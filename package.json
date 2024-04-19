@@ -18,8 +18,8 @@
         "title": "Hello World"
       },
       {
-        "command": "livesync.testWebView",
-        "title": "Test Web View"
+        "command": "livesync.configuration",
+        "title": "LiveSync: Configuration"
       }
     ]
   },

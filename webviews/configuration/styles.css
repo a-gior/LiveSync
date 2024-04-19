@@ -14,7 +14,7 @@
 .container select {
     padding: 8px;
     margin: 5px 0;
-    width: 95%; /* Adjusts the width of the input fields */
+    width: 90%; /* Adjusts the width of the input fields */
     box-sizing: border-box; /* Includes padding in the width */
     border: 1px solid #ccc;
     border-radius: 4px;
@@ -52,6 +52,7 @@ label {
 
 /* Styles for the form container */
 .form-section {
+    width: 55%;
     background-color: #2a2a2a; /* Dark background for the form section */
     border-radius: 8px;
     padding: 20px;
@@ -84,4 +85,14 @@ label {
   
 .save-button:hover {
     background-color: #3d5a80;
+}
+
+.error-message {
+    color: #d9534f; /* Red color for error messages */
+    font-size: 14px; /* Font size */
+    margin-bottom: 5px; /* Add some space below error messages */
+}
+
+.input-error {
+    border-color: #d9534f !important; /* Red border color for error state */
 }

@@ -1,11 +1,13 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import * as webviewUtils from './utils/webviewUtils';
+import { WebviewManager } from './ui/webviewManager';
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
+	
+    const webviewManager = WebviewManager.getInstance(context);
 
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
@@ -25,12 +27,12 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	context.subscriptions.push(helloWorldDisposable);
 
-	let testWebViewDisposable = vscode.commands.registerCommand('livesync.testWebView', async () => {
+	let configurationDisposable = vscode.commands.registerCommand('livesync.configuration', async () => {
 		
-		const panel = webviewUtils.createOrShowWebviewPanel(context);
+		const panel = webviewManager.createOrShowConfigurationWebview();
 
 	});
-	context.subscriptions.push(testWebViewDisposable);
+	context.subscriptions.push(configurationDisposable);
 }
 
 // This method is called when your extension is deactivated

@@ -8,6 +8,7 @@
 <body>
     <div class="container">
         <h2>Server Configuration</h2>
+        <div id="errorMessages"></div>
         <form id="serverConfigForm" class="form-section" action="#">
             <div class="form-group">
                 <label for="hostname">Hostname:</label>
@@ -82,7 +83,7 @@
 
         <!-- Footer where the Save button will stay -->
     <div class="footer">
-        <button class="save-button" onclick="saveForms()">Save</button>
+        <button class="save-button" onclick="saveForms(event)">Save</button>
     </div>
 </body>
 </html>

@@ -41,23 +41,20 @@ function setWebviewContent(panel: vscode.WebviewPanel, htmlFilePath: string, css
     }
 }
 
-export function createOrShowWebviewPanel(context: vscode.ExtensionContext) {
+export function createOrShowWebviewPanel(context: vscode.ExtensionContext, viewType: string, title: string, htmlFilePath: string, cssFilePath: string, jsFilePath: string) {
     const columnToShowIn = vscode.ViewColumn.One;
     const panel = vscode.window.createWebviewPanel(
-        'yourWebviewPanelId',
-        'Your Webview Title',
+        viewType,
+        title,
         columnToShowIn,
         {
             enableScripts: true
         }
     );
 
-    const htmlFilePath = path.join(context.extensionPath, 'webviews/configuration', 'index.html');
-    const cssFilePath = path.join(context.extensionPath, 'webviews/configuration', 'styles.css');
-    const jsFilePath = path.join(context.extensionPath, 'webviews/configuration', 'script.js');
-
     setWebviewContent(panel, htmlFilePath, cssFilePath, jsFilePath);
 }
+
 
 export function getNonce() {
 	let text = '';
