@@ -16,6 +16,10 @@
       {
         "command": "livesync.helloWorld",
         "title": "Hello World"
+      },
+      {
+        "command": "livesync.testWebView",
+        "title": "Test Web View"
       }
     ]
   },

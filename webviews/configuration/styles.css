@@ -1,0 +1,87 @@
+/* Apply a font and some spacing to the overall container */
+.container {
+    font-family: 'Arial', sans-serif;
+    margin: 20px;
+    color: #d3d3d3;
+    padding-bottom: 60px;
+}
+  
+/* Style each input field with padding and margin */
+.container input[type="text"],
+.container input[type="password"],
+.container input[type="number"],
+.container input[type="file"],
+.container select {
+    padding: 8px;
+    margin: 5px 0;
+    width: 95%; /* Adjusts the width of the input fields */
+    box-sizing: border-box; /* Includes padding in the width */
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+  
+/* Style the submit button */
+.container input[type="submit"] {
+    padding: 10px 15px;
+    margin-top: 10px;
+    border: none;
+    border-radius: 4px;
+    background-color: #5c85d6;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+  
+/* Change the background color of the submit button on hover */
+.container input[type="submit"]:hover {
+    background-color: #3d5a80;
+}
+  
+/* Add some spacing around the form elements */
+label {
+    display: block;
+    margin-top: 10px;
+}
+
+/* Separator style */
+.form-separator {
+    border-bottom: 1px solid #404040; /* Adds a line to separate sections */
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+/* Styles for the form container */
+.form-section {
+    background-color: #2a2a2a; /* Dark background for the form section */
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 15px; /* Reduced space between form sections to accommodate footer */
+    border: 1px solid #404040; /* Subtle border for the form section */
+  }
+
+/* Styles for the footer container */
+.footer {
+    position: fixed; /* Fixed position to keep it at the bottom */
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #1a1a1a; /* Even darker background color for the footer */
+    padding: 10px 20px; /* Padding for spacing inside the footer */
+    text-align: right; /* Aligns the button to the right */
+    z-index: 1000; /* Ensures the footer is above other content */
+}
+  
+/* Fixed Save button within the footer */
+.save-button {
+    padding: 10px 20px;
+    background-color: #5c85d6; /* Button color */
+    color: white; /* Button text color */
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+  
+.save-button:hover {
+    background-color: #3d5a80;
+}

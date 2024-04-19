@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiveSync Configuration</title>
+</head>
+<body>
+    <div class="container">
+        <h2>Server Configuration</h2>
+        <form id="serverConfigForm" class="form-section" action="#">
+            <div class="form-group">
+                <label for="hostname">Hostname:</label>
+                <input type="text" id="hostname" name="hostname" required>
+            </div>
+            <div class="form-group">
+                <label for="port">Port:</label>
+                <input type="text" id="port" name="port" required>
+            </div>
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+
+            <div class="form-group">
+                <label for="auth-method">Authentication Method:</label>
+                <select id="auth-method" onchange="toggleAuthMethod()">
+                    <option value="password">Password</option>
+                    <option value="ssh">SSH Key</option>
+                </select>
+
+                <div id="password-input" style="display:block;">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password">
+                </div>
+
+                <div id="ssh-input" style="display:none;">
+                    <label for="ssh-key">SSH Key:</label>
+                    <input type="file" id="ssh-key" name="ssh-key">
+                </div>
+            </div>
+            <!-- <div class="form-group">
+                <input type="submit" value="Submit">
+            </div> -->
+        </form>
+
+        <div class="form-separator"></div>
+
+        <h2>Other Configuration</h2>
+        <form class="form-section">
+            <div class="form-group">
+                <label for="lorem">Lorem Ipsum</label>
+                <input type="text" id="lorem" name="lorem" required>
+            </div>
+            <div class="form-group">
+                <label for="lorem">Lorem Ipsum</label>
+                <input type="text" id="lorem" name="lorem" required>
+            </div>
+            <div class="form-group">
+                <label for="lorem">Lorem Ipsum</label>
+                <input type="text" id="lorem" name="lorem" required>
+            </div>
+            <div class="form-group">
+                <label for="lorem">Lorem Ipsum</label>
+                <input type="text" id="lorem" name="lorem" required>
+            </div>
+            <div class="form-group">
+                <label for="lorem">Lorem Ipsum</label>
+                <input type="text" id="lorem" name="lorem" required>
+            </div>
+            <div class="form-group">
+                <label for="lorem">Lorem Ipsum</label>
+                <input type="text" id="lorem" name="lorem" required>
+            </div>
+            <div class="form-group">
+                <label for="lorem">Lorem Ipsum</label>
+                <input type="text" id="lorem" name="lorem" required>
+            </div>
+            <p>WIP</p>
+        </form>
+    </div>
+
+        <!-- Footer where the Save button will stay -->
+    <div class="footer">
+        <button class="save-button" onclick="saveForms()">Save</button>
+    </div>
+</body>
+</html>
