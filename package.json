@@ -4,7 +4,7 @@
   "description": "",
   "version": "0.0.1",
   "engines": {
-    "vscode": "^1.87.2"
+    "vscode": "^1.88.1"
   },
   "categories": [
     "Other"
@@ -21,7 +21,37 @@
         "command": "livesync.configuration",
         "title": "LiveSync: Configuration"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "LiveSync",
+      "properties": {
+        "LiveSync.hostname": {
+          "type": "string",
+          "default": "",
+          "description": "Hostname for LiveSync configuration."
+        },
+        "LiveSync.port": {
+          "type": "number",
+          "default": 8080,
+          "description": "Port number for LiveSync configuration."
+        },
+        "LiveSync.username": {
+          "type": "string",
+          "default": "",
+          "description": "Username for LiveSync configuration."
+        },
+        "LiveSync.password": {
+          "type": "string",
+          "default": "",
+          "description": "Password for LiveSync configuration."
+        },
+        "LiveSync.sshKey": {
+          "type": "string",
+          "default": "",
+          "description": "SSH key for LiveSync configuration."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

@@ -63,10 +63,28 @@ function saveForms(event) {
 
     if (isFormValid) {
         // Proceed with form submission or other actions
+        sendConfiguration();
         console.log('Form submitted successfully');
     } else {
         console.log('Form not submitted, validation failed');
     }
+}
+
+function sendConfiguration() {
+    let vscode = acquireVsCodeApi();
+    const configurationMessage = {
+        command: 'updateConfiguration',
+        configuration: {
+            hostname: hostnameInput.value,
+            port: portInput.value,
+            username: usernameInput.value,
+            password: passwordInput?.value ?? null,
+            sshKey: sshKeyInput?.value ?? null
+        
+        }
+    };
+    vscode.postMessage(configurationMessage);
+    console.log(configurationMessage);
 }
 
 function isValidHostname(hostname) {
@@ -120,4 +138,29 @@ function displayError(elem, message) {
         errorMessage.remove();
         elem.classList.remove('input-error');
     }, 3000);
+}
+
+window.addEventListener('message', function (event) {
+    // Get initial state from the webview's state
+    const data = event.data;
+
+    switch(data.command) {
+        case 'setInitialConfiguration':
+            this.setInitialConfiguration(data.configuration);
+            break;
+    }
+});
+
+function setInitialConfiguration(config) {
+    // Check if initialState is not null or undefined
+    if (config) {
+        // Access configuration values from initialState
+        const { hostname, port, username, password, sshKey } = config;
+
+        // Set the initial values of the form fields
+        document.getElementById('hostname').value = hostname;
+        document.getElementById('port').value = port;
+        document.getElementById('username').value = username;
+        document.getElementById('password').value = password ?? '';
+    }
 }

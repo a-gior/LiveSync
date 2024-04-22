@@ -29,6 +29,12 @@ export function activate(context: vscode.ExtensionContext) {
 
 	let configurationDisposable = vscode.commands.registerCommand('livesync.configuration', async () => {
 		
+		// Check if there are any workspace folders open
+		if (vscode.workspace.workspaceFolders === undefined) {
+			vscode.window.showErrorMessage('No workspace opened. This extension requires an open workspace.');
+			return;
+		}
+		
 		const panel = webviewManager.createOrShowConfigurationWebview();
 
 	});
