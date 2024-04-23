@@ -143,6 +143,7 @@ function displayError(elem, message) {
 window.addEventListener('message', function (event) {
     // Get initial state from the webview's state
     const data = event.data;
+    console.log(acquireVsCodeApi());
 
     switch(data.command) {
         case 'setInitialConfiguration':

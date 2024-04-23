@@ -73,35 +73,43 @@ export function createOrShowWebviewPanel(
     initialState?: any
 ): vscode.WebviewPanel {
     // Check if the panel already exists
-    const existingPanel = webviews.find(panel => panel.viewType === viewType);
-    if (existingPanel) {
+    const panel = webviews.find(panel => panel.viewType === viewType);
+    if (panel) {
         // Show the existing panel
-        existingPanel.reveal(vscode.ViewColumn.One);
-        return existingPanel;
-    }
 
-    // Create a new webview panel
-    const panel = createWebviewPanel(viewType, title, htmlFilePath, cssFilePath, jsFilePath);
-    webviews.push(panel);
+        panel.reveal(vscode.ViewColumn.One);
 
-    // Handle disposal of the panel
-    panel.onDidDispose(() => {
-        const index = webviews.indexOf(panel);
-        if (index !== -1) {
-            webviews.splice(index, 1);
+        // Pass initial state to the webview
+        if (initialState) {
+            panel.webview.postMessage(initialState);
         }
-    });
+        
+        return panel;
+    } else {
+        // Create a new webview panel
+        const panel = createWebviewPanel(viewType, title, htmlFilePath, cssFilePath, jsFilePath);
+        webviews.push(panel);
 
-    // Set function to be called if message is recieved
-    if(postMessageCallback) {
-        panel.webview.onDidReceiveMessage(postMessageCallback);
+        // Handle disposal of the panel
+        panel.onDidDispose(() => {
+            const index = webviews.indexOf(panel);
+            if (index !== -1) {
+                webviews.splice(index, 1);
+            }
+        });
+
+        // Set function to be called if message is recieved
+        if(postMessageCallback) {
+            panel.webview.onDidReceiveMessage(postMessageCallback);
+        }
+
+        // Pass initial state to the webview
+        if (initialState) {
+            panel.webview.postMessage(initialState);
+        }
+        return panel;
     }
 
-    // Pass initial state to the webview
-    if (initialState) {
-        panel.webview.postMessage(initialState);
-    }
-    return panel;
 }
 
 export function getNonce() {
