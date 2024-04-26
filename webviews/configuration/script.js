@@ -6,7 +6,15 @@ const passwordInput = document.getElementById('password');
 const sshKeyInput = document.getElementById('sshKey');
 const errorMessages = document.getElementById('errorMessages');
 
+const vscode = acquireVsCodeApi();
 let isFormValid = false;
+
+// Set saved config if exists
+const previousState = vscode.getState();
+let config = previousState && previousState.config;
+if(config) {
+    this.setInitialConfiguration(config);
+}
 
 function toggleAuthMethod() {
     var authMethod = document.getElementById('auth-method').value;
@@ -22,6 +30,44 @@ function toggleAuthMethod() {
 function saveForms(event) {
     event.preventDefault(); // Prevent form submission
 
+    // Perform validation checks
+    if (areValidInputs()) {
+        // Proceed with form submission or other actions
+        vscode.setState({config: config});
+        sendConfiguration('updateConfiguration');
+        console.log('Form submitted successfully');
+    } else {
+        console.log('Form not submitted, validation failed');
+    }
+
+}
+
+function testConnection() {
+
+    // Clear previous error messages
+    errorMessages.innerHTML = '';
+
+    // Perform validation checks
+    if (areValidInputs()) {
+        // Proceed with form submission or other actions
+        console.log('Valid inputs, we send the test connection');
+    } else {
+        console.log('Inputs not valid');
+    }
+
+    sendConfiguration('testConnection');
+}
+
+function sendConfiguration(cmd) {
+
+    const configurationMessage = {
+        command: cmd,
+        configuration: getCurrentConfig()
+    };
+    vscode.postMessage(configurationMessage);
+}
+
+function areValidInputs()  {
     // Validate input
     const authMethod = document.getElementById('auth-method').value;
     isFormValid = true; // Clear previous error messages
@@ -62,29 +108,10 @@ function saveForms(event) {
     }
 
     if (isFormValid) {
-        // Proceed with form submission or other actions
-        sendConfiguration();
-        console.log('Form submitted successfully');
-    } else {
-        console.log('Form not submitted, validation failed');
-    }
-}
-
-function sendConfiguration() {
-    let vscode = acquireVsCodeApi();
-    const configurationMessage = {
-        command: 'updateConfiguration',
-        configuration: {
-            hostname: hostnameInput.value,
-            port: portInput.value,
-            username: usernameInput.value,
-            password: passwordInput?.value ?? null,
-            sshKey: sshKeyInput?.value ?? null
-        
-        }
-    };
-    vscode.postMessage(configurationMessage);
-    console.log(configurationMessage);
+        return true;
+    } 
+    
+    return false;
 }
 
 function isValidHostname(hostname) {
@@ -143,7 +170,6 @@ function displayError(elem, message) {
 window.addEventListener('message', function (event) {
     // Get initial state from the webview's state
     const data = event.data;
-    console.log(acquireVsCodeApi());
 
     switch(data.command) {
         case 'setInitialConfiguration':
@@ -152,16 +178,28 @@ window.addEventListener('message', function (event) {
     }
 });
 
+function getCurrentConfig() {
+    return {
+        hostname: hostnameInput.value,
+        port: portInput.value,
+        username: usernameInput.value,
+        password: passwordInput?.value ?? null,
+        sshKey: sshKeyInput?.value ?? null
+    
+    };
+}
+
 function setInitialConfiguration(config) {
     // Check if initialState is not null or undefined
     if (config) {
         // Access configuration values from initialState
+        vscode.setState({config: config});
         const { hostname, port, username, password, sshKey } = config;
 
         // Set the initial values of the form fields
-        document.getElementById('hostname').value = hostname;
-        document.getElementById('port').value = port;
-        document.getElementById('username').value = username;
-        document.getElementById('password').value = password ?? '';
+        hostnameInput.value = hostname;
+        portInput.value = port;
+        usernameInput.value = username;
+        passwordInput.value = password ?? '';
     }
 }

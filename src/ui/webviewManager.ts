@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { Client } from 'ssh2';
 import { createOrShowWebviewPanel } from './../utils/webviewUtils';
 import { ConfigurationMessage } from './DTOs/configurationDTO';
 
@@ -26,13 +27,11 @@ export class WebviewManager {
         const configurationCallback = (message: ConfigurationMessage) => {
             switch (message.command) {
                 case 'updateConfiguration':
-                    const config = vscode.workspace.getConfiguration('LiveSync');
-                    config.update('hostname', message.configuration.hostname, vscode.ConfigurationTarget.Workspace);
-                    config.update('port', message.configuration.port, vscode.ConfigurationTarget.Workspace);
-                    config.update('username', message.configuration.username, vscode.ConfigurationTarget.Workspace);
-                    config.update('password', message.configuration.password, vscode.ConfigurationTarget.Workspace);
-                    config.update('sshKey', message.configuration.sshKey, vscode.ConfigurationTarget.Workspace);
-                    console.log(message, config);
+                    this.updateConfiguration(message.configuration);
+                    break;
+                case 'testConnection':
+                    console.log("TestConnection...");
+                    this.testConnection(message.configuration);
                     break;
             }
         };
@@ -66,4 +65,34 @@ export class WebviewManager {
             initialState
         );
     }
+
+    updateConfiguration(configuration: ConfigurationMessage['configuration']) {
+        const config = vscode.workspace.getConfiguration('LiveSync');
+        const { hostname, port, username, password, sshKey } = configuration;
+
+        config.update('hostname', hostname, vscode.ConfigurationTarget.Workspace);
+        config.update('port', port, vscode.ConfigurationTarget.Workspace);
+        config.update('username', username, vscode.ConfigurationTarget.Workspace);
+        config.update('password', password, vscode.ConfigurationTarget.Workspace);
+        config.update('sshKey', sshKey, vscode.ConfigurationTarget.Workspace);
+
+        console.log("Updated config: ", config);
+    }
+
+    async testConnection(configuration: ConfigurationMessage['configuration']) {
+        const { hostname, port } = configuration;
+        const url = `http://${hostname}:${port}/api/users`;
+    
+        try {
+            const response = await fetch(url);
+            if (response.ok) {
+                console.log('Connection successful');
+            } else {
+                console.error('Error connecting:', response.statusText);
+            }
+        } catch (error) {
+            console.error('Error connecting:', error);
+        }
+    }
+    
 }
