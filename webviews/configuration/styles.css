@@ -96,3 +96,40 @@ label {
 .input-error {
     border-color: #d9534f !important; /* Red border color for error state */
 }
+
+/* Apply styles for the form group containing authentication method */
+.auth-method {
+    display: flex; /* Use flexbox for layout */
+    align-items: center; /* Align items vertically in the center */
+}
+
+/* Add spacing between radio buttons and labels */
+.auth-method div {
+    margin-right: 20px; /* Adjust spacing as needed */
+}
+
+/* Align labels with radio buttons */
+.auth-method label {
+    display: inline-block;
+    line-height: 18px; /* Match line height with radio button height */
+    vertical-align: middle; /* Align vertically */
+}
+
+/* Style the radio buttons */
+.auth-method input[type="radio"] {
+    appearance: none; /* Hide the default radio button */
+    -webkit-appearance: none; /* For Safari */
+    -moz-appearance: none; /* For Firefox */
+    width: 15px; /* Set the width */
+    height: 15px; /* Set the height */
+    border-radius: 50%; /* Make it round */
+    border: 2px solid #ccc; /* Add border */
+    outline: none; /* Remove outline */
+    vertical-align: middle; /* Align vertically */
+}
+
+/* Style the checked state of radio buttons */
+.auth-method input[type="radio"]:checked {
+    background-color: #5c85d6; /* Change background color when checked */
+    border-color: #5c85d6; /* Change border color when checked */
+}

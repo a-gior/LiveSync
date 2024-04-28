@@ -46,6 +46,7 @@ export class WebviewManager {
         const defaultHostname = config.get<string>('hostname', '');
         const defaultPort = config.get<number>('port', 22);
         const defaultUsername = config.get<string>('username', '');
+        const defaultAuthMethod = config.get<string>('authMethod', 'password');
         const defaultPassword = config.get<string>('password', '');
         const defaultSshKey = config.get<string>('sshKey', '');
 
@@ -55,6 +56,7 @@ export class WebviewManager {
                 hostname: defaultHostname,
                 port: defaultPort,
                 username: defaultUsername,
+                authMethod: defaultAuthMethod,
                 password: defaultPassword,
                 sshKey: defaultSshKey
             }
@@ -74,11 +76,12 @@ export class WebviewManager {
 
     updateConfiguration(configuration: ConfigurationMessage['configuration']) {
         const config = vscode.workspace.getConfiguration('LiveSync');
-        const { hostname, port, username, password, sshKey } = configuration;
+        const { hostname, port, username, authMethod, password, sshKey } = configuration;
 
         config.update('hostname', hostname, vscode.ConfigurationTarget.Workspace);
         config.update('port', port, vscode.ConfigurationTarget.Workspace);
         config.update('username', username, vscode.ConfigurationTarget.Workspace);
+        config.update('authMethod', authMethod, vscode.ConfigurationTarget.Workspace);
         config.update('password', password, vscode.ConfigurationTarget.Workspace);
         config.update('sshKey', sshKey, vscode.ConfigurationTarget.Workspace);
 
@@ -112,19 +115,21 @@ export class WebviewManager {
 
         const panel = this._webviews.find(panel => panel.viewType === viewType);
         const clientErrors = client.getErrors();
-        if(clientErrors) {
+        if(clientErrors.length > 0) {
             if(panel) {
-                let errorsMsg: ErrorsMessage = {command: "error", errors: clientErrors};
-                panel.webview.postMessage(errorsMsg);
-                vscode.window.showErrorMessage('Test Connection failed');
+                // let errorsMsg: ErrorsMessage = {command: "error", errors: clientErrors};
+                // panel.webview.postMessage(errorsMsg);
+                vscode.window.showErrorMessage(clientErrors[0].error.message);
             } else {
                 console.log("Couldnt find panel");
             }
         } else {
             if(panel) {
-                let notifMsg: NotificationMessage = {command: "showNotif", msg: "SSH connection successful."};
-                panel.webview.postMessage(notifMsg);
+                // let notifMsg: NotificationMessage = {command: "showNotif", msg: "SSH connection successful."};
+                // panel.webview.postMessage(notifMsg);
                 vscode.window.showInformationMessage('Test Connection successful');
+            } else {
+                console.log("Couldnt find panel");
             }
         }
 

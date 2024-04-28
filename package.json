@@ -40,6 +40,11 @@
           "default": "",
           "description": "Username for LiveSync configuration."
         },
+        "LiveSync.authMethod": {
+          "type": "string",
+          "default": "password",
+          "description": "authMethod for LiveSync configuration."
+        },
         "LiveSync.password": {
           "type": "string",
           "default": "",

@@ -3,7 +3,7 @@ const hostnameInput = document.getElementById('hostname');
 const portInput = document.getElementById('port');
 const usernameInput = document.getElementById('username');
 const passwordInput = document.getElementById('password');
-const sshKeyInput = document.getElementById('sshKey');
+const sshKeyInput = document.getElementById('ssh-key');
 const errorMessages = document.getElementById('errorMessages');
 
 const vscode = acquireVsCodeApi();
@@ -16,12 +16,13 @@ if(config) {
     this.setInitialConfiguration(config);
 }
 
+
 function toggleAuthMethod() {
-    var authMethod = document.getElementById('auth-method').value;
-    if (authMethod === 'password') {
+    const authMethod = document.querySelector('input[name="auth-method"]:checked');
+    if (authMethod.value === 'password') {
         document.getElementById('password-input').style.display = 'block';
         document.getElementById('ssh-input').style.display = 'none';
-    } else if (authMethod === 'ssh') {
+    } else if (authMethod.value === 'ssh') {
         document.getElementById('password-input').style.display = 'none';
         document.getElementById('ssh-input').style.display = 'block';
     }
@@ -68,7 +69,7 @@ function sendConfiguration(cmd) {
 
 function areValidInputs()  {
     // Validate input
-    const authMethod = document.getElementById('auth-method').value;
+    const authMethod = document.querySelector('input[name="auth-method"]:checked');
     isFormValid = true; // Clear previous error messages
 
     if (!isValidHostname(hostnameInput.value)) {
@@ -83,7 +84,7 @@ function areValidInputs()  {
         displayError(usernameInput, 'Invalid username');
     }
 
-    if (authMethod === 'password') {
+    if (authMethod.value === 'password') {
         if (!isValidPassword(passwordInput.value)) {
             displayError(passwordInput, 'Invalid password');
         }
@@ -98,10 +99,11 @@ function areValidInputs()  {
             }
         };
             
-        reader.onerror = function(event) {
+        reader.onerror = function() {
             displayError(sshKeyInput, 'Error reading SSH key file');
         };
 
+        console.log("SSHKey Input: ", sshKeyInput.files[0]);
         reader.readAsText(sshKeyFile);
             
     }
@@ -138,9 +140,13 @@ function isValidPassword(password) {
     return password.length >= 6;
 }
 
-function isValidSSHKey(sshKey) {
+function isValidSSHKey(sshKey, isPublic = false) {
     // Check if SSH key has the expected format
-    const sshKeyRegex = /^(ssh-(rsa|dsa|ed25519)\s+[A-Za-z0-9+/]+[=]{0,2}\s+\S+)$/;
+    if(isPublic) {
+        const sshKeyRegex = /^(ssh-(rsa|dsa|ed25519)\s+[A-Za-z0-9+/]+[=]{0,2}\s+\S+)$/;
+    } else {
+        const sshKeyRegex = /^-----BEGIN\s(?:RSA|DSA|EC|OPENSSH)\sPRIVATE\sKEY-----(?:[\s\S]*?)-----END\s(?:RSA|DSA|EC|OPENSSH)\sPRIVATE\sKEY-----$/m;
+    }
     return sshKeyRegex.test(sshKey);
 }
 
@@ -172,7 +178,7 @@ window.addEventListener('message', function (event) {
 
     switch(data.command) {
         case 'setInitialConfiguration':
-            this.setInitialConfiguration(data.configuration);
+            setInitialConfiguration(data.configuration);
             break;
         case 'showNotif':
             break;
@@ -182,27 +188,43 @@ window.addEventListener('message', function (event) {
 });
 
 function getCurrentConfig() {
+    
+    const authMethod = document.querySelector('input[name="auth-method"]:checked');
     return {
         hostname: hostnameInput.value,
         port: portInput.value,
         username: usernameInput.value,
+        authMethod: authMethod?.value ?? null,
         password: passwordInput?.value ?? null,
-        sshKey: sshKeyInput?.value ?? null
+        sshKey: sshKeyInput?.files[0].path ?? null
     
     };
 }
 
 function setInitialConfiguration(config) {
+    
+
     // Check if initialState is not null or undefined
     if (config) {
         // Access configuration values from initialState
         vscode.setState({config: config});
-        const { hostname, port, username, password, sshKey } = config;
+        const { hostname, port, username, authMethod, password, sshKey } = config;
 
         // Set the initial values of the form fields
         hostnameInput.value = hostname;
         portInput.value = port;
         usernameInput.value = username;
+        switch(authMethod) {
+            case 'password':
+                document.getElementById('auth-password').checked = true;
+                break;
+            case 'ssh':
+                document.getElementById('auth-ssh').checked = true;
+                break;
+        }
         passwordInput.value = password ?? '';
     }
+    
+    // Initial call to show/hide inputs based on default selection
+    toggleAuthMethod();
 }

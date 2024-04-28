@@ -6,19 +6,37 @@ import * as fs from "fs";
 
 export class SFTPClient {
     private _client: Client;
-    private _errorMsgs: SFTPError[] | undefined;
+    private _errorMsgs: SFTPError[];
 
     constructor() {
       this._client = new Client();
-      this._errorMsgs = undefined;
+      this._errorMsgs = [];
     }
   
     async connect(config: ConfigurationMessage['configuration']) {
       console.log(`Connecting to ${config.hostname}:${config.port}`);
       try {
-        await this._client.connect(config);
+        const connectionOptions: Client.ConnectOptions = {
+          host: config.hostname,
+          port: config.port,
+          username: config.username,
+        };
+    
+        console.log("Authmethod: ", config.authMethod);
+        if (config.authMethod === 'password') {
+          connectionOptions.password = config.password;
+        } else if (config.authMethod === 'ssh') {
+          if (!config.sshKey) {
+            throw new Error('SSH Key file path is not provided');
+          }
+          connectionOptions.privateKey = fs.readFileSync(config.sshKey);
+        } else {
+          throw new Error('Invalid authentication method');
+        }
+    
+        await this._client.connect(connectionOptions);
       } catch (err) {
-        this._addError('Failed to connect', err);
+        this._addError('Connection failed', err);
       }
     }
   
@@ -80,7 +98,7 @@ export class SFTPClient {
 
     private _addError(msg: string, err: any) {
       console.log(msg, err);
-      this._errorMsgs?.push({
+      this._errorMsgs.push({
         msg: msg+": ",
         error: err
       });

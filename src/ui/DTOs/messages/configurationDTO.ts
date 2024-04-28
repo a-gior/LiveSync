@@ -5,6 +5,7 @@ export interface ConfigurationMessage {
         hostname: string;
         port: number;
         username: string;
+        authMethod?: string;
         password: string;
         sshKey: string | null; // Optional SSH key
     };
