@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { ConfigurationMessage } from '../ui/DTOs/configurationDTO';
+import { ConfigurationMessage } from '../ui/DTOs/messages/configurationDTO';
 
 type ConfigurationCallbackFunction = (message: ConfigurationMessage) => void;
 

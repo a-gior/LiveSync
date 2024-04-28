@@ -60,13 +60,14 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "vscode-test",
-    "mocks" : "mocks-server"
+    "mocks": "mocks-server"
   },
   "devDependencies": {
     "@mocks-server/main": "^4.1.0",
     "@types/mocha": "^10.0.6",
     "@types/node": "18.x",
     "@types/ssh2": "^1.15.0",
+    "@types/ssh2-sftp-client": "^9.0.3",
     "@types/vscode": "^1.88.0",
     "@typescript-eslint/eslint-plugin": "^7.4.0",
     "@typescript-eslint/parser": "^7.4.0",
@@ -76,6 +77,7 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "ssh2": "^1.15.0"
+    "ssh2": "^1.15.0",
+    "ssh2-sftp-client": "^10.0.3"
   }
 }

@@ -1,8 +1,12 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { Client } from 'ssh2';
+import * as fs from 'fs';
 import { createOrShowWebviewPanel } from './../utils/webviewUtils';
-import { ConfigurationMessage } from './DTOs/configurationDTO';
+import { ConfigurationMessage } from './DTOs/messages/configurationDTO';
+import { ErrorsMessage } from './DTOs/messages/errorsDTO';
+import { NotificationMessage } from './DTOs/messages/notificationDTO';
+import { SFTPClient } from '../services/SFTPClient';
 
 export class WebviewManager {
     private static _instance: WebviewManager | undefined;
@@ -17,7 +21,7 @@ export class WebviewManager {
         return WebviewManager._instance;
     }
 
-    public createOrShowConfigurationWebview(): void {
+    public createOrShowConfigurationWebview(context: vscode.ExtensionContext): void {
         const viewType = 'configurationViewType';
         const title = 'Configuration';
         const htmlFilePath = path.join(this._context.extensionPath, 'webviews/configuration', 'index.html');
@@ -27,14 +31,16 @@ export class WebviewManager {
         const configurationCallback = (message: ConfigurationMessage) => {
             switch (message.command) {
                 case 'updateConfiguration':
+                    console.log("UpdateConfiguration...");
                     this.updateConfiguration(message.configuration);
                     break;
                 case 'testConnection':
                     console.log("TestConnection...");
-                    this.testConnection(message.configuration);
+                    this.testConnection(context, message.configuration, viewType);
                     break;
             }
         };
+
         // Initial state containing configuration values
         const config = vscode.workspace.getConfiguration('LiveSync');
         const defaultHostname = config.get<string>('hostname', '');
@@ -79,20 +85,63 @@ export class WebviewManager {
         console.log("Updated config: ", config);
     }
 
-    async testConnection(configuration: ConfigurationMessage['configuration']) {
-        const { hostname, port } = configuration;
-        const url = `http://${hostname}:${port}/api/users`;
+    async testConnection(context: vscode.ExtensionContext, configuration: ConfigurationMessage['configuration'], viewType: string): Promise<void> {
     
-        try {
-            const response = await fetch(url);
-            if (response.ok) {
-                console.log('Connection successful');
-            } else {
-                console.error('Error connecting:', response.statusText);
-            }
-        } catch (error) {
-            console.error('Error connecting:', error);
+        // Function to connect via SSH
+        function connectSSH(config: ConfigurationMessage['configuration']): void {
+            const conn = new Client();
+    
+            conn.on('ready', () => {
+                console.log('SSH Connection successful');
+                conn.end();
+            });
+            conn.on('error', (err) => {
+                console.error('Error connecting via SSH:', err);
+            });
+            conn.connect(config);
         }
+
+        const { hostname, port, username, password } = configuration;
+        // Test SSH connection
+        // connectSSH(configuration);
+    
+        // Test SFTP connection
+        //* Open the connection
+        const client = new SFTPClient();
+        await client.connect(configuration);
+
+        const panel = this._webviews.find(panel => panel.viewType === viewType);
+        const clientErrors = client.getErrors();
+        if(clientErrors) {
+            if(panel) {
+                let errorsMsg: ErrorsMessage = {command: "error", errors: clientErrors};
+                panel.webview.postMessage(errorsMsg);
+                vscode.window.showErrorMessage('Test Connection failed');
+            } else {
+                console.log("Couldnt find panel");
+            }
+        } else {
+            if(panel) {
+                let notifMsg: NotificationMessage = {command: "showNotif", msg: "SSH connection successful."};
+                panel.webview.postMessage(notifMsg);
+                vscode.window.showInformationMessage('Test Connection successful');
+            }
+        }
+
+        // //* List working directory files
+        // await client.listFiles(".");
+
+        // //* Upload local file to remote file
+        // await client.uploadFile("./local.txt", "./remote.txt");
+
+        // //* Download remote file to local file
+        // await client.downloadFile("./remote.txt", "./download.txt");
+
+        // //* Delete remote file
+        // await client.deleteFile("./remote.txt");
+
+        //* Close the connection
+        await client.disconnect();
     }
     
 }

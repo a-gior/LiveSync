@@ -33,7 +33,7 @@ function saveForms(event) {
     // Perform validation checks
     if (areValidInputs()) {
         // Proceed with form submission or other actions
-        vscode.setState({config: config});
+        vscode.setState({config: getCurrentConfig()});
         sendConfiguration('updateConfiguration');
         console.log('Form submitted successfully');
     } else {
@@ -50,12 +50,11 @@ function testConnection() {
     // Perform validation checks
     if (areValidInputs()) {
         // Proceed with form submission or other actions
+        sendConfiguration('testConnection');
         console.log('Valid inputs, we send the test connection');
     } else {
         console.log('Inputs not valid');
     }
-
-    sendConfiguration('testConnection');
 }
 
 function sendConfiguration(cmd) {
@@ -130,13 +129,13 @@ function isValidPort(port) {
 function isValidUsername(username) {
     // Implement validation logic for username
     // Example validation: check for length or specific characters
-    return username.trim().length > 6;
+    return username.trim().length >= 6;
 }
 
 function isValidPassword(password) {
     // Implement password validation logic (e.g., strength requirements)
     // Example validation: check for minimum length
-    return password.length >= 8;
+    return password.length >= 6;
 }
 
 function isValidSSHKey(sshKey) {
@@ -174,6 +173,10 @@ window.addEventListener('message', function (event) {
     switch(data.command) {
         case 'setInitialConfiguration':
             this.setInitialConfiguration(data.configuration);
+            break;
+        case 'showNotif':
+            break;
+        case 'showError':
             break;
     }
 });
