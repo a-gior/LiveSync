@@ -21,7 +21,7 @@ export class WebviewManager {
         return WebviewManager._instance;
     }
 
-    public createOrShowConfigurationWebview(context: vscode.ExtensionContext): void {
+    public createOrShowConfigurationWebview(): void {
         const viewType = 'configurationViewType';
         const title = 'Configuration';
         const htmlFilePath = path.join(this._context.extensionPath, 'webviews/configuration', 'index.html');
@@ -36,7 +36,7 @@ export class WebviewManager {
                     break;
                 case 'testConnection':
                     console.log("TestConnection...");
-                    this.testConnection(context, message.configuration, viewType);
+                    this.testConnection(this._context, message.configuration, viewType);
                     break;
             }
         };

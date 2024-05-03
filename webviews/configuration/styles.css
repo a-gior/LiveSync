@@ -1,5 +1,5 @@
 /* Apply a font and some spacing to the overall container */
-.container {
+.configuration-container {
     font-family: 'Arial', sans-serif;
     margin: 20px;
     color: #d3d3d3;
@@ -7,11 +7,11 @@
 }
   
 /* Style each input field with padding and margin */
-.container input[type="text"],
-.container input[type="password"],
-.container input[type="number"],
-.container input[type="file"],
-.container select {
+.configuration-container input[type="text"],
+.configuration-container input[type="password"],
+.configuration-container input[type="number"],
+.configuration-container input[type="file"],
+.configuration-container select {
     padding: 8px;
     margin: 5px 0;
     width: 90%; /* Adjusts the width of the input fields */
@@ -21,7 +21,7 @@
 }
   
 /* Style the submit button */
-.container input[type="submit"] {
+.configuration-container input[type="submit"] {
     padding: 10px 15px;
     margin-top: 10px;
     border: none;
@@ -33,7 +33,7 @@
 }
   
 /* Change the background color of the submit button on hover */
-.container input[type="submit"]:hover {
+.configuration-container input[type="submit"]:hover {
     background-color: #3d5a80;
 }
   
@@ -73,7 +73,7 @@ label {
 }
   
 /* Fixed Save button within the footer */
-.save-button {
+.save-button, .test-connection-button {
     padding: 10px 20px;
     background-color: #5c85d6; /* Button color */
     color: white; /* Button text color */
