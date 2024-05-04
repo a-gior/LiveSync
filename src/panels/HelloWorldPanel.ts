@@ -8,6 +8,7 @@ import {
 } from "vscode";
 import { getUri } from "../utilities/getUri";
 import { getNonce } from "../utilities/getNonce";
+import { Panel } from "./Panel";
 
 /**
  * This class manages the state and behavior of HelloWorld webview panels.
@@ -19,32 +20,37 @@ import { getNonce } from "../utilities/getNonce";
  * - Setting the HTML (and by proxy CSS/JavaScript) content of the webview panel
  * - Setting message listeners so data can be passed between the webview and extension
  */
-export class HelloWorldPanel {
-  public static currentPanel: HelloWorldPanel | undefined;
-  private readonly _panel: WebviewPanel;
-  private _disposables: Disposable[] = [];
-
+export class HelloWorldPanel extends Panel {
   /**
    * The HelloWorldPanel class private constructor (called only from the render method).
    *
    * @param panel A reference to the webview panel
    * @param extensionUri The URI of the directory containing the extension
    */
-  private constructor(panel: WebviewPanel, extensionUri: Uri) {
-    this._panel = panel;
+  protected constructor(panel: WebviewPanel, extensionUri: Uri) {
+    const fnCallback = (message: any) => {
+      const command = message.command;
+      const text = message.text;
 
-    // Set an event listener to listen for when the panel is disposed (i.e. when the user closes
-    // the panel or when the panel is closed programmatically)
-    this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
+      switch (command) {
+        case "hello":
+          // Code that should run in response to the hello message command
+          window.showInformationMessage(text);
+          return;
+        // Add more switch case statements here as more webview message commands
+        // are created within the webview context (i.e. inside media/main.js)
+      }
+    };
 
-    // Set the HTML content for the webview panel
-    this._panel.webview.html = this._getWebviewContent(
-      this._panel.webview,
+    super(
+      panel,
       extensionUri,
+      [
+        "webview-ui/public/build/bundle.css",
+        "webview-ui/public/build/bundle.js",
+      ],
+      fnCallback,
     );
-
-    // Set an event listener to listen for messages passed from the webview context
-    this._setWebviewMessageListener(this._panel.webview);
   }
 
   /**
@@ -56,7 +62,7 @@ export class HelloWorldPanel {
   public static render(extensionUri: Uri) {
     if (HelloWorldPanel.currentPanel) {
       // If the webview panel already exists reveal it
-      HelloWorldPanel.currentPanel._panel.reveal(ViewColumn.One);
+      HelloWorldPanel.currentPanel.getPanel().reveal(ViewColumn.One);
     } else {
       // If a webview panel does not already exist create and show a new one
       const panel = window.createWebviewPanel(
@@ -98,79 +104,5 @@ export class HelloWorldPanel {
         disposable.dispose();
       }
     }
-  }
-
-  /**
-   * Defines and returns the HTML that should be rendered within the webview panel.
-   *
-   * @remarks This is also the place where references to the Svelte webview build files
-   * are created and inserted into the webview HTML.
-   *
-   * @param webview A reference to the extension webview
-   * @param extensionUri The URI of the directory containing the extension
-   * @returns A template string literal containing the HTML that should be
-   * rendered within the webview panel
-   */
-  private _getWebviewContent(webview: Webview, extensionUri: Uri) {
-    // The CSS file from the Svelte build output
-    const stylesUri = getUri(webview, extensionUri, [
-      "webview-ui",
-      "public",
-      "build",
-      "bundle.css",
-    ]);
-    // The JS file from the Svelte build output
-    const scriptUri = getUri(webview, extensionUri, [
-      "webview-ui",
-      "public",
-      "build",
-      "bundle.js",
-    ]);
-
-    const nonce = getNonce();
-
-    // Tip: Install the es6-string-html VS Code extension to enable code highlighting below
-    return /*html*/ `
-      <!DOCTYPE html>
-      <html lang="en">
-        <head>
-          <title>Hello World</title>
-          <meta charset="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
-          <link rel="stylesheet" type="text/css" href="${stylesUri}">
-          <script defer nonce="${nonce}" src="${scriptUri}"></script>
-        </head>
-        <body>
-        </body>
-      </html>
-    `;
-  }
-
-  /**
-   * Sets up an event listener to listen for messages passed from the webview context and
-   * executes code based on the message that is recieved.
-   *
-   * @param webview A reference to the extension webview
-   * @param context A reference to the extension context
-   */
-  private _setWebviewMessageListener(webview: Webview) {
-    webview.onDidReceiveMessage(
-      (message: any) => {
-        const command = message.command;
-        const text = message.text;
-
-        switch (command) {
-          case "hello":
-            // Code that should run in response to the hello message command
-            window.showInformationMessage(text);
-            return;
-          // Add more switch case statements here as more webview message commands
-          // are created within the webview context (i.e. inside media/main.js)
-        }
-      },
-      undefined,
-      this._disposables,
-    );
   }
 }

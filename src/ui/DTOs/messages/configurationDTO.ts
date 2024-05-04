@@ -1,5 +1,7 @@
+import { Message } from "./messageDTO";
+
 // Define a DTO for the configuration message
-export interface ConfigurationMessage {
+export interface ConfigurationMessage extends Message {
   command: string;
   configuration: {
     hostname: string;
