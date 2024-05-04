@@ -64,8 +64,7 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "test": "vscode-test",
-    "mocks": "mocks-server"
+    "test": "vscode-test"
   },
   "devDependencies": {
     "@mocks-server/main": "^4.1.0",
