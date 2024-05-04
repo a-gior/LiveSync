@@ -20,6 +20,10 @@
       {
         "command": "livesync.configuration",
         "title": "LiveSync: Configuration"
+      },
+      {
+        "command": "livesync.showHelloWorld",
+        "title": "LiveSync: Show Hello World (Svelte)"
       }
     ],
     "configuration": {
@@ -59,26 +63,30 @@
     }
   },
   "scripts": {
+    "install:all": "npm install && cd webview-ui && npm install",
+    "start:webview": "cd webview-ui && npm run dev",
+    "build:webview": "cd webview-ui && npm run build",
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
-    "lint": "eslint src --ext ts",
-    "test": "vscode-test"
+    "lint": "eslint src --ext ts"
   },
   "devDependencies": {
-    "@mocks-server/main": "^4.1.0",
     "@types/mocha": "^10.0.6",
     "@types/node": "18.x",
-    "@types/ssh2": "^1.15.0",
-    "@types/ssh2-sftp-client": "^9.0.3",
     "@types/vscode": "^1.88.0",
+
     "@typescript-eslint/eslint-plugin": "^7.4.0",
     "@typescript-eslint/parser": "^7.4.0",
+    
     "@vscode/test-cli": "^0.0.8",
     "@vscode/test-electron": "^2.3.9",
     "eslint": "^8.57.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    
+    "@types/ssh2": "^1.15.0",
+    "@types/ssh2-sftp-client": "^9.0.3"
   },
   "dependencies": {
     "ssh2": "^1.15.0",
