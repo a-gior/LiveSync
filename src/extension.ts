@@ -1,42 +1,50 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
-import * as vscode from 'vscode';
-import { WebviewManager } from './ui/webviewManager';
+import * as vscode from "vscode";
+import { WebviewManager } from "./ui/webviewManager";
 import { HelloWorldPanel } from "./panels/HelloWorldPanel";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-	
-    const webviewManager = WebviewManager.getInstance(context);
+  const webviewManager = WebviewManager.getInstance(context);
 
-	console.log('Congratulations, your extension "livesync" is now active!');
+  console.log('Congratulations, your extension "livesync" is now active!');
 
-	let helloWorldDisposable = vscode.commands.registerCommand('livesync.helloWorld', async () => {
-		vscode.window.showInformationMessage('Hello World from LiveSync!');
-		const input = await vscode.window.showInputBox();
-		if(input) {
-			vscode.window.showInformationMessage(input);
-		}
-	});
-	context.subscriptions.push(helloWorldDisposable);
+  let helloWorldDisposable = vscode.commands.registerCommand(
+    "livesync.helloWorld",
+    async () => {
+      vscode.window.showInformationMessage("Hello World from LiveSync!");
+      const input = await vscode.window.showInputBox();
+      if (input) {
+        vscode.window.showInformationMessage(input);
+      }
+    },
+  );
+  context.subscriptions.push(helloWorldDisposable);
 
-	let configurationDisposable = vscode.commands.registerCommand('livesync.configuration', async () => {
-		
-		// Check if there are any workspace folders open
-		if (vscode.workspace.workspaceFolders === undefined) {
-			vscode.window.showErrorMessage('No workspace opened. This extension requires an open workspace.');
-			return;
-		}
-		
-		const panel = webviewManager.createOrShowConfigurationWebview();
+  let configurationDisposable = vscode.commands.registerCommand(
+    "livesync.configuration",
+    async () => {
+      // Check if there are any workspace folders open
+      if (vscode.workspace.workspaceFolders === undefined) {
+        vscode.window.showErrorMessage(
+          "No workspace opened. This extension requires an open workspace.",
+        );
+        return;
+      }
 
-	});
-	context.subscriptions.push(configurationDisposable);
+      const panel = webviewManager.createOrShowConfigurationWebview();
+    },
+  );
+  context.subscriptions.push(configurationDisposable);
 
-	const showHelloWorldCommand = vscode.commands.registerCommand("livesync.showHelloWorld", () => {
-		HelloWorldPanel.render(context.extensionUri);
-	  });
+  const showHelloWorldCommand = vscode.commands.registerCommand(
+    "livesync.showHelloWorld",
+    () => {
+      HelloWorldPanel.render(context.extensionUri);
+    },
+  );
 }
 
 // This method is called when your extension is deactivated

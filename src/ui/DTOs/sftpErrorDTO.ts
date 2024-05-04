@@ -1,4 +1,4 @@
 export interface SFTPError {
-    msg: string;
-    error: any;
-  }
+  msg: string;
+  error: any;
+}

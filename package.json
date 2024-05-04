@@ -70,26 +70,30 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src --ext ts",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.6",
     "@types/node": "18.x",
+    "@types/ssh2": "^1.15.0",
+    "@types/ssh2-sftp-client": "^9.0.3",
     "@types/vscode": "^1.88.0",
-
     "@typescript-eslint/eslint-plugin": "^7.4.0",
     "@typescript-eslint/parser": "^7.4.0",
-    
     "@vscode/test-cli": "^0.0.8",
     "@vscode/test-electron": "^2.3.9",
     "eslint": "^8.57.0",
-    "typescript": "^5.3.3",
-    
-    "@types/ssh2": "^1.15.0",
-    "@types/ssh2-sftp-client": "^9.0.3"
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.2",
+    "prettier": "3.2.5",
+    "typescript": "^5.3.3"
   },
   "dependencies": {
     "ssh2": "^1.15.0",
     "ssh2-sftp-client": "^10.0.3"
+  },
+  "lint-staged": {
+    "**/*": "prettier --write --ignore-unknown"
   }
 }
