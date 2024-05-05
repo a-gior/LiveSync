@@ -3,6 +3,7 @@
 import * as vscode from "vscode";
 import { WebviewManager } from "./ui/webviewManager";
 import { HelloWorldPanel } from "./panels/HelloWorldPanel";
+import { ConfigurationPanel } from "./panels/ConfigurationPanel";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -34,17 +35,18 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      const panel = webviewManager.createOrShowConfigurationWebview();
+      ConfigurationPanel.render(context.extensionUri);
     },
   );
   context.subscriptions.push(configurationDisposable);
 
-  const showHelloWorldCommand = vscode.commands.registerCommand(
+  const svelteHelloWorldDisposable = vscode.commands.registerCommand(
     "livesync.showHelloWorld",
     () => {
       HelloWorldPanel.render(context.extensionUri);
     },
   );
+  context.subscriptions.push(svelteHelloWorldDisposable);
 }
 
 // This method is called when your extension is deactivated

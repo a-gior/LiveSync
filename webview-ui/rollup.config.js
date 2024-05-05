@@ -43,12 +43,12 @@ export default fs
     const name = input.split(".")[0];
     console.log(name);
     return {
-      input: "src/pages/" + name + ".ts",
+      input: `src/pages/${name}.ts`,
       output: {
         sourcemap: true,
         format: "iife",
         name: "app",
-        file: "public/build/pages/" + name + ".js",
+        file: `public/build/pages/${name}/${name}.js`,
       },
       plugins: [
         svelte({
@@ -60,7 +60,7 @@ export default fs
         }),
         // we'll extract any component CSS out into
         // a separate file - better for performance
-        css({ output: name + ".css" }),
+        css({ output: `public/build/pages/${name}/${name}.css` }),
 
         // If you have external dependencies installed from
         // npm, you'll most likely need these plugins. In

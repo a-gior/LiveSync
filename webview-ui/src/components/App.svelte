@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { provideVSCodeDesignSystem, vsCodeButton } from "@vscode/webview-ui-toolkit";
+	import { provideVSCodeDesignSystem, vsCodeButton, vsCodeCheckbox } from "@vscode/webview-ui-toolkit";
 	import { vscode } from "./../utilities/vscode";
 
 	// In order to use the Webview UI Toolkit web components they

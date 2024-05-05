@@ -1,11 +1,4 @@
-import {
-  Disposable,
-  Webview,
-  WebviewPanel,
-  window,
-  Uri,
-  ViewColumn,
-} from "vscode";
+import { window, Uri } from "vscode";
 import { Panel } from "./Panel";
 
 export class HelloWorldPanel extends Panel {
