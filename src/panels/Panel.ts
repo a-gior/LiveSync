@@ -10,11 +10,19 @@ import {
 import { getUri } from "../utilities/getUri";
 import { getNonce } from "../utilities/getNonce";
 import * as path from "path";
-import * as fs from "fs";
-import { ConfigurationMessage } from "../ui/DTOs/messages/configurationDTO";
 
 type WebviewMessageCallback = (message: any) => void;
 
+/**
+ * This class manages the state and behavior of HelloWorld webview panels.
+ *
+ * It contains all the data and methods for:
+ *
+ * - Creating and rendering HelloWorld webview panels
+ * - Properly cleaning up and disposing of webview resources when the panel is closed
+ * - Setting the HTML (and by proxy CSS/JavaScript) content of the webview panel
+ * - Setting message listeners so data can be passed between the webview and extension
+ */
 export class Panel {
   protected _disposables: Disposable[] = [];
   public static currentPanel: Panel | undefined;
@@ -107,6 +115,42 @@ export class Panel {
     callback: WebviewMessageCallback,
   ) {
     webview.onDidReceiveMessage(callback, undefined, this._disposables);
+  }
+
+  /**
+   * Renders the current webview panel if it exists otherwise a new webview panel
+   * will be created and displayed.
+   *
+   * @param extensionUri The URI of the directory containing the extension.
+   */
+  public static render(
+    extensionUri: Uri,
+    viewType: string,
+    title: string,
+    localResourceRoots: Uri[],
+    filepaths: string[],
+    callback: WebviewMessageCallback,
+    editorColumn?: ViewColumn,
+    options?: WebviewOptions,
+  ) {
+    if (Panel.currentPanel) {
+      // If the webview panel already exists reveal it
+      Panel.currentPanel.getPanel().reveal(ViewColumn.One);
+    } else {
+      // If editorColumn is not provided, default to ViewColumn.One
+      editorColumn = editorColumn || ViewColumn.One;
+
+      // If a webview panel does not already exist create and show a new one
+      const panel = window.createWebviewPanel(viewType, title, editorColumn, {
+        // Enable JavaScript in the webview
+        enableScripts: true,
+        // Restrict the webview to only load resources from specified local resource roots
+        localResourceRoots: localResourceRoots,
+        ...options, // Include additional options if provided
+      });
+
+      Panel.currentPanel = new Panel(panel, extensionUri, filepaths, callback);
+    }
   }
 
   /**
