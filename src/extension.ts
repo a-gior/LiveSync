@@ -26,7 +26,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   let configurationDisposable = vscode.commands.registerCommand(
     "livesync.configuration",
-    async () => {
+    () => {
       // Check if there are any workspace folders open
       if (vscode.workspace.workspaceFolders === undefined) {
         vscode.window.showErrorMessage(
@@ -35,6 +35,7 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
+      console.log("Rendering Configuration Panel");
       ConfigurationPanel.render(context.extensionUri);
     },
   );
@@ -43,6 +44,7 @@ export function activate(context: vscode.ExtensionContext) {
   const svelteHelloWorldDisposable = vscode.commands.registerCommand(
     "livesync.showHelloWorld",
     () => {
+      console.log("Testing render");
       HelloWorldPanel.render(context.extensionUri);
     },
   );

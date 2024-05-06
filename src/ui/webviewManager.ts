@@ -4,9 +4,9 @@ import { Client } from "ssh2";
 import { SFTPClient } from "../services/SFTPClient";
 import * as fs from "fs";
 import { createOrShowWebviewPanel } from "./../utils/webviewUtils";
-import { ConfigurationMessage } from "./DTOs/messages/configurationDTO";
-import { ErrorsMessage } from "./DTOs/messages/errorsDTO";
-import { NotificationMessage } from "./DTOs/messages/notificationDTO";
+import { ConfigurationMessage } from "@shared/DTOs/messages/configurationDTO";
+import { ErrorsMessage } from "@shared/DTOs/messages/errorsDTO";
+import { NotificationMessage } from "@shared/DTOs/messages/notificationDTO";
 
 export class WebviewManager {
   private static _instance: WebviewManager | undefined;
@@ -60,7 +60,7 @@ export class WebviewManager {
     const defaultUsername = config.get<string>("username", "");
     const defaultAuthMethod = config.get<string>("authMethod", "password");
     const defaultPassword = config.get<string>("password", "");
-    const defaultSshKey = config.get<string>("sshKey", "");
+    // const defaultSshKey = config.get<string>("sshKey", "");
 
     const initialState: ConfigurationMessage = {
       command: "setInitialConfiguration",
@@ -70,7 +70,7 @@ export class WebviewManager {
         username: defaultUsername,
         authMethod: defaultAuthMethod,
         password: defaultPassword,
-        sshKey: defaultSshKey,
+        // sshKey: defaultSshKey,
       },
     };
 

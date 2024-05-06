@@ -133,7 +133,10 @@ export class Panel {
     editorColumn?: ViewColumn,
     options?: WebviewOptions,
   ) {
-    if (Panel.currentPanel) {
+    if (
+      Panel.currentPanel &&
+      Panel.currentPanel.getPanel().viewType === viewType
+    ) {
       // If the webview panel already exists reveal it
       Panel.currentPanel.getPanel().reveal(ViewColumn.One);
     } else {

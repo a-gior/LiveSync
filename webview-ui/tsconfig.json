@@ -1,11 +1,16 @@
 {
   "extends": "@tsconfig/svelte/tsconfig.json",
 
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "../shared/**/*"],
   "exclude": ["node_modules/*", "__sapper__/*", "public/*"],
   "compilerOptions": {
-    "verbatimModuleSyntax": true,
+    // "verbatimModuleSyntax": true,
     "importsNotUsedAsValues": "remove",
-    "preserveValueImports": false
+    "preserveValueImports": false,
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": "./",
+    "paths": {
+      "@shared/*": ["../shared/*"]
+    }
   }
 }

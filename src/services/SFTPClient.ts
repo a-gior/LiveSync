@@ -1,5 +1,5 @@
-import { ConfigurationMessage } from "../ui/DTOs/messages/configurationDTO";
-import { SFTPError } from "../ui/DTOs/sftpErrorDTO";
+import { ConfigurationMessage } from "@shared/DTOs/messages/configurationDTO";
+import { SFTPError } from "@shared/DTOs/sftpErrorDTO";
 import Client = require("ssh2-sftp-client");
 import * as fs from "fs";
 
@@ -22,9 +22,9 @@ export class SFTPClient {
       };
 
       console.log("Authmethod: ", config.authMethod);
-      if (config.authMethod === "password") {
+      if (config.authMethod === "auth-password") {
         connectionOptions.password = config.password;
-      } else if (config.authMethod === "ssh") {
+      } else if (config.authMethod === "auth-sshKey") {
         if (!config.sshKey) {
           throw new Error("SSH Key file path is not provided");
         }

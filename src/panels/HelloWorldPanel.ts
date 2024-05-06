@@ -23,8 +23,8 @@ export class HelloWorldPanel extends Panel {
     };
 
     const filepaths = [
-      "webview-ui/public/build/pages/main.css",
-      "webview-ui/public/build/pages/main.js",
+      "webview-ui/public/build/pages/main/main.css",
+      "webview-ui/public/build/pages/main/main.js",
     ];
 
     // Call the render method from the parent class with additional parameters

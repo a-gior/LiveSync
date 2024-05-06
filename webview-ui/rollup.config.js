@@ -6,6 +6,7 @@ import { terser } from "rollup-plugin-terser";
 import sveltePreprocess from "svelte-preprocess";
 import typescript from "@rollup/plugin-typescript";
 import css from "rollup-plugin-css-only";
+import alias from "@rollup/plugin-alias";
 
 import fs from "fs";
 import path from "path";
@@ -41,7 +42,6 @@ export default fs
   .readdirSync(path.join(__dirname, "src", "pages"))
   .map((input) => {
     const name = input.split(".")[0];
-    console.log(name);
     return {
       input: `src/pages/${name}.ts`,
       output: {
@@ -60,7 +60,7 @@ export default fs
         }),
         // we'll extract any component CSS out into
         // a separate file - better for performance
-        css({ output: `public/build/pages/${name}/${name}.css` }),
+        css({ output: `${name}.css` }),
 
         // If you have external dependencies installed from
         // npm, you'll most likely need these plugins. In
@@ -75,8 +75,16 @@ export default fs
         typescript({
           sourceMap: !production,
           inlineSources: !production,
+          include: ["**/*.ts", "../shared/**/*.ts"],
         }),
-
+        alias({
+          entries: [
+            {
+              find: "@shared",
+              replacement: path.resolve(__dirname, "../shared"),
+            },
+          ],
+        }),
         // In dev mode, call `npm run start` once
         // the bundle has been generated
         // !production && serve(),

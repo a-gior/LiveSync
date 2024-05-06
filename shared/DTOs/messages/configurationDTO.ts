@@ -1,6 +1,5 @@
 import { Message } from "./messageDTO";
 
-// Define a DTO for the configuration message
 export interface ConfigurationMessage extends Message {
   command: string;
   configuration: {
@@ -8,7 +7,7 @@ export interface ConfigurationMessage extends Message {
     port: number;
     username: string;
     authMethod?: string;
-    password: string;
-    sshKey: string | null; // Optional SSH key
+    password?: string;
+    sshKey?: string; // Optional SSH key
   };
 }
