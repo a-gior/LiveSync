@@ -1,15 +1,12 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
-import { WebviewManager } from "./ui/webviewManager";
 import { HelloWorldPanel } from "./panels/HelloWorldPanel";
 import { ConfigurationPanel } from "./panels/ConfigurationPanel";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-  const webviewManager = WebviewManager.getInstance(context);
-
   console.log('Congratulations, your extension "livesync" is now active!');
 
   let helloWorldDisposable = vscode.commands.registerCommand(
