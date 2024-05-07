@@ -82,7 +82,7 @@ export class ConfigurationPanel extends Panel {
 
   static async testConnection(
     configuration: ConfigurationMessage["configuration"],
-  ): Promise<void> {
+  ): Promise<boolean> {
     // Function to connect via SSH
     function connectSSH(config: ConfigurationMessage["configuration"]): void {
       const conn = new Client();
@@ -108,11 +108,6 @@ export class ConfigurationPanel extends Panel {
     await client.connect(configuration);
 
     const clientErrors = client.getErrors();
-    if (clientErrors.length > 0) {
-      window.showErrorMessage(clientErrors[0].error.message);
-    } else {
-      window.showInformationMessage("Test Connection successful");
-    }
 
     // //* List working directory files
     // await client.listFiles(".");
@@ -128,6 +123,14 @@ export class ConfigurationPanel extends Panel {
 
     //* Close the connection
     await client.disconnect();
+
+    if (clientErrors.length > 0) {
+      window.showErrorMessage(clientErrors[0].error.message);
+      return false;
+    } else {
+      window.showInformationMessage("Test Connection successful");
+      return true;
+    }
   }
 
   static getWorkspaceConfiguration(): ConfigurationState | null {

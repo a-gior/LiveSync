@@ -8,7 +8,6 @@
     "rootDirs": ["src", "shared"],
     "baseUrl": "./",
     "paths": {
-      "src/*": ["src/*"],
       "@shared/*": ["shared/*"]
     },
     // "rootDir": "src",

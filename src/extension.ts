@@ -32,7 +32,7 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      console.log("Rendering Configuration Panel");
+      console.log("Rendering Configuration Panel", context.extensionUri);
       ConfigurationPanel.render(context.extensionUri);
     },
   );
