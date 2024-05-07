@@ -21,6 +21,18 @@ export function activate(context: vscode.ExtensionContext) {
   );
   context.subscriptions.push(helloWorldDisposable);
 
+  let refreshDisposable = vscode.commands.registerCommand(
+    "livesync.refreshConfig",
+    () => {
+      ConfigurationPanel.kill();
+      ConfigurationPanel.render(context.extensionUri);
+      vscode.commands.executeCommand(
+        "workbench.action.webview.openDeveloperTools",
+      );
+    },
+  );
+  context.subscriptions.push(refreshDisposable);
+
   let configurationDisposable = vscode.commands.registerCommand(
     "livesync.configuration",
     () => {

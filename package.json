@@ -22,6 +22,10 @@
         "title": "LiveSync: Configuration"
       },
       {
+        "command": "livesync.refreshConfig",
+        "title": "LiveSync: Refresh Configuration"
+      },
+      {
         "command": "livesync.showHelloWorld",
         "title": "LiveSync: Show Hello World (Svelte)"
       }
@@ -72,13 +76,17 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "prepare": "husky",
-    "test": "node ./out/src/test/runTest.js"
+    "custom-test": "node ./out/src/test/runTest.js",
+    "custom-build-and-test": "npm run compile && node ./out/src/test/runTest.js",
+    "vscode-test": "vscode-test",
+    "vscode-build-and-test": "npm run compile && vscode-test"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.1",
     "@types/node": "18.x",
     "@types/ssh2": "^1.15.0",
     "@types/ssh2-sftp-client": "^9.0.3",
+    "@types/tmp": "^0.2.6",
     "@types/vscode": "^1.88.0",
     "@types/vscode-webview": "^1.57.5",
     "@typescript-eslint/eslint-plugin": "^7.4.0",
@@ -93,6 +101,7 @@
     "mocha": "^10.2.0",
     "prettier": "3.2.5",
     "rimraf": "^5.0.5",
+    "tmp-promise": "^3.0.3",
     "typescript": "^4.1.3"
   },
   "dependencies": {

@@ -24,15 +24,15 @@ export class ConfigurationPanel extends Panel {
       Uri.joinPath(extensionUri, "out"),
       Uri.joinPath(extensionUri, "webview-ui/public/build"),
     ];
-    const configurationCallback = (message: ConfigurationMessage) => {
+    const configurationCallback = async (message: ConfigurationMessage) => {
       switch (message.command) {
         case "updateConfiguration":
           console.log("UpdateConfiguration...");
-          this.updateConfiguration(message.configuration);
+          await this.updateConfiguration(message.configuration);
           break;
         case "testConnection":
           console.log("TestConnection...");
-          this.testConnection(message.configuration);
+          await this.testConnection(message.configuration);
           break;
       }
     };
@@ -65,19 +65,23 @@ export class ConfigurationPanel extends Panel {
     }
   }
 
-  static updateConfiguration(
+  static async updateConfiguration(
     configuration: ConfigurationMessage["configuration"],
   ) {
     const config = workspace.getConfiguration("LiveSync");
     const { hostname, port, username, authMethod, password, sshKey } =
       configuration;
 
-    config.update("hostname", hostname, ConfigurationTarget.Workspace);
-    config.update("port", port, ConfigurationTarget.Workspace);
-    config.update("username", username, ConfigurationTarget.Workspace);
-    config.update("authMethod", authMethod, ConfigurationTarget.Workspace);
-    config.update("password", password, ConfigurationTarget.Workspace);
-    config.update("sshKey", sshKey, ConfigurationTarget.Workspace);
+    await config.update("hostname", hostname, ConfigurationTarget.Workspace);
+    await config.update("port", port, ConfigurationTarget.Workspace);
+    await config.update("username", username, ConfigurationTarget.Workspace);
+    await config.update(
+      "authMethod",
+      authMethod,
+      ConfigurationTarget.Workspace,
+    );
+    await config.update("password", password, ConfigurationTarget.Workspace);
+    await config.update("sshKey", sshKey, ConfigurationTarget.Workspace);
   }
 
   static async testConnection(
@@ -104,7 +108,7 @@ export class ConfigurationPanel extends Panel {
     // Test SFTP connection
     //* Open the connection
     const client = new SFTPClient();
-    console.log("SFTP Client with config: ", configuration);
+    // console.log("[testConnection] SFTP Client with config: ", configuration);
     await client.connect(configuration);
 
     const clientErrors = client.getErrors();
@@ -128,7 +132,9 @@ export class ConfigurationPanel extends Panel {
       window.showErrorMessage(clientErrors[0].error.message);
       return false;
     } else {
-      window.showInformationMessage("Test Connection successful");
+      window.showInformationMessage(
+        "[testConnection] Test Connection successful",
+      );
       return true;
     }
   }
@@ -145,14 +151,8 @@ export class ConfigurationPanel extends Panel {
     const sshKeyFilePath = config.get<string | null>("sshKey");
 
     // Return null if any value is empty or undefined
-    if (
-      !hostname ||
-      !port ||
-      !username ||
-      !authMethod ||
-      !password ||
-      !sshKeyFilePath
-    ) {
+    if (!hostname || !port || !username || (!password ?? !sshKeyFilePath)) {
+      // console.log("One is null", {hostname, port, username, authMethod, password, sshKeyFilePath});
       return null;
     }
 
@@ -168,7 +168,6 @@ export class ConfigurationPanel extends Panel {
       },
     };
 
-    console.log("getWorkspaceConfiguration", workspaceConfig);
     return workspaceConfig;
   }
 }

@@ -156,6 +156,11 @@ export class Panel {
     }
   }
 
+  public static kill() {
+    Panel.currentPanel?.dispose();
+    Panel.currentPanel = undefined;
+  }
+
   /**
    * Cleans up and disposes of webview resources when the webview panel is closed.
    */

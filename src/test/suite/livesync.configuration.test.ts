@@ -1,9 +1,12 @@
 import * as vscode from "vscode";
 import * as assert from "assert";
+import * as myExt from "../../extension";
 import { ConfigurationPanel } from "../../panels/ConfigurationPanel";
 import { ConfigurationMessage } from "@shared/DTOs/messages/configurationDTO";
 
 suite("LiveSync Configuration Command Tests", () => {
+  // let extensionContext: vscode.ExtensionContext;
+
   vscode.window.showInformationMessage(
     "Start LiveSync configuration command tests.",
   );
@@ -12,7 +15,7 @@ suite("LiveSync Configuration Command Tests", () => {
     console.log("suiteSetup");
   });
 
-  test("Test Connection & Save Button", async () => {
+  test("TestConnection & Save Configuration", async () => {
     // Local VM credentials used for testing
     const configurationTest: ConfigurationMessage["configuration"] = {
       hostname: "192.168.56.101",
@@ -20,11 +23,29 @@ suite("LiveSync Configuration Command Tests", () => {
       authMethod: "auth-password",
       username: "centos",
       password: "centos",
+      sshKey: "",
     };
-    const testResult = ConfigurationPanel.testConnection(configurationTest);
-    assert.equal(testResult, true, "Test Connection OK");
 
-    // ConfigurationPanel.updateConfiguration(configurationTest);
+    // Test Connection
+    const testResult =
+      await ConfigurationPanel.testConnection(configurationTest);
+    assert.equal(testResult, true, "Test Connection is KO");
+
+    // Save Configuration
+    const currentConfig = ConfigurationPanel.getWorkspaceConfiguration();
+    assert.equal(currentConfig, null, "Initial Config isnt null");
+    try {
+      await ConfigurationPanel.updateConfiguration(configurationTest);
+    } catch (err: any) {
+      console.log("Error updating config: ", err.message);
+    }
+    const updatedConfig = ConfigurationPanel.getWorkspaceConfiguration();
+
+    assert.deepEqual(
+      updatedConfig?.config,
+      configurationTest,
+      "Config is not updated",
+    );
   });
 
   suiteTeardown(async () => {

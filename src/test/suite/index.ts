@@ -6,6 +6,7 @@ export async function run(): Promise<void> {
   // Create the mocha test
   const mocha = new Mocha({
     ui: "tdd",
+    color: true,
   });
 
   const testsRoot = path.resolve(__dirname, "..");
