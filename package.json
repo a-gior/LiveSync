@@ -62,6 +62,25 @@
           "type": "string",
           "default": "",
           "description": "SSH key for LiveSync configuration."
+        },
+        "LiveSync.pairedFolders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "title": "Paired Folders",
+            "properties": {
+              "localPath": {
+                "type": "string",
+                "description": "Path to a local folder"
+              },
+              "remotePath": {
+                "type": "string",
+                "description": "Path to a remote folder"
+              }
+            }
+          },
+          "default": [],
+          "description": "Array of paired local and remote folders"
         }
       }
     }

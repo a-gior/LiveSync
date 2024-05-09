@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as assert from "assert";
 import * as myExt from "../../extension";
 import { ConfigurationPanel } from "../../panels/ConfigurationPanel";
-import { ConfigurationMessage } from "@shared/DTOs/messages/configurationDTO";
+import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
 
 suite("LiveSync Configuration Command Tests", () => {
   // let extensionContext: vscode.ExtensionContext;
@@ -42,7 +42,7 @@ suite("LiveSync Configuration Command Tests", () => {
     const updatedConfig = ConfigurationPanel.getWorkspaceConfiguration();
 
     assert.deepEqual(
-      updatedConfig?.config,
+      updatedConfig?.configuration,
       configurationTest,
       "Config is not updated",
     );

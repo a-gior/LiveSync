@@ -2,7 +2,7 @@ import { Form } from "../components/types/formTypes";
 import { errorDisplayer } from "./errorDisplayer";
 
 class InputValidator {
-  isValidHostname = (hostnameInput: HTMLInputElement) => {
+  isValidHostname = (hostnameInput: HTMLInputElement): boolean => {
     // Check if hostname is a valid domain name or IP address
     // Example validation: regular expression for hostname or IP address format
     const hostnameRegex =
@@ -10,22 +10,29 @@ class InputValidator {
     return hostnameRegex.test(hostnameInput.value);
   };
 
-  isValidPort = (portInput: HTMLInputElement) => {
+  isValidPort = (portInput: HTMLInputElement): boolean => {
     // Check if port is a valid number within the range 1-65535
     const portNumber = parseInt(portInput.value);
     return !isNaN(portNumber) && portNumber >= 1 && portNumber <= 65535;
   };
 
-  isValidUsername = (usernameInput: HTMLInputElement) => {
+  isValidUsername = (usernameInput: HTMLInputElement): boolean => {
     // Implement validation logic for username
     // Example validation: check for length or specific characters
     return usernameInput.value.trim().length >= 6;
   };
 
-  isValidPassword = (passwordInput: HTMLInputElement) => {
+  isValidPassword = (passwordInput: HTMLInputElement): boolean => {
     // Implement password validation logic (e.g., strength requirements)
     // Example validation: check for minimum length
     return passwordInput.value.length >= 6;
+  };
+
+  isValidPath = (pathInput: HTMLInputElement): boolean => {
+    // Regular expression to match a path Windows/Linux
+    const pathRegex =
+      /^(?:[a-zA-Z]:\\(?:[^\\/:*?"<>|\r\n]+\\)*[^\\/:*?"<>|\r\n]*|(?:\/(?:[^/]+\/)*[^/]+)?)$/;
+    return pathRegex.test(pathInput.value);
   };
 
   isValidSSHKey = (
@@ -63,7 +70,7 @@ class InputValidator {
     });
   };
 
-  areValidInputs(form: Form) {
+  areValidInputs(form: Form): boolean {
     for (const formGroup of form.formGroups) {
       for (const formField of formGroup.fields) {
         if (

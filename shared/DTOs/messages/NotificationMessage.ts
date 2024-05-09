@@ -1,4 +1,4 @@
-import { Message } from "./messageDTO";
+import { Message } from "./Message";
 
 // Define a DTO for the configuration message
 export interface NotificationMessage extends Message {

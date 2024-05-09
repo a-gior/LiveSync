@@ -9,41 +9,55 @@
     import GenericForm from './shared/GenericForm.svelte';
     import Footer from './configuration/Footer.svelte';
     
-    import { ConfigurationMessage } from '@shared/DTOs/messages/configurationDTO';
-    import { ConfigurationState } from '@shared/DTOs/states/configurationState';
+    import { ConfigurationMessage } from '@shared/DTOs/messages/ConfigurationMessage';
+    import { ConfigurationState } from '@shared/DTOs/states/ConfigurationState';
+    import { utils } from 'src/utilities/utils';
+    import { PairFoldersMessage } from '@shared/DTOs/messages/PairFoldersMessage';
+    import { FullConfigurationMessage } from '@shared/DTOs/messages/FullConfigurationMessage';
     
 	provideVSCodeDesignSystem().register(vsCodeButton(), vsCodeCheckbox());
 
     function checkAuthMethod(event) {
-        form["formGroups"][0]["fields"][4]["visible"] = (event.target.value === "auth-password");
-        form["formGroups"][0]["fields"][5]["visible"] = (event.target.value === "auth-sshKey");
-        form = form;
+        remoteServerConfigFormData["formGroups"][0]["fields"][4]["visible"] = (event.target.value === "auth-password");
+        remoteServerConfigFormData["formGroups"][0]["fields"][5]["visible"] = (event.target.value === "auth-sshKey");
     }
 
-    function setInitialConfiguration(config: ConfigurationMessage['configuration']) {
+    function setInitialConfiguration(confState: ConfigurationState) {
+        vscode.setState(confState);
+        console.log("setInitialConfiguration Configuration.svelte : ", confState);
 
-        console.log("setInitialConfiguration", config);
-        // Check if initialState is not null or undefined
-        if (config) {
+        if(confState.configuration) {
             // Access configuration values from initialState
-            const confState: ConfigurationState = { config: config };
-            vscode.setState(confState);
-            const { hostname, port, username, authMethod, password, sshKey } = config;
+            const { hostname, port, username, authMethod, password, sshKey } = confState.configuration;
 
             // Set the initial values of the form fields
-            form.formGroups[0].fields[0].value = hostname;
-            form.formGroups[0].fields[1].value = port.toString();
-            form.formGroups[0].fields[2].value = username;
-            form.formGroups[0].fields[4].value = password;
+            remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[0].value = hostname;
+            remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[1].value = port.toString();
+            remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[2].value = username;
+            remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[4].value = password;
         }
+        
+        if(confState.pairedFolders) {
+
+            let i = 0;
+            for(const pairedFolder of confState.pairedFolders) {
+                newPairFolders();
+                console.log("pairFolderForm.formGroups", pairFolderFormData.formGroups);
+                pairFolderFormData.formGroups["pair-folder-form-group-"+i].fields[0].value = pairedFolder.localPath
+                pairFolderFormData.formGroups["pair-folder-form-group-"+i].fields[1].value = pairedFolder.remotePath;
+                i++;
+            }
+        }
+
     }
 
     // Create the form object
-    let form: Form = {
+    let remoteServerConfigFormData: Form = {
         title: "Remote Server Configuration",
         hasSubmitButton: false,
-        formGroups: [
-            {
+        id: "remote-server-form-data",
+        formGroups: {
+            "remote-server-form-group-0": {
                 visible: true,
                 fields: [
                     { name: 'host', label: 'Host', type: 'text', required: true, value: '', visible: true, validationCallback: inputValidator.isValidHostname },
@@ -64,8 +78,36 @@
                     { name: 'sshKey', label: 'SSH Key', type: 'file', required: true, value: '', visible: false, validationCallback: inputValidator.isValidSSHKey }
                 ]
             }
-        ]
+        }
     };
+
+    let pairFolderFormData: Form = {
+        title: "Paired Folders",
+        hasSubmitButton: true,
+        submitButtonName: "Validate",
+        id: "pair-folder-form-data",
+        formGroups: {
+            // Added dynamically
+        }
+    }
+
+    function newPairFolders() {
+        const index = Object.keys(pairFolderFormData.formGroups).length; // = index + 1 or initialize it to 0
+
+        pairFolderFormData = {
+            ...pairFolderFormData,
+            formGroups: {
+                ...pairFolderFormData.formGroups,
+                ["pair-folder-form-group-"+index]: {
+                    visible: true,
+                    fields: [
+                        { name: 'localFolder', label: 'Select a local folder', type: 'text', required: true, value: '', visible: true, validationCallback: inputValidator.isValidPath},
+                        { name: 'remoteFolder', label: 'Select a remote folder', type: 'text', required: true, value: '', visible: true, validationCallback: inputValidator.isValidPath}
+                    ]
+                }
+            }
+        };
+    }
     
     window.addEventListener("message", function (event) {
         console.log("Received postMessage", event);
@@ -74,7 +116,11 @@
 
         switch (data.command) {
             case "setInitialConfiguration":
-                setInitialConfiguration(data.configuration);
+                const configState: ConfigurationState = {
+                    configuration: data.configuration,
+                    pairedFolders: data.pairedFolders
+                }
+                setInitialConfiguration(configState);
                 break;
             case "showNotif":
                 break;
@@ -90,22 +136,50 @@
             const confState = previousState as ConfigurationState;
             console.log("Configuration: OnMount", confState);
 
+            const configState: ConfigurationState = {
+                configuration: confState.configuration,
+                pairedFolders: confState.pairedFolders
+            }
             // Now you can safely access the config property
-            setInitialConfiguration(confState.config);
+            setInitialConfiguration(configState);
         }
 
     });
+    
+    function savePairFolders(event) {
+        pairFolderFormData = pairFolderFormData; 
+        const pairFoldersMessage: FullConfigurationMessage = {
+            command: "savePairFolders",
+            pairedFolders: Object.entries(pairFolderFormData.formGroups).map(([key, form]): PairFoldersMessage["paths"] => ({
+                localPath: form.fields[0].value,
+                remotePath: form.fields[1].value
+            }))
+        };
+        const currentState: ConfigurationState = vscode.getState();
+
+        // Update State with new paired Folders and send postMessage
+        vscode.setState({...currentState, pairedFolders: pairFoldersMessage.pairedFolders});
+        vscode.postMessage(pairFoldersMessage);
+    }
+    
 
 </script>
 
 <configuration-container>
-    <GenericForm bind:form on:change={checkAuthMethod}/>
-    <Footer bind:form/>
+    <main>
+        <GenericForm bind:formData={remoteServerConfigFormData} on:change={checkAuthMethod}/>
+        <GenericForm bind:formData={pairFolderFormData} on:change={checkAuthMethod} onSubmit={savePairFolders}/>
+    </main>
+    <Footer bind:remoteServerConfigFormData bind:pairFolderFormData on:click={newPairFolders}/>
 </configuration-container>
 
 <style>
     configuration-container {
         width: 90%;
         margin-left: 2%;
+    }
+
+    configuration-container main {
+        margin-bottom: 5%;
     }
 </style>

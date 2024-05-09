@@ -4,26 +4,36 @@
 	import { vscode } from "./../../utilities/vscode";
     import { inputValidator } from "../../utilities/inputValidator";
     
-    import { ConfigurationState } from "@shared/DTOs/states/configurationState";
+    import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
+    import { FullConfigurationMessage } from "@shared/DTOs/messages/FullConfigurationMessage";
+    import { PairFoldersMessage } from "@shared/DTOs/messages/PairFoldersMessage";
 
 	provideVSCodeDesignSystem().register(vsCodeButton());
-    export let form: Form;
+    export let remoteServerConfigFormData: Form;
+    export let pairFolderFormData: Form;
 
-    let sshKeyInput = form.formGroups[0].fields[5];
+    let sshKeyInput = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[5];
     $: currentConfig = {
-        hostname: form.formGroups[0].fields[0].value,
-        port: Number(form.formGroups[0].fields[1].value),
-        username: form.formGroups[0].fields[2].value,
-        authMethod: form.formGroups[0].fields[3].value,
-        password: form.formGroups[0].fields[4].value,
+        hostname: remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[0].value,
+        port: Number(remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[1].value),
+        username: remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[2].value,
+        authMethod: remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[3].value,
+        password: remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[4].value,
         // sshKey: form.formGroups[0].fields[5].value, //htmlElement.querySelector("input[type='file']").files[0].path, // sshKeyInput?.files[0].path
         sshKey: sshKeyInput.files ? (sshKeyInput.files[0] as any).path : null, 
     };
+    $: currentPairedFolders = Object.entries(pairFolderFormData.formGroups).map(([key, form]): PairFoldersMessage["paths"] => ({
+        localPath: form.fields[0].value,
+        remotePath: form.fields[1].value
+    }));
 
     function saveForms() {
-        if (inputValidator.areValidInputs(form)) {
+        if (inputValidator.areValidInputs(remoteServerConfigFormData)) {
             // Proceed with form submission or other actions
-            const confState: ConfigurationState = { config: currentConfig };
+            const confState: ConfigurationState = { 
+                configuration: currentConfig,
+                pairedFolders: currentPairedFolders
+            };
             vscode.setState(confState);
             sendConfiguration("updateConfiguration");
             console.log("Form submitted successfully");
@@ -34,7 +44,7 @@
 
     function testConnection() {
         // Perform validation checks
-        if (inputValidator.areValidInputs(form)) {
+        if (inputValidator.areValidInputs(remoteServerConfigFormData)) {
             // Proceed with form submission or other actions
             sendConfiguration("testConnection");
             console.log("Valid inputs, we send the test connection");
@@ -44,22 +54,30 @@
     }
     
     function sendConfiguration(cmd) {
-    const configurationMessage = {
-        command: cmd,
-        configuration: currentConfig,
-    };
-    vscode.postMessage(configurationMessage);
+        const configurationMessage: FullConfigurationMessage = {
+            command: cmd,
+            configuration: currentConfig,
+            pairedFolders: currentPairedFolders
+        };
+        vscode.postMessage(configurationMessage);
     }
   </script>
   
 
   <footer-container>
     <vscode-button id="test-connection-button" on:click={testConnection}>Test Connection</vscode-button>
+    <vscode-button id="add-pair-folders" on:click>New Folder Pair</vscode-button>
     <vscode-button class="save-button" on:click={saveForms}>Save</vscode-button>
   </footer-container>
   
   <style>
-    
+    vscode-button {
+        margin: 0 5px;
+    }
+    #add-pair-folders, #test-connection-button {
+        float: left;
+    }
+
     /* Styles for the footer container */
     footer-container {
     position: fixed; /* Fixed position to keep it at the bottom */

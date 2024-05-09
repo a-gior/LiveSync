@@ -1,4 +1,4 @@
-import { ConfigurationMessage } from "@shared/DTOs/messages/configurationDTO";
+import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
 import { SFTPError } from "@shared/DTOs/sftpErrorDTO";
 import Client = require("ssh2-sftp-client");
 import * as fs from "fs";
@@ -97,6 +97,10 @@ export class SFTPClient {
     } catch (err) {
       this._addError("Deleting failed", err);
     }
+  }
+
+  async pathExists(remotePath: string) {
+    return this._client.exists(remotePath);
   }
 
   private _addError(msg: string, err: any) {

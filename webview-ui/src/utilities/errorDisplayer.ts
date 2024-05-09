@@ -1,4 +1,4 @@
-export class ErrorDisplayer {
+class ErrorDisplayer {
   private readonly displayDuration: number = 3000; // milliseconds
 
   display(

@@ -1,5 +1,7 @@
-import { ConfigurationMessage } from "../messages/configurationDTO";
+import { ConfigurationMessage } from "../messages/ConfigurationMessage";
+import { PairFoldersMessage } from "../messages/PairFoldersMessage";
 
 export interface ConfigurationState {
-  config: ConfigurationMessage["configuration"];
+  configuration?: ConfigurationMessage["configuration"];
+  pairedFolders?: PairFoldersMessage["paths"][];
 }

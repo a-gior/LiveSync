@@ -11,10 +11,14 @@ import {
 } from "vscode";
 import { Panel } from "./Panel";
 
-import { ConfigurationMessage } from "@shared/DTOs/messages/configurationDTO";
-import { ConfigurationState } from "@shared/DTOs/states/configurationState";
+import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
+import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 import { Client } from "ssh2";
 import { SFTPClient } from "../services/SFTPClient";
+import { Message } from "@shared/DTOs/messages/Message";
+import { PairFoldersMessage } from "@shared/DTOs/messages/PairFoldersMessage";
+import * as fs from "fs";
+import { FullConfigurationMessage } from "@shared/DTOs/messages/FullConfigurationMessage";
 
 export class ConfigurationPanel extends Panel {
   static render(extensionUri: Uri) {
@@ -24,15 +28,28 @@ export class ConfigurationPanel extends Panel {
       Uri.joinPath(extensionUri, "out"),
       Uri.joinPath(extensionUri, "webview-ui/public/build"),
     ];
-    const configurationCallback = async (message: ConfigurationMessage) => {
+    const configurationCallback = async (message: FullConfigurationMessage) => {
       switch (message.command) {
         case "updateConfiguration":
           console.log("UpdateConfiguration...");
-          await this.updateConfiguration(message.configuration);
+          if (message.configuration) {
+            await this.updateConfiguration(message.configuration);
+          }
+          if (message.pairedFolders) {
+            await this.savePairFolders(message.pairedFolders);
+          }
           break;
         case "testConnection":
           console.log("TestConnection...");
-          await this.testConnection(message.configuration);
+          if (message.configuration) {
+            await this.testConnection(message.configuration);
+          }
+          break;
+        case "savePairFolders":
+          console.log("Save Pair Folders...");
+          if (message.pairedFolders) {
+            await this.savePairFolders(message.pairedFolders);
+          }
           break;
       }
     };
@@ -55,14 +72,64 @@ export class ConfigurationPanel extends Panel {
     );
 
     const workspaceConfig = this.getWorkspaceConfiguration();
-    if (workspaceConfig !== null) {
-      const configurationMessage = {
+
+    if (workspaceConfig) {
+      const fullConfigMessage: FullConfigurationMessage = {
         command: "setInitialConfiguration",
-        configuration: workspaceConfig["config"],
+        configuration: workspaceConfig.configuration,
+        pairedFolders: workspaceConfig.pairedFolders,
       };
 
-      this.currentPanel?.getPanel().webview.postMessage(configurationMessage);
+      this.currentPanel?.getPanel().webview.postMessage(fullConfigMessage);
     }
+  }
+
+  static async savePairFolders(
+    pairedFoldersArr: PairFoldersMessage["paths"][],
+  ) {
+    console.log("DEBUGGING pairedFolders: ", pairedFoldersArr);
+
+    const config = workspace.getConfiguration("LiveSync");
+    const currentConnectionConfig = this.getWorkspaceConfiguration();
+
+    for (const pairedFolders of pairedFoldersArr) {
+      if (
+        currentConnectionConfig &&
+        currentConnectionConfig.configuration &&
+        currentConnectionConfig.pairedFolders
+      ) {
+        const { localPath, remotePath } = pairedFolders;
+        const client = new SFTPClient();
+        await client.connect(currentConnectionConfig.configuration);
+
+        if (!fs.existsSync(localPath)) {
+          console.log(
+            `Local folder not found. Local path: ${localPath} & remote path: ${remotePath}`,
+          );
+          window.showErrorMessage("Local folder not found");
+          return;
+        } else if (!(await client.pathExists(remotePath))) {
+          console.log(
+            `Remote folder not found. Local path: ${localPath} & remote path: ${remotePath}`,
+          );
+          window.showErrorMessage("Remote folder not found");
+          return;
+        }
+      } else {
+        window.showErrorMessage(
+          "No configuration found or missing properties. Please configure LiveSync correctly",
+        );
+        return;
+      }
+    }
+
+    // All good so we update the pairedFolders config
+    await config.update(
+      "pairedFolders",
+      pairedFoldersArr,
+      ConfigurationTarget.Workspace,
+    );
+    window.showInformationMessage("Paired Folders are valid and saved");
   }
 
   static async updateConfiguration(
@@ -87,24 +154,6 @@ export class ConfigurationPanel extends Panel {
   static async testConnection(
     configuration: ConfigurationMessage["configuration"],
   ): Promise<boolean> {
-    // Function to connect via SSH
-    function connectSSH(config: ConfigurationMessage["configuration"]): void {
-      const conn = new Client();
-
-      conn.on("ready", () => {
-        console.log("SSH Connection successful");
-        conn.end();
-      });
-      conn.on("error", (err) => {
-        console.error("Error connecting via SSH:", err);
-      });
-      conn.connect(config);
-    }
-
-    const { hostname, port, username, password } = configuration;
-    // Test SSH connection
-    // connectSSH(configuration);
-
     // Test SFTP connection
     //* Open the connection
     const client = new SFTPClient();
@@ -132,9 +181,7 @@ export class ConfigurationPanel extends Panel {
       window.showErrorMessage(clientErrors[0].error.message);
       return false;
     } else {
-      window.showInformationMessage(
-        "[testConnection] Test Connection successful",
-      );
+      window.showInformationMessage("Test Connection successful");
       return true;
     }
   }
@@ -148,7 +195,10 @@ export class ConfigurationPanel extends Panel {
     const username = config.get<string>("username");
     const authMethod = config.get<string | undefined>("authMethod");
     const password = config.get<string>("password");
-    const sshKeyFilePath = config.get<string | null>("sshKey");
+    const sshKeyFilePath = config.get<string>("sshKey");
+
+    const pairedFolders =
+      config.get<Array<PairFoldersMessage["paths"]>>("pairedFolders");
 
     // Return null if any value is empty or undefined
     if (!hostname || !port || !username || (!password ?? !sshKeyFilePath)) {
@@ -158,7 +208,7 @@ export class ConfigurationPanel extends Panel {
 
     // Construct the workspace configuration object
     const workspaceConfig: ConfigurationState = {
-      config: {
+      configuration: {
         hostname: hostname,
         port: port,
         username: username,
@@ -166,6 +216,7 @@ export class ConfigurationPanel extends Panel {
         password: password,
         sshKey: sshKeyFilePath,
       },
+      pairedFolders: pairedFolders,
     };
 
     return workspaceConfig;

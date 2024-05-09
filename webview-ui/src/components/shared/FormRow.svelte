@@ -62,12 +62,5 @@
     form-row {
         padding-left: 15px;
     }
-    
-    /* Separator style */
-    .form-separator {
-        border-bottom: 1px solid #404040; /* Adds a line to separate sections */
-        margin-top: 5px;
-        margin-bottom: 5px;
-    }
 
 </style>

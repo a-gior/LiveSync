@@ -1,4 +1,4 @@
-import { Message } from "./messageDTO";
+import { Message } from "./Message";
 
 export interface ConfigurationMessage extends Message {
   command: string;

@@ -1,7 +1,9 @@
 export interface Form {
+  id: string;
   title: string;
-  formGroups: FormGroup[];
+  formGroups: { [id: string]: FormGroup };
   hasSubmitButton: boolean;
+  submitButtonName?: string;
 }
 
 export interface FormGroup {
@@ -13,6 +15,7 @@ export interface FormGroup {
 export interface FormField {
   name: string;
   label?: string;
+  placeholder?: string;
   type: string;
   value: string;
   files?: FileList;
