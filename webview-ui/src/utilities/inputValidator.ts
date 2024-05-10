@@ -71,7 +71,7 @@ class InputValidator {
   };
 
   areValidInputs(form: Form): boolean {
-    for (const formGroup of form.formGroups) {
+    for (const [id, formGroup] of Object.entries(form.formGroups)) {
       for (const formField of formGroup.fields) {
         if (
           formField.visible &&
