@@ -186,7 +186,7 @@ export class ConfigurationPanel extends Panel {
     }
   }
 
-  static getWorkspaceConfiguration(): ConfigurationState | null {
+  static getWorkspaceConfiguration(): ConfigurationState {
     const config = workspace.getConfiguration("LiveSync");
 
     // Get individual configuration values
@@ -200,24 +200,24 @@ export class ConfigurationPanel extends Panel {
     const pairedFolders =
       config.get<Array<PairFoldersMessage["paths"]>>("pairedFolders");
 
-    // Return null if any value is empty or undefined
-    if (!hostname || !port || !username || (!password ?? !sshKeyFilePath)) {
-      // console.log("One is null", {hostname, port, username, authMethod, password, sshKeyFilePath});
-      return null;
-    }
+    const workspaceConfig: ConfigurationState = {};
 
-    // Construct the workspace configuration object
-    const workspaceConfig: ConfigurationState = {
-      configuration: {
+    // Return null if any value is empty or undefined
+    if (hostname && port && username && (password ?? sshKeyFilePath)) {
+      // console.log("One is null", {hostname, port, username, authMethod, password, sshKeyFilePath});
+      workspaceConfig.configuration = {
         hostname: hostname,
         port: port,
         username: username,
         authMethod: authMethod,
         password: password,
         sshKey: sshKeyFilePath,
-      },
-      pairedFolders: pairedFolders,
-    };
+      };
+    }
+
+    if (pairedFolders) {
+      workspaceConfig.pairedFolders = pairedFolders;
+    }
 
     return workspaceConfig;
   }

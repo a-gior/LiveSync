@@ -3,23 +3,25 @@
 import * as vscode from "vscode";
 import { HelloWorldPanel } from "./panels/HelloWorldPanel";
 import { ConfigurationPanel } from "./panels/ConfigurationPanel";
+import { PairedFoldersTreeDataProvider } from "./services/PairedFoldersTreeDataProvider";
+import { JsonOutlineProvider } from "./services/JsonOutlineProvider";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
+  const rootPath =
+    vscode.workspace.workspaceFolders &&
+    vscode.workspace.workspaceFolders.length > 0
+      ? vscode.workspace.workspaceFolders[0].uri.fsPath
+      : undefined;
+
   console.log('Congratulations, your extension "livesync" is now active!');
 
-  let helloWorldDisposable = vscode.commands.registerCommand(
-    "livesync.helloWorld",
-    async () => {
-      vscode.window.showInformationMessage("Hello World from LiveSync!");
-      const input = await vscode.window.showInputBox();
-      if (input) {
-        vscode.window.showInformationMessage(input);
-      }
-    },
+  const nodeDependenciesProvider = new PairedFoldersTreeDataProvider(context);
+  vscode.window.registerTreeDataProvider(
+    "nodeDependencies",
+    nodeDependenciesProvider,
   );
-  context.subscriptions.push(helloWorldDisposable);
 
   let refreshDisposable = vscode.commands.registerCommand(
     "livesync.refreshConfig",

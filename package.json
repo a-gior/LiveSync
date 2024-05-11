@@ -12,6 +12,25 @@
   "activationEvents": [],
   "main": "./out/src/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "package-explorer",
+          "title": "LiveSync",
+          "icon": "webview-ui/public/build/media/liveysync-logo.svg"
+        }
+      ]
+    },
+    "views": {
+      "package-explorer": [
+        {
+          "id": "nodeDependencies",
+          "name": "Paired Folders",
+          "type": "tree",
+          "icon": "webview-ui/public/build/media/liveysync-logo.svg"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "livesync.helloWorld",
@@ -115,6 +134,7 @@
     "eslint": "^8.57.0",
     "glob": "^10.3.12",
     "husky": "^9.0.11",
+    "jsonc-parser": "^3.2.1",
     "lint-staged": "^15.2.2",
     "minimatch": "^9.0.4",
     "mocha": "^10.2.0",
