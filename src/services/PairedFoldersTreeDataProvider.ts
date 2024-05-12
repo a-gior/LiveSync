@@ -3,46 +3,46 @@ import * as fs from "fs";
 import * as path from "path";
 import { ConfigurationPanel } from "../panels/ConfigurationPanel";
 import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
-import { SFTPClient } from "./SFTPClient";
-
-class FileSystemItem {
-  constructor(
-    public name: string,
-    public children: FileSystemItem[] = [],
-  ) {}
-}
+import {
+  listLocalFilesRecursive,
+  listRemoteFilesRecursive,
+  compareFileMaps,
+} from "../utilities/filesUtils";
+import { FileMap } from "src/types/FileTypes";
 
 export class PairedFoldersTreeDataProvider
-  implements vscode.TreeDataProvider<FileSystemItem>
+  implements vscode.TreeDataProvider<FileMap>
 {
   private _onDidChangeTreeData: vscode.EventEmitter<
-    FileSystemItem | undefined | null | void
-  > = new vscode.EventEmitter<FileSystemItem | undefined | null | void>();
-  readonly onDidChangeTreeData: vscode.Event<
-    FileSystemItem | undefined | null | void
-  > = this._onDidChangeTreeData.event;
+    FileMap[] | undefined | void
+  > = new vscode.EventEmitter<FileMap[] | undefined | void>();
+  readonly onDidChangeTreeData: vscode.Event<FileMap[] | undefined | void> =
+    this._onDidChangeTreeData.event;
 
   readonly workspaceConfiguration: ConfigurationState =
     ConfigurationPanel.getWorkspaceConfiguration();
 
-  constructor(private context: vscode.ExtensionContext) {}
+  constructor() {}
 
   refresh(): void {
     this._onDidChangeTreeData.fire();
   }
 
-  getTreeItem(element: FileSystemItem): vscode.TreeItem {
+  getTreeItem(element: FileMap): vscode.TreeItem {
+    const [fileName, fileItem] = Object.entries(element)[0];
+    console.log("GetTreeItem: ", element);
+
     return new vscode.TreeItem(
-      element.name,
-      element.children.length > 0
+      fileName,
+      Object.entries(fileItem.children).length > 0
         ? vscode.TreeItemCollapsibleState.Collapsed
         : vscode.TreeItemCollapsibleState.None,
     );
   }
 
-  async getChildren(element?: FileSystemItem): Promise<FileSystemItem[]> {
+  async getChildren(element?: FileMap): Promise<FileMap[]> {
     if (!element) {
-      const rootItems: FileSystemItem[] = [];
+      const rootItems: FileMap[] = [];
       // If no element provided, get the root items (local folders)
       if (
         !this.workspaceConfiguration.configuration ||
@@ -53,80 +53,63 @@ export class PairedFoldersTreeDataProvider
       } else {
         const pairedFolders: { localPath: string; remotePath: string }[] =
           this.workspaceConfiguration.pairedFolders;
+
         for (const { localPath, remotePath } of pairedFolders) {
           console.log("getChildren localPath: ", localPath);
-          rootItems.push(await this.getFilesInDirectory(localPath, remotePath));
+          const rootName: string = `[local] ${path.basename(localPath)} <=> ${path.basename(remotePath)} [remote]`;
+          const rootFileMap: FileMap = {};
+
+          rootFileMap[rootName] = {
+            type: "directory",
+            size: 0,
+            modifiedTime: new Date(),
+            source: "local",
+            status: "unchanged",
+            children: await this.compareDirectories(localPath, remotePath),
+          };
+
+          rootItems.push(rootFileMap);
         }
         console.log("getChildren rootItems: ", rootItems);
       }
       return rootItems;
     } else {
       // If element provided, return its children
-      return element.children;
+      const fileMapArr: FileMap[] = [];
+      const [fileName, fileItem] = Object.entries(element)[0];
+
+      console.log("getChildren element: ", element[fileName].children);
+      for (const [childFileName, childFileItem] of Object.entries(
+        element[fileName].children,
+      )) {
+        fileMapArr.push({
+          [childFileName]: childFileItem,
+        });
+      }
+
+      return fileMapArr;
     }
   }
 
-  private async getFilesInDirectory(
-    folderPath: string,
-    remotePath: string,
-    isRoot: boolean = true,
-  ): Promise<FileSystemItem> {
-    let root;
-    if (isRoot) {
-      root = new FileSystemItem(
-        `[local] ${path.basename(folderPath)} <=> ${path.basename(remotePath)} [remote]`,
-      );
-      await this.compareDirectories(folderPath, remotePath);
-    } else {
-      root = new FileSystemItem(`${path.basename(folderPath)}`);
-    }
+  async compareDirectories(
+    localDir: string,
+    remoteDir: string,
+  ): Promise<FileMap> {
+    let differences: FileMap = {};
     try {
-      const dirents = await fs.promises.readdir(folderPath, {
-        withFileTypes: true,
-      });
-      for (const dirent of dirents) {
-        const name = dirent.name;
-        const fullPath = path.join(folderPath, name);
-        if (dirent.isDirectory()) {
-          root.children.push(
-            await this.getFilesInDirectory(fullPath, remotePath, false),
-          );
-        } else {
-          root.children.push(new FileSystemItem(name));
-        }
-      }
-
-      if (isRoot && root.children.length === 0) {
-        root = new FileSystemItem(
-          `[local] ${path.basename(folderPath)} <=> ${path.basename(remotePath)} [remote] (EMPTY)`,
-        );
-      }
-    } catch (error) {
-      console.error(`Error reading directory: ${folderPath}`, error);
-    }
-    return root;
-  }
-
-  async compareDirectories(localDir: string, remoteDir: string) {
-    const sftpClient = new SFTPClient();
-
-    try {
-      // Connect to the remote server
-      if (this.workspaceConfiguration.configuration) {
-        await sftpClient.connect(this.workspaceConfiguration.configuration);
-      }
-
       // List files and folders in the remote directory
-      const localFiles = await sftpClient.listLocalFilesRecursive(localDir);
-      const remoteFiles = await sftpClient.listRemoteFilesRecursive(remoteDir);
+      const localFiles = await listLocalFilesRecursive(localDir);
+      const remoteFiles = await listRemoteFilesRecursive(remoteDir);
 
       console.log("Local Files: ", localFiles);
       console.log("Remote Files: ", remoteFiles);
+
+      differences = compareFileMaps(localFiles, remoteFiles);
+      console.log("Differences in Files: ", differences);
     } catch (error) {
       console.error("Error:", error);
-    } finally {
-      // Disconnect from the remote server
-      await sftpClient.disconnect();
     }
+
+    return differences;
   }
 }

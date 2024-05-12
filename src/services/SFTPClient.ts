@@ -73,101 +73,6 @@ export class SFTPClient {
     return fileNames;
   }
 
-  async listRemoteFilesRecursive(
-    remoteDir: string,
-    fileGlob?: any,
-  ): Promise<any> {
-    console.log(`Listing ${remoteDir} recursively...`);
-
-    const listDirectory = async (dir: string): Promise<any> => {
-      const fileObjects = await this._client.list(
-        dir.replace(/\\/g, "/"),
-        fileGlob,
-      );
-      const directoryContents: any = {};
-
-      for (const file of fileObjects) {
-        const filePath = path.join(dir, file.name);
-        if (file.type === "d") {
-          console.log(
-            `${new Date(file.modifyTime).toISOString()} PRE ${file.name}`,
-          );
-          // Recursively list files in subdirectory
-          const subfiles = await listDirectory(filePath);
-          directoryContents[file.name] = {
-            type: "directory",
-            modifiedTime: new Date(file.modifyTime).toISOString(),
-            contents: subfiles,
-          };
-        } else {
-          console.log(
-            `${new Date(file.modifyTime).toISOString()} ${file.size} ${file.name}`,
-          );
-          directoryContents[file.name] = {
-            type: "file",
-            size: file.size,
-            modifiedTime: new Date(file.modifyTime).toISOString(),
-          };
-        }
-      }
-
-      return directoryContents;
-    };
-
-    try {
-      return await listDirectory(remoteDir);
-    } catch (err) {
-      this._addError("Recursive listing failed", err);
-      return null;
-    }
-  }
-
-  async listLocalFilesRecursive(
-    localDir: string,
-    fileGlob?: string,
-  ): Promise<any> {
-    console.log(`Listing ${localDir} recursively...`);
-
-    const listDirectory = async (dir: string): Promise<any> => {
-      const directoryContents: any = {};
-
-      const files = fs.readdirSync(dir, { withFileTypes: true });
-      for (const file of files) {
-        const filePath = path.join(dir, file.name);
-        if (file.isDirectory()) {
-          console.log(
-            `${fs.statSync(filePath).mtime.toISOString()} PRE ${file.name}`,
-          );
-          // Recursively list files in subdirectory
-          const subfiles = await listDirectory(filePath);
-          directoryContents[file.name] = {
-            type: "directory",
-            modifiedTime: fs.statSync(filePath).mtime.toISOString(),
-            contents: subfiles,
-          };
-        } else {
-          console.log(
-            `${fs.statSync(filePath).mtime.toISOString()} ${fs.statSync(filePath).size} ${file.name}`,
-          );
-          directoryContents[file.name] = {
-            type: "file",
-            size: fs.statSync(filePath).size,
-            modifiedTime: fs.statSync(filePath).mtime.toISOString(),
-          };
-        }
-      }
-
-      return directoryContents;
-    };
-
-    try {
-      return await listDirectory(localDir);
-    } catch (err) {
-      this._addError("Recursive listing failed", err);
-      return null;
-    }
-  }
-
   async uploadFile(localFile: string, remoteFile: string) {
     console.log(`Uploading ${localFile} to ${remoteFile} ...`);
     try {
@@ -205,6 +110,10 @@ export class SFTPClient {
       msg: msg + ": ",
       error: err,
     });
+  }
+
+  getClient() {
+    return this._client;
   }
 
   getErrors() {

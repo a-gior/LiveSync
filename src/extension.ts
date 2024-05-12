@@ -17,7 +17,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   console.log('Congratulations, your extension "livesync" is now active!');
 
-  const nodeDependenciesProvider = new PairedFoldersTreeDataProvider(context);
+  const nodeDependenciesProvider = new PairedFoldersTreeDataProvider();
   vscode.window.registerTreeDataProvider(
     "nodeDependencies",
     nodeDependenciesProvider,
