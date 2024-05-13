@@ -4,7 +4,6 @@ import * as vscode from "vscode";
 import { HelloWorldPanel } from "./panels/HelloWorldPanel";
 import { ConfigurationPanel } from "./panels/ConfigurationPanel";
 import { PairedFoldersTreeDataProvider } from "./services/PairedFoldersTreeDataProvider";
-import { JsonOutlineProvider } from "./services/JsonOutlineProvider";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -28,9 +27,12 @@ export function activate(context: vscode.ExtensionContext) {
     () => {
       ConfigurationPanel.kill();
       ConfigurationPanel.render(context.extensionUri);
-      vscode.commands.executeCommand(
-        "workbench.action.webview.openDeveloperTools",
-      );
+
+      setTimeout(async () => {
+        await vscode.commands.executeCommand(
+          "workbench.action.webview.openDeveloperTools",
+        );
+      }, 500);
     },
   );
   context.subscriptions.push(refreshDisposable);

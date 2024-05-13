@@ -17,7 +17,7 @@
         {
           "id": "package-explorer",
           "title": "LiveSync",
-          "icon": "webview-ui/public/build/media/liveysync-logo.svg"
+          "icon": "resources/media/liveysync-logo.svg"
         }
       ]
     },
@@ -27,7 +27,7 @@
           "id": "nodeDependencies",
           "name": "Paired Folders",
           "type": "tree",
-          "icon": "webview-ui/public/build/media/liveysync-logo.svg"
+          "icon": "resources/media/liveysync-logo.svg"
         }
       ]
     },

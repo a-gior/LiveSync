@@ -6,7 +6,7 @@
     } from "@vscode/webview-ui-toolkit";
     import type { Form } from "../types/formTypes";
     import FormRow from "./FormRow.svelte";
-    import CloseIcon from "./../../../public/build/icons/close.svelte";
+    import CloseIcon from "@resources/icons/close.svelte";
 
     export let formData: Form;
     export let onSubmit: CallableFunction = null;

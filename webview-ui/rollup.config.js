@@ -83,6 +83,10 @@ export default fs
               find: "@shared",
               replacement: path.resolve(__dirname, "../shared"),
             },
+            {
+              find: "@resources",
+              replacement: path.resolve(__dirname, "../resources"),
+            },
           ],
         }),
         // In dev mode, call `npm run start` once

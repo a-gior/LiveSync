@@ -1,6 +1,4 @@
 <script>
-    import close from './../../../public/build/icons/close.svelte';
-
     export let name;
     export let width = "1rem";
     export let height = "1rem";
