@@ -7,16 +7,18 @@ import {
   listLocalFilesRecursive,
   listRemoteFilesRecursive,
   compareFileMaps,
+  listLocalFilesRecursive2,
 } from "../utilities/filesUtils";
 import { FileMap } from "src/types/FileTypes";
+import { FileEntry } from "src/services/FileEntry";
 
 export class PairedFoldersTreeDataProvider
-  implements vscode.TreeDataProvider<FileMap>
+  implements vscode.TreeDataProvider<FileEntry>
 {
   private _onDidChangeTreeData: vscode.EventEmitter<
-    FileMap[] | undefined | void
-  > = new vscode.EventEmitter<FileMap[] | undefined | void>();
-  readonly onDidChangeTreeData: vscode.Event<FileMap[] | undefined | void> =
+    FileEntry[] | undefined | void
+  > = new vscode.EventEmitter<FileEntry[] | undefined | void>();
+  readonly onDidChangeTreeData: vscode.Event<FileEntry[] | undefined | void> =
     this._onDidChangeTreeData.event;
 
   readonly workspaceConfiguration: ConfigurationState =
@@ -28,21 +30,20 @@ export class PairedFoldersTreeDataProvider
     this._onDidChangeTreeData.fire();
   }
 
-  getTreeItem(element: FileMap): vscode.TreeItem {
-    const [fileName, fileItem] = Object.entries(element)[0];
+  getTreeItem(element: FileEntry): vscode.TreeItem {
     console.log("GetTreeItem: ", element);
 
     return new vscode.TreeItem(
-      fileName,
-      Object.entries(fileItem.children).length > 0
+      element.name,
+      Object.entries(element.children).length > 0
         ? vscode.TreeItemCollapsibleState.Collapsed
         : vscode.TreeItemCollapsibleState.None,
     );
   }
 
-  async getChildren(element?: FileMap): Promise<FileMap[]> {
+  async getChildren(element?: FileEntry): Promise<FileEntry[]> {
     if (!element) {
-      const rootItems: FileMap[] = [];
+      const rootItems: FileEntry[] = [];
       // If no element provided, get the root items (local folders)
       if (
         !this.workspaceConfiguration.configuration ||
@@ -57,35 +58,30 @@ export class PairedFoldersTreeDataProvider
         for (const { localPath, remotePath } of pairedFolders) {
           console.log("getChildren localPath: ", localPath);
           const rootName: string = `[local] ${path.basename(localPath)} <=> ${path.basename(remotePath)} [remote]`;
-          const rootFileMap: FileMap = {};
+          const rootFileEntry: FileEntry = new FileEntry(
+            rootName,
+            "directory",
+            0,
+            new Date(),
+            "local",
+            "./",
+            "unchanged",
+          );
+          for (const [fileName, fileEntry] of await this.compareDirectories(
+            localPath,
+            remotePath,
+          )) {
+            rootFileEntry.addChild(fileEntry);
+          }
 
-          rootFileMap[rootName] = {
-            type: "directory",
-            size: 0,
-            modifiedTime: new Date(),
-            source: "local",
-            status: "unchanged",
-            children: await this.compareDirectories(localPath, remotePath),
-          };
-
-          rootItems.push(rootFileMap);
+          rootItems.push(rootFileEntry);
         }
         console.log("getChildren rootItems: ", rootItems);
       }
       return rootItems;
     } else {
       // If element provided, return its children
-      const fileMapArr: FileMap[] = [];
-      const [fileName, fileItem] = Object.entries(element)[0];
-
-      console.log("getChildren element: ", element[fileName].children);
-      for (const [childFileName, childFileItem] of Object.entries(
-        element[fileName].children,
-      )) {
-        fileMapArr.push({
-          [childFileName]: childFileItem,
-        });
-      }
+      const fileMapArr: FileEntry[] = [];
 
       return fileMapArr;
     }
@@ -94,17 +90,17 @@ export class PairedFoldersTreeDataProvider
   async compareDirectories(
     localDir: string,
     remoteDir: string,
-  ): Promise<FileMap> {
-    let differences: FileMap = {};
+  ): Promise<FileEntry[]> {
+    let differences: FileEntry[] = [];
     try {
       // List files and folders in the remote directory
-      const localFiles = await listLocalFilesRecursive(localDir);
-      const remoteFiles = await listRemoteFilesRecursive(remoteDir);
+      const localFiles = await listLocalFilesRecursive2(localDir);
+      const remoteFiles = await listRemoteFilesRecursive2(remoteDir);
 
       console.log("Local Files: ", localFiles);
       console.log("Remote Files: ", remoteFiles);
 
-      differences = compareFileMaps(localFiles, remoteFiles);
+      differences = FileEntry.compareDirectories(localFiles, remoteFiles);
       console.log("Differences in Files: ", differences);
     } catch (error) {
       console.error("Error:", error);

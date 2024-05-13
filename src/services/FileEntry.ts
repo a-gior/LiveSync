@@ -105,10 +105,3 @@ export class FileEntry {
     return changes;
   }
 }
-
-// Example usage:
-// let root = new FileEntry("root", "directory", 0, new Date(), "local", "/root");
-// let childFile = new FileEntry("example.txt", "file", 1024, new Date(), "remote", "/root");
-
-// root.addChild(childFile);
-// console.log(root.getChild("example.txt"));

@@ -6,6 +6,7 @@ import { ConfigurationPanel } from "../panels/ConfigurationPanel";
 import { FileMap } from "../types/FileTypes";
 
 import { workspace, window, ViewColumn } from "vscode";
+import { FileEntry } from "src/services/FileEntry";
 
 export async function listRemoteFilesRecursive(
   remoteDir: string,
@@ -69,6 +70,68 @@ export async function listRemoteFilesRecursive(
   }
 }
 
+export async function listRemoteFilesRecursive2(
+  remoteDir: string,
+  fileGlob?: any,
+): Promise<FileEntry> {
+  console.log(`Listing ${remoteDir} recursively...`);
+  const sftpClient = new SFTPClient();
+  const workspaceConfiguration: ConfigurationState =
+    ConfigurationPanel.getWorkspaceConfiguration();
+
+  try {
+    // Connect to the remote server
+    if (workspaceConfiguration.configuration) {
+      await sftpClient.connect(workspaceConfiguration.configuration);
+    }
+
+    const client = sftpClient.getClient();
+    const listDirectory = async (dir: string): Promise<any> => {
+      const fileObjects = await client.list(dir.replace(/\\/g, "/"), fileGlob);
+      const directoryContents: FileMap = {};
+
+      for (const file of fileObjects) {
+        const filePath = path.join(dir, file.name);
+        if (file.type === "d") {
+          console.log(
+            `${new Date(file.modifyTime).toISOString()} PRE ${file.name}`,
+          );
+          // Recursively list files in subdirectory
+          const subfiles = await listDirectory(filePath);
+          directoryContents[file.name] = {
+            type: "directory",
+            size: file.size,
+            modifiedTime: new Date(file.modifyTime),
+            children: subfiles,
+            source: "remote",
+          };
+        } else {
+          console.log(
+            `${new Date(file.modifyTime).toISOString()} ${file.size} ${file.name}`,
+          );
+          directoryContents[file.name] = {
+            type: "file",
+            size: file.size,
+            modifiedTime: new Date(file.modifyTime),
+            source: "remote",
+            children: [],
+          };
+        }
+      }
+
+      return directoryContents;
+    };
+
+    return await listDirectory(remoteDir);
+  } catch (error) {
+    console.error("Recursive listing failed:", error);
+    return new FileEntry("", "directory", 0, new Date(), "local", "");
+  } finally {
+    // Disconnect from the remote server
+    await sftpClient.disconnect();
+  }
+}
+
 export async function listLocalFilesRecursive(
   localDir: string,
 ): Promise<FileMap> {
@@ -115,6 +178,69 @@ export async function listLocalFilesRecursive(
   } catch (err) {
     console.error("Recursive listing failed", err);
     return {};
+  }
+}
+
+export async function listLocalFilesRecursive2(
+  localDir: string,
+): Promise<FileEntry> {
+  console.log(`Listing ${localDir} recursively...`);
+
+  const listDirectory = async (dir: string): Promise<FileEntry> => {
+    const directoryContents: FileEntry = new FileEntry(
+      "root",
+      "directory",
+      0,
+      new Date(),
+      "local",
+      "./",
+      "unchanged",
+    );
+
+    const files = fs.readdirSync(dir, { withFileTypes: true });
+    for (const file of files) {
+      const filePath = path.join(dir, file.name);
+      if (file.isDirectory()) {
+        console.log(
+          `${fs.statSync(filePath).mtime.toISOString()} PRE ${file.name}`,
+        );
+        // Recursively list files in subdirectory
+        const subfiles = await listDirectory(filePath);
+        let subFileEntry = new FileEntry(
+          file.name,
+          "directory",
+          fs.statSync(filePath).size,
+          fs.statSync(filePath).mtime,
+          "local",
+          "",
+        );
+        subFileEntry.addChild(subfiles);
+        directoryContents.addChild(subFileEntry);
+      } else {
+        console.log(
+          `${fs.statSync(filePath).mtime.toISOString()} ${fs.statSync(filePath).size} ${file.name}`,
+        );
+        directoryContents.addChild(
+          new FileEntry(
+            file.name,
+            "file",
+            fs.statSync(filePath).size,
+            fs.statSync(filePath).mtime,
+            "local",
+            "",
+          ),
+        );
+      }
+    }
+
+    return directoryContents;
+  };
+
+  try {
+    return await listDirectory(localDir);
+  } catch (err) {
+    console.error("Recursive listing failed", err);
+    return new FileEntry("", "directory", 0, new Date(), "local", "");
   }
 }
 
