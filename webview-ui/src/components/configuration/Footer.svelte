@@ -12,29 +12,9 @@
     export let remoteServerConfigFormData: Form;
     export let pairFolderFormData: Form;
 
-    let sshKeyInput = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[5];
-    $: currentConfig = {
-        hostname: remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[0].value,
-        port: Number(remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[1].value),
-        username: remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[2].value,
-        authMethod: remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[3].value,
-        password: remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[4].value,
-        // sshKey: form.formGroups[0].fields[5].value, //htmlElement.querySelector("input[type='file']").files[0].path, // sshKeyInput?.files[0].path
-        sshKey: sshKeyInput.files ? (sshKeyInput.files[0] as any).path : null, 
-    };
-    $: currentPairedFolders = Object.entries(pairFolderFormData.formGroups).map(([key, form]): PairFoldersMessage["paths"] => ({
-        localPath: form.fields[0].value,
-        remotePath: form.fields[1].value
-    }));
-
     function saveForms() {
         if (inputValidator.areValidInputs(remoteServerConfigFormData)) {
             // Proceed with form submission or other actions
-            const confState: ConfigurationState = { 
-                configuration: currentConfig,
-                pairedFolders: currentPairedFolders
-            };
-            vscode.setState(confState);
             sendConfiguration("updateConfiguration");
             console.log("Form submitted successfully");
         } else {
@@ -54,11 +34,42 @@
     }
     
     function sendConfiguration(cmd) {
+        
+        const currentHostname = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[0].value;
+        const currentPort = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[1].value;
+        const currentUsername = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[2].value;
+        const currentAuthMethod = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[3].value;
+        const currentPassword = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[4].value;
+        const sshKeyInput = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[5];
+
+        const currentConfig = {
+            hostname: currentHostname,
+            port: Number(currentPort),
+            username: currentUsername,
+            authMethod: currentAuthMethod,
+            password: currentPassword,
+            // sshKey: form.formGroups[0].fields[5].value, //htmlElement.querySelector("input[type='file']").files[0].path, // sshKeyInput?.files[0].path
+            sshKey: sshKeyInput.files ? (sshKeyInput.files[0] as any).path : null, 
+        };
+
+        const currentPairedFolders = Object.entries(pairFolderFormData.formGroups).map(([key, form]): PairFoldersMessage["paths"] => ({
+            localPath: form.fields[0].value,
+            remotePath: form.fields[1].value
+        }))
+
+        console.log("sendConfiguration", remoteServerConfigFormData, currentConfig, currentPairedFolders);
         const configurationMessage: FullConfigurationMessage = {
             command: cmd,
             configuration: currentConfig,
             pairedFolders: currentPairedFolders
         };
+        
+        const confState: ConfigurationState = { 
+            configuration: currentConfig,
+            pairedFolders: currentPairedFolders
+        };
+        vscode.setState(confState);
+
         vscode.postMessage(configurationMessage);
     }
   </script>

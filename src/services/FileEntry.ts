@@ -1,12 +1,29 @@
 import * as crypto from "crypto";
 
+export enum FileEntryStatus {
+  added,
+  removed,
+  modified,
+  unchanged,
+}
+
+export enum FileEntryType {
+  file,
+  directory,
+}
+
+export enum FileEntrySource {
+  remote,
+  local,
+}
+
 export class FileEntry {
   name: string;
-  type: "file" | "directory";
+  type: FileEntryType;
   size: number;
   modifiedTime: Date;
-  source: "remote" | "local";
-  status?: "modified" | "missing" | "unchanged";
+  source: FileEntrySource;
+  status?: FileEntryStatus;
   children: Map<string, FileEntry>;
   fullPath: string;
 
@@ -14,12 +31,12 @@ export class FileEntry {
 
   constructor(
     name: string,
-    type: "file" | "directory",
+    type: FileEntryType,
     size: number,
     modifiedTime: Date,
-    source: "remote" | "local",
+    source: FileEntrySource,
     fullPath: string,
-    status?: "modified" | "missing" | "unchanged",
+    status?: FileEntryStatus,
   ) {
     this.name = name;
     this.type = type;
@@ -31,6 +48,10 @@ export class FileEntry {
     this.children = new Map<string, FileEntry>();
 
     this.hash = this.generateHash();
+  }
+
+  updateStatus(newStatus: FileEntryStatus = FileEntryStatus.unchanged): void {
+    this.status = newStatus;
   }
 
   addChild(child: FileEntry): void {
@@ -47,12 +68,12 @@ export class FileEntry {
     return this.children.delete(name);
   }
 
-  listChildren(): FileEntry[] {
-    return Array.from(this.children.values());
+  setChildren(children: Map<string, FileEntry>) {
+    this.children = children;
   }
 
-  updateStatus(newStatus: "modified" | "missing" | "unchanged"): void {
-    this.status = newStatus;
+  listChildren(): FileEntry[] {
+    return Array.from(this.children.values());
   }
 
   generateHash(): string {
@@ -61,47 +82,79 @@ export class FileEntry {
     return hash.digest("hex");
   }
 
-  static compareDirectories(localRoot: FileEntry, remoteRoot: FileEntry) {
-    const changes: {
-      added: FileEntry[];
-      removed: FileEntry[];
-      modified: FileEntry[];
-    } = {
-      added: [],
-      removed: [],
-      modified: [],
-    };
+  static compareDirectories(
+    localRoot: FileEntry,
+    remoteRoot: FileEntry,
+  ): Map<string, FileEntry> {
+    const root = new FileEntry(
+      localRoot.name,
+      FileEntryType.directory,
+      localRoot.size,
+      localRoot.modifiedTime,
+      localRoot.source,
+      localRoot.fullPath,
+    );
 
     function recurse(
       localEntry: FileEntry | undefined,
       remoteEntry: FileEntry | undefined,
+      parent: FileEntry,
     ) {
       if (!localEntry && remoteEntry) {
-        changes.added.push(remoteEntry);
-        remoteEntry.children.forEach((child) => recurse(undefined, child));
+        remoteEntry.updateStatus(FileEntryStatus.added);
+        parent.addChild(remoteEntry);
+        remoteEntry.children.forEach((child) =>
+          recurse(undefined, child, remoteEntry),
+        );
         return;
       }
+
       if (localEntry && !remoteEntry) {
-        changes.removed.push(localEntry);
-        localEntry.children.forEach((child) => recurse(child, undefined));
+        localEntry.updateStatus(FileEntryStatus.removed);
+        parent.addChild(localEntry);
+        localEntry.children.forEach((child) =>
+          recurse(child, undefined, localEntry),
+        );
         return;
       }
+
       if (localEntry && remoteEntry) {
-        if (localEntry.hash !== remoteEntry.hash) {
-          changes.modified.push(localEntry);
+        const currentEntry = new FileEntry(
+          localEntry.name,
+          localEntry.type,
+          localEntry.size,
+          localEntry.modifiedTime,
+          localEntry.source,
+          localEntry.fullPath,
+        );
+
+        if (
+          localEntry.size !== remoteEntry.size ||
+          localEntry.modifiedTime.getTime() !==
+            remoteEntry.modifiedTime.getTime()
+        ) {
+          currentEntry.updateStatus(FileEntryStatus.modified);
         }
+
+        parent.addChild(currentEntry);
+
         const allKeys = new Set([
           ...localEntry.children.keys(),
           ...remoteEntry.children.keys(),
         ]);
         allKeys.forEach((key) => {
-          recurse(localEntry.children.get(key), remoteEntry.children.get(key));
+          recurse(
+            localEntry.children.get(key),
+            remoteEntry.children.get(key),
+            currentEntry,
+          );
         });
       }
     }
 
-    recurse(localRoot, remoteRoot);
-
-    return changes;
+    recurse(localRoot, remoteRoot, root);
+    console.log("\n");
+    console.log("Recusive root: ", root);
+    return root.children;
   }
 }

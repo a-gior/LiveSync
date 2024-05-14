@@ -3,7 +3,7 @@
 import * as vscode from "vscode";
 import { HelloWorldPanel } from "./panels/HelloWorldPanel";
 import { ConfigurationPanel } from "./panels/ConfigurationPanel";
-import { PairedFoldersTreeDataProvider } from "./services/PairedFoldersTreeDataProvider";
+import { PairedFoldersTreeDataProvider } from "./services/PairedFoldersTreeDataProvider2";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed

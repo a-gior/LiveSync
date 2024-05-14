@@ -19,7 +19,7 @@ class InputValidator {
   isValidUsername = (usernameInput: HTMLInputElement): boolean => {
     // Implement validation logic for username
     // Example validation: check for length or specific characters
-    return usernameInput.value.trim().length >= 6;
+    return usernameInput.value.trim().length >= 4;
   };
 
   isValidPassword = (passwordInput: HTMLInputElement): boolean => {

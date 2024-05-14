@@ -8,9 +8,14 @@ import {
   listRemoteFilesRecursive,
   compareFileMaps,
   listLocalFilesRecursive2,
+  listRemoteFilesRecursive2,
 } from "../utilities/filesUtils";
 import { FileMap } from "src/types/FileTypes";
-import { FileEntry } from "src/services/FileEntry";
+import {
+  FileEntry,
+  FileEntryStatus,
+  FileEntryType,
+} from "../services/FileEntry";
 
 export class PairedFoldersTreeDataProvider
   implements vscode.TreeDataProvider<FileEntry>
@@ -35,7 +40,7 @@ export class PairedFoldersTreeDataProvider
 
     return new vscode.TreeItem(
       element.name,
-      Object.entries(element.children).length > 0
+      element.type === FileEntryType.directory
         ? vscode.TreeItemCollapsibleState.Collapsed
         : vscode.TreeItemCollapsibleState.None,
     );
@@ -43,7 +48,7 @@ export class PairedFoldersTreeDataProvider
 
   async getChildren(element?: FileEntry): Promise<FileEntry[]> {
     if (!element) {
-      const rootItems: FileEntry[] = [];
+      let rootItems: FileEntry[] = [];
       // If no element provided, get the root items (local folders)
       if (
         !this.workspaceConfiguration.configuration ||
@@ -58,40 +63,31 @@ export class PairedFoldersTreeDataProvider
         for (const { localPath, remotePath } of pairedFolders) {
           console.log("getChildren localPath: ", localPath);
           const rootName: string = `[local] ${path.basename(localPath)} <=> ${path.basename(remotePath)} [remote]`;
-          const rootFileEntry: FileEntry = new FileEntry(
-            rootName,
-            "directory",
-            0,
-            new Date(),
-            "local",
-            "./",
-            "unchanged",
-          );
-          for (const [fileName, fileEntry] of await this.compareDirectories(
-            localPath,
-            remotePath,
-          )) {
-            rootFileEntry.addChild(fileEntry);
-          }
+          const children: Map<string, FileEntry> =
+            await this.compareDirectories(localPath, remotePath);
 
-          rootItems.push(rootFileEntry);
+          let workspaceEntry = children.get(path.basename(localPath));
+          if (workspaceEntry instanceof FileEntry) {
+            workspaceEntry.name = rootName;
+            rootItems.push(workspaceEntry);
+          } else {
+            console.error("Workspace entry error: ", workspaceEntry);
+          }
         }
         console.log("getChildren rootItems: ", rootItems);
       }
       return rootItems;
     } else {
       // If element provided, return its children
-      const fileMapArr: FileEntry[] = [];
-
-      return fileMapArr;
+      return [...element.children.values()];
     }
   }
 
   async compareDirectories(
     localDir: string,
     remoteDir: string,
-  ): Promise<FileEntry[]> {
-    let differences: FileEntry[] = [];
+  ): Promise<Map<string, FileEntry>> {
+    let differences: Map<string, FileEntry> = new Map();
     try {
       // List files and folders in the remote directory
       const localFiles = await listLocalFilesRecursive2(localDir);
