@@ -3,79 +3,18 @@ import * as fs from "fs";
 import { SFTPClient } from "../services/SFTPClient";
 import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 import { ConfigurationPanel } from "../panels/ConfigurationPanel";
-import { FileMap } from "../types/FileTypes";
 
-import { workspace, window, ViewColumn } from "vscode";
+import { window, workspace, Uri, commands, TextDocument } from "vscode";
 import {
   FileEntry,
   FileEntrySource,
   FileEntryStatus,
   FileEntryType,
-} from "../services/FileEntry";
+} from "../utilities/FileEntry";
+import { PairFoldersMessage } from "../DTOs/messages/PairFoldersMessage";
+import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
 
 export async function listRemoteFilesRecursive(
-  remoteDir: string,
-  fileGlob?: any,
-): Promise<FileMap> {
-  console.log(`Listing ${remoteDir} recursively...`);
-  const sftpClient = new SFTPClient();
-  const workspaceConfiguration: ConfigurationState =
-    ConfigurationPanel.getWorkspaceConfiguration();
-
-  try {
-    // Connect to the remote server
-    if (workspaceConfiguration.configuration) {
-      await sftpClient.connect(workspaceConfiguration.configuration);
-    }
-
-    const client = sftpClient.getClient();
-    const listDirectory = async (dir: string): Promise<any> => {
-      const fileObjects = await client.list(dir.replace(/\\/g, "/"), fileGlob);
-      const directoryContents: FileMap = {};
-
-      for (const file of fileObjects) {
-        const filePath = path.join(dir, file.name);
-        if (file.type === "d") {
-          console.log(
-            `${new Date(file.modifyTime).toISOString()} PRE ${file.name}`,
-          );
-          // Recursively list files in subdirectory
-          const subfiles = await listDirectory(filePath);
-          directoryContents[file.name] = {
-            type: "directory",
-            size: file.size,
-            modifiedTime: new Date(file.modifyTime),
-            source: "remote",
-            children: subfiles,
-          };
-        } else {
-          console.log(
-            `${new Date(file.modifyTime).toISOString()} ${file.size} ${file.name}`,
-          );
-          directoryContents[file.name] = {
-            type: "file",
-            size: file.size,
-            modifiedTime: new Date(file.modifyTime),
-            source: "remote",
-            children: [],
-          };
-        }
-      }
-
-      return directoryContents;
-    };
-
-    return await listDirectory(remoteDir);
-  } catch (error) {
-    console.error("Recursive listing failed:", error);
-    return {};
-  } finally {
-    // Disconnect from the remote server
-    await sftpClient.disconnect();
-  }
-}
-
-export async function listRemoteFilesRecursive2(
   remoteDir: string,
   fileGlob?: any,
 ): Promise<FileEntry> {
@@ -92,21 +31,23 @@ export async function listRemoteFilesRecursive2(
 
     const client = sftpClient.getClient();
     const listDirectory = async (dir: string): Promise<FileEntry> => {
-      const dirStat = await client.stat(dir.replace(/\\/g, "/"));
-      const fileObjects = await client.list(dir.replace(/\\/g, "/"), fileGlob);
+      const normalizedDir = dir.replace(/\\/g, "/");
+      const dirStat = await client.stat(normalizedDir);
+      const fileObjects = await client.list(normalizedDir, fileGlob);
       console.log("FileObj remote: ", dirStat);
       const directoryContents: FileEntry = new FileEntry(
-        path.basename(dir),
+        path.basename(normalizedDir),
         FileEntryType.directory,
         dirStat.size,
         new Date(dirStat.modifyTime * 1000), // modifyTime is in seconds
         FileEntrySource.remote,
-        dir,
+        normalizedDir,
       );
 
       for (const file of fileObjects) {
-        const filePath = path.join(dir, file.name);
-        console.log("FilePath: ", filePath);
+        const filePath = path
+          .join(normalizedDir, file.name)
+          .replace(/\\/g, "/");
         if (file.type === "d") {
           console.log(
             `${new Date(file.modifyTime).toISOString()} PRE ${file.name}`,
@@ -150,92 +91,57 @@ export async function listRemoteFilesRecursive2(
   }
 }
 
-export async function listLocalFilesRecursive(
-  localDir: string,
-): Promise<FileMap> {
-  console.log(`Listing ${localDir} recursively...`);
-
-  const listDirectory = async (dir: string): Promise<any> => {
-    const directoryContents: FileMap = {};
-
-    const files = fs.readdirSync(dir, { withFileTypes: true });
-    for (const file of files) {
-      const filePath = path.join(dir, file.name);
-      if (file.isDirectory()) {
-        console.log(
-          `${fs.statSync(filePath).mtime.toISOString()} PRE ${file.name}`,
-        );
-        // Recursively list files in subdirectory
-        const subfiles = await listDirectory(filePath);
-        directoryContents[file.name] = {
-          type: "directory",
-          size: fs.statSync(filePath).size,
-          modifiedTime: fs.statSync(filePath).mtime,
-          children: subfiles,
-          source: "local",
-        };
-      } else {
-        console.log(
-          `${fs.statSync(filePath).mtime.toISOString()} ${fs.statSync(filePath).size} ${file.name}`,
-        );
-        directoryContents[file.name] = {
-          type: "file",
-          size: fs.statSync(filePath).size,
-          modifiedTime: fs.statSync(filePath).mtime,
-          source: "local",
-          children: [],
-        };
-      }
-    }
-
-    return directoryContents;
-  };
-
-  try {
-    return await listDirectory(localDir);
-  } catch (err) {
-    console.error("Recursive listing failed", err);
-    return {};
+function normalizePath(p: string): string {
+  let normalizedPath = path.normalize(p);
+  if (process.platform === "win32") {
+    // Ensure the drive letter is in uppercase
+    normalizedPath =
+      normalizedPath.charAt(0).toLowerCase() + normalizedPath.slice(1);
+    normalizedPath = normalizedPath.replace(/\\/g, "/");
   }
+  return normalizedPath;
 }
 
-export async function listLocalFilesRecursive2(
+export async function listLocalFilesRecursive(
   localDir: string,
 ): Promise<FileEntry> {
   console.log(`Listing ${localDir} recursively...`);
 
   const listDirectory = async (dir: string): Promise<FileEntry> => {
+    console.log("\nlistDir: ", path.basename(dir));
     const directoryContents: FileEntry = new FileEntry(
       path.basename(dir),
       FileEntryType.directory,
       fs.statSync(dir).size,
       fs.statSync(dir).mtime,
       FileEntrySource.local,
-      dir,
+      path.normalize(dir),
     );
 
     const files = fs.readdirSync(dir, { withFileTypes: true });
     for (const file of files) {
-      const filePath = path.join(dir, file.name);
+      console.log(`\nCheck path ${file.path} -- ${file.name}`);
+      const filePath = path.join(file.path, file.name);
+      const normalizedFilePath = path.normalize(filePath);
       if (file.isDirectory()) {
         console.log(
-          `${fs.statSync(filePath).mtime.toISOString()} PRE ${file.name}`,
+          `${fs.statSync(normalizedFilePath).mtime.toISOString()} PRE ${file.name}`,
         );
         // Recursively list files in subdirectory
-        const subfiles = await listDirectory(filePath);
+        const subfiles = await listDirectory(normalizedFilePath);
         directoryContents.addChild(subfiles);
       } else {
         console.log(
-          `${fs.statSync(filePath).mtime.toISOString()} ${fs.statSync(filePath).size} ${file.name}`,
+          `${fs.statSync(normalizedFilePath).mtime.toISOString()} ${fs.statSync(normalizedFilePath).size} ${file.name}`,
         );
         directoryContents.addChild(
           new FileEntry(
             file.name,
             FileEntryType.file,
-            fs.statSync(filePath).size,
-            fs.statSync(filePath).mtime,
+            fs.statSync(normalizedFilePath).size,
+            fs.statSync(normalizedFilePath).mtime,
             FileEntrySource.local,
-            filePath,
+            normalizedFilePath,
           ),
         );
       }
@@ -259,122 +165,137 @@ export async function listLocalFilesRecursive2(
   }
 }
 
-// TODO: IMPROVE ALGO
-export function compareFileMaps(local: FileMap, remote: FileMap): FileMap {
-  const differences: FileMap = {};
-
-  // Check files and directories in the remote FileMap
-  for (const remoteName in remote) {
-    if (!local.hasOwnProperty(remoteName)) {
-      // File or directory exists only in remote
-      const remoteItem = remote[remoteName];
-      differences[remoteName] = {
-        ...remoteItem,
-        source: "remote",
-        status: "missing",
-      };
-    } else {
-      const remoteItem = remote[remoteName];
-      const localItem = local[remoteName];
-
-      // Compare files
-      if (remoteItem.type === "file" && localItem.type === "file") {
-        if (
-          remoteItem.size !== localItem.size ||
-          remoteItem.modifiedTime?.getTime() !==
-            localItem.modifiedTime?.getTime()
-        ) {
-          differences[remoteName] = {
-            ...remoteItem,
-            source: "remote",
-            status: "modified",
-          };
-        }
-      }
-
-      // Recursively compare directories
-      // if (remoteItem.type === 'directory' && localItem.type === 'directory') {
-      //     const subDifferences = compareFileMaps(localItem.children || {}, remoteItem.children || {});
-      //     if (Object.keys(subDifferences).length > 0) {
-      //         differences[remoteName] = {
-      //             ...remoteItem,
-      //             source: 'local',
-      //             status: 'modified',
-      //             children: [subDifferences]
-      //         };
-      //     }
-      // }
+function getRemotePath(
+  localPath: string,
+  pairedFolders: PairFoldersMessage["paths"][],
+): string | null {
+  for (const folder of pairedFolders) {
+    console.log(
+      `File Local path : ${normalizePath(localPath)} / Folder local config path: ${normalizePath(folder.localPath)}`,
+    );
+    if (normalizePath(localPath).startsWith(normalizePath(folder.localPath))) {
+      return path
+        .join(folder.remotePath, path.relative(folder.localPath, localPath))
+        .replace(/\\/g, "/");
     }
   }
+  return null;
+}
 
-  // Check files and directories in the local FileMap
-  for (const localName in local) {
-    if (!remote.hasOwnProperty(localName)) {
-      // File or directory exists only locally
-      const localItem = local[localName];
-      differences[localName] = {
-        ...localItem,
-        source: "local",
-        status: "missing",
-      };
+// NOT TESTED
+function getLocalPath(
+  remotePath: string,
+  pairedFolders: PairFoldersMessage["paths"][],
+): string | null {
+  for (const folder of pairedFolders) {
+    if (remotePath.startsWith(folder.remotePath)) {
+      return path.join(
+        folder.localPath,
+        path.relative(folder.remotePath, remotePath),
+      );
     }
   }
-
-  return differences;
+  return null;
 }
 
-export async function showFileDiff(fileMap: FileMap) {
-  let diffText = "";
+async function downloadRemoteFile(
+  configuration: ConfigurationMessage["configuration"],
+  remotePath: string,
+  localTmpPath: string,
+): Promise<void> {
+  const sftp = new SFTPClient();
+  try {
+    await sftp.connect(configuration);
 
-  // Loop through the fileMap and generate diff for each file
-  for (const filePath in fileMap) {
-    if (fileMap.hasOwnProperty(filePath)) {
-      const fileData = fileMap[filePath];
+    // Ensure the directory for localTmpPath exists
+    const dir = path.dirname(localTmpPath);
+    await fs.promises.mkdir(dir, { recursive: true });
 
-      // If the file is missing in local or remote
-      if (fileData.status === "missing" && fileData.source === "local") {
-        diffText += `- ${filePath} (Missing in local)\n`;
-      } else if (
-        fileData.status === "missing" &&
-        fileData.source === "remote"
-      ) {
-        diffText += `- ${filePath} (Missing in remote)\n`;
-      } else {
-        // Read file contents
-        const fileContents = await readFile(filePath);
+    await sftp.getClient().fastGet(remotePath, localTmpPath);
+  } finally {
+    sftp.disconnect();
+  }
+}
 
-        // Generate diff for modified files
-        diffText += `Diff for: ${filePath}\n`;
-        diffText += generateDiff(fileContents, fileContents); // Assuming remote and local contents are the same
-      }
-    }
+export async function showDiff(fileEntry: FileEntry) {
+  const workspaceConfig = ConfigurationPanel.getWorkspaceConfiguration();
+  const pairedFolders: PairFoldersMessage["paths"][] =
+    workspaceConfig["pairedFolders"] || [];
+  if (!workspaceConfig["configuration"]) {
+    window.showErrorMessage("Remote server not configured");
+    return;
+  }
+  const configuration: ConfigurationMessage["configuration"] =
+    workspaceConfig["configuration"];
+
+  const localFilePath = fileEntry.fullPath;
+  const remoteFilePath = getRemotePath(localFilePath, pairedFolders);
+
+  if (!remoteFilePath) {
+    window.showErrorMessage(`No remote path found for ${localFilePath}`);
+    return;
   }
 
-  // Show the diff in a new text document
-  workspace
-    .openTextDocument({ language: "plaintext", content: diffText })
-    .then((doc) => {
-      window.showTextDocument(doc, { viewColumn: ViewColumn.Active });
-    });
+  const tmpDir = path.join(__dirname, "..", "..", "tmp");
+  const localTmpPath = path.join(tmpDir, path.basename(remoteFilePath));
+
+  try {
+    await downloadRemoteFile(configuration, remoteFilePath, localTmpPath);
+
+    const localUri = Uri.file(localFilePath);
+    const remoteUri = Uri.file(localTmpPath);
+
+    await commands.executeCommand(
+      "vscode.diff",
+      localUri,
+      remoteUri,
+      "Local ↔ Remote",
+    );
+  } catch (error: any) {
+    window.showErrorMessage(`Error showing diff: ${error.message}`);
+  }
 }
 
-// Generate diff between oldText and newText
-function generateDiff(oldText: string, newText: string): string {
-  // Code to generate diff using diff library or any other diffing method
-  // Replace this with the appropriate diffing logic based on your requirements
-  // This is just a placeholder function
-  return `Diff:\nOld: ${oldText}\nNew: ${newText}\n\n`;
+export async function handleFileSave(document: TextDocument) {
+  const config = workspace.getConfiguration("LiveSync");
+  const actionOnSave = config.get<string>("actionOnSave");
+
+  if (actionOnSave === "upload" || actionOnSave === "check&upload") {
+    await uploadFile(document);
+  }
 }
 
-// Read file contents
-function readFile(filePath: string): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    fs.readFile(filePath, "utf-8", (err, data) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(data);
-      }
-    });
-  });
+async function uploadFile(document: TextDocument) {
+  const localPath = document.uri.fsPath;
+  const workspaceConfig = ConfigurationPanel.getWorkspaceConfiguration();
+  const pairedFolders: PairFoldersMessage["paths"][] =
+    workspaceConfig["pairedFolders"] || [];
+
+  if (!workspaceConfig["configuration"]) {
+    window.showErrorMessage("Remote server not configured");
+    return;
+  }
+
+  const remotePath = getRemotePath(localPath, pairedFolders);
+  if (!remotePath) {
+    window.showErrorMessage(
+      `No remote folder paired with local folder: ${localPath}`,
+    );
+    return;
+  }
+
+  const sftp = new SFTPClient();
+  try {
+    await sftp.connect(workspaceConfig.configuration);
+
+    // Implement the SFTP upload logic here
+    await sftp.getClient().put(localPath, remotePath);
+    window.showInformationMessage(
+      `File ${localPath} uploaded to ${remotePath}`,
+    );
+  } catch (error: any) {
+    window.showErrorMessage(`Failed to upload file: ${error.message}`);
+  } finally {
+    sftp.disconnect();
+  }
 }

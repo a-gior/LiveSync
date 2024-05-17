@@ -24,7 +24,6 @@
 
     function setInitialConfiguration(confState: ConfigurationState) {
         vscode.setState(confState);
-        console.log("setInitialConfiguration Configuration.svelte : ", confState);
 
         if(confState.configuration) {
             // Access configuration values from initialState
@@ -42,7 +41,6 @@
             let i = 0;
             for(const pairedFolder of confState.pairedFolders) {
                 newPairFolders();
-                console.log("pairFolderForm.formGroups", pairFolderFormData.formGroups);
                 pairFolderFormData.formGroups["pair-folder-form-group-"+i].fields[0].value = pairedFolder.localPath
                 pairFolderFormData.formGroups["pair-folder-form-group-"+i].fields[1].value = pairedFolder.remotePath;
                 i++;
@@ -134,8 +132,6 @@
         if (previousState && Object.keys(previousState).length > 0) {
             // Use a type assertion to inform TypeScript about the type of config
             const confState = previousState as ConfigurationState;
-            console.log("Configuration: OnMount", confState);
-
             const configState: ConfigurationState = {
                 configuration: confState.configuration,
                 pairedFolders: confState.pairedFolders

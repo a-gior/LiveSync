@@ -24,7 +24,6 @@
         const formGroupId = event.target.closest('form-group').getAttribute('id');
         delete formData.formGroups[formGroupId];
         formData = formData;
-        console.log("Event RemoveGroup", formData);
     }
 </script>
 

@@ -1,9 +1,12 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
-import { HelloWorldPanel } from "./panels/HelloWorldPanel";
 import { ConfigurationPanel } from "./panels/ConfigurationPanel";
-import { PairedFoldersTreeDataProvider } from "./services/PairedFoldersTreeDataProvider2";
+import { PairedFoldersTreeDataProvider } from "./services/PairedFoldersTreeDataProvider";
+import { FileStatusDecorationProvider } from "./services/FileDecorationProvider";
+import { FileEntry } from "src/utilities/FileEntry";
+import { showDiff, handleFileSave } from "./utilities/filesUtils";
+import { file } from "tmp";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -20,6 +23,10 @@ export function activate(context: vscode.ExtensionContext) {
   vscode.window.registerTreeDataProvider(
     "nodeDependencies",
     nodeDependenciesProvider,
+  );
+  const fileStatusDecorationProvider = new FileStatusDecorationProvider();
+  context.subscriptions.push(
+    vscode.window.registerFileDecorationProvider(fileStatusDecorationProvider),
   );
 
   let refreshDisposable = vscode.commands.registerCommand(
@@ -48,20 +55,44 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      console.log("Rendering Configuration Panel", context.extensionUri);
       ConfigurationPanel.render(context.extensionUri);
     },
   );
   context.subscriptions.push(configurationDisposable);
 
-  const svelteHelloWorldDisposable = vscode.commands.registerCommand(
-    "livesync.showHelloWorld",
-    () => {
-      console.log("Testing render");
-      HelloWorldPanel.render(context.extensionUri);
-    },
+  context.subscriptions.push(
+    vscode.commands.registerCommand("livesync.fileEntryRefresh", () => {
+      nodeDependenciesProvider.refresh();
+    }),
+    vscode.commands.registerCommand(
+      "livesync.fileEntryShowDiff",
+      (fileEntry: FileEntry) => {
+        vscode.window.showInformationMessage(
+          `Comparing files for ${fileEntry.name}`,
+        );
+        // Implement your compare logic here
+
+        console.log("Show Diff: ", fileEntry);
+        showDiff(fileEntry);
+      },
+    ),
   );
-  context.subscriptions.push(svelteHelloWorldDisposable);
+
+  // Listen for configuration changes
+  vscode.workspace.onDidChangeConfiguration((event) => {
+    if (event.affectsConfiguration("LiveSync.actionOnSave")) {
+      const config = vscode.workspace.getConfiguration("LiveSync");
+      const actionOnSave = config.get<string>("actionOnSave");
+      vscode.window.showInformationMessage(
+        `actionOnSave is now set to ${actionOnSave}`,
+      );
+    }
+  });
+
+  // Listen for file save events
+  vscode.workspace.onDidSaveTextDocument((document) => {
+    handleFileSave(document);
+  });
 }
 
 // This method is called when your extension is deactivated

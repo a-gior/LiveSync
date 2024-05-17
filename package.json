@@ -47,8 +47,32 @@
       {
         "command": "livesync.showHelloWorld",
         "title": "LiveSync: Show Hello World (Svelte)"
+      },
+      {
+        "command": "livesync.fileEntryRefresh",
+        "title": "Refresh local and remote file",
+        "icon": "resources/media/dark/refresh.svg"
+      },
+      {
+        "command": "livesync.fileEntryShowDiff",
+        "title": "Compare local and remote file",
+        "icon": "resources/media/dark/compare.svg"
       }
     ],
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "livesync.fileEntryShowDiff",
+          "when": "viewItem == fileEntry-modified",
+          "group": "inline"
+        },
+        {
+          "command": "livesync.fileEntryRefresh",
+          "when": "viewItem == fileEntry-modified",
+          "group": "inline"
+        }
+      ]
+    },
     "configuration": {
       "title": "LiveSync",
       "properties": {
@@ -100,6 +124,16 @@
           },
           "default": [],
           "description": "Array of paired local and remote folders"
+        },
+        "LiveSync.actionOnSave": {
+          "type": "string",
+          "default": "check",
+          "enum": [
+            "upload",
+            "check",
+            "check&upload"
+          ],
+          "description": "Action to perform on file save"
         }
       }
     }
@@ -149,5 +183,6 @@
   },
   "lint-staged": {
     "**/*": "prettier --write --ignore-unknown"
-  }
+  },
+  "workbench.colorCustomizations": {}
 }

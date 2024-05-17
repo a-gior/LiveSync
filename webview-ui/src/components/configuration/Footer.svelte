@@ -57,7 +57,6 @@
             remotePath: form.fields[1].value
         }))
 
-        console.log("sendConfiguration", remoteServerConfigFormData, currentConfig, currentPairedFolders);
         const configurationMessage: FullConfigurationMessage = {
             command: cmd,
             configuration: currentConfig,

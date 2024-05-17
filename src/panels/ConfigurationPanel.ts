@@ -88,8 +88,6 @@ export class ConfigurationPanel extends Panel {
   static async savePairFolders(
     pairedFoldersArr: PairFoldersMessage["paths"][],
   ) {
-    console.log("DEBUGGING pairedFolders: ", pairedFoldersArr);
-
     const config = workspace.getConfiguration("LiveSync");
     const currentConnectionConfig = this.getWorkspaceConfiguration();
 

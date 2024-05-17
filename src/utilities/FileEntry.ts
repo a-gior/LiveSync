@@ -1,20 +1,20 @@
 import * as crypto from "crypto";
 
 export enum FileEntryStatus {
-  added,
-  removed,
-  modified,
-  unchanged,
+  added = "added",
+  removed = "removed",
+  modified = "modified",
+  unchanged = "unchanged",
 }
 
 export enum FileEntryType {
-  file,
-  directory,
+  file = "file",
+  directory = "directory",
 }
 
 export enum FileEntrySource {
-  remote,
-  local,
+  remote = "remote",
+  local = "local",
 }
 
 export class FileEntry {
@@ -56,7 +56,6 @@ export class FileEntry {
 
   addChild(child: FileEntry): void {
     // Update child's fullPath based on current fullPath and child's name
-    child.fullPath = `${this.fullPath}/${child.name}`;
     this.children.set(child.name, child);
   }
 
@@ -101,7 +100,7 @@ export class FileEntry {
       parent: FileEntry,
     ) {
       if (!localEntry && remoteEntry) {
-        remoteEntry.updateStatus(FileEntryStatus.added);
+        remoteEntry.updateStatus(FileEntryStatus.removed);
         parent.addChild(remoteEntry);
         remoteEntry.children.forEach((child) =>
           recurse(undefined, child, remoteEntry),
@@ -110,7 +109,7 @@ export class FileEntry {
       }
 
       if (localEntry && !remoteEntry) {
-        localEntry.updateStatus(FileEntryStatus.removed);
+        localEntry.updateStatus(FileEntryStatus.added);
         parent.addChild(localEntry);
         localEntry.children.forEach((child) =>
           recurse(child, undefined, localEntry),
@@ -133,6 +132,9 @@ export class FileEntry {
           localEntry.modifiedTime.getTime() !==
             remoteEntry.modifiedTime.getTime()
         ) {
+          console.log("localEntry", localEntry);
+          console.log("remoteEntry", remoteEntry);
+          console.log("\n");
           currentEntry.updateStatus(FileEntryStatus.modified);
         }
 
@@ -153,8 +155,6 @@ export class FileEntry {
     }
 
     recurse(localRoot, remoteRoot, root);
-    console.log("\n");
-    console.log("Recusive root: ", root);
     return root.children;
   }
 }

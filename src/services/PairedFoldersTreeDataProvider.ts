@@ -1,22 +1,24 @@
 import * as vscode from "vscode";
-import * as fs from "fs";
 import * as path from "path";
 import { ConfigurationPanel } from "../panels/ConfigurationPanel";
 import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 import {
   listLocalFilesRecursive,
   listRemoteFilesRecursive,
-  compareFileMaps,
 } from "../utilities/filesUtils";
-import { FileMap } from "src/types/FileTypes";
+import {
+  FileEntry,
+  FileEntryStatus,
+  FileEntryType,
+} from "../utilities/FileEntry";
 
 export class PairedFoldersTreeDataProvider
-  implements vscode.TreeDataProvider<FileMap>
+  implements vscode.TreeDataProvider<FileEntry>
 {
   private _onDidChangeTreeData: vscode.EventEmitter<
-    FileMap[] | undefined | void
-  > = new vscode.EventEmitter<FileMap[] | undefined | void>();
-  readonly onDidChangeTreeData: vscode.Event<FileMap[] | undefined | void> =
+    FileEntry[] | undefined | void
+  > = new vscode.EventEmitter<FileEntry[] | undefined | void>();
+  readonly onDidChangeTreeData: vscode.Event<FileEntry[] | undefined | void> =
     this._onDidChangeTreeData.event;
 
   readonly workspaceConfiguration: ConfigurationState =
@@ -28,21 +30,29 @@ export class PairedFoldersTreeDataProvider
     this._onDidChangeTreeData.fire();
   }
 
-  getTreeItem(element: FileMap): vscode.TreeItem {
-    const [fileName, fileItem] = Object.entries(element)[0];
-    console.log("GetTreeItem: ", element);
-
-    return new vscode.TreeItem(
-      fileName,
-      Object.entries(fileItem.children).length > 0
+  getTreeItem(element: FileEntry): vscode.TreeItem {
+    const treeItem = new vscode.TreeItem(
+      element.name,
+      element.type === FileEntryType.directory
         ? vscode.TreeItemCollapsibleState.Collapsed
         : vscode.TreeItemCollapsibleState.None,
     );
+
+    if (element.status && element.type) {
+      treeItem.iconPath = this.getIconPathForType(element.type);
+      treeItem.description = FileEntryStatus[element.status];
+      treeItem.contextValue = `fileEntry-${FileEntryStatus[element.status]}`;
+
+      const query = `?status=${FileEntryStatus[element.status]}`;
+      treeItem.resourceUri = vscode.Uri.file(element.fullPath).with({ query });
+    }
+
+    return treeItem;
   }
 
-  async getChildren(element?: FileMap): Promise<FileMap[]> {
+  async getChildren(element?: FileEntry): Promise<FileEntry[]> {
     if (!element) {
-      const rootItems: FileMap[] = [];
+      let rootItems: FileEntry[] = [];
       // If no element provided, get the root items (local folders)
       if (
         !this.workspaceConfiguration.configuration ||
@@ -55,61 +65,102 @@ export class PairedFoldersTreeDataProvider
           this.workspaceConfiguration.pairedFolders;
 
         for (const { localPath, remotePath } of pairedFolders) {
-          console.log("getChildren localPath: ", localPath);
-          const rootName: string = `[local] ${path.basename(localPath)} <=> ${path.basename(remotePath)} [remote]`;
-          const rootFileMap: FileMap = {};
+          const rootName: string = `[local] ${path.basename(localPath)} / ${path.basename(remotePath)} [remote]`;
+          const children: Map<string, FileEntry> =
+            await this.compareDirectories(localPath, remotePath);
 
-          rootFileMap[rootName] = {
-            type: "directory",
-            size: 0,
-            modifiedTime: new Date(),
-            source: "local",
-            status: "unchanged",
-            children: await this.compareDirectories(localPath, remotePath),
-          };
-
-          rootItems.push(rootFileMap);
+          let workspaceEntry = children.get(path.basename(localPath));
+          if (workspaceEntry instanceof FileEntry) {
+            workspaceEntry.name = rootName;
+            rootItems.push(workspaceEntry);
+          } else {
+            console.error("Workspace entry error: ", workspaceEntry);
+          }
         }
-        console.log("getChildren rootItems: ", rootItems);
       }
       return rootItems;
     } else {
       // If element provided, return its children
-      const fileMapArr: FileMap[] = [];
-      const [fileName, fileItem] = Object.entries(element)[0];
-
-      console.log("getChildren element: ", element[fileName].children);
-      for (const [childFileName, childFileItem] of Object.entries(
-        element[fileName].children,
-      )) {
-        fileMapArr.push({
-          [childFileName]: childFileItem,
-        });
-      }
-
-      return fileMapArr;
+      return [...element.children.values()];
     }
   }
 
   async compareDirectories(
     localDir: string,
     remoteDir: string,
-  ): Promise<FileMap> {
-    let differences: FileMap = {};
+  ): Promise<Map<string, FileEntry>> {
     try {
-      // List files and folders in the remote directory
       const localFiles = await listLocalFilesRecursive(localDir);
       const remoteFiles = await listRemoteFilesRecursive(remoteDir);
 
-      console.log("Local Files: ", localFiles);
-      console.log("Remote Files: ", remoteFiles);
-
-      differences = compareFileMaps(localFiles, remoteFiles);
-      console.log("Differences in Files: ", differences);
+      return FileEntry.compareDirectories(localFiles, remoteFiles);
     } catch (error) {
       console.error("Error:", error);
+      return new Map();
     }
+  }
 
-    return differences;
+  private getIconPathForStatus(
+    status: FileEntryStatus,
+  ): vscode.ThemeIcon | { light: string; dark: string } {
+    const iconFolderPath = path.join(
+      __dirname,
+      "..",
+      "..",
+      "..",
+      "resources",
+      "media",
+      "dark",
+    );
+    switch (status) {
+      case FileEntryStatus.added:
+        return {
+          light: path.join(iconFolderPath, "added.svg"),
+          dark: path.join(iconFolderPath, "added.svg"),
+        };
+      case FileEntryStatus.removed:
+        return {
+          light: path.join(iconFolderPath, "removed.svg"),
+          dark: path.join(iconFolderPath, "removed.svg"),
+        };
+      case FileEntryStatus.modified:
+        return {
+          light: path.join(iconFolderPath, "modified.svg"),
+          dark: path.join(iconFolderPath, "modified.svg"),
+        };
+      case FileEntryStatus.unchanged:
+      default:
+        return {
+          light: path.join(iconFolderPath, "unchanged.svg"),
+          dark: path.join(iconFolderPath, "unchanged.svg"),
+        };
+    }
+  }
+
+  private getIconPathForType(
+    status: FileEntryType,
+  ): vscode.ThemeIcon | { light: string; dark: string } {
+    const iconFolderPath = path.join(
+      __dirname,
+      "..",
+      "..",
+      "..",
+      "resources",
+      "media",
+      "dark",
+    );
+    switch (status) {
+      case FileEntryType.directory:
+        return {
+          light: path.join(iconFolderPath, "directory.svg"),
+          dark: path.join(iconFolderPath, "directory.svg"),
+        };
+      case FileEntryType.file:
+      default:
+        return {
+          light: path.join(iconFolderPath, "file.svg"),
+          dark: path.join(iconFolderPath, "file.svg"),
+        };
+    }
   }
 }
