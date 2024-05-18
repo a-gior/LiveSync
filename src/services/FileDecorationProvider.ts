@@ -17,25 +17,25 @@ export class FileStatusDecorationProvider
       badge: "A",
       tooltip: "Added",
       color: new vscode.ThemeColor("gitDecoration.addedResourceForeground"),
-      propagate: true,
+      propagate: false,
     });
     this.decorationData.set(FileEntryStatus.removed, {
       badge: "R",
       tooltip: "Removed",
       color: new vscode.ThemeColor("gitDecoration.deletedResourceForeground"),
-      propagate: true,
+      propagate: false,
     });
     this.decorationData.set(FileEntryStatus.modified, {
       badge: "M",
       tooltip: "Modified",
       color: new vscode.ThemeColor("gitDecoration.modifiedResourceForeground"),
-      propagate: true,
+      propagate: false,
     });
     this.decorationData.set(FileEntryStatus.unchanged, {
       badge: "U",
       tooltip: "Unchanged",
       color: new vscode.ThemeColor("gitDecoration.untrackedResourceForeground"),
-      propagate: true,
+      propagate: false,
     });
   }
 

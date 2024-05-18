@@ -5,7 +5,8 @@ import { ConfigurationPanel } from "./panels/ConfigurationPanel";
 import { PairedFoldersTreeDataProvider } from "./services/PairedFoldersTreeDataProvider";
 import { FileStatusDecorationProvider } from "./services/FileDecorationProvider";
 import { FileEntry } from "src/utilities/FileEntry";
-import { showDiff, handleFileSave } from "./utilities/filesUtils";
+import { showDiff } from "./utilities/fileUtils/fileDiff";
+import { handleFileSave } from "./utilities/fileUtils/fileSave";
 import { file } from "tmp";
 
 // This method is called when your extension is activated
@@ -70,9 +71,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage(
           `Comparing files for ${fileEntry.name}`,
         );
-        // Implement your compare logic here
 
-        console.log("Show Diff: ", fileEntry);
         showDiff(fileEntry);
       },
     ),

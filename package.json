@@ -51,24 +51,44 @@
       {
         "command": "livesync.fileEntryRefresh",
         "title": "Refresh local and remote file",
-        "icon": "resources/media/dark/refresh.svg"
+        "icon": "resources/media/dark/debug-restart.svg"
       },
       {
         "command": "livesync.fileEntryShowDiff",
         "title": "Compare local and remote file",
-        "icon": "resources/media/dark/compare.svg"
+        "icon": "resources/media/dark/arrow-both.svg"
+      },
+      {
+        "command": "livesync.fileEntryUpload",
+        "title": "Upload local file to remote",
+        "icon": "resources/media/dark/arrow-small-up.svg"
+      },
+      {
+        "command": "livesync.fileEntryDownload",
+        "title": "Download remote file",
+        "icon": "resources/media/dark/arrow-small-down.svg"
       }
     ],
     "menus": {
       "view/item/context": [
         {
+          "command": "livesync.fileEntryUpload",
+          "when": "viewItem == fileEntry-file-modified || viewItem == fileEntry-file-added",
+          "group": "inline"
+        },
+        {
+          "command": "livesync.fileEntryDownload",
+          "when": "viewItem == fileEntry-file-modified || viewItem == fileEntry-file-removed",
+          "group": "inline"
+        },
+        {
           "command": "livesync.fileEntryShowDiff",
-          "when": "viewItem == fileEntry-modified",
+          "when": "viewItem == fileEntry-file-modified",
           "group": "inline"
         },
         {
           "command": "livesync.fileEntryRefresh",
-          "when": "viewItem == fileEntry-modified",
+          "when": "viewItem == fileEntry-rootFolder",
           "group": "inline"
         }
       ]

@@ -5,12 +5,18 @@ import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 import {
   listLocalFilesRecursive,
   listRemoteFilesRecursive,
-} from "../utilities/filesUtils";
+} from "../utilities/fileUtils/fileListing";
 import {
   FileEntry,
   FileEntryStatus,
   FileEntryType,
 } from "../utilities/FileEntry";
+import {
+  saveToFile,
+  ensureDirectoryExists,
+} from "../utilities/fileUtils/fileOperations";
+import { SAVE_DIR } from "../utilities/constants";
+import { isRootPath } from "../utilities/fileUtils/filePathUtils";
 
 export class PairedFoldersTreeDataProvider
   implements vscode.TreeDataProvider<FileEntry>
@@ -41,7 +47,13 @@ export class PairedFoldersTreeDataProvider
     if (element.status && element.type) {
       treeItem.iconPath = this.getIconPathForType(element.type);
       treeItem.description = FileEntryStatus[element.status];
-      treeItem.contextValue = `fileEntry-${FileEntryStatus[element.status]}`;
+      treeItem.contextValue = `fileEntry-${element.type}-${FileEntryStatus[element.status]}`;
+      if (
+        this.workspaceConfiguration.pairedFolders &&
+        isRootPath(element.fullPath, this.workspaceConfiguration.pairedFolders)
+      ) {
+        treeItem.contextValue = "fileEntry-rootFolder";
+      }
 
       const query = `?status=${FileEntryStatus[element.status]}`;
       treeItem.resourceUri = vscode.Uri.file(element.fullPath).with({ query });
@@ -66,8 +78,10 @@ export class PairedFoldersTreeDataProvider
 
         for (const { localPath, remotePath } of pairedFolders) {
           const rootName: string = `[local] ${path.basename(localPath)} / ${path.basename(remotePath)} [remote]`;
+
+          ensureDirectoryExists(SAVE_DIR);
           const children: Map<string, FileEntry> =
-            await this.compareDirectories(localPath, remotePath);
+            await this.compareDirectories(localPath, remotePath, SAVE_DIR);
 
           let workspaceEntry = children.get(path.basename(localPath));
           if (workspaceEntry instanceof FileEntry) {
@@ -88,12 +102,30 @@ export class PairedFoldersTreeDataProvider
   async compareDirectories(
     localDir: string,
     remoteDir: string,
+    saveDir: string,
   ): Promise<Map<string, FileEntry>> {
     try {
       const localFiles = await listLocalFilesRecursive(localDir);
       const remoteFiles = await listRemoteFilesRecursive(remoteDir);
+      const compareFiles = FileEntry.compareDirectories(
+        localFiles,
+        remoteFiles,
+      );
 
-      return FileEntry.compareDirectories(localFiles, remoteFiles);
+      await saveToFile(
+        localFiles.toJSON(),
+        path.join(saveDir, "localFiles.json"),
+      );
+      await saveToFile(
+        remoteFiles.toJSON(),
+        path.join(saveDir, "remoteFiles.json"),
+      );
+      await saveToFile(
+        Object.fromEntries(compareFiles.entries()),
+        path.join(saveDir, "compareFiles.json"),
+      );
+
+      return compareFiles;
     } catch (error) {
       console.error("Error:", error);
       return new Map();
@@ -152,8 +184,8 @@ export class PairedFoldersTreeDataProvider
     switch (status) {
       case FileEntryType.directory:
         return {
-          light: path.join(iconFolderPath, "directory.svg"),
-          dark: path.join(iconFolderPath, "directory.svg"),
+          light: path.join(iconFolderPath, "folder.svg"),
+          dark: path.join(iconFolderPath, "folder.svg"),
         };
       case FileEntryType.file:
       default:

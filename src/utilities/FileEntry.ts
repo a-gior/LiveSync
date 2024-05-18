@@ -1,4 +1,4 @@
-import * as crypto from "crypto";
+import { generateHash } from "./fileUtils/hashUtils";
 
 export enum FileEntryStatus {
   added = "added",
@@ -47,7 +47,7 @@ export class FileEntry {
     this.fullPath = fullPath;
     this.children = new Map<string, FileEntry>();
 
-    this.hash = this.generateHash();
+    this.hash = generateHash(this.name, this.size, this.modifiedTime);
   }
 
   updateStatus(newStatus: FileEntryStatus = FileEntryStatus.unchanged): void {
@@ -73,12 +73,6 @@ export class FileEntry {
 
   listChildren(): FileEntry[] {
     return Array.from(this.children.values());
-  }
-
-  generateHash(): string {
-    const hash = crypto.createHash("sha256");
-    hash.update(`${this.name}${this.size}${this.modifiedTime.toISOString()}`); // Using ISO string for consistent date formatting
-    return hash.digest("hex");
   }
 
   static compareDirectories(
@@ -132,9 +126,6 @@ export class FileEntry {
           localEntry.modifiedTime.getTime() !==
             remoteEntry.modifiedTime.getTime()
         ) {
-          console.log("localEntry", localEntry);
-          console.log("remoteEntry", remoteEntry);
-          console.log("\n");
           currentEntry.updateStatus(FileEntryStatus.modified);
         }
 
@@ -156,5 +147,44 @@ export class FileEntry {
 
     recurse(localRoot, remoteRoot, root);
     return root.children;
+  }
+
+  static fromJSON(json: any): FileEntry {
+    const entry = new FileEntry(
+      json.name,
+      json.type,
+      json.size,
+      new Date(json.modifiedTime),
+      json.source,
+      json.fullPath,
+      json.status,
+    );
+    entry.hash = json.hash;
+    entry.children = new Map(
+      Object.entries(json.children).map(([key, value]) => [
+        key,
+        FileEntry.fromJSON(value),
+      ]),
+    );
+    return entry;
+  }
+
+  toJSON(): any {
+    return {
+      name: this.name,
+      type: this.type,
+      size: this.size,
+      modifiedTime: this.modifiedTime.toISOString(),
+      source: this.source,
+      status: this.status,
+      fullPath: this.fullPath,
+      hash: this.hash,
+      children: Object.fromEntries(
+        Array.from(this.children.entries()).map(([key, value]) => [
+          key,
+          value.toJSON(),
+        ]),
+      ),
+    };
   }
 }
