@@ -7,7 +7,7 @@ import { FileStatusDecorationProvider } from "./services/FileDecorationProvider"
 import { FileEntry } from "src/utilities/FileEntry";
 import { showDiff } from "./utilities/fileUtils/fileDiff";
 import { handleFileSave } from "./utilities/fileUtils/fileSave";
-import { file } from "tmp";
+import { handleFileDownload } from "./utilities/fileUtils/fileDownload";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -73,6 +73,21 @@ export function activate(context: vscode.ExtensionContext) {
         );
 
         showDiff(fileEntry);
+      },
+    ),
+    vscode.commands.registerCommand(
+      "livesync.fileEntryUpload",
+      async (fileEntry) => {
+        const document = await vscode.workspace.openTextDocument(
+          fileEntry.fullPath,
+        );
+        await handleFileSave(document);
+      },
+    ),
+    vscode.commands.registerCommand(
+      "livesync.fileEntryDownload",
+      async (fileEntry) => {
+        await handleFileDownload(fileEntry);
       },
     ),
   );
