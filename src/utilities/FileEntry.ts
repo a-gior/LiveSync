@@ -98,9 +98,12 @@ export class FileEntry {
       remoteEntry: FileEntry | undefined,
       parent: FileEntry,
     ) {
+      parent.updateStatus(FileEntryStatus.unchanged);
+
       if (!localEntry && remoteEntry) {
         remoteEntry.updateStatus(FileEntryStatus.removed);
         parent.addChild(remoteEntry);
+        parent.updateStatus(FileEntryStatus.modified);
         remoteEntry.children.forEach((child) =>
           recurse(undefined, child, remoteEntry),
         );
@@ -110,6 +113,7 @@ export class FileEntry {
       if (localEntry && !remoteEntry) {
         localEntry.updateStatus(FileEntryStatus.added);
         parent.addChild(localEntry);
+        parent.updateStatus(FileEntryStatus.modified);
         localEntry.children.forEach((child) =>
           recurse(child, undefined, localEntry),
         );
@@ -137,6 +141,7 @@ export class FileEntry {
           currentEntry.updateStatus(FileEntryStatus.unchanged);
         } else if (localEntry.hash !== remoteEntry.hash) {
           currentEntry.updateStatus(FileEntryStatus.modified);
+          parent.updateStatus(FileEntryStatus.modified);
         } else {
           currentEntry.updateStatus(FileEntryStatus.unchanged);
         }
