@@ -58,13 +58,12 @@ export class PairedFoldersTreeDataProvider
       const query = `?status=${FileEntryStatus[element.status]}`;
       treeItem.resourceUri = vscode.Uri.file(element.fullPath).with({ query });
     }
-
     return treeItem;
   }
 
   async getChildren(element?: FileEntry): Promise<FileEntry[]> {
     if (!element) {
-      let rootItems: FileEntry[] = [];
+      let rootFileEntries: FileEntry[] = [];
       // If no element provided, get the root items (local folders)
       if (
         !this.workspaceConfiguration.configuration ||
@@ -86,13 +85,13 @@ export class PairedFoldersTreeDataProvider
           let workspaceEntry = children.get(path.basename(localPath));
           if (workspaceEntry instanceof FileEntry) {
             workspaceEntry.name = rootName;
-            rootItems.push(workspaceEntry);
+            rootFileEntries.push(workspaceEntry);
           } else {
             console.error("Workspace entry error: ", workspaceEntry);
           }
         }
       }
-      return rootItems;
+      return rootFileEntries;
     } else {
       // If element provided, return its children
       return [...element.children.values()];

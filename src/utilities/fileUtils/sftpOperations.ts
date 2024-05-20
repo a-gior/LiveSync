@@ -5,6 +5,7 @@ import { ConfigurationMessage } from "../../DTOs/messages/ConfigurationMessage";
 import { generateHash } from "./hashUtils";
 import { loadFromFile } from "./fileOperations";
 import { REMOTE_FILES_PATH } from "../constants";
+import { uploadDirectory } from "./directoryOperations";
 
 export async function downloadRemoteFile(
   configuration: ConfigurationMessage["configuration"],
@@ -32,6 +33,13 @@ export async function uploadFile(
   const sftp = new SFTPClient();
   try {
     await sftp.connect(configuration);
+
+    // Check if remote directory exists, if not create it
+    const remoteDir = path.dirname(remotePath);
+    const dirExists = await sftp.getClient().exists(remoteDir);
+    if (!dirExists) {
+      await sftp.getClient().mkdir(remoteDir, true);
+    }
 
     await sftp.getClient().put(localPath, remotePath);
   } finally {

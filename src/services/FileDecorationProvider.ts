@@ -34,7 +34,7 @@ export class FileStatusDecorationProvider
     this.decorationData.set(FileEntryStatus.unchanged, {
       badge: "U",
       tooltip: "Unchanged",
-      color: new vscode.ThemeColor("gitDecoration.untrackedResourceForeground"),
+      color: new vscode.ThemeColor("foreground"),
       propagate: false,
     });
   }

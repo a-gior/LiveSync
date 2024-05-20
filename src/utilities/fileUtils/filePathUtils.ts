@@ -30,11 +30,12 @@ export function getLocalPath(
   pairedFolders: PairFoldersMessage["paths"][],
 ): string | null {
   for (const folder of pairedFolders) {
-    if (remotePath.startsWith(folder.remotePath)) {
-      return path.join(
-        folder.localPath,
-        path.relative(folder.remotePath, remotePath),
-      );
+    if (
+      normalizePath(remotePath).startsWith(normalizePath(folder.remotePath))
+    ) {
+      return path
+        .join(folder.localPath, path.relative(folder.remotePath, remotePath))
+        .replace(/\\/g, "/");
     }
   }
   return null;

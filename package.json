@@ -73,12 +73,12 @@
       "view/item/context": [
         {
           "command": "livesync.fileEntryUpload",
-          "when": "viewItem == fileEntry-file-modified || viewItem == fileEntry-file-added",
+          "when": "viewItem == fileEntry-file-modified || viewItem == fileEntry-file-added || viewItem == fileEntry-directory-added",
           "group": "inline"
         },
         {
           "command": "livesync.fileEntryDownload",
-          "when": "viewItem == fileEntry-file-modified || viewItem == fileEntry-file-removed",
+          "when": "viewItem == fileEntry-file-modified || viewItem == fileEntry-file-removed || viewItem == fileEntry-directory-removed",
           "group": "inline"
         },
         {
@@ -154,6 +154,11 @@
             "check&upload"
           ],
           "description": "Action to perform on file save"
+        },
+        "LiveSync.showUnchanged": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show or hide unchanged files in the tree view."
         }
       }
     }

@@ -4,10 +4,14 @@ import * as vscode from "vscode";
 import { ConfigurationPanel } from "./panels/ConfigurationPanel";
 import { PairedFoldersTreeDataProvider } from "./services/PairedFoldersTreeDataProvider";
 import { FileStatusDecorationProvider } from "./services/FileDecorationProvider";
-import { FileEntry } from "src/utilities/FileEntry";
+import { FileEntry, FileEntryType } from "./utilities/FileEntry";
 import { showDiff } from "./utilities/fileUtils/fileDiff";
 import { handleFileSave } from "./utilities/fileUtils/fileSave";
 import { handleFileDownload } from "./utilities/fileUtils/fileDownload";
+import {
+  downloadDirectory,
+  uploadDirectory,
+} from "./utilities/fileUtils/directoryOperations";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -78,35 +82,53 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       "livesync.fileEntryUpload",
       async (fileEntry) => {
-        const document = await vscode.workspace.openTextDocument(
-          fileEntry.fullPath,
-        );
-        await handleFileSave(document);
+        if (fileEntry.isDirectory()) {
+          await uploadDirectory(fileEntry);
+        } else {
+          const document = await vscode.workspace.openTextDocument(
+            fileEntry.fullPath,
+          );
+          await handleFileSave(document);
+        }
+        vscode.commands.executeCommand("livesync.fileEntryRefresh");
       },
     ),
     vscode.commands.registerCommand(
       "livesync.fileEntryDownload",
       async (fileEntry) => {
-        await handleFileDownload(fileEntry);
+        if (fileEntry.isDirectory()) {
+          await downloadDirectory(fileEntry);
+        } else {
+          await handleFileDownload(fileEntry);
+        }
+        vscode.commands.executeCommand("livesync.fileEntryRefresh");
       },
     ),
   );
 
-  // Listen for configuration changes
-  vscode.workspace.onDidChangeConfiguration((event) => {
-    if (event.affectsConfiguration("LiveSync.actionOnSave")) {
-      const config = vscode.workspace.getConfiguration("LiveSync");
-      const actionOnSave = config.get<string>("actionOnSave");
-      vscode.window.showInformationMessage(
-        `actionOnSave is now set to ${actionOnSave}`,
-      );
-    }
-  });
-
-  // Listen for file save events
-  vscode.workspace.onDidSaveTextDocument((document) => {
-    handleFileSave(document);
-  });
+  context.subscriptions.push(
+    // Listen for configuration changes
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("LiveSync.actionOnSave")) {
+        const config = vscode.workspace.getConfiguration("LiveSync");
+        const actionOnSave = config.get<string>("actionOnSave");
+        vscode.window.showInformationMessage(
+          `actionOnSave is now set to ${actionOnSave}`,
+        );
+      }
+    }),
+    // Listen for file save events
+    vscode.workspace.onDidSaveTextDocument((document) => {
+      handleFileSave(document);
+    }),
+    // Register event listeners for file creation and deletion
+    vscode.workspace.onDidCreateFiles((event) => {
+      vscode.commands.executeCommand("livesync.fileEntryRefresh");
+    }),
+    vscode.workspace.onDidDeleteFiles((event) => {
+      vscode.commands.executeCommand("livesync.fileEntryRefresh");
+    }),
+  );
 }
 
 // This method is called when your extension is deactivated

@@ -1,3 +1,4 @@
+import { workspace } from "vscode";
 import { generateHash } from "./fileUtils/hashUtils";
 
 export enum FileEntryStatus {
@@ -75,6 +76,10 @@ export class FileEntry {
     return Array.from(this.children.values());
   }
 
+  isDirectory(): boolean {
+    return this.type === FileEntryType.directory;
+  }
+
   static compareDirectories(
     localRoot: FileEntry,
     remoteRoot: FileEntry,
@@ -121,15 +126,33 @@ export class FileEntry {
           localEntry.fullPath,
         );
 
+        console.log(
+          `Comparing ${localEntry.name}/${localEntry.size}/${localEntry.modifiedTime} with ${remoteEntry.name}/${remoteEntry.size}/${remoteEntry.modifiedTime}`,
+        );
         if (
-          localEntry.size !== remoteEntry.size ||
-          localEntry.modifiedTime.getTime() !==
-            remoteEntry.modifiedTime.getTime()
+          localEntry.isDirectory() &&
+          remoteEntry.isDirectory() &&
+          localEntry.name === remoteEntry.name
         ) {
+          currentEntry.updateStatus(FileEntryStatus.unchanged);
+        } else if (localEntry.hash !== remoteEntry.hash) {
           currentEntry.updateStatus(FileEntryStatus.modified);
+        } else {
+          currentEntry.updateStatus(FileEntryStatus.unchanged);
         }
 
-        parent.addChild(currentEntry);
+        const showUnchanged = workspace
+          .getConfiguration("LiveSync")
+          .get<boolean>("showUnchanged", true);
+        // Only add the current file entry to the parent if currentEntry is not unchanged or if the showUnchanged flag is true
+        if (
+          !(
+            showUnchanged === false &&
+            currentEntry.status === FileEntryStatus.unchanged
+          )
+        ) {
+          parent.addChild(currentEntry);
+        }
 
         const allKeys = new Set([
           ...localEntry.children.keys(),
