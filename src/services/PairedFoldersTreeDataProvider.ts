@@ -120,7 +120,11 @@ export class PairedFoldersTreeDataProvider
 
           ensureDirectoryExists(SAVE_DIR);
           const children: Map<string, FileEntry> =
-            await this.compareDirectories(localPath, remotePath, SAVE_DIR);
+            await this.getDirectoriesComparison(
+              localPath,
+              remotePath,
+              SAVE_DIR,
+            );
 
           let workspaceEntry = children.get(path.basename(localPath));
           if (workspaceEntry instanceof FileEntry) {
@@ -138,7 +142,7 @@ export class PairedFoldersTreeDataProvider
     }
   }
 
-  async compareDirectories(
+  async getDirectoriesComparison(
     localDir: string,
     remoteDir: string,
     saveDir: string,

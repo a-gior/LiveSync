@@ -17,7 +17,6 @@ export async function run(): Promise<void> {
       withFileTypes: true,
     });
     for (const file of glob) {
-      console.log("Adding test file: ", file.fullpath());
       mocha.addFile(file.fullpath());
     }
 

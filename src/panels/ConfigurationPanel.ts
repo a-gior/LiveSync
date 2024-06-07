@@ -164,7 +164,6 @@ export class ConfigurationPanel extends Panel {
     const clientErrors = client.getErrors();
 
     // //* List working directory files
-    // await client.listFiles(".");
 
     // //* Upload local file to remote file
     // await client.uploadFile("./local.txt", "./remote.txt");

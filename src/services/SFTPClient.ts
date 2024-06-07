@@ -23,7 +23,9 @@ export class SFTPClient {
   }
 
   async connect(config: ConfigurationMessage["configuration"]) {
-    console.log(`Connecting using SFTP to ${config.hostname}:${config.port}`);
+    console.log(
+      `Connecting using SFTP to ${config.hostname}:${config.port} using ${config.authMethod}`,
+    );
     try {
       const connectionOptions: Client.ConnectOptions = {
         host: config.hostname,
@@ -31,7 +33,6 @@ export class SFTPClient {
         username: config.username,
       };
 
-      console.log("Authmethod: ", config.authMethod);
       if (config.authMethod === "auth-password") {
         connectionOptions.password = config.password;
       } else if (config.authMethod === "auth-sshKey") {
@@ -58,7 +59,7 @@ export class SFTPClient {
   }
 
   async listFiles(remoteDir: string, fileGlob?: any) {
-    console.log(`Listing ${remoteDir} ...`);
+    console.log(`Listing ${remoteDir}`);
     let fileObjects: Client.FileInfo[];
     const fileNames = [];
 
@@ -66,16 +67,6 @@ export class SFTPClient {
       fileObjects = await this._client.list(remoteDir, fileGlob);
 
       for (const file of fileObjects) {
-        if (file.type === "d") {
-          console.log(
-            `${new Date(file.modifyTime).toISOString()} PRE ${file.name}`,
-          );
-        } else {
-          console.log(
-            `${new Date(file.modifyTime).toISOString()} ${file.size} ${file.name}`,
-          );
-        }
-
         fileNames.push(file.name);
       }
     } catch (err) {

@@ -2916,7 +2916,7 @@
       "php2"
     ],
     "filenames": [],
-    "languageIds": ["php"]
+    "languageIds": ["php2"]
   },
   "php2": {
     "extensions": [
@@ -2950,7 +2950,7 @@
       "php2"
     ],
     "filenames": [],
-    "languageIds": ["php"]
+    "languageIds": ["php3"]
   },
   "phpcsfixer": {
     "extensions": [],

@@ -19,7 +19,6 @@ async function main() {
     );
 
     const { path: tempdir, cleanup } = await dir({ unsafeCleanup: true });
-    console.log("Creating temp folder as workspace : ", tempdir);
 
     // Download VS Code, unzip it and run the integration test
     await runTests({

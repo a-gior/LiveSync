@@ -65,9 +65,6 @@ export async function generateHash(
   // console.log(`Creating hash with fileContentHash: ${fileContentHash}`);
   hash.update(`${relativePath}${fileType}${fileContentHash}`);
   const filehash = hash.digest("hex");
-  console.log(
-    `DEBUG generateHash, relativePath: ${relativePath} | ${fileSource} | ${fileType} | ${fileContentHash} | ${filehash}`,
-  );
 
   return filehash;
 }

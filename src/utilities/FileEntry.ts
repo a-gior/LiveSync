@@ -81,43 +81,50 @@ export class FileEntry {
     return this.type === FileEntryType.directory;
   }
 
+  /**
+   * Compares the directories of local and remote file entries and returns the differences.
+   * @param localRoot The local root file entry.
+   * @param remoteRoot The remote root file entry.
+   * @returns A map of file entries with their comparison status.
+   */
   static async compareDirectories(
     localRoot: FileEntry,
     remoteRoot: FileEntry,
   ): Promise<Map<string, FileEntry>> {
-    const root = new FileEntry(
-      localRoot.name,
-      FileEntryType.directory,
-      localRoot.size,
-      localRoot.modifiedTime,
-      localRoot.source,
-      localRoot.fullPath,
-    );
-
+    /**
+     * Recursively compares the local and remote file entries.
+     * @param localEntry The local file entry.
+     * @param remoteEntry The remote file entry.
+     * @param parent The parent file entry to which the current entry belongs.
+     */
     async function recurse(
       localEntry: FileEntry | undefined,
       remoteEntry: FileEntry | undefined,
       parent: FileEntry,
     ) {
-      parent.updateStatus(FileEntryStatus.unchanged);
-
       if (!localEntry && remoteEntry) {
+        // Case: File/Folder is present in remote but not in local
         remoteEntry.updateStatus(FileEntryStatus.removed);
         parent.addChild(remoteEntry);
-        parent.updateStatus(FileEntryStatus.modified);
+        // parent.updateStatus(FileEntryStatus.modified); // Mark parent as modified
         for (const child of remoteEntry.children.values()) {
           await recurse(undefined, child, remoteEntry);
         }
+
+        FileEntry.updateDirectoryStatusBasedOnChildren(remoteEntry);
         return;
       }
 
       if (localEntry && !remoteEntry) {
+        // Case: File/Folder is present in local but not in remote
         localEntry.updateStatus(FileEntryStatus.added);
         parent.addChild(localEntry);
-        parent.updateStatus(FileEntryStatus.modified);
+        // parent.updateStatus(FileEntryStatus.modified); // Mark parent as modified
         for (const child of localEntry.children.values()) {
           await recurse(child, undefined, localEntry);
         }
+
+        FileEntry.updateDirectoryStatusBasedOnChildren(localEntry);
         return;
       }
 
@@ -131,27 +138,33 @@ export class FileEntry {
           localEntry.fullPath,
         );
 
-        const localHash = await generateHash(
-          localEntry.fullPath,
-          localEntry.source,
-          localEntry.type,
-        );
-        const remoteHash = await generateHash(
-          remoteEntry.fullPath,
-          remoteEntry.source,
-          remoteEntry.type,
-        );
-        console.log(
-          `Comparing ${localEntry.name}: ${localHash} with ${remoteEntry.name}: ${remoteHash}`,
-        );
+        if (
+          localEntry.type === FileEntryType.file &&
+          remoteEntry.type === FileEntryType.file
+        ) {
+          // Compute hashes in parallel for files
+          const [localHash, remoteHash] = await Promise.all([
+            generateHash(
+              localEntry.fullPath,
+              localEntry.source,
+              localEntry.type,
+            ),
+            generateHash(
+              remoteEntry.fullPath,
+              remoteEntry.source,
+              remoteEntry.type,
+            ),
+          ]);
 
-        if (localHash !== remoteHash) {
-          currentEntry.updateStatus(FileEntryStatus.modified);
-          parent.updateStatus(FileEntryStatus.modified);
-          console.log(`Status of ${localEntry.name} : modified`);
+          if (localHash !== remoteHash) {
+            currentEntry.updateStatus(FileEntryStatus.modified);
+            parent.updateStatus(FileEntryStatus.modified);
+          } else {
+            currentEntry.updateStatus(FileEntryStatus.unchanged);
+          }
         } else {
+          // Directories are marked as unchanged initially, will update based on children
           currentEntry.updateStatus(FileEntryStatus.unchanged);
-          console.log(`Status of ${localEntry.name} : unchanged`);
         }
 
         const showUnchanged = workspace
@@ -171,6 +184,7 @@ export class FileEntry {
           ...localEntry.children.keys(),
           ...remoteEntry.children.keys(),
         ]);
+
         for (const key of allKeys) {
           await recurse(
             localEntry.children.get(key),
@@ -178,11 +192,56 @@ export class FileEntry {
             currentEntry,
           );
         }
+
+        FileEntry.updateDirectoryStatusBasedOnChildren(currentEntry);
+        return;
       }
     }
 
+    const root = new FileEntry(
+      localRoot.name,
+      FileEntryType.directory,
+      localRoot.size,
+      localRoot.modifiedTime,
+      localRoot.source,
+      localRoot.fullPath,
+    );
+    // Start recursion from the root entries
     await recurse(localRoot, remoteRoot, root);
     return root.children;
+  }
+
+  /**
+   * Updates the status of a directory based on the statuses of its children.
+   * @param currentEntry The current directory entry whose status needs to be updated.
+   */
+  private static updateDirectoryStatusBasedOnChildren(currentEntry: FileEntry) {
+    let previousStatus: FileEntryStatus | undefined;
+
+    // Iterate over the children and track their statuses
+    for (const child of currentEntry.children.values()) {
+      if (!child.status) {
+        console.error(
+          `[updateDirectoryStatusBasedOnChildren] CurrentEntry (${currentEntry.name}) child ${child.name} parameter has no status`,
+        );
+        return;
+      }
+
+      if (
+        child.status === FileEntryStatus.modified ||
+        (previousStatus && previousStatus !== child.status)
+      ) {
+        currentEntry.updateStatus(FileEntryStatus.modified);
+        console.log(
+          `DEBUG: childrenStats TESTING ${currentEntry.name}`,
+          FileEntryStatus.modified,
+        );
+        return; // Early exit on first modified status
+      }
+      previousStatus = child.status;
+    }
+
+    return previousStatus;
   }
 
   static fromJSON(json: any): FileEntry {

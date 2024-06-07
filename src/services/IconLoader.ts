@@ -87,7 +87,6 @@ function getIcon(
   // Get the extension name without the dot
   const fileExtension = path.extname(name).toLowerCase().substring(1);
   const basename = path.basename(name, fileExtension).toLowerCase();
-  console.log(`DEBUG: getIcon on ${basename}--${fileExtension} `);
 
   const entries = Object.entries(iconMappings).slice(1); // Skip the first element containing the default value (always true)
 
@@ -96,7 +95,6 @@ function getIcon(
       mappings.filenames.includes(basename) ||
       mappings.extensions.includes(fileExtension)
     ) {
-      console.log("DEBUG: found in ZIP, ", iconName, mappings);
       const lightIconPath = `icons_light/${iconName}${type === FileEntryType.directory ? "_opened" : ""}.svg`;
       const darkIconPath = `icons_dark/${iconName}${type === FileEntryType.directory ? "_opened" : ""}.svg`;
 
@@ -107,7 +105,6 @@ function getIcon(
     }
   }
 
-  console.log(`Set default icon for ${name}.`);
   return {
     light: defaultIconPath,
     dark: defaultIconPath,
@@ -132,12 +129,8 @@ export function getIconForFile(
 
   const fileExtension = path.extname(filename);
   const languageId = getLanguageIdFromMapping(fileExtension);
-  console.log(
-    `DEBUG JSON: ${fileExtension} ->getLanguageIdFromMapping ${languageId}`,
-  );
   if (languageId) {
     for (const [iconName, mappings] of Object.entries(iconMappings)) {
-      console.log(`DEBUG JSON: ${iconName}`, mappings);
       if (mappings.languageIds.includes(languageId)) {
         const lightIconPath = `icons_light/${iconName}.svg`;
         const darkIconPath = `icons_dark/${iconName}.svg`;
