@@ -1,0 +1,813 @@
+{
+  "folder": {
+    "extensions": [""],
+    "filenames": [],
+    "languageIds": []
+  },
+  "root_folder": {
+    "extensions": [],
+    "filenames": ["root_folder"],
+    "languageIds": []
+  },
+  "android": {
+    "extensions": ["android"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "api": {
+    "extensions": ["apis", "api"],
+    "filenames": [".api", ".apis"],
+    "languageIds": []
+  },
+  "app": {
+    "extensions": ["app"],
+    "filenames": [".app"],
+    "languageIds": []
+  },
+  "arangodb": {
+    "extensions": ["arangodb", "arango"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "asset": {
+    "extensions": ["assets"],
+    "filenames": [".assets"],
+    "languageIds": []
+  },
+  "aurelia": {
+    "extensions": ["aurelia_project"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "audio": {
+    "extensions": ["sounds", "audio", "sound", "audios"],
+    "filenames": [".sounds", ".sound", ".audio", ".audios"],
+    "languageIds": []
+  },
+  "aws": {
+    "extensions": ["aws"],
+    "filenames": [".aws"],
+    "languageIds": []
+  },
+  "azure": {
+    "extensions": ["azure"],
+    "filenames": [".azure"],
+    "languageIds": []
+  },
+  "azurepipelines": {
+    "extensions": ["azure-pipelines"],
+    "filenames": [".azure-pipelines"],
+    "languageIds": []
+  },
+  "binary": {
+    "extensions": ["bin"],
+    "filenames": [".bin"],
+    "languageIds": []
+  },
+  "bloc": {
+    "extensions": ["bloc", "blocs"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "blueprint": {
+    "extensions": ["blueprints", "blueprint"],
+    "filenames": [".blueprints", ".blueprint"],
+    "languageIds": []
+  },
+  "bower": {
+    "extensions": ["bower_components"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "buildkite": {
+    "extensions": [],
+    "filenames": [".buildkite"],
+    "languageIds": []
+  },
+  "cake": {
+    "extensions": ["cake"],
+    "filenames": [".cake"],
+    "languageIds": []
+  },
+  "certificate": {
+    "extensions": ["certs", "certs.", "certificates"],
+    "filenames": [".certificates"],
+    "languageIds": []
+  },
+  "chef": {
+    "extensions": ["chef"],
+    "filenames": [".chef"],
+    "languageIds": []
+  },
+  "circleci": {
+    "extensions": [],
+    "filenames": [".circleci"],
+    "languageIds": []
+  },
+  "controller": {
+    "extensions": ["controllers", "controller", "handlers"],
+    "filenames": [".controllers", ".handlers"],
+    "languageIds": []
+  },
+  "component": {
+    "extensions": ["ui", "components", "component", "widgets", "gui"],
+    "filenames": [".components"],
+    "languageIds": []
+  },
+  "composer": {
+    "extensions": ["composer"],
+    "filenames": [".composer"],
+    "languageIds": []
+  },
+  "cli": {
+    "extensions": [
+      "console",
+      "cli",
+      "commands",
+      "commandline",
+      "cmd",
+      "command"
+    ],
+    "filenames": [],
+    "languageIds": []
+  },
+  "client": {
+    "extensions": ["clients", "client"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "cmake": {
+    "extensions": ["cmake"],
+    "filenames": [".cmake"],
+    "languageIds": []
+  },
+  "config": {
+    "extensions": [
+      "config",
+      "configs",
+      "ini",
+      "setting",
+      "initializers",
+      "configuration",
+      "settings",
+      "configurations",
+      "conf"
+    ],
+    "filenames": [
+      ".configuration",
+      ".setting",
+      ".settings",
+      ".configurations",
+      ".config",
+      ".conf",
+      ".initializers",
+      ".configs",
+      ".ini"
+    ],
+    "languageIds": []
+  },
+  "coverage": {
+    "extensions": ["coverage"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "css": {
+    "extensions": ["_css", "css"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "cubit": {
+    "extensions": ["cubits", "cubit"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "cypress": {
+    "extensions": ["cypress"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "dapr": {
+    "extensions": ["dapr"],
+    "filenames": [".dapr"],
+    "languageIds": []
+  },
+  "db": {
+    "extensions": [
+      "repo",
+      "db",
+      "repository",
+      "data",
+      "repositories",
+      "sql",
+      "database"
+    ],
+    "filenames": [],
+    "languageIds": []
+  },
+  "debian": {
+    "extensions": ["debian", "deb"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "dependabot": {
+    "extensions": [],
+    "filenames": [".dependabot"],
+    "languageIds": []
+  },
+  "devcontainer": {
+    "extensions": [],
+    "filenames": [".devcontainer"],
+    "languageIds": []
+  },
+  "dist": {
+    "extensions": [
+      "target",
+      "outs",
+      "out",
+      "dist",
+      "builds",
+      "targets",
+      "build",
+      "releases",
+      "dists",
+      "export",
+      "exports",
+      "release"
+    ],
+    "filenames": [".build", ".dist"],
+    "languageIds": []
+  },
+  "docker": {
+    "extensions": ["docker"],
+    "filenames": [".docker"],
+    "languageIds": []
+  },
+  "docs": {
+    "extensions": ["docs", "doc"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "e2e": {
+    "extensions": ["e2e"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "elasticbeanstalk": {
+    "extensions": [],
+    "filenames": [".elasticbeanstalk", ".ebextensions"],
+    "languageIds": []
+  },
+  "electron": {
+    "extensions": ["electron"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "expo": {
+    "extensions": [],
+    "filenames": [".expo-shared", ".expo"],
+    "languageIds": []
+  },
+  "favicon": {
+    "extensions": ["favicons", "favicon"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "flow": {
+    "extensions": ["flow", "flow-typed"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "fonts": {
+    "extensions": ["fonts", "font", "fnt"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "gcp": {
+    "extensions": ["gcp"],
+    "filenames": [".gcp"],
+    "languageIds": []
+  },
+  "git": {
+    "extensions": ["submodules"],
+    "filenames": [".svn", ".git", ".submodules"],
+    "languageIds": []
+  },
+  "github": {
+    "extensions": [],
+    "filenames": [".github"],
+    "languageIds": []
+  },
+  "gitlab": {
+    "extensions": [],
+    "filenames": [".gitlab"],
+    "languageIds": []
+  },
+  "gradle": {
+    "extensions": ["gradle"],
+    "filenames": [".gradle"],
+    "languageIds": []
+  },
+  "graphql": {
+    "extensions": ["graphql"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "grunt": {
+    "extensions": ["grunt"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "gulp": {
+    "extensions": ["gulp"],
+    "filenames": [
+      "gulpfile.babel.js",
+      "gulpfile.coffee",
+      "gulpfile.babel.ts",
+      "gulpfile.ts",
+      "gulpfile.js",
+      "gulpfile.babel.coffee"
+    ],
+    "languageIds": []
+  },
+  "haxelib": {
+    "extensions": ["haxe_libraries"],
+    "filenames": [".haxelib"],
+    "languageIds": []
+  },
+  "helper": {
+    "extensions": ["helper", "helpers"],
+    "filenames": [".helpers", ".helper"],
+    "languageIds": []
+  },
+  "hook": {
+    "extensions": ["hook", "hooks"],
+    "filenames": [".hooks", ".hook"],
+    "languageIds": []
+  },
+  "husky": {
+    "extensions": [],
+    "filenames": [".husky"],
+    "languageIds": []
+  },
+  "idea": {
+    "extensions": [],
+    "filenames": [".idea"],
+    "languageIds": []
+  },
+  "images": {
+    "extensions": [
+      "svg",
+      "imgs",
+      "image",
+      "icons",
+      "icon",
+      "images",
+      "img",
+      "ico",
+      "screenshot",
+      "screenshots"
+    ],
+    "filenames": [],
+    "languageIds": []
+  },
+  "include": {
+    "extensions": [
+      "include",
+      "_include",
+      "incl",
+      "inc",
+      "includes",
+      "_incl",
+      "_inc",
+      "_includes"
+    ],
+    "filenames": [".inc", ".include", ".incl", ".includes"],
+    "languageIds": []
+  },
+  "interfaces": {
+    "extensions": ["interface", "interfaces"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "ios": {
+    "extensions": ["ios"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "js": {
+    "extensions": ["js"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "json": {
+    "extensions": ["json"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "json_official": {
+    "extensions": ["json"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "kubernetes": {
+    "extensions": ["kuber", "k8s", "kube", "kubernetes"],
+    "filenames": [".kuber", ".kube", ".kubernetes", ".k8s"],
+    "languageIds": []
+  },
+  "less": {
+    "extensions": ["_less", "less"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "library": {
+    "extensions": ["library", "libraries", "lib", "libs"],
+    "filenames": [".libs", ".lib"],
+    "languageIds": []
+  },
+  "linux": {
+    "extensions": ["linux"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "locale": {
+    "extensions": [
+      "locale",
+      "locales",
+      "g11n",
+      "l10n",
+      "globalization",
+      "localization",
+      "i18n",
+      "_locale",
+      "internationalization",
+      "lang",
+      "_locales",
+      "language",
+      "languages"
+    ],
+    "filenames": [],
+    "languageIds": []
+  },
+  "log": {
+    "extensions": ["logs", "log"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "macos": {
+    "extensions": ["darwin", "macos"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "mariadb": {
+    "extensions": ["maria", "mariadb"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "maven": {
+    "extensions": [],
+    "filenames": [".mvn"],
+    "languageIds": []
+  },
+  "memcached": {
+    "extensions": ["memcached"],
+    "filenames": [".memcached"],
+    "languageIds": []
+  },
+  "middleware": {
+    "extensions": ["middleware", "middlewares"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "mjml": {
+    "extensions": ["mjml"],
+    "filenames": [".mjml"],
+    "languageIds": []
+  },
+  "minikube": {
+    "extensions": ["minikube", "minik8s", "minikuber"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "mock": {
+    "extensions": ["mocks", "__mocks__"],
+    "filenames": [".mocks"],
+    "languageIds": []
+  },
+  "model": {
+    "extensions": ["models", "entities", "model"],
+    "filenames": [".models", ".model", ".entities"],
+    "languageIds": []
+  },
+  "module": {
+    "extensions": ["modules"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "mongodb": {
+    "extensions": ["mongo", "mongodb"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "mysql": {
+    "extensions": ["mysqldb", "mysql"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "next": {
+    "extensions": [],
+    "filenames": [".next"],
+    "languageIds": []
+  },
+  "nginx": {
+    "extensions": ["nginx"],
+    "filenames": ["conf.d"],
+    "languageIds": []
+  },
+  "nix": {
+    "extensions": ["niv", "nix"],
+    "filenames": [".nix", ".niv"],
+    "languageIds": []
+  },
+  "node": {
+    "extensions": ["node_modules"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "notification": {
+    "extensions": ["events", "notification", "notifications", "event"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "nuget": {
+    "extensions": [],
+    "filenames": [".nuget"],
+    "languageIds": []
+  },
+  "package": {
+    "extensions": ["packages", "package", "pkg"],
+    "filenames": [".package", ".packages"],
+    "languageIds": []
+  },
+  "paket": {
+    "extensions": [],
+    "filenames": [".paket"],
+    "languageIds": []
+  },
+  "php": {
+    "extensions": ["php"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "platformio": {
+    "extensions": [],
+    "filenames": [".pioenvs", ".pio"],
+    "languageIds": []
+  },
+  "plugin": {
+    "extensions": ["plugin", "extensions", "plugins", "extension"],
+    "filenames": [".extension", ".plugin", ".extensions", ".plugins"],
+    "languageIds": []
+  },
+  "prisma": {
+    "extensions": ["prisma"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "private": {
+    "extensions": ["private"],
+    "filenames": [".private"],
+    "languageIds": []
+  },
+  "public": {
+    "extensions": ["public"],
+    "filenames": [".public"],
+    "languageIds": []
+  },
+  "python": {
+    "extensions": [],
+    "filenames": [".venv", ".virtualenv"],
+    "languageIds": []
+  },
+  "redis": {
+    "extensions": ["redis"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "ravendb": {
+    "extensions": ["ravendb"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "route": {
+    "extensions": ["routes", "route", "_routes", "_route", "routers"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "redux": {
+    "extensions": ["redux"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "meteor": {
+    "extensions": [],
+    "filenames": [".meteor"],
+    "languageIds": []
+  },
+  "nuxt": {
+    "extensions": [],
+    "filenames": [".nuxt"],
+    "languageIds": []
+  },
+  "sass": {
+    "extensions": ["sass", "_sass", "_scss", "scss"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "script": {
+    "extensions": ["scripts", "script"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "server": {
+    "extensions": ["server"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "services": {
+    "extensions": ["services", "service"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "src": {
+    "extensions": ["sources", "src", "source"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "sso": {
+    "extensions": ["sso"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "story": {
+    "extensions": ["__stories__", "stories", "story"],
+    "filenames": [".storybook"],
+    "languageIds": []
+  },
+  "style": {
+    "extensions": ["styles", "style"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "tauri": {
+    "extensions": ["src-tauri"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "test": {
+    "extensions": [
+      "spec",
+      "__test__",
+      "tests",
+      "test",
+      "__tests__",
+      "specs",
+      "integration"
+    ],
+    "filenames": [".specs", ".tests", ".spec", ".test"],
+    "languageIds": []
+  },
+  "temp": {
+    "extensions": ["temp", "tmp"],
+    "filenames": [".temp", ".tmp"],
+    "languageIds": []
+  },
+  "template": {
+    "extensions": ["template", "templates"],
+    "filenames": [".templates", ".template"],
+    "languageIds": []
+  },
+  "theme": {
+    "extensions": ["themes", "theme"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "travis": {
+    "extensions": [],
+    "filenames": [".travis"],
+    "languageIds": []
+  },
+  "tools": {
+    "extensions": ["utils", "tools", "tool", "util"],
+    "filenames": [".tools"],
+    "languageIds": []
+  },
+  "trunk": {
+    "extensions": [],
+    "filenames": [".trunk"],
+    "languageIds": []
+  },
+  "typescript": {
+    "extensions": ["typescript", "ts"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "typings": {
+    "extensions": ["typings", "@types"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "typings2": {
+    "extensions": ["typings", "@types"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "vagrant": {
+    "extensions": ["vagrant"],
+    "filenames": [".vagrant"],
+    "languageIds": []
+  },
+  "video": {
+    "extensions": ["videos", "video"],
+    "filenames": [".videos", ".video"],
+    "languageIds": []
+  },
+  "view": {
+    "extensions": [
+      "views",
+      "html",
+      "view",
+      "_layout",
+      "_pages",
+      "_page",
+      "pages",
+      "_view",
+      "layout",
+      "layouts",
+      "_layouts",
+      "_views",
+      "page"
+    ],
+    "filenames": [],
+    "languageIds": []
+  },
+  "vs": {
+    "extensions": [],
+    "filenames": [".vs"],
+    "languageIds": []
+  },
+  "vs2": {
+    "extensions": [],
+    "filenames": [".vs"],
+    "languageIds": []
+  },
+  "vscode": {
+    "extensions": ["vscode"],
+    "filenames": [".vscode"],
+    "languageIds": []
+  },
+  "vscode2": {
+    "extensions": ["vscode"],
+    "filenames": [".vscode"],
+    "languageIds": []
+  },
+  "vscode3": {
+    "extensions": ["vscode"],
+    "filenames": [".vscode"],
+    "languageIds": []
+  },
+  "vscode_test": {
+    "extensions": [],
+    "filenames": [".vscode-test"],
+    "languageIds": []
+  },
+  "vscode_test2": {
+    "extensions": [],
+    "filenames": [".vscode-test"],
+    "languageIds": []
+  },
+  "vscode_test3": {
+    "extensions": [],
+    "filenames": [".vscode-test"],
+    "languageIds": []
+  },
+  "webpack": {
+    "extensions": ["webpack"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "windows": {
+    "extensions": ["windows", "win32"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "www": {
+    "extensions": ["wwwroot", "www"],
+    "filenames": [],
+    "languageIds": []
+  },
+  "yarn": {
+    "extensions": [],
+    "filenames": [".yarn"],
+    "languageIds": []
+  }
+}

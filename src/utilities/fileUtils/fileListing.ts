@@ -1,66 +1,86 @@
-import * as fs from "fs";
+import * as fs from "fs/promises";
 import * as path from "path";
 import {
   FileEntry,
   FileEntrySource,
   FileEntryType,
 } from "../../utilities/FileEntry";
-import { SFTPClient } from "../../services/SFTPClient";
 import { ConfigurationPanel } from "../../panels/ConfigurationPanel";
 import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
+import pLimit = require("p-limit");
+import { ConnectionManager } from "../../services/ConnectionManager";
+import { SFTPClient } from "../../services/SFTPClient";
+
+const limit = pLimit(10); // Set a limit for the number of concurrent file operations
 
 export async function listRemoteFilesRecursive(
   remoteDir: string,
   fileGlob?: any,
 ): Promise<FileEntry> {
-  console.log(`Listing ${remoteDir} recursively...`);
-  const sftpClient = new SFTPClient();
   const workspaceConfiguration: ConfigurationState =
     ConfigurationPanel.getWorkspaceConfiguration();
+  if (!workspaceConfiguration.configuration) {
+    throw new Error("Please configure the plugin.");
+  }
 
-  try {
-    if (workspaceConfiguration.configuration) {
-      await sftpClient.connect(workspaceConfiguration.configuration);
-    }
+  const listDirectory = async (
+    sftpClient: SFTPClient,
+    dir: string,
+  ): Promise<FileEntry> => {
+    console.log(`Listing Dir ${dir}`);
+    const normalizedDir = dir.replace(/\\/g, "/");
+    const dirStat = await sftpClient.getClient().stat(normalizedDir);
+    const fileObjects = await sftpClient
+      .getClient()
+      .list(normalizedDir, fileGlob);
+    const directoryContents: FileEntry = new FileEntry(
+      path.basename(normalizedDir),
+      FileEntryType.directory,
+      dirStat.size,
+      new Date(dirStat.modifyTime * 1000),
+      FileEntrySource.remote,
+      normalizedDir,
+    );
 
-    const client = sftpClient.getClient();
-    const listDirectory = async (dir: string): Promise<FileEntry> => {
-      const normalizedDir = dir.replace(/\\/g, "/");
-      const dirStat = await client.stat(normalizedDir);
-      const fileObjects = await client.list(normalizedDir, fileGlob);
-      const directoryContents: FileEntry = new FileEntry(
-        path.basename(normalizedDir),
-        FileEntryType.directory,
-        dirStat.size,
-        new Date(dirStat.modifyTime * 1000),
-        FileEntrySource.remote,
-        normalizedDir,
-      );
-
-      for (const file of fileObjects) {
+    const promises = fileObjects.map((file) =>
+      limit(async () => {
+        console.log(`Listing file ${file.name}`);
         const filePath = path
           .join(normalizedDir, file.name)
           .replace(/\\/g, "/");
+        const stats = await sftpClient.getClient().stat(filePath);
+
         if (file.type === "d") {
-          const subfiles = await listDirectory(filePath);
+          const subfiles = await listDirectory(sftpClient, filePath);
           directoryContents.addChild(subfiles);
         } else {
           directoryContents.addChild(
             new FileEntry(
               file.name,
               FileEntryType.file,
-              file.size,
-              new Date(file.modifyTime),
+              stats.size,
+              new Date(stats.modifyTime * 1000),
               FileEntrySource.remote,
               filePath,
             ),
           );
         }
-      }
-      return directoryContents;
-    };
+      }),
+    );
 
-    return await listDirectory(remoteDir);
+    await Promise.all(promises);
+    return directoryContents;
+  };
+
+  try {
+    const connectionManager = ConnectionManager.getInstance(
+      workspaceConfiguration.configuration,
+    );
+    return await connectionManager.doSFTPOperation(
+      async (sftpClient: SFTPClient) => {
+        return await listDirectory(sftpClient, remoteDir);
+      },
+    );
   } catch (error) {
     console.error("Recursive remote listing failed:", error);
     return new FileEntry(
@@ -71,8 +91,6 @@ export async function listRemoteFilesRecursive(
       FileEntrySource.remote,
       "",
     );
-  } finally {
-    await sftpClient.disconnect();
   }
 }
 
@@ -81,51 +99,61 @@ export async function listLocalFilesRecursive(
 ): Promise<FileEntry> {
   console.log(`Listing ${localDir} recursively...`);
 
-  const listDirectory = async (dir: string): Promise<FileEntry> => {
-    const directoryContents: FileEntry = new FileEntry(
-      path.basename(dir),
-      FileEntryType.directory,
-      fs.statSync(dir).size,
-      fs.statSync(dir).mtime,
-      FileEntrySource.local,
-      path.normalize(dir),
-    );
+  const rootEntry = new FileEntry(
+    path.basename(localDir),
+    FileEntryType.directory,
+    (await fs.stat(localDir)).size,
+    (await fs.stat(localDir)).mtime,
+    FileEntrySource.local,
+    path.normalize(localDir),
+  );
 
-    const files = fs.readdirSync(dir, { withFileTypes: true });
-    for (const file of files) {
-      const filePath = path.join(dir, file.name);
-      const normalizedFilePath = path.normalize(filePath);
-      if (file.isDirectory()) {
-        const subfiles = await listDirectory(normalizedFilePath);
-        directoryContents.addChild(subfiles);
-      } else {
-        directoryContents.addChild(
-          new FileEntry(
-            file.name,
-            FileEntryType.file,
-            fs.statSync(normalizedFilePath).size,
-            fs.statSync(normalizedFilePath).mtime,
-            FileEntrySource.local,
-            normalizedFilePath,
-          ),
-        );
-      }
+  const stack = [rootEntry];
+
+  while (stack.length > 0) {
+    const currentEntry = stack.pop();
+    if (!currentEntry) {
+      continue;
     }
 
-    return directoryContents;
-  };
+    const currentDir = currentEntry.fullPath;
+    const files = await fs.readdir(currentDir, { withFileTypes: true });
 
-  try {
-    return await listDirectory(localDir);
-  } catch (err) {
-    console.error("Recursive local listing failed", err);
-    return new FileEntry(
-      "",
-      FileEntryType.directory,
-      0,
-      new Date(),
-      FileEntrySource.local,
-      "",
+    const promises = files.map((file) =>
+      limit(async () => {
+        const filePath = path.join(currentDir, file.name);
+        const normalizedFilePath = path.normalize(filePath);
+
+        const stats = await fs.stat(normalizedFilePath);
+
+        if (file.isDirectory()) {
+          const dirEntry = new FileEntry(
+            file.name,
+            FileEntryType.directory,
+            stats.size,
+            stats.mtime,
+            FileEntrySource.local,
+            normalizedFilePath,
+          );
+          currentEntry.addChild(dirEntry);
+          stack.push(dirEntry); // Add directory to stack for further processing
+        } else {
+          currentEntry.addChild(
+            new FileEntry(
+              file.name,
+              FileEntryType.file,
+              stats.size,
+              stats.mtime,
+              FileEntrySource.local,
+              normalizedFilePath,
+            ),
+          );
+        }
+      }),
     );
+
+    await Promise.all(promises); // Wait for all current directory operations to complete
   }
+
+  return rootEntry;
 }

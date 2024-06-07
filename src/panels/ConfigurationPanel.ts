@@ -21,6 +21,8 @@ import * as fs from "fs";
 import { FullConfigurationMessage } from "@shared/DTOs/messages/FullConfigurationMessage";
 
 export class ConfigurationPanel extends Panel {
+  private static _workspaceConfig: ConfigurationState;
+
   static render(extensionUri: Uri) {
     const viewType = "configurationViewType";
     const title = "Configuration";
@@ -98,7 +100,7 @@ export class ConfigurationPanel extends Panel {
         currentConnectionConfig.pairedFolders
       ) {
         const { localPath, remotePath } = pairedFolders;
-        const client = new SFTPClient();
+        const client = SFTPClient.getInstance();
         await client.connect(currentConnectionConfig.configuration);
 
         if (!fs.existsSync(localPath)) {
@@ -155,7 +157,7 @@ export class ConfigurationPanel extends Panel {
   ): Promise<boolean> {
     // Test SFTP connection
     //* Open the connection
-    const client = new SFTPClient();
+    const client = SFTPClient.getInstance();
     // console.log("[testConnection] SFTP Client with config: ", configuration);
     await client.connect(configuration);
 
@@ -186,6 +188,10 @@ export class ConfigurationPanel extends Panel {
   }
 
   static getWorkspaceConfiguration(): ConfigurationState {
+    if (this._workspaceConfig) {
+      return this._workspaceConfig;
+    }
+
     const config = workspace.getConfiguration("LiveSync");
 
     // Get individual configuration values
@@ -203,7 +209,6 @@ export class ConfigurationPanel extends Panel {
 
     // Return null if any value is empty or undefined
     if (hostname && port && username && (password ?? sshKeyFilePath)) {
-      // console.log("One is null", {hostname, port, username, authMethod, password, sshKeyFilePath});
       workspaceConfig.configuration = {
         hostname: hostname,
         port: port,
@@ -218,6 +223,7 @@ export class ConfigurationPanel extends Panel {
       workspaceConfig.pairedFolders = pairedFolders;
     }
 
+    this._workspaceConfig = workspaceConfig;
     return workspaceConfig;
   }
 }

@@ -1,5 +1,6 @@
 import * as path from "path";
 import { PairFoldersMessage } from "../../DTOs/messages/PairFoldersMessage";
+import { FileEntrySource } from "../FileEntry";
 
 export function normalizePath(p: string): string {
   let normalizedPath = path.normalize(p);
@@ -51,4 +52,28 @@ export function isRootPath(
       normalizedTargetPath === normalizePath(folder.localPath) ||
       normalizedTargetPath === normalizePath(folder.remotePath),
   );
+}
+
+export function getRelativePath(
+  pairedFolders: PairFoldersMessage["paths"][],
+  fullPath: string,
+  fileSource: FileEntrySource,
+): string {
+  const normalizedTargetPath = normalizePath(fullPath);
+  for (const folder of pairedFolders) {
+    if (
+      fileSource === FileEntrySource.local &&
+      normalizedTargetPath.startsWith(normalizePath(folder.localPath))
+    ) {
+      return path.relative(folder.localPath, fullPath);
+    }
+
+    if (
+      fileSource === FileEntrySource.remote &&
+      normalizedTargetPath.startsWith(normalizePath(folder.remotePath))
+    ) {
+      return path.relative(folder.remotePath, fullPath);
+    }
+  }
+  return "";
 }

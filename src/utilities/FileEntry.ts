@@ -48,7 +48,8 @@ export class FileEntry {
     this.fullPath = fullPath;
     this.children = new Map<string, FileEntry>();
 
-    this.hash = generateHash(this.name, this.size, this.modifiedTime);
+    // this.hash = generateHash(fullPath, source, type);
+    this.hash = "";
   }
 
   updateStatus(newStatus: FileEntryStatus = FileEntryStatus.unchanged): void {
@@ -80,10 +81,10 @@ export class FileEntry {
     return this.type === FileEntryType.directory;
   }
 
-  static compareDirectories(
+  static async compareDirectories(
     localRoot: FileEntry,
     remoteRoot: FileEntry,
-  ): Map<string, FileEntry> {
+  ): Promise<Map<string, FileEntry>> {
     const root = new FileEntry(
       localRoot.name,
       FileEntryType.directory,
@@ -93,7 +94,7 @@ export class FileEntry {
       localRoot.fullPath,
     );
 
-    function recurse(
+    async function recurse(
       localEntry: FileEntry | undefined,
       remoteEntry: FileEntry | undefined,
       parent: FileEntry,
@@ -104,9 +105,9 @@ export class FileEntry {
         remoteEntry.updateStatus(FileEntryStatus.removed);
         parent.addChild(remoteEntry);
         parent.updateStatus(FileEntryStatus.modified);
-        remoteEntry.children.forEach((child) =>
-          recurse(undefined, child, remoteEntry),
-        );
+        for (const child of remoteEntry.children.values()) {
+          await recurse(undefined, child, remoteEntry);
+        }
         return;
       }
 
@@ -114,9 +115,9 @@ export class FileEntry {
         localEntry.updateStatus(FileEntryStatus.added);
         parent.addChild(localEntry);
         parent.updateStatus(FileEntryStatus.modified);
-        localEntry.children.forEach((child) =>
-          recurse(child, undefined, localEntry),
-        );
+        for (const child of localEntry.children.values()) {
+          await recurse(child, undefined, localEntry);
+        }
         return;
       }
 
@@ -130,26 +131,33 @@ export class FileEntry {
           localEntry.fullPath,
         );
 
-        console.log(
-          `Comparing ${localEntry.name}/${localEntry.size}/${localEntry.modifiedTime} with ${remoteEntry.name}/${remoteEntry.size}/${remoteEntry.modifiedTime}`,
+        const localHash = await generateHash(
+          localEntry.fullPath,
+          localEntry.source,
+          localEntry.type,
         );
-        if (
-          localEntry.isDirectory() &&
-          remoteEntry.isDirectory() &&
-          localEntry.name === remoteEntry.name
-        ) {
-          currentEntry.updateStatus(FileEntryStatus.unchanged);
-        } else if (localEntry.hash !== remoteEntry.hash) {
+        const remoteHash = await generateHash(
+          remoteEntry.fullPath,
+          remoteEntry.source,
+          remoteEntry.type,
+        );
+        console.log(
+          `Comparing ${localEntry.name}: ${localHash} with ${remoteEntry.name}: ${remoteHash}`,
+        );
+
+        if (localHash !== remoteHash) {
           currentEntry.updateStatus(FileEntryStatus.modified);
           parent.updateStatus(FileEntryStatus.modified);
+          console.log(`Status of ${localEntry.name} : modified`);
         } else {
           currentEntry.updateStatus(FileEntryStatus.unchanged);
+          console.log(`Status of ${localEntry.name} : unchanged`);
         }
 
         const showUnchanged = workspace
           .getConfiguration("LiveSync")
           .get<boolean>("showUnchanged", true);
-        // Only add the current file entry to the parent if currentEntry is not unchanged or if the showUnchanged flag is true
+
         if (
           !(
             showUnchanged === false &&
@@ -163,17 +171,17 @@ export class FileEntry {
           ...localEntry.children.keys(),
           ...remoteEntry.children.keys(),
         ]);
-        allKeys.forEach((key) => {
-          recurse(
+        for (const key of allKeys) {
+          await recurse(
             localEntry.children.get(key),
             remoteEntry.children.get(key),
             currentEntry,
           );
-        });
+        }
       }
     }
 
-    recurse(localRoot, remoteRoot, root);
+    await recurse(localRoot, remoteRoot, root);
     return root.children;
   }
 

@@ -17,7 +17,10 @@ async function compareDirectories(
   try {
     const localFiles = await listLocalFilesRecursive(localDir);
     const remoteFiles = await listRemoteFilesRecursive(remoteDir);
-    const compareFiles = FileEntry.compareDirectories(localFiles, remoteFiles);
+    const compareFiles = await FileEntry.compareDirectories(
+      localFiles,
+      remoteFiles,
+    );
 
     await saveToFile(localFiles.toJSON(), LOCAL_FILES_PATH);
     await saveToFile(remoteFiles.toJSON(), REMOTE_FILES_PATH);

@@ -15,12 +15,30 @@ import {
   saveToFile,
   ensureDirectoryExists,
 } from "../utilities/fileUtils/fileOperations";
-import { SAVE_DIR } from "../utilities/constants";
+import {
+  FOLDER_ICON_MAPPINGS_PATH,
+  LANGUAGEIDS_ICON_MAPPINGS_PATH,
+  SAVE_DIR,
+} from "../utilities/constants";
 import { isRootPath } from "../utilities/fileUtils/filePathUtils";
+import {
+  getIconForFile,
+  getIconForFolder,
+  loadFolderIconMappings,
+  loadIconMappings,
+  loadLanguageIdMappings,
+} from "./IconLoader";
+import {
+  DEFAULT_FILE_ICON_PATH,
+  DEFAULT_FOLDER_ICON,
+  ICON_MAPPINGS_PATH,
+} from "../utilities/constants";
 
 export class PairedFoldersTreeDataProvider
   implements vscode.TreeDataProvider<FileEntry>
 {
+  private configLoaded = false;
+
   private _onDidChangeTreeData: vscode.EventEmitter<
     FileEntry[] | undefined | void
   > = new vscode.EventEmitter<FileEntry[] | undefined | void>();
@@ -30,7 +48,11 @@ export class PairedFoldersTreeDataProvider
   readonly workspaceConfiguration: ConfigurationState =
     ConfigurationPanel.getWorkspaceConfiguration();
 
-  constructor() {}
+  constructor() {
+    loadIconMappings(ICON_MAPPINGS_PATH);
+    loadFolderIconMappings(FOLDER_ICON_MAPPINGS_PATH);
+    loadLanguageIdMappings(LANGUAGEIDS_ICON_MAPPINGS_PATH);
+  }
 
   refresh(): void {
     this._onDidChangeTreeData.fire();
@@ -45,15 +67,33 @@ export class PairedFoldersTreeDataProvider
     );
 
     if (element.status && element.type) {
-      treeItem.iconPath = this.getIconPathForType(element.type);
-      treeItem.description = FileEntryStatus[element.status];
-      treeItem.contextValue = `fileEntry-${element.type}-${FileEntryStatus[element.status]}`;
       if (
         this.workspaceConfiguration.pairedFolders &&
         isRootPath(element.fullPath, this.workspaceConfiguration.pairedFolders)
       ) {
         treeItem.contextValue = "fileEntry-rootFolder";
+        treeItem.iconPath = getIconForFolder(
+          "root_folder",
+          DEFAULT_FOLDER_ICON,
+        );
+      } else {
+        treeItem.contextValue = `fileEntry-${element.type}-${FileEntryStatus[element.status]}`;
+
+        // treeItem.iconPath = this.getIconPathForType(element.type);
+        if (element.type === FileEntryType.directory) {
+          treeItem.iconPath = getIconForFolder(
+            element.name,
+            DEFAULT_FOLDER_ICON,
+          );
+        } else {
+          treeItem.iconPath = getIconForFile(
+            element.name,
+            DEFAULT_FILE_ICON_PATH,
+          );
+        }
       }
+
+      treeItem.description = FileEntryStatus[element.status];
 
       const query = `?status=${FileEntryStatus[element.status]}`;
       treeItem.resourceUri = vscode.Uri.file(element.fullPath).with({ query });
@@ -106,7 +146,7 @@ export class PairedFoldersTreeDataProvider
     try {
       const localFiles = await listLocalFilesRecursive(localDir);
       const remoteFiles = await listRemoteFilesRecursive(remoteDir);
-      const compareFiles = FileEntry.compareDirectories(
+      const compareFiles = await FileEntry.compareDirectories(
         localFiles,
         remoteFiles,
       );

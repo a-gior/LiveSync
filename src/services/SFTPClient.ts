@@ -3,8 +3,10 @@ import { SFTPError } from "@shared/DTOs/sftpErrorDTO";
 import Client = require("ssh2-sftp-client");
 import * as fs from "fs";
 import * as path from "path";
+import { window } from "vscode";
 
 export class SFTPClient {
+  private static instance: SFTPClient;
   private _client: Client;
   private _errorMsgs: SFTPError[];
 
@@ -13,8 +15,15 @@ export class SFTPClient {
     this._errorMsgs = [];
   }
 
+  static getInstance(): SFTPClient {
+    if (!SFTPClient.instance) {
+      SFTPClient.instance = new SFTPClient();
+    }
+    return SFTPClient.instance;
+  }
+
   async connect(config: ConfigurationMessage["configuration"]) {
-    console.log(`Connecting to ${config.hostname}:${config.port}`);
+    console.log(`Connecting using SFTP to ${config.hostname}:${config.port}`);
     try {
       const connectionOptions: Client.ConnectOptions = {
         host: config.hostname,
@@ -37,11 +46,14 @@ export class SFTPClient {
       await this._client.connect(connectionOptions);
     } catch (err) {
       this._addError("Connection failed", err);
+      window.showErrorMessage(
+        "Failed to connect to remote server. Please check your configuration.",
+      );
     }
   }
 
   async disconnect() {
-    console.log(`Disconnecting.`);
+    console.log(`Disconnecting SFTP.`);
     await this._client.end();
   }
 

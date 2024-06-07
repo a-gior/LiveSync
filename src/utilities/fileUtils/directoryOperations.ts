@@ -19,7 +19,7 @@ export async function uploadDirectory(fileEntry: FileEntry): Promise<void> {
     return;
   }
 
-  const sftp = new SFTPClient();
+  const sftp = SFTPClient.getInstance();
   try {
     await sftp.connect(workspaceConfig.configuration);
 
@@ -55,7 +55,7 @@ export async function downloadDirectory(fileEntry: FileEntry): Promise<void> {
     return;
   }
 
-  const sftp = new SFTPClient();
+  const sftp = SFTPClient.getInstance();
   try {
     await sftp.connect(workspaceConfig.configuration);
 
@@ -92,7 +92,7 @@ export async function deleteRemoteDirectory(
     return;
   }
 
-  const sftp = new SFTPClient();
+  const sftp = SFTPClient.getInstance();
   try {
     await sftp.connect(workspaceConfig.configuration);
 

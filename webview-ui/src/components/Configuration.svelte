@@ -18,8 +18,8 @@
 	provideVSCodeDesignSystem().register(vsCodeButton(), vsCodeCheckbox());
 
     function checkAuthMethod(event) {
-        remoteServerConfigFormData["formGroups"][0]["fields"][4]["visible"] = (event.target.value === "auth-password");
-        remoteServerConfigFormData["formGroups"][0]["fields"][5]["visible"] = (event.target.value === "auth-sshKey");
+        remoteServerConfigFormData["formGroups"]["remote-server-form-group-0"].fields[4]["visible"] = (event.target.value === "auth-password");
+        remoteServerConfigFormData["formGroups"]["remote-server-form-group-0"].fields[5]["visible"] = (event.target.value === "auth-sshKey");
     }
 
     function setInitialConfiguration(confState: ConfigurationState) {
@@ -156,6 +156,11 @@
         // Update State with new paired Folders and send postMessage
         vscode.setState({...currentState, pairedFolders: pairFoldersMessage.pairedFolders});
         vscode.postMessage(pairFoldersMessage);
+    }
+
+    $ : {
+        console.log(remoteServerConfigFormData["formGroups"]["remote-server-form-group-0"].fields[4]);
+        console.log(remoteServerConfigFormData["formGroups"]["remote-server-form-group-0"].fields[5]);
     }
     
 

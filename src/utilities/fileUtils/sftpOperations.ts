@@ -6,13 +6,18 @@ import { generateHash } from "./hashUtils";
 import { loadFromFile } from "./fileOperations";
 import { REMOTE_FILES_PATH } from "../constants";
 import { uploadDirectory } from "./directoryOperations";
+import { FileEntrySource, FileEntryType } from "../FileEntry";
+import { SSHClient } from "../../services/SSHClient";
+import { ConfigurationPanel } from "../../panels/ConfigurationPanel";
+import { window } from "vscode";
+import { ConnectionManager } from "../../services/ConnectionManager";
 
 export async function downloadRemoteFile(
   configuration: ConfigurationMessage["configuration"],
   remotePath: string,
   localTmpPath: string,
 ): Promise<void> {
-  const sftp = new SFTPClient();
+  const sftp = SFTPClient.getInstance();
   try {
     await sftp.connect(configuration);
 
@@ -30,7 +35,7 @@ export async function uploadFile(
   localPath: string,
   remotePath: string,
 ): Promise<void> {
-  const sftp = new SFTPClient();
+  const sftp = SFTPClient.getInstance();
   try {
     await sftp.connect(configuration);
 
@@ -47,38 +52,15 @@ export async function uploadFile(
   }
 }
 
-export async function getRemoteFileMetadata(
-  configuration: ConfigurationMessage["configuration"],
-  remotePath: string,
-): Promise<{ name: string; size: number; modifiedTime: Date }> {
-  const sftp = new SFTPClient();
-  try {
-    await sftp.connect(configuration);
-    const client = sftp.getClient();
-    const stat = await client.stat(remotePath);
-    return {
-      name: path.basename(remotePath),
-      size: stat.size,
-      modifiedTime: new Date(stat.modifyTime * 1000), // convert to milliseconds
-    };
-  } finally {
-    await sftp.disconnect();
-  }
-}
-
 export async function compareRemoteFileHash(
   configuration: ConfigurationMessage["configuration"],
   remotePath: string,
 ): Promise<boolean> {
   try {
-    const remoteFileMetadata = await getRemoteFileMetadata(
-      configuration,
-      remotePath,
-    );
     const remoteFileHash = generateHash(
-      remoteFileMetadata.name,
-      remoteFileMetadata.size,
-      remoteFileMetadata.modifiedTime,
+      remotePath,
+      FileEntrySource.remote,
+      FileEntryType.file,
     );
 
     const storedRemoteFiles = await loadFromFile<{ [key: string]: any }>(
@@ -91,4 +73,33 @@ export async function compareRemoteFileHash(
     console.error("Error comparing remote file hash:", error);
     return false;
   }
+}
+
+export async function getRemoteHash(
+  remotePath: string,
+): Promise<string | undefined> {
+  const workspaceConfig = ConfigurationPanel.getWorkspaceConfiguration();
+
+  if (!workspaceConfig["configuration"]) {
+    window.showErrorMessage("Remote server not configured");
+    return;
+  }
+
+  const connectionManager = ConnectionManager.getInstance(
+    workspaceConfig["configuration"],
+  );
+  const command = `sha256sum ${remotePath} | awk '{ print $1 }'`;
+  let fileHash: string | undefined;
+
+  try {
+    await connectionManager.doSSHOperation(async (sshClient: SSHClient) => {
+      const hash = await sshClient.executeCommand(command);
+      fileHash = hash.trim(); // Ensure any extra whitespace is removed
+    });
+  } catch (err) {
+    window.showErrorMessage("Error getting remote file hash");
+    console.log("Error: ", err);
+  }
+
+  return fileHash;
 }
