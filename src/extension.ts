@@ -66,22 +66,29 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(configurationDisposable);
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("livesync.fileEntryRefresh", () => {
-      nodeDependenciesProvider.refresh();
-    }),
+    vscode.commands.registerCommand(
+      "livesync.fileEntryRefresh",
+      (element?: FileEntry) => {
+        if (!element) {
+          nodeDependenciesProvider.refresh();
+        } else {
+          FileEntry.compareSingleEntry(element).then(
+            (updatedElement: FileEntry) => {
+              nodeDependenciesProvider.refresh(updatedElement);
+            },
+          );
+        }
+      },
+    ),
     vscode.commands.registerCommand(
       "livesync.fileEntryShowDiff",
       (fileEntry: FileEntry) => {
-        vscode.window.showInformationMessage(
-          `Comparing files for ${fileEntry.name}`,
-        );
-
         showDiff(fileEntry);
       },
     ),
     vscode.commands.registerCommand(
       "livesync.fileEntryUpload",
-      async (fileEntry) => {
+      async (fileEntry: FileEntry) => {
         if (fileEntry.isDirectory()) {
           await uploadDirectory(fileEntry);
         } else {
@@ -90,7 +97,7 @@ export function activate(context: vscode.ExtensionContext) {
           );
           await handleFileSave(document);
         }
-        vscode.commands.executeCommand("livesync.fileEntryRefresh");
+        vscode.commands.executeCommand("livesync.fileEntryRefresh", fileEntry);
       },
     ),
     vscode.commands.registerCommand(
@@ -101,7 +108,7 @@ export function activate(context: vscode.ExtensionContext) {
         } else {
           await handleFileDownload(fileEntry);
         }
-        vscode.commands.executeCommand("livesync.fileEntryRefresh");
+        vscode.commands.executeCommand("livesync.fileEntryRefresh", fileEntry);
       },
     ),
   );

@@ -1,5 +1,17 @@
-import { workspace } from "vscode";
 import { generateHash } from "./fileUtils/hashUtils";
+import {
+  getLocalPath,
+  getRemotePath,
+  pathExists,
+} from "./fileUtils/filePathUtils";
+import { ConfigurationPanel } from "../panels/ConfigurationPanel";
+import { workspace, window, TextDocument } from "vscode";
+import {
+  listLocalFilesRecursive,
+  listRemoteFilesRecursive,
+} from "./fileUtils/fileListing";
+import * as fs from "fs";
+import { remotePathExists } from "./fileUtils/sftpOperations";
 
 export enum FileEntryStatus {
   added = "added",
@@ -211,6 +223,80 @@ export class FileEntry {
     return root.children;
   }
 
+  static async compareSingleEntry(fileEntry: FileEntry): Promise<FileEntry> {
+    try {
+      const workspaceConfig = ConfigurationPanel.getWorkspaceConfiguration();
+      if (!workspaceConfig.configuration || !workspaceConfig.pairedFolders) {
+        window.showErrorMessage(
+          "Remote server or pairedFodlers not configured",
+        );
+        return fileEntry;
+      }
+
+      let localPath: string;
+      let remotePath: string;
+
+      if (fileEntry.source === "remote") {
+        remotePath = fileEntry.fullPath;
+        localPath =
+          getLocalPath(remotePath, workspaceConfig.pairedFolders) || ""; // Implement getLocalPath to get corresponding local path
+      } else {
+        localPath = fileEntry.fullPath;
+        remotePath =
+          getRemotePath(localPath, workspaceConfig.pairedFolders) || ""; // Implement getRemotePath to get corresponding remote path
+      }
+
+      if (fileEntry.type === FileEntryType.file) {
+        const localExists = await pathExists(localPath, FileEntrySource.local);
+        const remoteExists = await pathExists(
+          remotePath,
+          FileEntrySource.remote,
+        );
+
+        if (!localExists) {
+          fileEntry.updateStatus(FileEntryStatus.removed);
+          return fileEntry;
+        }
+
+        if (!remoteExists) {
+          fileEntry.updateStatus(FileEntryStatus.added);
+          return fileEntry;
+        }
+
+        // Compare file hashes if it exists on both local and remote
+        const [localHash, remoteHash] = await Promise.all([
+          generateHash(localPath, FileEntrySource.local, FileEntryType.file),
+          generateHash(remotePath, FileEntrySource.remote, FileEntryType.file),
+        ]);
+
+        console.log(
+          `[compareSingleEntry] Comparing ${fileEntry.name}: ${localHash} with ${remoteHash}`,
+        );
+        fileEntry.updateStatus(
+          localHash === remoteHash
+            ? FileEntryStatus.unchanged
+            : FileEntryStatus.modified,
+        );
+
+        return fileEntry;
+      } else {
+        // Compare directories
+        const localDirFiles = await listLocalFilesRecursive(localPath);
+        const remoteDirFiles = await listRemoteFilesRecursive(remotePath);
+        const updatedComparison = await FileEntry.compareDirectories(
+          localDirFiles,
+          remoteDirFiles,
+        );
+
+        fileEntry.setChildren(updatedComparison);
+        return fileEntry;
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      return fileEntry;
+    }
+  }
+
   /**
    * Updates the status of a directory based on the statuses of its children.
    * @param currentEntry The current directory entry whose status needs to be updated.
@@ -232,10 +318,6 @@ export class FileEntry {
         (previousStatus && previousStatus !== child.status)
       ) {
         currentEntry.updateStatus(FileEntryStatus.modified);
-        console.log(
-          `DEBUG: childrenStats TESTING ${currentEntry.name}`,
-          FileEntryStatus.modified,
-        );
         return; // Early exit on first modified status
       }
       previousStatus = child.status;
@@ -281,5 +363,9 @@ export class FileEntry {
         ]),
       ),
     };
+  }
+
+  async exists() {
+    return await pathExists(this.fullPath, this.source);
   }
 }

@@ -11,6 +11,7 @@ import { SSHClient } from "../../services/SSHClient";
 import { ConfigurationPanel } from "../../panels/ConfigurationPanel";
 import { window } from "vscode";
 import { ConnectionManager } from "../../services/ConnectionManager";
+import { ConfigurationState } from "../../DTOs/states/ConfigurationState";
 
 export async function downloadRemoteFile(
   configuration: ConfigurationMessage["configuration"],
@@ -102,4 +103,25 @@ export async function getRemoteHash(
   }
 
   return fileHash;
+}
+
+export async function remotePathExists(remotePath: string) {
+  const workspaceConfiguration: ConfigurationState =
+    ConfigurationPanel.getWorkspaceConfiguration();
+  if (!workspaceConfiguration.configuration) {
+    throw new Error("Please configure the plugin.");
+  }
+
+  try {
+    const connectionManager = ConnectionManager.getInstance(
+      workspaceConfiguration.configuration,
+    );
+    return await connectionManager.doSFTPOperation(
+      async (sftpClient: SFTPClient) => {
+        return await sftpClient.pathExists(remotePath);
+      },
+    );
+  } catch (error) {
+    console.error(`Error while checking if path exists: ${remotePath}`, error);
+  }
 }

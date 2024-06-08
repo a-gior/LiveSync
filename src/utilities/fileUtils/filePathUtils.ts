@@ -1,6 +1,8 @@
 import * as path from "path";
+import * as fs from "fs";
 import { PairFoldersMessage } from "../../DTOs/messages/PairFoldersMessage";
 import { FileEntrySource } from "../FileEntry";
+import { remotePathExists } from "./sftpOperations";
 
 export function normalizePath(p: string): string {
   let normalizedPath = path.normalize(p);
@@ -76,4 +78,15 @@ export function getRelativePath(
     }
   }
   return "";
+}
+
+export async function pathExists(path: string, source: FileEntrySource) {
+  switch (source) {
+    case FileEntrySource.local:
+      return fs.existsSync(path);
+    case FileEntrySource.remote:
+      return await remotePathExists(path);
+    default:
+      throw Error("[FileEntry - exists()] Wrong FileEntry source.");
+  }
 }

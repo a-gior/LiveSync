@@ -37,13 +37,12 @@ import {
 export class PairedFoldersTreeDataProvider
   implements vscode.TreeDataProvider<FileEntry>
 {
-  private configLoaded = false;
-
   private _onDidChangeTreeData: vscode.EventEmitter<
-    FileEntry[] | undefined | void
-  > = new vscode.EventEmitter<FileEntry[] | undefined | void>();
-  readonly onDidChangeTreeData: vscode.Event<FileEntry[] | undefined | void> =
-    this._onDidChangeTreeData.event;
+    FileEntry[] | FileEntry | undefined | void
+  > = new vscode.EventEmitter<FileEntry[] | FileEntry | undefined | void>();
+  readonly onDidChangeTreeData: vscode.Event<
+    FileEntry[] | FileEntry | undefined | void
+  > = this._onDidChangeTreeData.event;
 
   readonly workspaceConfiguration: ConfigurationState =
     ConfigurationPanel.getWorkspaceConfiguration();
@@ -54,8 +53,9 @@ export class PairedFoldersTreeDataProvider
     loadLanguageIdMappings(LANGUAGEIDS_ICON_MAPPINGS_PATH);
   }
 
-  refresh(): void {
-    this._onDidChangeTreeData.fire();
+  refresh(element?: FileEntry[] | FileEntry | void): void {
+    console.log(`TreeProvider refresh: `, element);
+    this._onDidChangeTreeData.fire(element);
   }
 
   getTreeItem(element: FileEntry): vscode.TreeItem {
@@ -172,70 +172,6 @@ export class PairedFoldersTreeDataProvider
     } catch (error) {
       console.error("Error:", error);
       return new Map();
-    }
-  }
-
-  private getIconPathForStatus(
-    status: FileEntryStatus,
-  ): vscode.ThemeIcon | { light: string; dark: string } {
-    const iconFolderPath = path.join(
-      __dirname,
-      "..",
-      "..",
-      "..",
-      "resources",
-      "media",
-      "dark",
-    );
-    switch (status) {
-      case FileEntryStatus.added:
-        return {
-          light: path.join(iconFolderPath, "added.svg"),
-          dark: path.join(iconFolderPath, "added.svg"),
-        };
-      case FileEntryStatus.removed:
-        return {
-          light: path.join(iconFolderPath, "removed.svg"),
-          dark: path.join(iconFolderPath, "removed.svg"),
-        };
-      case FileEntryStatus.modified:
-        return {
-          light: path.join(iconFolderPath, "modified.svg"),
-          dark: path.join(iconFolderPath, "modified.svg"),
-        };
-      case FileEntryStatus.unchanged:
-      default:
-        return {
-          light: path.join(iconFolderPath, "unchanged.svg"),
-          dark: path.join(iconFolderPath, "unchanged.svg"),
-        };
-    }
-  }
-
-  private getIconPathForType(
-    status: FileEntryType,
-  ): vscode.ThemeIcon | { light: string; dark: string } {
-    const iconFolderPath = path.join(
-      __dirname,
-      "..",
-      "..",
-      "..",
-      "resources",
-      "media",
-      "dark",
-    );
-    switch (status) {
-      case FileEntryType.directory:
-        return {
-          light: path.join(iconFolderPath, "folder.svg"),
-          dark: path.join(iconFolderPath, "folder.svg"),
-        };
-      case FileEntryType.file:
-      default:
-        return {
-          light: path.join(iconFolderPath, "file.svg"),
-          dark: path.join(iconFolderPath, "file.svg"),
-        };
     }
   }
 }
