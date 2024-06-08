@@ -11,12 +11,14 @@ import pLimit = require("p-limit");
 import { ConnectionManager } from "../../services/ConnectionManager";
 import { SFTPClient } from "../../services/SFTPClient";
 
-const limit = pLimit(10); // Set a limit for the number of concurrent file operations
+// Set a limit for the number of concurrent file operations, from 10 onwards triggers a warning for too much event listeners
+const limit = pLimit(9);
 
 export async function listRemoteFilesRecursive(
   remoteDir: string,
   fileGlob?: any,
 ): Promise<FileEntry> {
+  console.log(`Listing remote ${remoteDir} recursively...`);
   const workspaceConfiguration: ConfigurationState =
     ConfigurationPanel.getWorkspaceConfiguration();
   if (!workspaceConfiguration.configuration) {
@@ -97,7 +99,7 @@ export async function listRemoteFilesRecursive(
 export async function listLocalFilesRecursive(
   localDir: string,
 ): Promise<FileEntry> {
-  console.log(`Listing ${localDir} recursively...`);
+  console.log(`Listing local ${localDir} recursively...`);
 
   const rootEntry = new FileEntry(
     path.basename(localDir),

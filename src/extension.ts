@@ -19,10 +19,17 @@ import {
 } from "./utilities/fileUtils/directoryOperations";
 import { FileEventHandler } from "./services/FileEventHandler";
 import path from "path";
+import { logAllEventListeners } from "./services/eventListenersFunctions";
+import { EventEmitter } from "events";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
+  console.log(
+    "Activating, show context.subscriptions: ",
+    context.subscriptions,
+  );
+
   const rootPath =
     vscode.workspace.workspaceFolders &&
     vscode.workspace.workspaceFolders.length > 0
