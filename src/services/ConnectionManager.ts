@@ -126,7 +126,6 @@ export class ConnectionManager {
       throw err;
     } finally {
       this.sshActiveOperations--;
-      console.log(`SSH Active Operations: ${this.sshActiveOperations}`);
       if (this.sshActiveOperations === 0) {
         this.scheduleSSHDisconnect();
       }
@@ -145,7 +144,6 @@ export class ConnectionManager {
       throw err;
     } finally {
       this.sftpActiveOperations--;
-      console.log(`SFTP Active Operations: ${this.sftpActiveOperations}`);
       if (this.sftpActiveOperations === 0) {
         this.scheduleSFTPDisconnect();
       }

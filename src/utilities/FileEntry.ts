@@ -5,19 +5,22 @@ import {
   pathExists,
 } from "./fileUtils/filePathUtils";
 import { ConfigurationPanel } from "../panels/ConfigurationPanel";
-import { workspace, window, TextDocument } from "vscode";
+import { workspace, window } from "vscode";
 import {
   listLocalFilesRecursive,
   listRemoteFilesRecursive,
 } from "./fileUtils/fileListing";
 import * as fs from "fs";
-import { remotePathExists } from "./fileUtils/sftpOperations";
+import * as path from "path";
+import { getRemoteFileMetadata } from "./fileUtils/sftpOperations";
 
 export enum FileEntryStatus {
   added = "added",
   removed = "removed",
   modified = "modified",
   unchanged = "unchanged",
+  new = "new",
+  deleted = "deleted",
 }
 
 export enum FileEntryType {
@@ -288,7 +291,18 @@ export class FileEntry {
           remoteDirFiles,
         );
 
-        fileEntry.setChildren(updatedComparison);
+        const updatedFolder = updatedComparison.get(localDirFiles.name);
+        if (!updatedFolder) {
+          console.error(
+            `[compareSingleEntry] Couldnt compare ${localPath} & ${remotePath}`,
+            updatedComparison,
+          );
+          return fileEntry;
+        }
+
+        // Updates fileEntry and returns it
+        fileEntry.status = updatedFolder.status;
+        fileEntry.setChildren(updatedFolder.children);
         return fileEntry;
       }
     } catch (error) {
@@ -367,5 +381,43 @@ export class FileEntry {
 
   async exists() {
     return await pathExists(this.fullPath, this.source);
+  }
+
+  static getEntryFromLocalPath(localPath: string): FileEntry {
+    try {
+      const stats = fs.lstatSync(localPath);
+      return new FileEntry(
+        path.basename(localPath),
+        stats.isDirectory() ? FileEntryType.directory : FileEntryType.file,
+        stats.size,
+        stats.mtime,
+        FileEntrySource.local,
+        localPath,
+      );
+    } catch (error) {
+      console.error(`Error getting FileEntry for path ${localPath}:`, error);
+      throw error;
+    }
+  }
+
+  static async getEntryFromRemotePath(remotePath: string): Promise<FileEntry> {
+    try {
+      const stats = await getRemoteFileMetadata(remotePath);
+      if (!stats) {
+        throw new Error(`No metadata found for remote path: ${remotePath}`);
+      }
+
+      return new FileEntry(
+        path.basename(remotePath),
+        stats.isDirectory ? FileEntryType.directory : FileEntryType.file,
+        stats.size,
+        new Date(stats.modifyTime * 1000),
+        FileEntrySource.remote,
+        remotePath,
+      );
+    } catch (error) {
+      console.error(`Error getting FileEntry for path ${remotePath}:`, error);
+      throw error;
+    }
   }
 }

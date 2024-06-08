@@ -27,7 +27,7 @@ export async function listRemoteFilesRecursive(
     sftpClient: SFTPClient,
     dir: string,
   ): Promise<FileEntry> => {
-    console.log(`Listing Dir ${dir}`);
+    // console.log(`Listing Dir ${dir}`);
     const normalizedDir = dir.replace(/\\/g, "/");
     const dirStat = await sftpClient.getClient().stat(normalizedDir);
     const fileObjects = await sftpClient
@@ -44,7 +44,7 @@ export async function listRemoteFilesRecursive(
 
     const promises = fileObjects.map((file) =>
       limit(async () => {
-        console.log(`Listing file ${file.name}`);
+        // console.log(`Listing File ${file.name}`);
         const filePath = path
           .join(normalizedDir, file.name)
           .replace(/\\/g, "/");

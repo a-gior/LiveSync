@@ -3,24 +3,26 @@ import * as path from "path";
 import { ConfigurationPanel } from "../panels/ConfigurationPanel";
 import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 import {
-  listLocalFilesRecursive,
-  listRemoteFilesRecursive,
-} from "../utilities/fileUtils/fileListing";
-import {
   FileEntry,
+  FileEntrySource,
   FileEntryStatus,
   FileEntryType,
 } from "../utilities/FileEntry";
 import {
-  saveToFile,
   ensureDirectoryExists,
+  saveToFile,
 } from "../utilities/fileUtils/fileOperations";
 import {
-  FOLDER_ICON_MAPPINGS_PATH,
-  LANGUAGEIDS_ICON_MAPPINGS_PATH,
-  SAVE_DIR,
-} from "../utilities/constants";
-import { isRootPath } from "../utilities/fileUtils/filePathUtils";
+  comparePaths,
+  getLocalPath,
+  getRelativePath,
+  getRemotePath,
+  isRootPath,
+} from "../utilities/fileUtils/filePathUtils";
+import {
+  listLocalFilesRecursive,
+  listRemoteFilesRecursive,
+} from "../utilities/fileUtils/fileListing";
 import {
   getIconForFile,
   getIconForFolder,
@@ -29,21 +31,24 @@ import {
   loadLanguageIdMappings,
 } from "./IconLoader";
 import {
+  FOLDER_ICON_MAPPINGS_PATH,
+  LANGUAGEIDS_ICON_MAPPINGS_PATH,
+  ICON_MAPPINGS_PATH,
   DEFAULT_FILE_ICON_PATH,
   DEFAULT_FOLDER_ICON,
-  ICON_MAPPINGS_PATH,
+  SAVE_DIR,
 } from "../utilities/constants";
 
 export class PairedFoldersTreeDataProvider
   implements vscode.TreeDataProvider<FileEntry>
 {
   private _onDidChangeTreeData: vscode.EventEmitter<
-    FileEntry[] | FileEntry | undefined | void
-  > = new vscode.EventEmitter<FileEntry[] | FileEntry | undefined | void>();
-  readonly onDidChangeTreeData: vscode.Event<
-    FileEntry[] | FileEntry | undefined | void
-  > = this._onDidChangeTreeData.event;
+    FileEntry | undefined | void
+  > = new vscode.EventEmitter<FileEntry | undefined | void>();
+  readonly onDidChangeTreeData: vscode.Event<FileEntry | undefined | void> =
+    this._onDidChangeTreeData.event;
 
+  private rootElements: FileEntry[] = [];
   readonly workspaceConfiguration: ConfigurationState =
     ConfigurationPanel.getWorkspaceConfiguration();
 
@@ -53,9 +58,33 @@ export class PairedFoldersTreeDataProvider
     loadLanguageIdMappings(LANGUAGEIDS_ICON_MAPPINGS_PATH);
   }
 
-  refresh(element?: FileEntry[] | FileEntry | void): void {
-    console.log(`TreeProvider refresh: `, element);
+  refresh(element?: FileEntry): void {
+    if (!element) {
+      console.debug("################ Refresh all ################");
+    }
     this._onDidChangeTreeData.fire(element);
+  }
+
+  addElement(newElement: FileEntry, parentElement?: FileEntry): void {
+    if (parentElement) {
+      parentElement.addChild(newElement);
+      this.refresh(parentElement);
+    } else {
+      this.rootElements.push(newElement);
+      this.refresh();
+    }
+  }
+
+  removeElement(elementToRemove: FileEntry, parentElement?: FileEntry): void {
+    if (parentElement) {
+      parentElement.removeChild(elementToRemove.name);
+      this.refresh(parentElement);
+    } else {
+      this.rootElements = this.rootElements.filter(
+        (element) => element !== elementToRemove,
+      );
+      this.refresh();
+    }
   }
 
   getTreeItem(element: FileEntry): vscode.TreeItem {
@@ -78,23 +107,12 @@ export class PairedFoldersTreeDataProvider
         );
       } else {
         treeItem.contextValue = `fileEntry-${element.type}-${FileEntryStatus[element.status]}`;
-
-        // treeItem.iconPath = this.getIconPathForType(element.type);
-        if (element.type === FileEntryType.directory) {
-          treeItem.iconPath = getIconForFolder(
-            element.name,
-            DEFAULT_FOLDER_ICON,
-          );
-        } else {
-          treeItem.iconPath = getIconForFile(
-            element.name,
-            DEFAULT_FILE_ICON_PATH,
-          );
-        }
+        treeItem.iconPath =
+          element.type === FileEntryType.directory
+            ? getIconForFolder(element.name, DEFAULT_FOLDER_ICON)
+            : getIconForFile(element.name, DEFAULT_FILE_ICON_PATH);
       }
-
       treeItem.description = FileEntryStatus[element.status];
-
       const query = `?status=${FileEntryStatus[element.status]}`;
       treeItem.resourceUri = vscode.Uri.file(element.fullPath).with({ query });
     }
@@ -104,7 +122,6 @@ export class PairedFoldersTreeDataProvider
   async getChildren(element?: FileEntry): Promise<FileEntry[]> {
     if (!element) {
       let rootFileEntries: FileEntry[] = [];
-      // If no element provided, get the root items (local folders)
       if (
         !this.workspaceConfiguration.configuration ||
         !this.workspaceConfiguration.pairedFolders ||
@@ -114,10 +131,8 @@ export class PairedFoldersTreeDataProvider
       } else {
         const pairedFolders: { localPath: string; remotePath: string }[] =
           this.workspaceConfiguration.pairedFolders;
-
         for (const { localPath, remotePath } of pairedFolders) {
           const rootName: string = `[local] ${path.basename(localPath)} / ${path.basename(remotePath)} [remote]`;
-
           ensureDirectoryExists(SAVE_DIR);
           const children: Map<string, FileEntry> =
             await this.getDirectoriesComparison(
@@ -125,7 +140,6 @@ export class PairedFoldersTreeDataProvider
               remotePath,
               SAVE_DIR,
             );
-
           let workspaceEntry = children.get(path.basename(localPath));
           if (workspaceEntry instanceof FileEntry) {
             workspaceEntry.name = rootName;
@@ -135,9 +149,9 @@ export class PairedFoldersTreeDataProvider
           }
         }
       }
-      return rootFileEntries;
+      this.rootElements = rootFileEntries;
+      return this.rootElements;
     } else {
-      // If element provided, return its children
       return [...element.children.values()];
     }
   }
@@ -154,7 +168,6 @@ export class PairedFoldersTreeDataProvider
         localFiles,
         remoteFiles,
       );
-
       await saveToFile(
         localFiles.toJSON(),
         path.join(saveDir, "localFiles.json"),
@@ -167,11 +180,51 @@ export class PairedFoldersTreeDataProvider
         Object.fromEntries(compareFiles.entries()),
         path.join(saveDir, "compareFiles.json"),
       );
-
       return compareFiles;
     } catch (error) {
       console.error("Error:", error);
       return new Map();
     }
+  }
+
+  findEntryByPath(
+    filePath: string,
+    fileSource: FileEntrySource,
+    rootEntries: FileEntry[] = this.rootElements,
+  ): FileEntry | undefined {
+    const pairedFolders = this.workspaceConfiguration.pairedFolders || [];
+    const relativePath = getRelativePath(pairedFolders, filePath, fileSource);
+    if (!relativePath) {
+      return undefined;
+    }
+    const pathParts = relativePath.split(path.sep);
+
+    let currentEntries = rootEntries;
+    let foundEntry: FileEntry | undefined;
+
+    if (currentEntries === this.rootElements) {
+      for (const rootEntry of currentEntries) {
+        if (rootEntry.isDirectory()) {
+          currentEntries = Array.from(rootEntry.children.values());
+          break;
+        }
+      }
+    }
+
+    for (const part of pathParts) {
+      foundEntry = currentEntries.find((entry) =>
+        comparePaths(entry.name, part),
+      );
+      if (!foundEntry) {
+        return undefined;
+      }
+      if (foundEntry.isDirectory()) {
+        currentEntries = Array.from(foundEntry.children.values());
+      } else {
+        break;
+      }
+    }
+
+    return foundEntry;
   }
 }

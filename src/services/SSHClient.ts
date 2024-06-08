@@ -145,8 +145,8 @@ export class SSHClient {
       );
     }
 
-    console.log(
-      `Connection is connecting: ${this.isConnecting}, isConnected: ${this.isConnected}`,
-    );
+    // console.log(
+    //   `Connection is connecting: ${this.isConnecting}, isConnected: ${this.isConnected}`,
+    // );
   }
 }

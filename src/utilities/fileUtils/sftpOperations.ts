@@ -12,22 +12,24 @@ import { ConfigurationPanel } from "../../panels/ConfigurationPanel";
 import { window } from "vscode";
 import { ConnectionManager } from "../../services/ConnectionManager";
 import { ConfigurationState } from "../../DTOs/states/ConfigurationState";
+import sftp from "ssh2-sftp-client";
 
 export async function downloadRemoteFile(
   configuration: ConfigurationMessage["configuration"],
   remotePath: string,
   localTmpPath: string,
 ): Promise<void> {
-  const sftp = SFTPClient.getInstance();
+  const connectionManager = ConnectionManager.getInstance(configuration);
+
   try {
-    await sftp.connect(configuration);
-
-    const dir = path.dirname(localTmpPath);
-    await fs.promises.mkdir(dir, { recursive: true });
-
-    await sftp.getClient().fastGet(remotePath, localTmpPath);
-  } finally {
-    await sftp.disconnect();
+    await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+      const dir = path.dirname(localTmpPath);
+      await fs.promises.mkdir(dir, { recursive: true });
+      await sftpClient.getClient().fastGet(remotePath, localTmpPath);
+    });
+  } catch (error: any) {
+    console.error(`Failed to download file: ${error.message}`);
+    window.showErrorMessage(`Failed to download file: ${error.message}`);
   }
 }
 
@@ -36,25 +38,24 @@ export async function uploadFile(
   localPath: string,
   remotePath: string,
 ): Promise<void> {
-  const sftp = SFTPClient.getInstance();
+  const connectionManager = ConnectionManager.getInstance(configuration);
+
   try {
-    await sftp.connect(configuration);
-
-    // Check if remote directory exists, if not create it
-    const remoteDir = path.dirname(remotePath);
-    const dirExists = await sftp.getClient().exists(remoteDir);
-    if (!dirExists) {
-      await sftp.getClient().mkdir(remoteDir, true);
-    }
-
-    await sftp.getClient().put(localPath, remotePath);
-  } finally {
-    await sftp.disconnect();
+    await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+      const remoteDir = path.dirname(remotePath);
+      const dirExists = await sftpClient.getClient().exists(remoteDir);
+      if (!dirExists) {
+        await sftpClient.getClient().mkdir(remoteDir, true);
+      }
+      await sftpClient.getClient().put(localPath, remotePath);
+    });
+  } catch (error: any) {
+    console.error(`Failed to upload file: ${error.message}`);
+    window.showErrorMessage(`Failed to upload file: ${error.message}`);
   }
 }
 
 export async function compareRemoteFileHash(
-  configuration: ConfigurationMessage["configuration"],
   remotePath: string,
 ): Promise<boolean> {
   try {
@@ -123,5 +124,61 @@ export async function remotePathExists(remotePath: string) {
     );
   } catch (error) {
     console.error(`Error while checking if path exists: ${remotePath}`, error);
+  }
+}
+
+export async function getRemoteFileMetadata(
+  remotePath: string,
+): Promise<sftp.FileStats | undefined> {
+  const workspaceConfiguration: ConfigurationState =
+    ConfigurationPanel.getWorkspaceConfiguration();
+  if (!workspaceConfiguration.configuration) {
+    throw new Error("Please configure the plugin.");
+  }
+
+  try {
+    const connectionManager = ConnectionManager.getInstance(
+      workspaceConfiguration.configuration,
+    );
+    return await connectionManager.doSFTPOperation(
+      async (sftpClient: SFTPClient) => {
+        return await sftpClient.getClient().stat(remotePath);
+      },
+    );
+  } catch (err: any) {
+    console.error(`Couldn't fetch metadata for remote file ${remotePath}`);
+  }
+}
+
+export async function moveRemoteFile(
+  configuration: ConfigurationMessage["configuration"],
+  oldRemotePath: string,
+  newRemotePath: string,
+): Promise<void> {
+  const connectionManager = ConnectionManager.getInstance(configuration);
+
+  try {
+    await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+      await sftpClient.getClient().rename(oldRemotePath, newRemotePath);
+    });
+  } catch (error: any) {
+    console.error(`Failed to move remote file: ${error.message}`);
+    window.showErrorMessage(`Failed to move remote file: ${error.message}`);
+  }
+}
+
+export async function deleteRemoteFile(
+  configuration: ConfigurationMessage["configuration"],
+  remotePath: string,
+): Promise<void> {
+  const connectionManager = ConnectionManager.getInstance(configuration);
+
+  try {
+    await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+      await sftpClient.getClient().delete(remotePath);
+    });
+  } catch (error: any) {
+    console.error(`Failed to delete remote file: ${error.message}`);
+    window.showErrorMessage(`Failed to delete remote file: ${error.message}`);
   }
 }

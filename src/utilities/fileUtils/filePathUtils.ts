@@ -90,3 +90,7 @@ export async function pathExists(path: string, source: FileEntrySource) {
       throw Error("[FileEntry - exists()] Wrong FileEntry source.");
   }
 }
+
+export function comparePaths(path1: string, path2: string): boolean {
+  return normalizePath(path1) === normalizePath(path2);
+}

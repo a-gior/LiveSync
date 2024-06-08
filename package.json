@@ -147,13 +147,47 @@
         },
         "LiveSync.actionOnSave": {
           "type": "string",
-          "default": "check",
+          "default": "check&save",
           "enum": [
-            "upload",
+            "save",
             "check",
-            "check&upload"
+            "check&save",
+            "none"
           ],
-          "description": "Action to perform on file save"
+          "description": "Action to perform on file save.\n\nOptions:\n- save: Automatically uploads the file to the remote server on save.\n- check: Only checks if the file has been modified on the remote server without uploading.\n- check&save: Checks if the file has been modified on the remote server and uploads if it hasn't.\n- none: No action is performed on file save."
+        },
+        "LiveSync.actionOnDelete": {
+          "type": "string",
+          "default": "check&delete",
+          "enum": [
+            "delete",
+            "check",
+            "check&delete",
+            "none"
+          ],
+          "description": "Action to perform on file delete.\n\nOptions:\n- delete: Automatically deletes the file on the remote server on delete.\n- check: Only checks if the file has been deleted on the remote server without deleting.\n- check&delete: Checks if the file has been deleted on the remote server and deletes if it hasn't.\n- none: No action is performed on file delete."
+        },
+        "LiveSync.actionOnMove": {
+          "type": "string",
+          "default": "check&move",
+          "enum": [
+            "move",
+            "check",
+            "check&move",
+            "none"
+          ],
+          "description": "Action to perform on file move/rename.\n\nOptions:\n- move: Automatically moves/renames the file on the remote server on move/rename.\n- check: Only checks if the file has been moved/renamed on the remote server without moving/renaming.\n- check&move: Checks if the file has been moved/renamed on the remote server and moves/renames if it hasn't.\n- none: No action is performed on file move/rename."
+        },
+        "LiveSync.actionOnCreate": {
+          "type": "string",
+          "default": "check&create",
+          "enum": [
+            "create",
+            "check",
+            "check&create",
+            "none"
+          ],
+          "description": "Action to perform on file create.\n\nOptions:\n- create: Automatically creates the file on the remote server on create.\n- check: Only checks if the file has been created on the remote server without creating.\n- check&create: Checks if the file has been created on the remote server and creates if it hasn't.\n- none: No action is performed on file create."
         },
         "LiveSync.showUnchanged": {
           "type": "boolean",
