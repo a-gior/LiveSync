@@ -19,6 +19,8 @@ import { Message } from "@shared/DTOs/messages/Message";
 import { PairFoldersMessage } from "@shared/DTOs/messages/PairFoldersMessage";
 import * as fs from "fs";
 import { FullConfigurationMessage } from "@shared/DTOs/messages/FullConfigurationMessage";
+import { FileEventActionsMessage } from "@shared/DTOs/messages/FileEventActionsMessage";
+import { config } from "process";
 
 export class ConfigurationPanel extends Panel {
   private static _workspaceConfig: ConfigurationState;
@@ -36,10 +38,13 @@ export class ConfigurationPanel extends Panel {
         case "updateConfiguration":
           console.log("UpdateConfiguration...");
           if (message.configuration) {
-            await this.updateConfiguration(message.configuration);
+            await this.updateConfiguration(message);
           }
           if (message.pairedFolders) {
             await this.savePairFolders(message.pairedFolders);
+          }
+          if (message.fileEventActions) {
+            await this.saveFileEventActions(message.fileEventActions);
           }
           break;
         case "testConnection":
@@ -133,23 +138,68 @@ export class ConfigurationPanel extends Panel {
     window.showInformationMessage("Paired Folders are valid and saved");
   }
 
-  static async updateConfiguration(
-    configuration: ConfigurationMessage["configuration"],
+  static async saveFileEventActions(
+    actions: FileEventActionsMessage["actions"],
   ) {
     const config = workspace.getConfiguration("LiveSync");
-    const { hostname, port, username, authMethod, password, sshKey } =
-      configuration;
+    if (actions) {
+      config.update("actionOnSave", actions.actionOnSave, true);
+      config.update("actionOnCreate", actions.actionOnCreate, true);
+      config.update("actionOnDelete", actions.actionOnDelete, true);
+      config.update("actionOnMove", actions.actionOnMove, true);
 
-    await config.update("hostname", hostname, ConfigurationTarget.Workspace);
-    await config.update("port", port, ConfigurationTarget.Workspace);
-    await config.update("username", username, ConfigurationTarget.Workspace);
-    await config.update(
-      "authMethod",
-      authMethod,
-      ConfigurationTarget.Workspace,
-    );
-    await config.update("password", password, ConfigurationTarget.Workspace);
-    await config.update("sshKey", sshKey, ConfigurationTarget.Workspace);
+      console.log("File event actions saved successfully.");
+      window.showInformationMessage("File event actions saved.");
+    } else {
+      window.showErrorMessage(
+        "No configuration found or missing properties. Please configure LiveSync correctly.",
+      );
+      return;
+    }
+  }
+
+  static async saveRemoteServerConfiguration(
+    configuration: ConfigurationState["configuration"],
+  ) {
+    const config = workspace.getConfiguration("LiveSync");
+    if (configuration) {
+      const client = SFTPClient.getInstance();
+      await client.connect(configuration);
+
+      console.log("Remote server configuration saved successfully.");
+      window.showInformationMessage("Remote server configuration saved.");
+
+      const config = workspace.getConfiguration("LiveSync");
+      const { hostname, port, username, authMethod, password, sshKey } =
+        configuration;
+
+      await config.update("hostname", hostname, ConfigurationTarget.Workspace);
+      await config.update("port", port, ConfigurationTarget.Workspace);
+      await config.update("username", username, ConfigurationTarget.Workspace);
+      await config.update(
+        "authMethod",
+        authMethod,
+        ConfigurationTarget.Workspace,
+      );
+      await config.update("password", password, ConfigurationTarget.Workspace);
+      await config.update("sshKey", sshKey, ConfigurationTarget.Workspace);
+    } else {
+      window.showErrorMessage(
+        "No configuration found or missing properties. Please configure LiveSync correctly.",
+      );
+      return;
+    }
+  }
+
+  static async updateConfiguration(configuration: FullConfigurationMessage) {
+    this.saveRemoteServerConfiguration(configuration.configuration);
+
+    if (configuration.pairedFolders) {
+      this.savePairFolders(configuration.pairedFolders);
+    }
+    if (configuration.fileEventActions) {
+      this.saveFileEventActions(configuration.fileEventActions);
+    }
   }
 
   static async testConnection(

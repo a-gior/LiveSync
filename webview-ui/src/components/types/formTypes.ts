@@ -21,7 +21,7 @@ export interface FormField {
   value: string;
   files?: FileList;
   required: boolean;
-  options?: { label: string; value: string }[]; // Added options property for radio buttons
+  options?: { label: string; value: string; default?: boolean }[]; // Added options property for radio buttons
   validationCallback?: CallableFunction;
   visible: boolean;
   htmlElement?: HTMLElement;
