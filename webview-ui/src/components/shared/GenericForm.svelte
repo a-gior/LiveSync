@@ -37,7 +37,11 @@
                 {#if formGroup.visible}
                     <form-group id={formGroupId}>
                         <div class="form-separator"></div>
-                        <vscode-button><close-icon on:click={removeFormGroup} ><CloseIcon /></close-icon></vscode-button>
+
+                        {#if formGroup.deletable}
+                            <close-icon on:click={removeFormGroup} ><CloseIcon /></close-icon>
+                        {/if}
+
                         {#if formGroup.title}
                             <h3>{formGroup.title}</h3>
                         {/if}
@@ -71,9 +75,12 @@
 
 <style>
     close-icon {
+        width: 10px;
+        height: 10px;
         float: right;
         cursor: pointer;
     }
+
     generic-form {
         display: block;
         padding: 10px;

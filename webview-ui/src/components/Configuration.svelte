@@ -57,6 +57,7 @@
         formGroups: {
             "remote-server-form-group-0": {
                 visible: true,
+                deletable: false,
                 fields: [
                     { name: 'host', label: 'Host', type: 'text', required: true, value: '', visible: true, validationCallback: inputValidator.isValidHostname },
                     { name: 'port', label: 'Port', type: 'number', required: true, value: '', visible: true, validationCallback: inputValidator.isValidPort },
@@ -98,6 +99,7 @@
                 ...pairFolderFormData.formGroups,
                 ["pair-folder-form-group-"+index]: {
                     visible: true,
+                    deletable: true,
                     fields: [
                         { name: 'localFolder', label: 'Select a local folder', type: 'text', required: true, value: '', visible: true, validationCallback: inputValidator.isValidPath},
                         { name: 'remoteFolder', label: 'Select a remote folder', type: 'text', required: true, value: '', visible: true, validationCallback: inputValidator.isValidPath}

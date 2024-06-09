@@ -10,6 +10,7 @@ export interface FormGroup {
   title?: string;
   visible?: boolean;
   fields: FormField[];
+  deletable?: boolean;
 }
 
 export interface FormField {
