@@ -35,7 +35,7 @@ suite("LiveSync Configuration Command Tests", () => {
     const currentConfig = ConfigurationPanel.getWorkspaceConfiguration();
     assert.equal(currentConfig, null, "Initial Config isnt null");
     try {
-      await ConfigurationPanel.updateConfiguration(configurationTest);
+      await ConfigurationPanel.saveRemoteServerConfiguration(configurationTest);
     } catch (err: any) {
       console.log("Error updating config: ", err.message);
     }

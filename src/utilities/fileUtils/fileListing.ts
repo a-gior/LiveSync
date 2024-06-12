@@ -10,79 +10,83 @@ import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 import pLimit = require("p-limit");
 import { ConnectionManager } from "../../services/ConnectionManager";
 import { SFTPClient } from "../../services/SFTPClient";
+import { SSHClient } from "../../services/SSHClient";
 
 // Set a limit for the number of concurrent file operations, from 10 onwards triggers a warning for too much event listeners
 const limit = pLimit(9);
 
 export async function listRemoteFilesRecursive(
   remoteDir: string,
-  fileGlob?: any,
 ): Promise<FileEntry> {
   console.log(`Listing remote ${remoteDir} recursively...`);
+
   const workspaceConfiguration: ConfigurationState =
     ConfigurationPanel.getWorkspaceConfiguration();
   if (!workspaceConfiguration.configuration) {
     throw new Error("Please configure the plugin.");
   }
 
-  const listDirectory = async (
-    sftpClient: SFTPClient,
-    dir: string,
-  ): Promise<FileEntry> => {
-    // console.log(`Listing Dir ${dir}`);
-    const normalizedDir = dir.replace(/\\/g, "/");
-    const dirStat = await sftpClient.getClient().stat(normalizedDir);
-    const fileObjects = await sftpClient
-      .getClient()
-      .list(normalizedDir, fileGlob);
-    const directoryContents: FileEntry = new FileEntry(
-      path.basename(normalizedDir),
-      FileEntryType.directory,
-      dirStat.size,
-      new Date(dirStat.modifyTime * 1000),
-      FileEntrySource.remote,
-      normalizedDir,
-    );
-
-    const promises = fileObjects.map((file) =>
-      limit(async () => {
-        // console.log(`Listing File ${file.name}`);
-        const filePath = path
-          .join(normalizedDir, file.name)
-          .replace(/\\/g, "/");
-        const stats = await sftpClient.getClient().stat(filePath);
-
-        if (file.type === "d") {
-          const subfiles = await listDirectory(sftpClient, filePath);
-          directoryContents.addChild(subfiles);
-        } else {
-          directoryContents.addChild(
-            new FileEntry(
-              file.name,
-              FileEntryType.file,
-              stats.size,
-              new Date(stats.modifyTime * 1000),
-              FileEntrySource.remote,
-              filePath,
-            ),
-          );
-        }
-      }),
-    );
-
-    await Promise.all(promises);
-    return directoryContents;
-  };
-
   try {
     const connectionManager = ConnectionManager.getInstance(
       workspaceConfiguration.configuration,
     );
-    return await connectionManager.doSFTPOperation(
-      async (sftpClient: SFTPClient) => {
-        return await listDirectory(sftpClient, remoteDir);
-      },
-    );
+
+    return await connectionManager.doSSHOperation(async (sshClient) => {
+      /**
+       * Commands to also get hash on the following line for files
+       * find /home/centos/test-workspace/ -exec sh -c 'if [ -d "$1" ]; then stat --format="%n,%s,%Y,%F," "$1"; else stat --format="%n,%s,%Y,%F" "$1" && sha256sum "$1" | awk "{printf \\"%s\\", \$1}"; fi' sh {} \;
+       */
+      const command = `find ${remoteDir} -exec stat --format='%n,%s,%Y,%F' {} \\;`;
+      const output = await sshClient.executeCommand(command);
+
+      const lines = output.trim().split("\n");
+
+      // Extract the first line to create the rootEntry
+      const [rootFullPath, rootSize, rootModifyTime, rootType] =
+        lines[0].split(",");
+      const rootEntry = new FileEntry(
+        path.basename(rootFullPath),
+        FileEntryType.directory,
+        parseInt(rootSize, 10),
+        new Date(parseInt(rootModifyTime, 10) * 1000),
+        FileEntrySource.remote,
+        rootFullPath,
+      );
+
+      // Process each line to build the tree
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        const [fullPath, size, modifyTime, type] = line.split(",");
+        const entryType =
+          type === "directory" ? FileEntryType.directory : FileEntryType.file;
+
+        const newEntry = new FileEntry(
+          path.basename(fullPath),
+          entryType,
+          parseInt(size, 10),
+          new Date(parseInt(modifyTime, 10) * 1000),
+          FileEntrySource.remote,
+          fullPath,
+        );
+
+        const relativePath = path.relative(rootFullPath, fullPath);
+        const pathParts = relativePath.split(path.sep);
+
+        let currentEntry = rootEntry;
+
+        for (const part of pathParts) {
+          if (currentEntry.children.has(part)) {
+            currentEntry = currentEntry.children.get(part)!;
+          } else {
+            currentEntry.addChild(newEntry);
+            break;
+          }
+        }
+      }
+
+      console.log("Root ENtry: ", rootEntry);
+      return rootEntry;
+    });
   } catch (error) {
     console.error("Recursive remote listing failed:", error);
     return new FileEntry(

@@ -79,7 +79,7 @@ export class SFTPClient {
   }
 
   async waitForConnection() {
-    const timeout = 20000;
+    const timeout = 5000;
     const pause = 1000;
     let currentTime = 0;
     let retries = 0;
@@ -155,11 +155,11 @@ export class SFTPClient {
     });
   }
 
-  getClient() {
-    return this._client;
-  }
-
   getErrors() {
     return this._errorMsgs;
+  }
+
+  getClient() {
+    return this._client;
   }
 }

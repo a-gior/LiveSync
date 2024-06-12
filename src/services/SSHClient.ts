@@ -52,8 +52,8 @@ export class SSHClient {
     return new Promise((resolve, reject) => {
       this._client
         .on("ready", () => {
-          this.isConnected = true;
           this.isConnecting = false;
+          this.isConnected = true;
           console.log("SSH connection is ready");
           resolve();
         })
@@ -130,8 +130,12 @@ export class SSHClient {
     });
   }
 
+  getErrors() {
+    return this._errorMsgs;
+  }
+
   async waitForConnection() {
-    const timeout = 20000;
+    const timeout = 5000;
     const pause = 1000;
     let currentTime = 0;
     let retries = 0;

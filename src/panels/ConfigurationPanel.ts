@@ -21,6 +21,8 @@ import * as fs from "fs";
 import { FullConfigurationMessage } from "@shared/DTOs/messages/FullConfigurationMessage";
 import { FileEventActionsMessage } from "@shared/DTOs/messages/FileEventActionsMessage";
 import { config } from "process";
+import { ConnectionManager } from "../services/ConnectionManager";
+import { SSHClient } from "../services/SSHClient";
 
 export class ConfigurationPanel extends Panel {
   private static _workspaceConfig: ConfigurationState;
@@ -36,16 +38,8 @@ export class ConfigurationPanel extends Panel {
     const configurationCallback = async (message: FullConfigurationMessage) => {
       switch (message.command) {
         case "updateConfiguration":
-          console.log("UpdateConfiguration...");
-          if (message.configuration) {
-            await this.updateConfiguration(message);
-          }
-          if (message.pairedFolders) {
-            await this.savePairFolders(message.pairedFolders);
-          }
-          if (message.fileEventActions) {
-            await this.saveFileEventActions(message.fileEventActions);
-          }
+          console.log("Update all configurations...");
+          await this.updateConfiguration(message);
           break;
         case "testConnection":
           console.log("TestConnection...");
@@ -54,10 +48,6 @@ export class ConfigurationPanel extends Panel {
           }
           break;
         case "savePairFolders":
-          console.log("Save Pair Folders...");
-          if (message.pairedFolders) {
-            await this.savePairFolders(message.pairedFolders);
-          }
           break;
       }
     };
@@ -80,12 +70,12 @@ export class ConfigurationPanel extends Panel {
     );
 
     const workspaceConfig = this.getWorkspaceConfiguration();
-
     if (workspaceConfig) {
       const fullConfigMessage: FullConfigurationMessage = {
         command: "setInitialConfiguration",
         configuration: workspaceConfig.configuration,
         pairedFolders: workspaceConfig.pairedFolders,
+        fileEventActions: workspaceConfig.fileEventActions,
       };
 
       this.currentPanel?.getPanel().webview.postMessage(fullConfigMessage);
@@ -104,23 +94,38 @@ export class ConfigurationPanel extends Panel {
         currentConnectionConfig.configuration &&
         currentConnectionConfig.pairedFolders
       ) {
-        const { localPath, remotePath } = pairedFolders;
-        const client = SFTPClient.getInstance();
-        await client.connect(currentConnectionConfig.configuration);
-
-        if (!fs.existsSync(localPath)) {
-          console.log(
-            `Local folder not found. Local path: ${localPath} & remote path: ${remotePath}`,
-          );
-          window.showErrorMessage("Local folder not found");
-          return;
-        } else if (!(await client.pathExists(remotePath))) {
-          console.log(
-            `Remote folder not found. Local path: ${localPath} & remote path: ${remotePath}`,
-          );
-          window.showErrorMessage("Remote folder not found");
-          return;
-        }
+        const connectionManager = ConnectionManager.getInstance(
+          currentConnectionConfig.configuration,
+        );
+        connectionManager
+          .doSFTPOperation(async (sftpClient: SFTPClient) => {
+            const { localPath, remotePath } = pairedFolders;
+            if (!(await sftpClient.pathExists(remotePath))) {
+              console.error(
+                `Remote folder not found. Local path: ${localPath} & remote path: ${remotePath}`,
+              );
+              window.showErrorMessage(`Remote folder ${remotePath} not found`);
+              return;
+            } else if (!fs.existsSync(localPath)) {
+              console.error(
+                `Local folder not found. Local path: ${localPath} & remote path: ${remotePath}`,
+              );
+              window.showErrorMessage(`Local folder ${localPath} not found`);
+              return;
+            } else {
+              console.log("Paired Folders are valid");
+            }
+          })
+          .then(async () => {
+            // All good so we update the pairedFolders config
+            await config.update(
+              "pairedFolders",
+              pairedFoldersArr,
+              ConfigurationTarget.Workspace,
+            );
+            console.log("Paired Folders are saved");
+            window.showInformationMessage("Paired Folders are valid and saved");
+          });
       } else {
         window.showErrorMessage(
           "No configuration found or missing properties. Please configure LiveSync correctly",
@@ -128,14 +133,6 @@ export class ConfigurationPanel extends Panel {
         return;
       }
     }
-
-    // All good so we update the pairedFolders config
-    await config.update(
-      "pairedFolders",
-      pairedFoldersArr,
-      ConfigurationTarget.Workspace,
-    );
-    window.showInformationMessage("Paired Folders are valid and saved");
   }
 
   static async saveFileEventActions(
@@ -161,28 +158,54 @@ export class ConfigurationPanel extends Panel {
   static async saveRemoteServerConfiguration(
     configuration: ConfigurationState["configuration"],
   ) {
-    const config = workspace.getConfiguration("LiveSync");
     if (configuration) {
-      const client = SFTPClient.getInstance();
-      await client.connect(configuration);
-
-      console.log("Remote server configuration saved successfully.");
-      window.showInformationMessage("Remote server configuration saved.");
-
-      const config = workspace.getConfiguration("LiveSync");
-      const { hostname, port, username, authMethod, password, sshKey } =
-        configuration;
-
-      await config.update("hostname", hostname, ConfigurationTarget.Workspace);
-      await config.update("port", port, ConfigurationTarget.Workspace);
-      await config.update("username", username, ConfigurationTarget.Workspace);
-      await config.update(
-        "authMethod",
-        authMethod,
-        ConfigurationTarget.Workspace,
+      console.log(
+        `saveRemoteServerConfiguration - Trying to connect with config: `,
+        configuration,
       );
-      await config.update("password", password, ConfigurationTarget.Workspace);
-      await config.update("sshKey", sshKey, ConfigurationTarget.Workspace);
+      const connectionManager = ConnectionManager.getInstance(configuration);
+
+      connectionManager
+        .doSSHOperation(async (sshClient: SSHClient) => {
+          sshClient.waitForConnection();
+        })
+        .then(async () => {
+          const config = workspace.getConfiguration("LiveSync");
+          const { hostname, port, username, authMethod, password, sshKey } =
+            configuration;
+
+          await config.update(
+            "hostname",
+            hostname,
+            ConfigurationTarget.Workspace,
+          );
+          await config.update("port", port, ConfigurationTarget.Workspace);
+          await config.update(
+            "username",
+            username,
+            ConfigurationTarget.Workspace,
+          );
+          await config.update(
+            "authMethod",
+            authMethod,
+            ConfigurationTarget.Workspace,
+          );
+          await config.update(
+            "password",
+            password,
+            ConfigurationTarget.Workspace,
+          );
+          await config.update("sshKey", sshKey, ConfigurationTarget.Workspace);
+
+          console.log("Remote server configuration saved successfully.");
+          window.showInformationMessage("Remote server configuration saved.");
+        })
+        .catch((err: any) => {
+          console.error("Remote server configuration couldnt be saved.", err);
+          window.showErrorMessage(
+            `Remote server configuration couldn't be saved. \n${err.message}`,
+          );
+        });
     } else {
       window.showErrorMessage(
         "No configuration found or missing properties. Please configure LiveSync correctly.",
@@ -205,30 +228,14 @@ export class ConfigurationPanel extends Panel {
   static async testConnection(
     configuration: ConfigurationMessage["configuration"],
   ): Promise<boolean> {
-    // Test SFTP connection
-    //* Open the connection
-    const client = SFTPClient.getInstance();
-    // console.log("[testConnection] SFTP Client with config: ", configuration);
-    await client.connect(configuration);
+    const connectionManager = ConnectionManager.getInstance(configuration);
+    connectionManager.doSSHOperation(async (sshClient: SSHClient) => {
+      sshClient.waitForConnection();
+    });
 
-    const clientErrors = client.getErrors();
-
-    // //* List working directory files
-
-    // //* Upload local file to remote file
-    // await client.uploadFile("./local.txt", "./remote.txt");
-
-    // //* Download remote file to local file
-    // await client.downloadFile("./remote.txt", "./download.txt");
-
-    // //* Delete remote file
-    // await client.deleteFile("./remote.txt");
-
-    //* Close the connection
-    await client.disconnect();
-
-    if (clientErrors.length > 0) {
-      window.showErrorMessage(clientErrors[0].error.message);
+    const errors = connectionManager.getSSHClient().getErrors();
+    if (errors.length > 0) {
+      window.showErrorMessage(errors[0].error.message);
       return false;
     } else {
       window.showInformationMessage("Test Connection successful");

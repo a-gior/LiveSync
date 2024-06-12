@@ -142,12 +142,21 @@
                 i++;
             }
         }
+        
+        if(confState.fileEventActions) {
+            let i = 0;
+            const { actionOnSave, actionOnCreate, actionOnDelete, actionOnMove} = confState.fileEventActions;
+            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[0].value = actionOnSave;
+            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[1].value = actionOnCreate;
+            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[2].value = actionOnDelete;
+            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[3].value = actionOnMove;
+        }
     }
 
     // Function to save paired folders configuration
     function savePairFolders(event) {
         const pairFoldersMessage: FullConfigurationMessage = {
-            command: "savePairFolders",
+            command: "updateConfiguration",
             pairedFolders: Object.entries(pairFolderFormData.formGroups).map(([key, form]): PairFoldersMessage["paths"] => ({
                 localPath: form.fields[0].value,
                 remotePath: form.fields[1].value
@@ -160,15 +169,16 @@
     }
 
     function saveRemoteServerConfiguration(event) {
+        const sshKeyInput = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[5];
         const configurationMessage: FullConfigurationMessage = {
-            command: "saveRemoteServerConfiguration",
+            command: "updateConfiguration",
             configuration: {
                 hostname: remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[0].value,
                 port: parseInt(remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[1].value),
                 username: remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[2].value,
                 authMethod: remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[3].value,
                 password: remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[4].value,
-                sshKey: remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[5].value
+                sshKey: sshKeyInput.files ? (sshKeyInput.files[0] as any).path : null
             }
         };
         const currentState: ConfigurationState = vscode.getState();
@@ -180,7 +190,7 @@
 
     function saveFileEventActions(event) {
         const fileEventActionsMessage: FileEventActionsMessage = {
-            command: "saveFileEventActions",
+            command: "updateConfiguration",
             actions: {
                 actionOnSave: fileEventActions.formGroups["file-event-actions-form-group-0"].fields[0].value,
                 actionOnCreate: fileEventActions.formGroups["file-event-actions-form-group-0"].fields[1].value,
@@ -202,7 +212,8 @@
             case "setInitialConfiguration":
                 const configState: ConfigurationState = {
                     configuration: data.configuration,
-                    pairedFolders: data.pairedFolders
+                    pairedFolders: data.pairedFolders,
+                    fileEventActions: data.fileEventActions
                 };
                 setInitialConfiguration(configState);
                 break;
@@ -230,7 +241,7 @@
         <GenericForm bind:formData={pairFolderFormData} onSubmit={savePairFolders}/>
         <GenericForm bind:formData={fileEventActions} onSubmit={saveFileEventActions} />
     </main>
-    <Footer bind:remoteServerConfigFormData bind:pairFolderFormData on:click={newPairFolders} />
+    <Footer bind:remoteServerConfigFormData bind:pairFolderFormData bind:fileEventActions on:click={newPairFolders} />
 </configuration-container>
 
 <style>

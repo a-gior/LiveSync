@@ -11,6 +11,7 @@
 	provideVSCodeDesignSystem().register(vsCodeButton());
     export let remoteServerConfigFormData: Form;
     export let pairFolderFormData: Form;
+    export let fileEventActions: Form;
 
     function saveForms() {
         if (inputValidator.areValidInputs(remoteServerConfigFormData)) {
@@ -33,7 +34,7 @@
         }
     }
     
-    function sendConfiguration(cmd) {
+    function sendConfiguration(cmd: string) {
         
         const currentHostname = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[0].value;
         const currentPort = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[1].value;
@@ -57,16 +58,29 @@
             remotePath: form.fields[1].value
         }))
 
-        const configurationMessage: FullConfigurationMessage = {
-            command: cmd,
-            configuration: currentConfig,
-            pairedFolders: currentPairedFolders
-        };
-        
+        const currentActionOnSave =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[0].value;
+        const currentActionOnCreate =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[1].value;
+        const currentActionOnDelete =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[2].value;
+        const currentActionOnMove =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[3].value;
+
+        const currentFileEventActions = {
+            actionOnSave: currentActionOnSave,
+            actionOnCreate: currentActionOnCreate,
+            actionOnDelete: currentActionOnDelete,
+            actionOnMove: currentActionOnMove
+        }
+
         const confState: ConfigurationState = { 
             configuration: currentConfig,
-            pairedFolders: currentPairedFolders
+            pairedFolders: currentPairedFolders,
+            fileEventActions: currentFileEventActions
         };
+
+        const configurationMessage: FullConfigurationMessage = {
+            command: cmd,
+            ...confState
+        };
+        
         vscode.setState(confState);
 
         vscode.postMessage(configurationMessage);
