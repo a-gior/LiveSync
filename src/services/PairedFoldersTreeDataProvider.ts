@@ -100,18 +100,17 @@ export class PairedFoldersTreeDataProvider
         this.workspaceConfiguration.pairedFolders &&
         isRootPath(element.fullPath, this.workspaceConfiguration.pairedFolders)
       ) {
-        treeItem.contextValue = "fileEntry-rootFolder";
         treeItem.iconPath = getIconForFolder(
           "root_folder",
           DEFAULT_FOLDER_ICON,
         );
       } else {
-        treeItem.contextValue = `fileEntry-${element.type}-${FileEntryStatus[element.status]}`;
         treeItem.iconPath =
           element.type === FileEntryType.directory
             ? getIconForFolder(element.name, DEFAULT_FOLDER_ICON)
             : getIconForFile(element.name, DEFAULT_FILE_ICON_PATH);
       }
+      treeItem.contextValue = `fileEntry-${element.type}`;
       treeItem.description = FileEntryStatus[element.status];
       const query = `?status=${FileEntryStatus[element.status]}`;
       treeItem.resourceUri = vscode.Uri.file(element.fullPath).with({ query });

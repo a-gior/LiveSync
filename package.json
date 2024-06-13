@@ -73,23 +73,21 @@
       "view/item/context": [
         {
           "command": "livesync.fileEntryUpload",
-          "when": "viewItem == fileEntry-file-modified || viewItem == fileEntry-file-added || viewItem == fileEntry-directory-added",
-          "group": "inline"
+          "group": "inline@1"
         },
         {
           "command": "livesync.fileEntryDownload",
-          "when": "viewItem == fileEntry-file-modified || viewItem == fileEntry-file-removed || viewItem == fileEntry-directory-removed",
-          "group": "inline"
+          "group": "inline@2"
         },
         {
           "command": "livesync.fileEntryShowDiff",
-          "when": "viewItem == fileEntry-file-modified",
-          "group": "inline"
+          "when": "viewItem == fileEntry-file",
+          "group": "inline@3"
         },
         {
           "command": "livesync.fileEntryRefresh",
-          "when": "viewItem == fileEntry-rootFolder",
-          "group": "inline"
+          "when": "viewItem == fileEntry-directory",
+          "group": "inline@4"
         }
       ]
     },
