@@ -1,33 +1,22 @@
-import { workspace, window, TextDocument, commands, Uri } from "vscode";
-import { ConfigurationPanel } from "../../panels/ConfigurationPanel";
-import { PairFoldersMessage } from "../../DTOs/messages/PairFoldersMessage";
-import { getRemotePath } from "./filePathUtils";
+import { window, commands, Uri } from "vscode";
+import { getCorrespondingPath } from "./filePathUtils";
 import {
   uploadFile,
   compareRemoteFileHash,
   deleteRemoteFile,
   moveRemoteFile,
 } from "./sftpOperations";
-import { ConfigurationState } from "../../DTOs/states/ConfigurationState";
-import { FileEntry, FileEntrySource } from "../FileEntry";
+import { FileEntry } from "../FileEntry";
 import * as path from "path";
+import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 
 export async function fileSave(uri: Uri) {
-  const config = workspace.getConfiguration("LiveSync");
-  const actionOnSave = config.get<string>("actionOnSave");
+  const actionOnSave =
+    WorkspaceConfig.getInstance().getParameter("actionOnSave");
 
   if (actionOnSave !== "none") {
-    const workspaceConfig = ConfigurationPanel.getWorkspaceConfiguration();
-    const pairedFolders: { localPath: string; remotePath: string }[] =
-      workspaceConfig.pairedFolders || [];
-
-    if (!workspaceConfig.configuration) {
-      window.showErrorMessage("Remote server not configured");
-      return;
-    }
-
     const localPath = uri.fsPath;
-    const remotePath = getRemotePath(localPath, pairedFolders);
+    const remotePath = getCorrespondingPath(localPath);
     if (!remotePath) {
       window.showErrorMessage(
         `No remote folder paired with local folder: ${localPath}`,
@@ -66,7 +55,7 @@ export async function fileSave(uri: Uri) {
       }
     }
 
-    await uploadFile(workspaceConfig.configuration, localPath, remotePath);
+    await uploadFile(localPath, remotePath);
     window.showInformationMessage(
       `File ${localPath} uploaded to ${remotePath}`,
     );
@@ -74,23 +63,16 @@ export async function fileSave(uri: Uri) {
 }
 
 export async function fileMove(oldUri: Uri, newUri: Uri) {
-  const config = workspace.getConfiguration("LiveSync");
-  const actionOnMove = config.get<string>("actionOnMove");
+  const configuration =
+    WorkspaceConfig.getInstance().getRemoteServerConfigured();
+  const actionOnMove =
+    WorkspaceConfig.getInstance().getParameter("actionOnMove");
 
   if (actionOnMove !== "none") {
-    const workspaceConfig = ConfigurationPanel.getWorkspaceConfiguration();
-    const pairedFolders: { localPath: string; remotePath: string }[] =
-      workspaceConfig.pairedFolders || [];
-
-    if (!workspaceConfig.configuration) {
-      window.showErrorMessage("Remote server not configured");
-      return;
-    }
-
     const localPathOld = oldUri.fsPath;
     const localPathNew = newUri.fsPath;
-    const remotePathOld = getRemotePath(localPathOld, pairedFolders);
-    const remotePathNew = getRemotePath(localPathNew, pairedFolders);
+    const remotePathOld = getCorrespondingPath(localPathOld);
+    const remotePathNew = getCorrespondingPath(localPathNew);
 
     if (!remotePathOld || !remotePathNew) {
       window.showErrorMessage(
@@ -128,11 +110,7 @@ export async function fileMove(oldUri: Uri, newUri: Uri) {
       }
     }
 
-    await moveRemoteFile(
-      workspaceConfig.configuration,
-      remotePathOld,
-      remotePathNew,
-    );
+    await moveRemoteFile(configuration, remotePathOld, remotePathNew);
     window.showInformationMessage(
       `File ${localPathOld} moved to ${localPathNew} and synced to remote.`,
     );
@@ -140,21 +118,12 @@ export async function fileMove(oldUri: Uri, newUri: Uri) {
 }
 
 export async function fileDelete(uri: Uri) {
-  const config = workspace.getConfiguration("LiveSync");
-  const actionOnDelete = config.get<string>("actionOnDelete");
+  const actionOnDelete =
+    WorkspaceConfig.getInstance().getParameter("actionOnDelete");
 
   if (actionOnDelete !== "none") {
-    const workspaceConfig = ConfigurationPanel.getWorkspaceConfiguration();
-    const pairedFolders: { localPath: string; remotePath: string }[] =
-      workspaceConfig.pairedFolders || [];
-
-    if (!workspaceConfig.configuration) {
-      window.showErrorMessage("Remote server not configured");
-      return;
-    }
-
     const localPath = uri.fsPath;
-    const remotePath = getRemotePath(localPath, pairedFolders);
+    const remotePath = getCorrespondingPath(localPath);
 
     if (!remotePath) {
       window.showErrorMessage(
@@ -185,7 +154,7 @@ export async function fileDelete(uri: Uri) {
       }
     }
 
-    await deleteRemoteFile(workspaceConfig.configuration, remotePath);
+    await deleteRemoteFile(remotePath);
     window.showInformationMessage(
       `File ${localPath} deleted from remote ${remotePath}.`,
     );
@@ -193,21 +162,12 @@ export async function fileDelete(uri: Uri) {
 }
 
 export async function fileCreate(uri: Uri) {
-  const config = workspace.getConfiguration("LiveSync");
-  const actionOnCreate = config.get<string>("actionOnCreate");
+  const actionOnCreate =
+    WorkspaceConfig.getInstance().getParameter("actionOnCreate");
 
   if (actionOnCreate !== "none") {
-    const workspaceConfig = ConfigurationPanel.getWorkspaceConfiguration();
-    const pairedFolders: { localPath: string; remotePath: string }[] =
-      workspaceConfig.pairedFolders || [];
-
-    if (!workspaceConfig.configuration) {
-      window.showErrorMessage("Remote server not configured");
-      return;
-    }
-
     const localPath = uri.fsPath;
-    const remotePath = getRemotePath(localPath, pairedFolders);
+    const remotePath = getCorrespondingPath(localPath);
 
     if (!remotePath) {
       window.showErrorMessage(
@@ -232,7 +192,7 @@ export async function fileCreate(uri: Uri) {
       }
     }
 
-    await uploadFile(workspaceConfig.configuration, localPath, remotePath);
+    await uploadFile(localPath, remotePath);
     window.showInformationMessage(
       `File ${localPath} created on remote ${remotePath}`,
     );

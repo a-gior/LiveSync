@@ -1,25 +1,16 @@
 import * as path from "path";
 import { window, Uri, commands } from "vscode";
-import { ConfigurationPanel } from "../../panels/ConfigurationPanel";
-import { PairFoldersMessage } from "../../DTOs/messages/PairFoldersMessage";
-import { ConfigurationMessage } from "../../DTOs/messages/ConfigurationMessage";
 import { FileEntry } from "../../utilities/FileEntry";
 import { downloadRemoteFile } from "./sftpOperations";
-import { getRemotePath } from "./filePathUtils";
+import { getCorrespondingPath } from "./filePathUtils";
+import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 
 export async function showDiff(fileEntry: FileEntry) {
-  const workspaceConfig = ConfigurationPanel.getWorkspaceConfiguration();
-  const pairedFolders: PairFoldersMessage["paths"][] =
-    workspaceConfig["pairedFolders"] || [];
-  if (!workspaceConfig["configuration"]) {
-    window.showErrorMessage("Remote server not configured");
-    return;
-  }
-  const configuration: ConfigurationMessage["configuration"] =
-    workspaceConfig["configuration"];
+  const configuration =
+    WorkspaceConfig.getInstance().getRemoteServerConfigured();
 
   const localFilePath = fileEntry.fullPath;
-  const remoteFilePath = getRemotePath(localFilePath, pairedFolders);
+  const remoteFilePath = getCorrespondingPath(localFilePath);
 
   if (!remoteFilePath) {
     window.showErrorMessage(`No remote path found for ${localFilePath}`);

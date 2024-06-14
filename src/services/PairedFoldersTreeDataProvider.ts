@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { ConfigurationPanel } from "../panels/ConfigurationPanel";
 import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 import {
   FileEntry,
@@ -14,9 +13,7 @@ import {
 } from "../utilities/fileUtils/fileOperations";
 import {
   comparePaths,
-  getLocalPath,
   getRelativePath,
-  getRemotePath,
   isRootPath,
 } from "../utilities/fileUtils/filePathUtils";
 import {
@@ -38,6 +35,7 @@ import {
   DEFAULT_FOLDER_ICON,
   SAVE_DIR,
 } from "../utilities/constants";
+import { WorkspaceConfig } from "./WorkspaceConfig";
 
 export class PairedFoldersTreeDataProvider
   implements vscode.TreeDataProvider<FileEntry>
@@ -50,7 +48,7 @@ export class PairedFoldersTreeDataProvider
 
   private rootElements: FileEntry[] = [];
   readonly workspaceConfiguration: ConfigurationState =
-    ConfigurationPanel.getWorkspaceConfiguration();
+    WorkspaceConfig.getInstance().getAll();
 
   constructor() {
     loadIconMappings(ICON_MAPPINGS_PATH);
@@ -163,10 +161,12 @@ export class PairedFoldersTreeDataProvider
     try {
       const localFiles = await listLocalFilesRecursive(localDir);
       const remoteFiles = await listRemoteFilesRecursive(remoteDir);
+      console.log(`Comparing Directories...`);
       const compareFiles = await FileEntry.compareDirectories(
         localFiles,
         remoteFiles,
       );
+      console.log(`Compared Directories...`);
       await saveToFile(
         localFiles.toJSON(),
         path.join(saveDir, "localFiles.json"),
@@ -191,8 +191,7 @@ export class PairedFoldersTreeDataProvider
     fileSource: FileEntrySource,
     rootEntries: FileEntry[] = this.rootElements,
   ): FileEntry | undefined {
-    const pairedFolders = this.workspaceConfiguration.pairedFolders || [];
-    const relativePath = getRelativePath(pairedFolders, filePath, fileSource);
+    const relativePath = getRelativePath(filePath, fileSource);
     if (!relativePath) {
       return undefined;
     }

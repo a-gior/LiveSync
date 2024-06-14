@@ -1,11 +1,6 @@
 import { generateHash } from "./fileUtils/hashUtils";
-import {
-  getLocalPath,
-  getRemotePath,
-  pathExists,
-} from "./fileUtils/filePathUtils";
-import { ConfigurationPanel } from "../panels/ConfigurationPanel";
-import { workspace, window } from "vscode";
+import { getCorrespondingPath, pathExists } from "./fileUtils/filePathUtils";
+import { workspace } from "vscode";
 import {
   listLocalFilesRecursive,
   listRemoteFilesRecursive,
@@ -228,25 +223,15 @@ export class FileEntry {
 
   static async compareSingleEntry(fileEntry: FileEntry): Promise<FileEntry> {
     try {
-      const workspaceConfig = ConfigurationPanel.getWorkspaceConfiguration();
-      if (!workspaceConfig.configuration || !workspaceConfig.pairedFolders) {
-        window.showErrorMessage(
-          "Remote server or pairedFodlers not configured",
-        );
-        return fileEntry;
-      }
-
       let localPath: string;
       let remotePath: string;
 
       if (fileEntry.source === "remote") {
         remotePath = fileEntry.fullPath;
-        localPath =
-          getLocalPath(remotePath, workspaceConfig.pairedFolders) || ""; // Implement getLocalPath to get corresponding local path
+        localPath = getCorrespondingPath(remotePath) || ""; // Implement getCorrespondingPath to get corresponding local path
       } else {
         localPath = fileEntry.fullPath;
-        remotePath =
-          getRemotePath(localPath, workspaceConfig.pairedFolders) || ""; // Implement getRemotePath to get corresponding remote path
+        remotePath = getCorrespondingPath(localPath) || ""; // Implement getCorrespondingPath to get corresponding remote path
       }
 
       if (fileEntry.type === FileEntryType.file) {

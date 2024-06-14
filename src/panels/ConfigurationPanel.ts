@@ -1,32 +1,18 @@
-import {
-  Disposable,
-  Webview,
-  WebviewPanel,
-  window,
-  Uri,
-  ViewColumn,
-  workspace,
-  ConfigurationTarget,
-  ExtensionContext,
-} from "vscode";
+import { window, Uri, workspace, ConfigurationTarget } from "vscode";
 import { Panel } from "./Panel";
 
 import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
 import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
-import { Client } from "ssh2";
 import { SFTPClient } from "../services/SFTPClient";
-import { Message } from "@shared/DTOs/messages/Message";
 import { PairFoldersMessage } from "@shared/DTOs/messages/PairFoldersMessage";
 import * as fs from "fs";
 import { FullConfigurationMessage } from "@shared/DTOs/messages/FullConfigurationMessage";
 import { FileEventActionsMessage } from "@shared/DTOs/messages/FileEventActionsMessage";
-import { config } from "process";
 import { ConnectionManager } from "../services/ConnectionManager";
 import { SSHClient } from "../services/SSHClient";
+import { WorkspaceConfig } from "../services/WorkspaceConfig";
 
 export class ConfigurationPanel extends Panel {
-  private static _workspaceConfig: ConfigurationState;
-
   static render(extensionUri: Uri) {
     const viewType = "configurationViewType";
     const title = "Configuration";
@@ -69,69 +55,44 @@ export class ConfigurationPanel extends Panel {
       // Additional options if needed
     );
 
-    const workspaceConfig = this.getWorkspaceConfiguration();
-    if (workspaceConfig) {
-      const fullConfigMessage: FullConfigurationMessage = {
-        command: "setInitialConfiguration",
-        configuration: workspaceConfig.configuration,
-        pairedFolders: workspaceConfig.pairedFolders,
-        fileEventActions: workspaceConfig.fileEventActions,
-      };
-
-      this.currentPanel?.getPanel().webview.postMessage(fullConfigMessage);
-    }
+    const allWorkspaceConfig = WorkspaceConfig.getInstance().getAll();
+    this.currentPanel?.getPanel().webview.postMessage(allWorkspaceConfig);
   }
 
   static async savePairFolders(
     pairedFoldersArr: PairFoldersMessage["paths"][],
   ) {
-    const config = workspace.getConfiguration("LiveSync");
-    const currentConnectionConfig = this.getWorkspaceConfiguration();
+    const workspaceConfig = WorkspaceConfig.getInstance();
+    const configuration = workspaceConfig.getRemoteServerConfigured();
+    // const pairedFolders = workspaceConfig.getPairedFoldersConfigured();
 
     for (const pairedFolders of pairedFoldersArr) {
-      if (
-        currentConnectionConfig &&
-        currentConnectionConfig.configuration &&
-        currentConnectionConfig.pairedFolders
-      ) {
-        const connectionManager = ConnectionManager.getInstance(
-          currentConnectionConfig.configuration,
-        );
-        connectionManager
-          .doSFTPOperation(async (sftpClient: SFTPClient) => {
-            const { localPath, remotePath } = pairedFolders;
-            if (!(await sftpClient.pathExists(remotePath))) {
-              console.error(
-                `Remote folder not found. Local path: ${localPath} & remote path: ${remotePath}`,
-              );
-              window.showErrorMessage(`Remote folder ${remotePath} not found`);
-              return;
-            } else if (!fs.existsSync(localPath)) {
-              console.error(
-                `Local folder not found. Local path: ${localPath} & remote path: ${remotePath}`,
-              );
-              window.showErrorMessage(`Local folder ${localPath} not found`);
-              return;
-            } else {
-              console.log("Paired Folders are valid");
-            }
-          })
-          .then(async () => {
-            // All good so we update the pairedFolders config
-            await config.update(
-              "pairedFolders",
-              pairedFoldersArr,
-              ConfigurationTarget.Workspace,
+      const connectionManager = ConnectionManager.getInstance(configuration);
+      connectionManager
+        .doSFTPOperation(async (sftpClient: SFTPClient) => {
+          const { localPath, remotePath } = pairedFolders;
+          if (!(await sftpClient.pathExists(remotePath))) {
+            console.error(
+              `Remote folder not found. Local path: ${localPath} & remote path: ${remotePath}`,
             );
-            console.log("Paired Folders are saved");
-            window.showInformationMessage("Paired Folders are valid and saved");
-          });
-      } else {
-        window.showErrorMessage(
-          "No configuration found or missing properties. Please configure LiveSync correctly",
-        );
-        return;
-      }
+            window.showErrorMessage(`Remote folder ${remotePath} not found`);
+            return;
+          } else if (!fs.existsSync(localPath)) {
+            console.error(
+              `Local folder not found. Local path: ${localPath} & remote path: ${remotePath}`,
+            );
+            window.showErrorMessage(`Local folder ${localPath} not found`);
+            return;
+          } else {
+            console.log("Paired Folders are valid");
+          }
+        })
+        .then(async () => {
+          // All good so we update the pairedFolders config
+          await workspaceConfig.update("pairedFolders", pairedFoldersArr);
+          console.log("Paired Folders are saved");
+          window.showInformationMessage("Paired Folders are valid and saved");
+        });
     }
   }
 
@@ -241,45 +202,5 @@ export class ConfigurationPanel extends Panel {
       window.showInformationMessage("Test Connection successful");
       return true;
     }
-  }
-
-  static getWorkspaceConfiguration(): ConfigurationState {
-    if (this._workspaceConfig) {
-      return this._workspaceConfig;
-    }
-
-    const config = workspace.getConfiguration("LiveSync");
-
-    // Get individual configuration values
-    const hostname = config.get<string>("hostname");
-    const port = config.get<number>("port");
-    const username = config.get<string>("username");
-    const authMethod = config.get<string | undefined>("authMethod");
-    const password = config.get<string>("password");
-    const sshKeyFilePath = config.get<string>("sshKey");
-
-    const pairedFolders =
-      config.get<Array<PairFoldersMessage["paths"]>>("pairedFolders");
-
-    const workspaceConfig: ConfigurationState = {};
-
-    // Return null if any value is empty or undefined
-    if (hostname && port && username && (password ?? sshKeyFilePath)) {
-      workspaceConfig.configuration = {
-        hostname: hostname,
-        port: port,
-        username: username,
-        authMethod: authMethod,
-        password: password,
-        sshKey: sshKeyFilePath,
-      };
-    }
-
-    if (pairedFolders) {
-      workspaceConfig.pairedFolders = pairedFolders;
-    }
-
-    this._workspaceConfig = workspaceConfig;
-    return workspaceConfig;
   }
 }

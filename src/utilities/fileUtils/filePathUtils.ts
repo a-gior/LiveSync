@@ -3,6 +3,7 @@ import * as fs from "fs";
 import { PairFoldersMessage } from "../../DTOs/messages/PairFoldersMessage";
 import { FileEntrySource } from "../FileEntry";
 import { remotePathExists } from "./sftpOperations";
+import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 
 export function normalizePath(p: string): string {
   let normalizedPath = path.normalize(p);
@@ -14,34 +15,28 @@ export function normalizePath(p: string): string {
   return normalizedPath;
 }
 
-export function getRemotePath(
-  localPath: string,
-  pairedFolders: PairFoldersMessage["paths"][],
-): string | null {
-  for (const folder of pairedFolders) {
-    if (normalizePath(localPath).startsWith(normalizePath(folder.localPath))) {
-      return path
-        .join(folder.remotePath, path.relative(folder.localPath, localPath))
-        .replace(/\\/g, "/");
-    }
-  }
-  return null;
-}
+export function getCorrespondingPath(inputPath: string): string {
+  const normalizedInputPath = normalizePath(inputPath);
+  const pairedFolders =
+    WorkspaceConfig.getInstance().getPairedFoldersConfigured();
 
-export function getLocalPath(
-  remotePath: string,
-  pairedFolders: PairFoldersMessage["paths"][],
-): string | null {
   for (const folder of pairedFolders) {
-    if (
-      normalizePath(remotePath).startsWith(normalizePath(folder.remotePath))
-    ) {
+    // Check if the inputPath is a local path
+    if (normalizedInputPath.startsWith(normalizePath(folder.localPath))) {
       return path
-        .join(folder.localPath, path.relative(folder.remotePath, remotePath))
+        .join(folder.remotePath, path.relative(folder.localPath, inputPath))
+        .replace(/\\/g, "/");
+    }
+
+    // Check if the inputPath is a remote path
+    if (normalizedInputPath.startsWith(normalizePath(folder.remotePath))) {
+      return path
+        .join(folder.localPath, path.relative(folder.remotePath, inputPath))
         .replace(/\\/g, "/");
     }
   }
-  return null;
+
+  throw Error(`Couldnt find corresponding path of ${inputPath}`);
 }
 
 export function isRootPath(
@@ -57,11 +52,13 @@ export function isRootPath(
 }
 
 export function getRelativePath(
-  pairedFolders: PairFoldersMessage["paths"][],
   fullPath: string,
   fileSource: FileEntrySource,
 ): string {
+  const pairedFolders =
+    WorkspaceConfig.getInstance().getPairedFoldersConfigured();
   const normalizedTargetPath = normalizePath(fullPath);
+
   for (const folder of pairedFolders) {
     if (
       fileSource === FileEntrySource.local &&

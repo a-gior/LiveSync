@@ -5,14 +5,12 @@ import { ConfigurationMessage } from "../../DTOs/messages/ConfigurationMessage";
 import { generateHash } from "./hashUtils";
 import { loadFromFile } from "./fileOperations";
 import { REMOTE_FILES_PATH } from "../constants";
-import { uploadDirectory } from "./directoryOperations";
 import { FileEntrySource, FileEntryType } from "../FileEntry";
 import { SSHClient } from "../../services/SSHClient";
-import { ConfigurationPanel } from "../../panels/ConfigurationPanel";
 import { window } from "vscode";
 import { ConnectionManager } from "../../services/ConnectionManager";
-import { ConfigurationState } from "../../DTOs/states/ConfigurationState";
 import sftp from "ssh2-sftp-client";
+import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 
 export async function downloadRemoteFile(
   configuration: ConfigurationMessage["configuration"],
@@ -34,20 +32,24 @@ export async function downloadRemoteFile(
 }
 
 export async function uploadFile(
-  configuration: ConfigurationMessage["configuration"],
   localPath: string,
   remotePath: string,
+  checkParentDirExists: boolean = true,
 ): Promise<void> {
+  const configuration =
+    WorkspaceConfig.getInstance().getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   try {
     await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
       const remoteDir = path.dirname(remotePath);
-      const dirExists = await sftpClient.getClient().exists(remoteDir);
-      if (!dirExists) {
-        await sftpClient.getClient().mkdir(remoteDir, true);
+      if (checkParentDirExists) {
+        const dirExists = await sftpClient.getClient().exists(remoteDir);
+        if (!dirExists) {
+          await sftpClient.getClient().mkdir(remoteDir, true);
+        }
       }
-      await sftpClient.getClient().put(localPath, remotePath);
+      await sftpClient.getClient().fastPut(localPath, remotePath);
     });
   } catch (error: any) {
     console.error(`Failed to upload file: ${error.message}`);
@@ -80,16 +82,10 @@ export async function compareRemoteFileHash(
 export async function getRemoteHash(
   remotePath: string,
 ): Promise<string | undefined> {
-  const workspaceConfig = ConfigurationPanel.getWorkspaceConfiguration();
+  const configuration =
+    WorkspaceConfig.getInstance().getRemoteServerConfigured();
+  const connectionManager = ConnectionManager.getInstance(configuration);
 
-  if (!workspaceConfig["configuration"]) {
-    window.showErrorMessage("Remote server not configured");
-    return;
-  }
-
-  const connectionManager = ConnectionManager.getInstance(
-    workspaceConfig["configuration"],
-  );
   const command = `sha256sum ${remotePath} | awk '{ print $1 }'`;
   let fileHash: string | undefined;
 
@@ -107,16 +103,11 @@ export async function getRemoteHash(
 }
 
 export async function remotePathExists(remotePath: string) {
-  const workspaceConfiguration: ConfigurationState =
-    ConfigurationPanel.getWorkspaceConfiguration();
-  if (!workspaceConfiguration.configuration) {
-    throw new Error("Please configure the plugin.");
-  }
+  const configuration =
+    WorkspaceConfig.getInstance().getRemoteServerConfigured();
+  const connectionManager = ConnectionManager.getInstance(configuration);
 
   try {
-    const connectionManager = ConnectionManager.getInstance(
-      workspaceConfiguration.configuration,
-    );
     return await connectionManager.doSFTPOperation(
       async (sftpClient: SFTPClient) => {
         return await sftpClient.pathExists(remotePath);
@@ -130,16 +121,11 @@ export async function remotePathExists(remotePath: string) {
 export async function getRemoteFileMetadata(
   remotePath: string,
 ): Promise<sftp.FileStats | undefined> {
-  const workspaceConfiguration: ConfigurationState =
-    ConfigurationPanel.getWorkspaceConfiguration();
-  if (!workspaceConfiguration.configuration) {
-    throw new Error("Please configure the plugin.");
-  }
+  const configuration =
+    WorkspaceConfig.getInstance().getRemoteServerConfigured();
+  const connectionManager = ConnectionManager.getInstance(configuration);
 
   try {
-    const connectionManager = ConnectionManager.getInstance(
-      workspaceConfiguration.configuration,
-    );
     return await connectionManager.doSFTPOperation(
       async (sftpClient: SFTPClient) => {
         return await sftpClient.getClient().stat(remotePath);
@@ -167,10 +153,9 @@ export async function moveRemoteFile(
   }
 }
 
-export async function deleteRemoteFile(
-  configuration: ConfigurationMessage["configuration"],
-  remotePath: string,
-): Promise<void> {
+export async function deleteRemoteFile(remotePath: string): Promise<void> {
+  const configuration =
+    WorkspaceConfig.getInstance().getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   try {

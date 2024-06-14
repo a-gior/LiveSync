@@ -8,10 +8,7 @@ import {
   FileEntrySource,
 } from "../utilities/FileEntry";
 import { PairedFoldersTreeDataProvider } from "./PairedFoldersTreeDataProvider";
-import {
-  getRelativePath,
-  getRemotePath,
-} from "../utilities/fileUtils/filePathUtils";
+import { getRelativePath } from "../utilities/fileUtils/filePathUtils";
 import { ConfigurationPanel } from "../panels/ConfigurationPanel";
 import {
   compareRemoteFileHash,

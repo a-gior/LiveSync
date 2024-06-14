@@ -1,59 +1,93 @@
-import { workspace, window, TextDocument } from "vscode";
+import { window } from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { SFTPClient } from "../../services/SFTPClient";
-import { ConfigurationPanel } from "../../panels/ConfigurationPanel";
-import { ConfigurationMessage } from "../../DTOs/messages/ConfigurationMessage";
 import {
   FileEntry,
   FileEntryType,
   FileEntrySource,
 } from "../../utilities/FileEntry";
-import { getLocalPath, getRemotePath } from "./filePathUtils";
+import { getCorrespondingPath } from "./filePathUtils";
 import { listRemoteFilesRecursive } from "./fileListing";
-import { ConfigurationState } from "../../DTOs/states/ConfigurationState";
 import { ConnectionManager } from "../../services/ConnectionManager";
+import { WorkspaceConfig } from "../../services/WorkspaceConfig";
+import pLimit = require("p-limit");
 
-export async function uploadDirectory(fileEntry: FileEntry): Promise<void> {
-  const workspaceConfig: ConfigurationState =
-    ConfigurationPanel.getWorkspaceConfiguration();
-  if (!workspaceConfig.configuration) {
-    window.showErrorMessage("Remote server not configured.");
-    return;
-  }
+// Set a limit for the number of concurrent file operations, from 10 onwards triggers a warning for too much event listeners
+const limit = pLimit(9);
 
-  const connectionManager = ConnectionManager.getInstance(
-    workspaceConfig.configuration,
+async function createRemoteDirectories(
+  sftpClient: SFTPClient,
+  fileEntry: FileEntry,
+) {
+  let lastParentDir = "";
+  const filePaths: { localPath: string; remotePath: string }[] = [];
+
+  const createDir = async (entry: FileEntry) => {
+    const remotePath =
+      entry.source === FileEntrySource.local
+        ? getCorrespondingPath(entry.fullPath)
+        : entry.fullPath;
+
+    if (entry.listChildren().length === 0) {
+      if (entry.isDirectory()) {
+        console.log(`MKDIR Directory: ${remotePath}`);
+        await sftpClient.getClient().mkdir(remotePath, true);
+      } else {
+        const parentDirPath = path.dirname(remotePath);
+        if (lastParentDir !== parentDirPath) {
+          lastParentDir = parentDirPath;
+          console.log(`MKDIR Directory(parent): ${parentDirPath}`);
+          await sftpClient.getClient().mkdir(parentDirPath, true);
+        }
+        filePaths.push({ localPath: entry.fullPath, remotePath });
+      }
+    } else {
+      if (entry.isDirectory()) {
+        console.log(`MKDIR Directory: ${remotePath}`);
+        await sftpClient.getClient().mkdir(remotePath, true);
+        for (const child of entry.listChildren()) {
+          await createDir(child);
+        }
+      }
+    }
+  };
+
+  await createDir(fileEntry);
+  return filePaths;
+}
+
+async function uploadFilesWithLimit(
+  sftpClient: SFTPClient,
+  filePaths: { localPath: string; remotePath: string }[],
+) {
+  const uploadFile = async (localPath: string, remotePath: string) => {
+    try {
+      await sftpClient.getClient().fastPut(localPath, remotePath);
+      console.log(`Uploaded ${localPath} to ${remotePath}`);
+    } catch (err) {
+      console.error(`Failed to upload ${localPath} to ${remotePath}`, err);
+    }
+  };
+
+  const promises = filePaths.map((file) =>
+    limit(() => uploadFile(file.localPath, file.remotePath)),
   );
+  await Promise.all(promises);
+}
+
+export async function uploadDirectory(rootEntry: FileEntry) {
+  const configuration =
+    WorkspaceConfig.getInstance().getRemoteServerConfigured();
+  const connectionManager = ConnectionManager.getInstance(configuration);
 
   try {
     await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
-      if (!workspaceConfig.pairedFolders) {
-        window.showErrorMessage("Paired folders not configured");
-        return;
-      }
-      const remoteDir = getRemotePath(
-        fileEntry.fullPath,
-        workspaceConfig.pairedFolders,
-      );
-      console.log(`Uploading directory ${remoteDir}`);
-      if (remoteDir === null) {
-        window.showErrorMessage(
-          `No remote path found for ${fileEntry.fullPath}`,
-        );
-        return;
-      }
-      await sftpClient.getClient().mkdir(remoteDir, true);
+      // Step 1: Create remote directories and collect file paths
+      const filePaths = await createRemoteDirectories(sftpClient, rootEntry);
 
-      for (const child of fileEntry.listChildren()) {
-        if (child.isDirectory()) {
-          await uploadDirectory(child);
-        } else {
-          await sftpClient
-            .getClient()
-            .put(child.fullPath, path.join(remoteDir, child.name));
-        }
-      }
+      // Step 2: Upload files with concurrency limits
+      await uploadFilesWithLimit(sftpClient, filePaths);
     });
   } catch (error: any) {
     console.error(`Failed to upload directory: ${error.message}`);
@@ -65,27 +99,14 @@ export async function downloadDirectory(
   fileEntry: FileEntry,
   baseLocalDir?: string,
 ): Promise<void> {
-  const workspaceConfig: ConfigurationState =
-    ConfigurationPanel.getWorkspaceConfiguration();
-  if (!workspaceConfig.configuration) {
-    window.showErrorMessage("Remote server not configured.");
-    return;
-  }
-
-  const connectionManager = ConnectionManager.getInstance(
-    workspaceConfig.configuration,
-  );
+  const configuration =
+    WorkspaceConfig.getInstance().getRemoteServerConfigured();
+  const connectionManager = ConnectionManager.getInstance(configuration);
 
   try {
     await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
-      if (!workspaceConfig.pairedFolders) {
-        window.showErrorMessage("Paired folders not configured");
-        return;
-      }
-
       const remoteDir = fileEntry.fullPath;
-      const localDir =
-        baseLocalDir || getLocalPath(remoteDir, workspaceConfig.pairedFolders);
+      const localDir = baseLocalDir || getCorrespondingPath(remoteDir);
       console.log(`Downloading directory ${remoteDir} to ${localDir}`);
       if (!localDir) {
         window.showErrorMessage(`No local path found for ${remoteDir}`);
@@ -94,7 +115,7 @@ export async function downloadDirectory(
 
       const remoteFilesEntry = await listRemoteFilesRecursive(remoteDir);
 
-      for (const [, child] of remoteFilesEntry.children) {
+      for (const child of remoteFilesEntry.listChildren()) {
         const childLocalPath = path.join(localDir, child.name);
         if (child.type === FileEntryType.directory) {
           await fs.promises.mkdir(childLocalPath, { recursive: true });
@@ -116,16 +137,9 @@ export async function downloadDirectory(
 export async function deleteRemoteDirectory(
   fileEntry: FileEntry,
 ): Promise<void> {
-  const workspaceConfig: ConfigurationState =
-    ConfigurationPanel.getWorkspaceConfiguration();
-  if (!workspaceConfig.configuration) {
-    window.showErrorMessage("Remote server not configured");
-    return;
-  }
-
-  const connectionManager = ConnectionManager.getInstance(
-    workspaceConfig.configuration,
-  );
+  const configuration =
+    WorkspaceConfig.getInstance().getRemoteServerConfigured();
+  const connectionManager = ConnectionManager.getInstance(configuration);
 
   try {
     await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {

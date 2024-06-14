@@ -5,12 +5,9 @@ import {
   FileEntrySource,
   FileEntryType,
 } from "../../utilities/FileEntry";
-import { ConfigurationPanel } from "../../panels/ConfigurationPanel";
-import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 import pLimit = require("p-limit");
 import { ConnectionManager } from "../../services/ConnectionManager";
-import { SFTPClient } from "../../services/SFTPClient";
-import { SSHClient } from "../../services/SSHClient";
+import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 
 // Set a limit for the number of concurrent file operations, from 10 onwards triggers a warning for too much event listeners
 const limit = pLimit(9);
@@ -20,17 +17,11 @@ export async function listRemoteFilesRecursive(
 ): Promise<FileEntry> {
   console.log(`Listing remote ${remoteDir} recursively...`);
 
-  const workspaceConfiguration: ConfigurationState =
-    ConfigurationPanel.getWorkspaceConfiguration();
-  if (!workspaceConfiguration.configuration) {
-    throw new Error("Please configure the plugin.");
-  }
+  const configuration =
+    WorkspaceConfig.getInstance().getRemoteServerConfigured();
+  const connectionManager = ConnectionManager.getInstance(configuration);
 
   try {
-    const connectionManager = ConnectionManager.getInstance(
-      workspaceConfiguration.configuration,
-    );
-
     return await connectionManager.doSSHOperation(async (sshClient) => {
       /**
        * Commands to also get hash on the following line for files
@@ -42,8 +33,7 @@ export async function listRemoteFilesRecursive(
       const lines = output.trim().split("\n");
 
       // Extract the first line to create the rootEntry
-      const [rootFullPath, rootSize, rootModifyTime, rootType] =
-        lines[0].split(",");
+      const [rootFullPath, rootSize, rootModifyTime] = lines[0].split(",");
       const rootEntry = new FileEntry(
         path.basename(rootFullPath),
         FileEntryType.directory,
@@ -84,7 +74,7 @@ export async function listRemoteFilesRecursive(
         }
       }
 
-      console.log("Root ENtry: ", rootEntry);
+      console.log("Root Entry: ", rootEntry);
       return rootEntry;
     });
   } catch (error) {

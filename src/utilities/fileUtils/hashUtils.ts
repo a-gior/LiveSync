@@ -1,9 +1,6 @@
 import * as crypto from "crypto";
-import { createHash } from "crypto";
 import { createReadStream } from "fs";
 import { FileEntrySource, FileEntryType } from "../FileEntry";
-import { ConfigurationPanel } from "../../panels/ConfigurationPanel";
-import { PairFoldersMessage } from "../../DTOs/messages/PairFoldersMessage";
 import { getRelativePath } from "./filePathUtils";
 import { getRemoteHash } from "./sftpOperations";
 
@@ -27,13 +24,7 @@ export async function generateHash(
     return "";
   }
 
-  const workspaceConfig = ConfigurationPanel.getWorkspaceConfiguration();
-
-  const relativePath = getRelativePath(
-    workspaceConfig.pairedFolders || [],
-    filePath,
-    fileSource,
-  );
+  const relativePath = getRelativePath(filePath, fileSource);
 
   if (!relativePath && relativePath !== "") {
     throw new Error(

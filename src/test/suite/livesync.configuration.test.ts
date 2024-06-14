@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
 import * as assert from "assert";
-import * as myExt from "../../extension";
 import { ConfigurationPanel } from "../../panels/ConfigurationPanel";
 import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
+import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 
 suite("LiveSync Configuration Command Tests", () => {
   // let extensionContext: vscode.ExtensionContext;
@@ -32,14 +32,14 @@ suite("LiveSync Configuration Command Tests", () => {
     assert.equal(testResult, true, "Test Connection is KO");
 
     // Save Configuration
-    const currentConfig = ConfigurationPanel.getWorkspaceConfiguration();
+    const currentConfig = WorkspaceConfig.getInstance().getAll();
     assert.equal(currentConfig, null, "Initial Config isnt null");
     try {
       await ConfigurationPanel.saveRemoteServerConfiguration(configurationTest);
     } catch (err: any) {
       console.log("Error updating config: ", err.message);
     }
-    const updatedConfig = ConfigurationPanel.getWorkspaceConfiguration();
+    const updatedConfig = WorkspaceConfig.getInstance().getAll();
 
     assert.deepEqual(
       updatedConfig?.configuration,

@@ -8,7 +8,6 @@ import {
   FileEntry,
   FileEntrySource,
   FileEntryStatus,
-  FileEntryType,
 } from "./utilities/FileEntry";
 import { showDiff } from "./utilities/fileUtils/fileDiff";
 import { fileSave } from "./utilities/fileUtils/fileEventFunctions";
@@ -19,6 +18,7 @@ import {
 } from "./utilities/fileUtils/directoryOperations";
 import { FileEventHandler } from "./services/FileEventHandler";
 import path from "path";
+import { StatusBarManager } from "./services/StatusBarManager";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -28,11 +28,14 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions,
   );
 
-  const rootPath =
-    vscode.workspace.workspaceFolders &&
-    vscode.workspace.workspaceFolders.length > 0
-      ? vscode.workspace.workspaceFolders[0].uri.fsPath
-      : undefined;
+  // Create the permanent status bar icon
+  StatusBarManager.createPermanentIcon();
+
+  // const rootPath =
+  //   vscode.workspace.workspaceFolders &&
+  //   vscode.workspace.workspaceFolders.length > 0
+  //     ? vscode.workspace.workspaceFolders[0].uri.fsPath
+  //     : undefined;
 
   console.log('Congratulations, your extension "livesync" is now active!');
 

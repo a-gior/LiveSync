@@ -2,7 +2,6 @@ import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage
 import { SFTPError } from "@shared/DTOs/sftpErrorDTO";
 import Client = require("ssh2-sftp-client");
 import * as fs from "fs";
-import { window } from "vscode";
 
 export class SFTPClient {
   private static instance: SFTPClient;
