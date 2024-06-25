@@ -27,7 +27,7 @@ export async function listRemoteFilesRecursive(
        * Commands to also get hash on the following line for files
        * find /home/centos/test-workspace/ -exec sh -c 'if [ -d "$1" ]; then stat --format="%n,%s,%Y,%F," "$1"; else stat --format="%n,%s,%Y,%F" "$1" && sha256sum "$1" | awk "{printf \\"%s\\", \$1}"; fi' sh {} \;
        */
-      const command = `find ${remoteDir} -exec stat --format='%n,%s,%Y,%F' {} \\;`;
+      const command = `find "${remoteDir}" -exec stat --format='%n,%s,%Y,%F' {} \\;`;
       const output = await sshClient.executeCommand(command);
 
       const lines = output.trim().split("\n");

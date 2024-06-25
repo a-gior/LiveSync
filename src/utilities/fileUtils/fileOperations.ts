@@ -1,5 +1,4 @@
 import * as fs from "fs";
-import * as path from "path";
 
 export async function saveToFile(data: any, filePath: string): Promise<void> {
   await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2));

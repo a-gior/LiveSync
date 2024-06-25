@@ -19,6 +19,7 @@ import {
 import { FileEventHandler } from "./services/FileEventHandler";
 import path from "path";
 import { StatusBarManager } from "./services/StatusBarManager";
+import { compareCorrespondingEntry } from "./utilities/fileUtils/entriesComparison";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -36,8 +37,6 @@ export function activate(context: vscode.ExtensionContext) {
   //   vscode.workspace.workspaceFolders.length > 0
   //     ? vscode.workspace.workspaceFolders[0].uri.fsPath
   //     : undefined;
-
-  console.log('Congratulations, your extension "livesync" is now active!');
 
   const pairedFoldersTreeDataProvider = new PairedFoldersTreeDataProvider();
   vscode.window.registerTreeDataProvider(
@@ -103,7 +102,7 @@ export function activate(context: vscode.ExtensionContext) {
             element.status = FileEntryStatus.removed;
             pairedFoldersTreeDataProvider.removeElement(element, parentEntry);
           } else {
-            FileEntry.compareSingleEntry(element).then(
+            compareCorrespondingEntry(element).then(
               (updatedElement: FileEntry) => {
                 console.log(
                   `[Refresh command] updatedElement: `,

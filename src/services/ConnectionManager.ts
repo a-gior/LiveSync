@@ -1,6 +1,7 @@
 import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
 import { SFTPClient } from "./SFTPClient";
 import { SSHClient } from "./SSHClient";
+import { window } from "vscode";
 
 export class ConnectionManager {
   private static instance: ConnectionManager;
@@ -122,6 +123,15 @@ export class ConnectionManager {
       await this.retryOperation(async () => await this.connectSSH());
       return await operation(this.sshClient);
     } catch (err: any) {
+      if (err.message.includes("Timed out")) {
+        window.showErrorMessage(
+          `Connection to ${this.currentConfig.hostname}:${this.currentConfig.port} timed out.`,
+        );
+      } else {
+        window.showErrorMessage(
+          `Couldn't do operation on ${this.currentConfig.hostname}:${this.currentConfig.port}`,
+        );
+      }
       console.error("Error doSSHOperation: ", err);
       throw err;
     } finally {

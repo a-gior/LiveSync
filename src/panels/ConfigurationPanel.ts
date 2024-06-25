@@ -55,7 +55,10 @@ export class ConfigurationPanel extends Panel {
       // Additional options if needed
     );
 
-    const allWorkspaceConfig = WorkspaceConfig.getInstance().getAll();
+    const allWorkspaceConfig: FullConfigurationMessage = {
+      command: "setInitialConfiguration",
+      ...WorkspaceConfig.getInstance().getAll(),
+    };
     this.currentPanel?.getPanel().webview.postMessage(allWorkspaceConfig);
   }
 
@@ -120,10 +123,6 @@ export class ConfigurationPanel extends Panel {
     configuration: ConfigurationState["configuration"],
   ) {
     if (configuration) {
-      console.log(
-        `saveRemoteServerConfiguration - Trying to connect with config: `,
-        configuration,
-      );
       const connectionManager = ConnectionManager.getInstance(configuration);
 
       connectionManager

@@ -86,7 +86,7 @@ export async function getRemoteHash(
     WorkspaceConfig.getInstance().getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
-  const command = `sha256sum ${remotePath} | awk '{ print $1 }'`;
+  const command = `sha256sum "${remotePath}" | awk '{ print $1 }'`;
   let fileHash: string | undefined;
 
   try {
@@ -96,7 +96,9 @@ export async function getRemoteHash(
     });
   } catch (err) {
     window.showErrorMessage("Error getting remote file hash");
-    console.log("Error: ", err);
+    console.error(
+      `Error getting remote file hash on \n\t${remotePath} \nwith command \n\t${command}`,
+    );
   }
 
   return fileHash;

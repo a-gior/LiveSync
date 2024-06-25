@@ -20,7 +20,6 @@
             // Set the default value based on the options' default field
             const defaultOption = options.find(option => option.default);
             if (defaultOption) {
-                console.log("DefaultOption value : ", defaultOption.value);
                 formField.value = defaultOption.value;
             }
         }

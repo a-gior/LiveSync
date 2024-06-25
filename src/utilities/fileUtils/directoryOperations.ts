@@ -8,7 +8,6 @@ import {
   FileEntrySource,
 } from "../../utilities/FileEntry";
 import { getCorrespondingPath } from "./filePathUtils";
-import { listRemoteFilesRecursive } from "./fileListing";
 import { ConnectionManager } from "../../services/ConnectionManager";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import pLimit = require("p-limit");
@@ -31,21 +30,17 @@ async function createRemoteDirectories(
 
     if (entry.listChildren().length === 0) {
       if (entry.isDirectory()) {
-        console.log(`MKDIR Directory: ${remotePath}`);
         await sftpClient.getClient().mkdir(remotePath, true);
       } else {
         const parentDirPath = path.dirname(remotePath);
         if (lastParentDir !== parentDirPath) {
           lastParentDir = parentDirPath;
-          console.log(`MKDIR Directory(parent): ${parentDirPath}`);
           await sftpClient.getClient().mkdir(parentDirPath, true);
         }
         filePaths.push({ localPath: entry.fullPath, remotePath });
       }
     } else {
       if (entry.isDirectory()) {
-        console.log(`MKDIR Directory: ${remotePath}`);
-        await sftpClient.getClient().mkdir(remotePath, true);
         for (const child of entry.listChildren()) {
           await createDir(child);
         }
@@ -64,7 +59,6 @@ async function uploadFilesWithLimit(
   const uploadFile = async (localPath: string, remotePath: string) => {
     try {
       await sftpClient.getClient().fastPut(localPath, remotePath);
-      console.log(`Uploaded ${localPath} to ${remotePath}`);
     } catch (err) {
       console.error(`Failed to upload ${localPath} to ${remotePath}`, err);
     }
@@ -95,38 +89,73 @@ export async function uploadDirectory(rootEntry: FileEntry) {
   }
 }
 
-export async function downloadDirectory(
-  fileEntry: FileEntry,
-  baseLocalDir?: string,
-): Promise<void> {
+async function createLocalDirectories(
+  sftpClient: SFTPClient,
+  remoteEntry: FileEntry,
+) {
+  const filePaths: { remotePath: string; localPath: string }[] = [];
+  const createDir = async (entry: FileEntry, localBasePath: string) => {
+    const localPath = path.join(localBasePath, path.basename(entry.fullPath));
+
+    if (entry.isDirectory()) {
+      await fs.promises.mkdir(localPath, { recursive: true });
+
+      const remoteEntries = await sftpClient.getClient().list(entry.fullPath);
+      for (const remoteEntry of remoteEntries) {
+        const fullRemotePath = path
+          .join(entry.fullPath, remoteEntry.name)
+          .replace(/\\/g, "/");
+        const childEntry = new FileEntry(
+          remoteEntry.name,
+          remoteEntry.type === "d"
+            ? FileEntryType.directory
+            : FileEntryType.file,
+          0,
+          new Date(),
+          FileEntrySource.remote,
+          fullRemotePath,
+        );
+        await createDir(childEntry, localPath);
+      }
+    } else {
+      filePaths.push({ remotePath: entry.fullPath, localPath });
+    }
+  };
+
+  await createDir(remoteEntry, remoteEntry.fullPath);
+  return filePaths;
+}
+
+async function downloadFilesWithLimit(
+  sftpClient: SFTPClient,
+  filePaths: { remotePath: string; localPath: string }[],
+) {
+  const downloadFile = async (remotePath: string, localPath: string) => {
+    try {
+      await sftpClient.getClient().fastGet(remotePath, localPath);
+    } catch (err) {
+      console.error(`Failed to download ${remotePath} to ${localPath}`, err);
+    }
+  };
+
+  const promises = filePaths.map((file) =>
+    limit(() => downloadFile(file.remotePath, file.localPath)),
+  );
+  await Promise.all(promises);
+}
+
+export async function downloadDirectory(remoteEntry: FileEntry) {
   const configuration =
     WorkspaceConfig.getInstance().getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   try {
     await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
-      const remoteDir = fileEntry.fullPath;
-      const localDir = baseLocalDir || getCorrespondingPath(remoteDir);
-      console.log(`Downloading directory ${remoteDir} to ${localDir}`);
-      if (!localDir) {
-        window.showErrorMessage(`No local path found for ${remoteDir}`);
-        return;
-      }
+      // Step 1: Create local directories and collect file paths
+      const filePaths = await createLocalDirectories(sftpClient, remoteEntry);
 
-      const remoteFilesEntry = await listRemoteFilesRecursive(remoteDir);
-
-      for (const child of remoteFilesEntry.listChildren()) {
-        const childLocalPath = path.join(localDir, child.name);
-        if (child.type === FileEntryType.directory) {
-          await fs.promises.mkdir(childLocalPath, { recursive: true });
-          await downloadDirectory(child, childLocalPath);
-        } else {
-          await fs.promises.mkdir(path.dirname(childLocalPath), {
-            recursive: true,
-          });
-          await sftpClient.getClient().fastGet(child.fullPath, childLocalPath);
-        }
-      }
+      // Step 2: Download files with concurrency limits
+      await downloadFilesWithLimit(sftpClient, filePaths);
     });
   } catch (error: any) {
     console.error(`Failed to download directory: ${error.message}`);

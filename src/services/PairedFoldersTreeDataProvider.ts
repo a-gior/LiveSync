@@ -7,10 +7,7 @@ import {
   FileEntryStatus,
   FileEntryType,
 } from "../utilities/FileEntry";
-import {
-  ensureDirectoryExists,
-  saveToFile,
-} from "../utilities/fileUtils/fileOperations";
+import { ensureDirectoryExists } from "../utilities/fileUtils/fileOperations";
 import {
   comparePaths,
   getRelativePath,
@@ -36,6 +33,8 @@ import {
   SAVE_DIR,
 } from "../utilities/constants";
 import { WorkspaceConfig } from "./WorkspaceConfig";
+import { compareLocalAndRemote } from "../utilities/fileUtils/entriesComparison";
+import FileEntryManager, { JsonType } from "./FileEntryManager";
 
 export class PairedFoldersTreeDataProvider
   implements vscode.TreeDataProvider<FileEntry>
@@ -50,7 +49,11 @@ export class PairedFoldersTreeDataProvider
   readonly workspaceConfiguration: ConfigurationState =
     WorkspaceConfig.getInstance().getAll();
 
+  private fileEntryManager: FileEntryManager;
+
   constructor() {
+    this.fileEntryManager = FileEntryManager.getInstance();
+
     loadIconMappings(ICON_MAPPINGS_PATH);
     loadFolderIconMappings(FOLDER_ICON_MAPPINGS_PATH);
     loadLanguageIdMappings(LANGUAGEIDS_ICON_MAPPINGS_PATH);
@@ -63,23 +66,45 @@ export class PairedFoldersTreeDataProvider
     this._onDidChangeTreeData.fire(element);
   }
 
-  addElement(newElement: FileEntry, parentElement?: FileEntry): void {
+  public async addElement(
+    newElement: FileEntry,
+    parentElement?: FileEntry,
+  ): Promise<void> {
     if (parentElement) {
       parentElement.addChild(newElement);
+      await this.fileEntryManager.updateJsonFileEntry(
+        parentElement,
+        JsonType.COMPARE,
+      );
       this.refresh(parentElement);
     } else {
       this.rootElements.push(newElement);
+      await this.fileEntryManager.updateJsonFileEntry(
+        newElement,
+        JsonType.COMPARE,
+      );
       this.refresh();
     }
   }
 
-  removeElement(elementToRemove: FileEntry, parentElement?: FileEntry): void {
+  public async removeElement(
+    elementToRemove: FileEntry,
+    parentElement?: FileEntry,
+  ): Promise<void> {
     if (parentElement) {
       parentElement.removeChild(elementToRemove.name);
+      await this.fileEntryManager.updateJsonFileEntry(
+        parentElement,
+        JsonType.COMPARE,
+      );
       this.refresh(parentElement);
     } else {
       this.rootElements = this.rootElements.filter(
         (element) => element !== elementToRemove,
+      );
+      await this.fileEntryManager.updateJsonFileEntry(
+        elementToRemove,
+        JsonType.COMPARE,
       );
       this.refresh();
     }
@@ -117,37 +142,51 @@ export class PairedFoldersTreeDataProvider
   }
 
   async getChildren(element?: FileEntry): Promise<FileEntry[]> {
+    await this.fileEntryManager.waitForJsonLoad();
+
     if (!element) {
-      let rootFileEntries: FileEntry[] = [];
-      if (
-        !this.workspaceConfiguration.configuration ||
-        !this.workspaceConfiguration.pairedFolders ||
-        this.workspaceConfiguration.pairedFolders.length === 0
-      ) {
-        vscode.window.showErrorMessage("Please configure the plugin");
-      } else {
-        const pairedFolders: { localPath: string; remotePath: string }[] =
-          this.workspaceConfiguration.pairedFolders;
-        for (const { localPath, remotePath } of pairedFolders) {
-          const rootName: string = `[local] ${path.basename(localPath)} / ${path.basename(remotePath)} [remote]`;
-          ensureDirectoryExists(SAVE_DIR);
-          const children: Map<string, FileEntry> =
-            await this.getDirectoriesComparison(
-              localPath,
-              remotePath,
-              SAVE_DIR,
-            );
-          let workspaceEntry = children.get(path.basename(localPath));
-          if (workspaceEntry instanceof FileEntry) {
-            workspaceEntry.name = rootName;
-            rootFileEntries.push(workspaceEntry);
-          } else {
-            console.error("Workspace entry error: ", workspaceEntry);
+      try {
+        const comparisonEntries =
+          this.fileEntryManager.getComparisonFileEntries();
+        console.log(`ComparisonEntries: `, comparisonEntries);
+
+        if (!comparisonEntries || comparisonEntries.size === 0) {
+          let rootFileEntries: FileEntry[] = [];
+          const pairedFolders =
+            WorkspaceConfig.getInstance().getPairedFoldersConfigured();
+
+          for (const { localPath, remotePath } of pairedFolders) {
+            const rootName: string = `[local] ${path.basename(localPath)} / ${path.basename(remotePath)} [remote]`;
+            ensureDirectoryExists(SAVE_DIR);
+            const children: Map<string, FileEntry> =
+              await this.getDirectoriesComparison(localPath, remotePath);
+            let workspaceEntry = children.get(path.basename(localPath));
+            if (workspaceEntry instanceof FileEntry) {
+              await FileEntryManager.getInstance().updateJsonFileEntry(
+                workspaceEntry,
+                JsonType.COMPARE,
+              );
+              workspaceEntry.name = rootName;
+              rootFileEntries.push(workspaceEntry);
+            } else {
+              console.error("Workspace entry error: ", workspaceEntry);
+            }
           }
+          return rootFileEntries;
+        } else if (comparisonEntries) {
+          this.rootElements = Array.from(comparisonEntries.values());
+          return this.rootElements;
+        } else {
+          vscode.window.showErrorMessage(
+            "Comparison JSON data not found. Please run the initial comparison.",
+          );
+          return [];
         }
+      } catch (error) {
+        console.error("Error fetching comparison data:", error);
+        vscode.window.showErrorMessage("Failed to load comparison data.");
+        return [];
       }
-      this.rootElements = rootFileEntries;
-      return this.rootElements;
     } else {
       return [...element.children.values()];
     }
@@ -156,29 +195,22 @@ export class PairedFoldersTreeDataProvider
   async getDirectoriesComparison(
     localDir: string,
     remoteDir: string,
-    saveDir: string,
   ): Promise<Map<string, FileEntry>> {
     try {
       const localFiles = await listLocalFilesRecursive(localDir);
       const remoteFiles = await listRemoteFilesRecursive(remoteDir);
       console.log(`Comparing Directories...`);
-      const compareFiles = await FileEntry.compareDirectories(
+
+      await FileEntryManager.getInstance().updateJsonFileEntry(
         localFiles,
+        JsonType.LOCAL,
+      );
+      await FileEntryManager.getInstance().updateJsonFileEntry(
         remoteFiles,
+        JsonType.REMOTE,
       );
-      console.log(`Compared Directories...`);
-      await saveToFile(
-        localFiles.toJSON(),
-        path.join(saveDir, "localFiles.json"),
-      );
-      await saveToFile(
-        remoteFiles.toJSON(),
-        path.join(saveDir, "remoteFiles.json"),
-      );
-      await saveToFile(
-        Object.fromEntries(compareFiles.entries()),
-        path.join(saveDir, "compareFiles.json"),
-      );
+
+      const compareFiles = await compareLocalAndRemote(localFiles, remoteFiles);
       return compareFiles;
     } catch (error) {
       console.error("Error:", error);

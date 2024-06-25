@@ -1,20 +1,12 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import * as fs from "fs/promises";
 import {
   FileEntry,
-  FileEntryType,
   FileEntryStatus,
   FileEntrySource,
 } from "../utilities/FileEntry";
 import { PairedFoldersTreeDataProvider } from "./PairedFoldersTreeDataProvider";
-import { getRelativePath } from "../utilities/fileUtils/filePathUtils";
-import { ConfigurationPanel } from "../panels/ConfigurationPanel";
-import {
-  compareRemoteFileHash,
-  uploadFile,
-} from "../utilities/fileUtils/sftpOperations";
-import { ConfigurationState } from "../DTOs/states/ConfigurationState";
+
 import {
   fileDelete,
   fileMove,
@@ -34,7 +26,7 @@ export class FileEventHandler {
     context.subscriptions.push(
       // Handle file create events
       vscode.workspace.onDidCreateFiles(async (event) => {
-        await FileEventHandler.handleFileCreate(event, treeDataProvider);
+        await FileEventHandler.handleFileCreate(event);
       }),
 
       // Handle file delete events
@@ -76,18 +68,13 @@ export class FileEventHandler {
    * @param event - The file create event
    * @param treeDataProvider - The tree data provider
    */
-  static async handleFileCreate(
-    event: vscode.FileCreateEvent,
-    treeDataProvider: PairedFoldersTreeDataProvider,
-  ) {
-    console.log(`[handleFileCreate] DEBUG: File(s) created: `, event.files);
+  static async handleFileCreate(event: vscode.FileCreateEvent) {
     for (const fileUri of event.files) {
       fileSave(fileUri)
         .then(() => {
           const newEntry = FileEntry.getEntryFromLocalPath(fileUri.fsPath);
           newEntry.updateStatus(FileEntryStatus.new);
 
-          console.log(`[handleFileCreate] DEBUG: New entry: `, newEntry);
           vscode.commands.executeCommand("livesync.fileEntryRefresh", newEntry);
         })
         .catch((err: any) => {
@@ -105,18 +92,12 @@ export class FileEventHandler {
     event: vscode.FileDeleteEvent,
     treeDataProvider: PairedFoldersTreeDataProvider,
   ) {
-    console.log(`[handleFileDelete] DEBUG: File(s) deleted: `, event.files);
     for (const fileUri of event.files) {
       fileDelete(fileUri)
         .then(() => {
           const entryToRemove = treeDataProvider.findEntryByPath(
             fileUri.fsPath,
             FileEntrySource.local,
-          );
-          console.log(
-            `[handleFileDelete] DEBUG: Entry to remove: `,
-            fileUri.fsPath,
-            entryToRemove,
           );
           if (entryToRemove) {
             vscode.commands.executeCommand(
@@ -140,17 +121,12 @@ export class FileEventHandler {
     event: vscode.FileRenameEvent,
     treeDataProvider: PairedFoldersTreeDataProvider,
   ) {
-    console.log(`[handleFileRename] DEBUG: File(s) renamed: `, event.files);
     for (const { oldUri, newUri } of event.files) {
       fileMove(oldUri, newUri)
         .then(() => {
           const entryToRenameOrMove = treeDataProvider.findEntryByPath(
             oldUri.fsPath,
             FileEntrySource.local,
-          );
-          console.log(
-            `[handleFileRename] DEBUG: Entry to rename or move: `,
-            entryToRenameOrMove,
           );
 
           if (
@@ -191,16 +167,15 @@ export class FileEventHandler {
     event: vscode.TextDocumentChangeEvent,
     treeDataProvider: PairedFoldersTreeDataProvider,
   ) {
-    console.log(
-      `[handleFileChange] DEBUG: Document changed: `,
-      event.document.uri.fsPath,
+    const changedFileUri = event.document.uri;
+    const changedEntry = treeDataProvider.findEntryByPath(
+      changedFileUri.fsPath,
+      FileEntrySource.local,
     );
-    // const changedFileUri = event.document.uri;
-    // const changedEntry = treeDataProvider.findEntryByPath(changedFileUri.fsPath, FileEntrySource.local);
-    // if (changedEntry) {
-    //   // Perform necessary updates to the changedEntry
-    //   treeDataProvider.refresh(changedEntry);
-    // }
+    if (changedEntry) {
+      // Perform necessary updates to the changedEntry
+      // treeDataProvider.refresh(changedEntry);
+    }
   }
 
   /**

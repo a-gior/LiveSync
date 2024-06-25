@@ -4,11 +4,8 @@ import AdmZip from "adm-zip";
 import {
   FILE_ICONS_ZIP_PATH,
   FOLDER_ICONS_ZIP_PATH,
-  MEDIA_DIR,
 } from "../utilities/constants";
 import { FileEntryType } from "../utilities/FileEntry";
-import * as vscode from "vscode";
-import { file } from "tmp";
 
 interface IconMappings {
   [key: string]: {
