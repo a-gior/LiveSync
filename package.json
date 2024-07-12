@@ -191,6 +191,14 @@
           "type": "boolean",
           "default": true,
           "description": "Show or hide unchanged files in the tree view."
+        },
+        "LiveSync.ignore": {
+          "type": "array",
+          "description": "List of patterns of files/folders to ignore",
+          "items": {
+            "type": "string"
+          },
+          "default": []
         }
       }
     }

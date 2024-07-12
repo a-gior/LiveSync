@@ -4,6 +4,8 @@ export interface Form {
   formGroups: { [id: string]: FormGroup };
   hasSubmitButton: boolean;
   submitButtonName?: string;
+  canAddFormGroups?: boolean; // Indicates if new formGroups can be added
+  newFormGroupTemplate?: FormGroup;
 }
 
 export interface FormGroup {

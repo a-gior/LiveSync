@@ -8,6 +8,7 @@ import {
 import pLimit = require("p-limit");
 import { ConnectionManager } from "../../services/ConnectionManager";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
+import { LogManager } from "../../services/LogManager";
 
 // Set a limit for the number of concurrent file operations, from 10 onwards triggers a warning for too much event listeners
 const limit = pLimit(9);
@@ -47,6 +48,7 @@ export async function listRemoteFilesRecursive(
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i];
         const [fullPath, size, modifyTime, type] = line.split(",");
+        LogManager.log(`List ${fullPath}`);
         const entryType =
           type === "directory" ? FileEntryType.directory : FileEntryType.file;
 
@@ -76,7 +78,7 @@ export async function listRemoteFilesRecursive(
 
       console.log("Root Entry: ", rootEntry);
       return rootEntry;
-    });
+    }, `Listing files from ${remoteDir}`);
   } catch (error) {
     console.error("Recursive remote listing failed:", error);
     return new FileEntry(

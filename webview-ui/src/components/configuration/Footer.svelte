@@ -7,11 +7,14 @@
     import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
     import { FullConfigurationMessage } from "@shared/DTOs/messages/FullConfigurationMessage";
     import { PairFoldersMessage } from "@shared/DTOs/messages/PairFoldersMessage";
+    import IgnoreList from "./IgnoreList.svelte";
+    
 
 	provideVSCodeDesignSystem().register(vsCodeButton());
     export let remoteServerConfigFormData: Form;
     export let pairFolderFormData: Form;
     export let fileEventActions: Form;
+    export let patterns: string[];
 
     function saveForms() {
         if (inputValidator.areValidInputs(remoteServerConfigFormData)) {
@@ -73,7 +76,8 @@
         const confState: ConfigurationState = { 
             configuration: currentConfig,
             pairedFolders: currentPairedFolders,
-            fileEventActions: currentFileEventActions
+            fileEventActions: currentFileEventActions,
+            ignoreList: patterns
         };
 
         const configurationMessage: FullConfigurationMessage = {
@@ -90,16 +94,12 @@
 
   <footer-container>
     <vscode-button id="test-connection-button" on:click={testConnection}>Test Connection</vscode-button>
-    <vscode-button id="add-pair-folders" on:click>New Folder Pair</vscode-button>
     <vscode-button class="save-button" on:click={saveForms}>Save</vscode-button>
   </footer-container>
   
   <style>
     vscode-button {
         margin: 0 5px;
-    }
-    #add-pair-folders, #test-connection-button {
-        float: left;
     }
 
     /* Styles for the footer container */

@@ -1,4 +1,4 @@
-import { window, Uri, workspace, ConfigurationTarget } from "vscode";
+import { window, Uri } from "vscode";
 import { Panel } from "./Panel";
 
 import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
@@ -11,6 +11,7 @@ import { FileEventActionsMessage } from "@shared/DTOs/messages/FileEventActionsM
 import { ConnectionManager } from "../services/ConnectionManager";
 import { SSHClient } from "../services/SSHClient";
 import { WorkspaceConfig } from "../services/WorkspaceConfig";
+import { IgnoreListMessage } from "../DTOs/messages/IgnoreListMessage";
 
 export class ConfigurationPanel extends Panel {
   static render(extensionUri: Uri) {
@@ -65,14 +66,15 @@ export class ConfigurationPanel extends Panel {
   static async savePairFolders(
     pairedFoldersArr: PairFoldersMessage["paths"][],
   ) {
+    console.log("pairedFoldersArr", pairedFoldersArr);
     const workspaceConfig = WorkspaceConfig.getInstance();
     const configuration = workspaceConfig.getRemoteServerConfigured();
     // const pairedFolders = workspaceConfig.getPairedFoldersConfigured();
 
-    for (const pairedFolders of pairedFoldersArr) {
-      const connectionManager = ConnectionManager.getInstance(configuration);
-      connectionManager
-        .doSFTPOperation(async (sftpClient: SFTPClient) => {
+    const connectionManager = ConnectionManager.getInstance(configuration);
+    connectionManager
+      .doSFTPOperation(async (sftpClient: SFTPClient) => {
+        for (const pairedFolders of pairedFoldersArr) {
           const { localPath, remotePath } = pairedFolders;
           if (!(await sftpClient.pathExists(remotePath))) {
             console.error(
@@ -89,25 +91,26 @@ export class ConfigurationPanel extends Panel {
           } else {
             console.log("Paired Folders are valid");
           }
-        })
-        .then(async () => {
-          // All good so we update the pairedFolders config
-          await workspaceConfig.update("pairedFolders", pairedFoldersArr);
-          console.log("Paired Folders are saved");
-          window.showInformationMessage("Paired Folders are valid and saved");
-        });
-    }
+        }
+      }, "Saving PairedFolders")
+      .then(async () => {
+        // All good so we update the pairedFolders config
+        await workspaceConfig.update("pairedFolders", pairedFoldersArr);
+        console.log("Paired Folders are saved");
+        window.showInformationMessage("Paired Folders are valid and saved");
+      });
   }
 
   static async saveFileEventActions(
     actions: FileEventActionsMessage["actions"],
   ) {
-    const config = workspace.getConfiguration("LiveSync");
+    console.log("saveActions", actions);
+    const workspaceConfig = WorkspaceConfig.getInstance();
     if (actions) {
-      config.update("actionOnSave", actions.actionOnSave, true);
-      config.update("actionOnCreate", actions.actionOnCreate, true);
-      config.update("actionOnDelete", actions.actionOnDelete, true);
-      config.update("actionOnMove", actions.actionOnMove, true);
+      await workspaceConfig.update("actionOnSave", actions.actionOnSave);
+      await workspaceConfig.update("actionOnCreate", actions.actionOnCreate);
+      await workspaceConfig.update("actionOnDelete", actions.actionOnDelete);
+      await workspaceConfig.update("actionOnMove", actions.actionOnMove);
 
       console.log("File event actions saved successfully.");
       window.showInformationMessage("File event actions saved.");
@@ -124,38 +127,22 @@ export class ConfigurationPanel extends Panel {
   ) {
     if (configuration) {
       const connectionManager = ConnectionManager.getInstance(configuration);
+      const workspaceConfig = WorkspaceConfig.getInstance();
 
       connectionManager
         .doSSHOperation(async (sshClient: SSHClient) => {
           sshClient.waitForConnection();
-        })
+        }, "Test Connection")
         .then(async () => {
-          const config = workspace.getConfiguration("LiveSync");
           const { hostname, port, username, authMethod, password, sshKey } =
             configuration;
 
-          await config.update(
-            "hostname",
-            hostname,
-            ConfigurationTarget.Workspace,
-          );
-          await config.update("port", port, ConfigurationTarget.Workspace);
-          await config.update(
-            "username",
-            username,
-            ConfigurationTarget.Workspace,
-          );
-          await config.update(
-            "authMethod",
-            authMethod,
-            ConfigurationTarget.Workspace,
-          );
-          await config.update(
-            "password",
-            password,
-            ConfigurationTarget.Workspace,
-          );
-          await config.update("sshKey", sshKey, ConfigurationTarget.Workspace);
+          await workspaceConfig.update("hostname", hostname);
+          await workspaceConfig.update("port", port);
+          await workspaceConfig.update("username", username);
+          await workspaceConfig.update("authMethod", authMethod);
+          await workspaceConfig.update("password", password);
+          await workspaceConfig.update("sshKey", sshKey);
 
           console.log("Remote server configuration saved successfully.");
           window.showInformationMessage("Remote server configuration saved.");
@@ -174,14 +161,40 @@ export class ConfigurationPanel extends Panel {
     }
   }
 
-  static async updateConfiguration(configuration: FullConfigurationMessage) {
-    this.saveRemoteServerConfiguration(configuration.configuration);
+  static async saveIgnoreList(ignoreList: IgnoreListMessage["ignoreList"]) {
+    console.log(`<saveIgnoreList> list: `, ignoreList);
+    const workspaceConfig = WorkspaceConfig.getInstance();
 
+    if (ignoreList) {
+      try {
+        await workspaceConfig.update("ignore", ignoreList);
+        console.log("Ignore list saved successfully.");
+        window.showInformationMessage("Ignore list saved successfully.");
+      } catch (error) {
+        console.error("Error saving ignore list: ", error);
+        window.showErrorMessage(
+          "Failed to save ignore list. See console for details.",
+        );
+      }
+    } else {
+      window.showErrorMessage(
+        "No configuration found or missing properties. Please configure LiveSync correctly.",
+      );
+    }
+  }
+
+  static async updateConfiguration(configuration: FullConfigurationMessage) {
+    if (configuration.configuration) {
+      this.saveRemoteServerConfiguration(configuration.configuration);
+    }
     if (configuration.pairedFolders) {
       this.savePairFolders(configuration.pairedFolders);
     }
     if (configuration.fileEventActions) {
       this.saveFileEventActions(configuration.fileEventActions);
+    }
+    if (configuration.ignoreList) {
+      this.saveIgnoreList(configuration.ignoreList);
     }
   }
 
@@ -189,17 +202,15 @@ export class ConfigurationPanel extends Panel {
     configuration: ConfigurationMessage["configuration"],
   ): Promise<boolean> {
     const connectionManager = ConnectionManager.getInstance(configuration);
-    connectionManager.doSSHOperation(async (sshClient: SSHClient) => {
-      sshClient.waitForConnection();
-    });
+    try {
+      await connectionManager.doSSHOperation(async (sshClient: SSHClient) => {
+        await sshClient.waitForConnection();
+      }, "Test Connection");
 
-    const errors = connectionManager.getSSHClient().getErrors();
-    if (errors.length > 0) {
-      window.showErrorMessage(errors[0].error.message);
-      return false;
-    } else {
-      window.showInformationMessage("Test Connection successful");
+      window.showInformationMessage("Test connection successful.");
       return true;
+    } catch (error: any) {
+      return false;
     }
   }
 }

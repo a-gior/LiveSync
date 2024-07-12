@@ -20,6 +20,7 @@ import { FileEventHandler } from "./services/FileEventHandler";
 import path from "path";
 import { StatusBarManager } from "./services/StatusBarManager";
 import { compareCorrespondingEntry } from "./utilities/fileUtils/entriesComparison";
+import { LogManager } from "./services/LogManager";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -31,6 +32,11 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Create the permanent status bar icon
   StatusBarManager.createPermanentIcon();
+  context.subscriptions.push(
+    vscode.commands.registerCommand("livesync.showLogs", () => {
+      LogManager.showLogs();
+    }),
+  );
 
   // const rootPath =
   //   vscode.workspace.workspaceFolders &&

@@ -7,9 +7,11 @@
     import type { Form } from "../types/formTypes";
     import FormRow from "./FormRow.svelte";
     import CloseIcon from "@resources/icons/close.svelte";
+    import { get, Writable } from "svelte/store";
 
-    export let formData: Form;
+    export let formDataStore: Writable<Form>;
     export let onSubmit: CallableFunction = null;
+    export let onChange: CallableFunction = null;
 
     provideVSCodeDesignSystem().register(vsCodeButton(), vsCodeCheckbox());
 
@@ -20,23 +22,42 @@
         }
     }
 
+    function handleChange(event) {
+        console.log("Input Changed, source", event.srcElement);
+        if (onChange) {
+            onChange(event);
+        }
+    }
+
     function removeFormGroup(event) {
         const formGroupId = event.target.closest('form-group').getAttribute('id');
-        delete formData.formGroups[formGroupId];
-        formData = formData;
+        delete get(formDataStore).formGroups[formGroupId];
+        formDataStore = formDataStore;
+    }
+
+    function addNewGroup() {
+        const index = Object.keys(get(formDataStore).formGroups).length;
+
+        formDataStore.update(formData => {
+            return {
+                ...formData,
+                formGroups: {
+                    ...formData.formGroups,
+                    [`form-group-${index}`]: {
+                        ...formData.newFormGroupTemplate,
+                    },
+                }
+            };  
+        });
     }
 </script>
 
 <generic-form>
-    {#if formData}
-        {#if formData.title}
-            <h2>{formData.title}</h2>
-        {/if}
-        <form id={formData.id} on:submit|preventDefault={handleSubmit}>
-            {#each Object.entries(formData.formGroups) as [formGroupId, formGroup] (formGroupId)}
+    {#if get(formDataStore)}
+        <form id={get(formDataStore).id} on:submit|preventDefault={handleSubmit}>
+            {#each Object.entries(get(formDataStore).formGroups) as [formGroupId, formGroup] (formGroupId)}
                 {#if formGroup.visible}
                     <form-group id={formGroupId}>
-                        <div class="form-separator"></div>
 
                         {#if formGroup.deletable}
                             <close-icon on:click={removeFormGroup} ><CloseIcon /></close-icon>
@@ -51,7 +72,7 @@
                                     <FormRow
                                         bind:formField
                                         inputType={formField.type}
-                                        on:change
+                                        on:change={handleChange}
                                         bind:node={formField.htmlElement}
                                     />
                                 {/if}
@@ -60,10 +81,13 @@
                     </form-group>
                 {/if}
             {/each}
-            {#if formData.hasSubmitButton}
+            {#if get(formDataStore).canAddFormGroups}
+                <vscode-button type="button" on:click={addNewGroup}>Add</vscode-button>
+            {/if}
+            {#if get(formDataStore).hasSubmitButton}
                 <vscode-button type="submit">
-                    {#if formData.submitButtonName}
-                        {formData.submitButtonName}
+                    {#if get(formDataStore).submitButtonName}
+                        {get(formDataStore).submitButtonName}
                     {:else}
                         Submit
                     {/if}
@@ -83,16 +107,9 @@
 
     generic-form {
         display: block;
-        padding: 10px;
+        /* padding: 10px;
         margin-top: 1%;
-        border: 1px solid #969696;
-    }
-
-    /* Separator style */
-    .form-separator {
-        border-bottom: 1px solid #404040; /* Adds a line to separate sections */
-        margin-top: 5px;
-        margin-bottom: 5px;
+        border: 1px solid #969696; */
     }
 
     vscode-button[type="submit"] {

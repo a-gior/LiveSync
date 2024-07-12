@@ -1,8 +1,11 @@
 import * as vscode from "vscode";
+import { LogManager } from "./LogManager";
 
 export class StatusBarManager {
   private static statusBarItem: vscode.StatusBarItem;
   private static permanentItem: vscode.StatusBarItem;
+  private static currentMessage: string;
+  private static currentIcon: string;
 
   private static getStatusBarItem(): vscode.StatusBarItem {
     if (!this.statusBarItem) {
@@ -24,24 +27,39 @@ export class StatusBarManager {
   ) {
     const statusBarItem = this.getStatusBarItem();
 
-    let displayMessage = message;
-    if (icon) {
-      displayMessage = `$(${icon}) ${message}`;
-    }
+    let displayIcon = icon ? `$(${icon}) ` : "";
     if (loading) {
-      displayMessage = `$(sync~spin) ${message}`;
+      displayIcon = `$(sync~spin) `;
     }
 
-    statusBarItem.text = displayMessage;
-    statusBarItem.tooltip = tooltip || "";
-    if (command) {
-      statusBarItem.command = command;
+    // Extract the actual message without the icon
+    let actualMessage = message;
+    if (loading || icon) {
+      actualMessage = message.replace(/^\$\([^\)]+\)\s*/, "");
     }
-    statusBarItem.show();
+
+    // Check if the actual message is different
+    if (
+      this.currentMessage !== actualMessage ||
+      this.currentIcon !== displayIcon
+    ) {
+      statusBarItem.text = `${displayIcon}${actualMessage}`;
+      statusBarItem.tooltip = tooltip || "";
+      statusBarItem.command = command || "livesync.showLogs";
+      statusBarItem.show();
+
+      LogManager.log(message); // Log the message
+      this.currentMessage = actualMessage;
+      this.currentIcon = displayIcon;
+    }
 
     if (duration) {
       setTimeout(() => {
-        statusBarItem.hide();
+        if (this.currentMessage === actualMessage) {
+          statusBarItem.hide();
+          this.currentMessage = "";
+          this.currentIcon = "";
+        }
       }, duration);
     }
   }
@@ -49,6 +67,8 @@ export class StatusBarManager {
   static hideMessage() {
     if (this.statusBarItem) {
       this.statusBarItem.hide();
+      this.currentMessage = "";
+      this.currentIcon = "";
     }
   }
 

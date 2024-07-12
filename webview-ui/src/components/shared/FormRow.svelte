@@ -12,7 +12,7 @@
     let options = formField.options;
 
     onMount(() => {
-        if (inputElement) {
+        if (inputElement && inputType !== 'select') {
             inputElement.type = inputType;
         }
 
@@ -26,16 +26,21 @@
     });
 
     function isValid(event, validationCallback: CallableFunction) {
-        if (!validationCallback(event.target)) {
+        if (validationCallback && !validationCallback(event.target)) {
             errorDisplayer.display(event.target, "top", "Invalid format");
+        }
+    }
+
+    $: if (inputType === 'select' && options && formField.value) {
+        let selectElement = inputElement;
+        if (selectElement) {
+            selectElement.value = formField.value;
         }
     }
 
 </script>
 
 <form-row bind:this={node}>
-    <div class="form-separator"></div>
-    
     {#if inputType === 'checkbox' && options} <!-- Checkbox input -->
         {#each options as option}
             <label>
@@ -49,7 +54,7 @@
         {#if options}
         <label>
             {formField.label}:
-            <select id={formField.name} name={formField.name} bind:value={formField.value} required={formField.required} on:change={e => isValid(e, formField.validationCallback)}>
+            <select bind:this={inputElement} id={formField.name} name={formField.name} bind:value={formField.value} required={formField.required} on:change={e => isValid(e, formField.validationCallback)}>
             {#each options as option}
                 <option value={option.value}>{option.label}</option>
             {/each}
@@ -69,6 +74,8 @@
 
 <style>
     form-row {
-        padding-left: 15px;
+        display: block;
+        padding-left: 5px;
+        margin-bottom: 20px;
     }
 </style>

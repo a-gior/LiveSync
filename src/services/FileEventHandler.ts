@@ -12,6 +12,7 @@ import {
   fileMove,
   fileSave,
 } from "../utilities/fileUtils/fileEventFunctions";
+import { WorkspaceConfig } from "./WorkspaceConfig";
 
 export class FileEventHandler {
   /**
@@ -187,16 +188,49 @@ export class FileEventHandler {
     document: vscode.TextDocument,
     treeDataProvider: PairedFoldersTreeDataProvider,
   ) {
-    await fileSave(document.uri)
-      .then(() => {
-        const entrySaved = treeDataProvider.findEntryByPath(
-          document.uri.fsPath,
-          FileEntrySource.local,
-        );
-        vscode.commands.executeCommand("livesync.fileEntryRefresh", entrySaved);
-      })
-      .catch((err: any) => {
-        console.error("[handleFileSave] Error : ", err);
-      });
+    const filePath = document.uri.fsPath;
+
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) {
+      console.log(
+        `<handleFileSave> Event saving ${filePath} List of workspace folders that are open in the editor is empty`,
+      );
+      return;
+    }
+
+    const isInWorkspace = workspaceFolders.some((folder) =>
+      filePath.startsWith(folder.uri.fsPath),
+    );
+    const isSettingsJson = filePath.endsWith("settings.json");
+
+    if (!isInWorkspace) {
+      console.log(
+        `<handleFileSave> Event saving ${filePath} not in workspace, we do nothing`,
+      );
+      return;
+    } else if (isSettingsJson) {
+      WorkspaceConfig.getInstance().reloadConfiguration();
+      console.log(
+        `<handleFileSave> Event saving ${filePath}, reloaded WorkspaceConfig`,
+      );
+      return;
+    } else {
+      console.log(`<handleFileSave> Event saving ${filePath}`);
+
+      await fileSave(document.uri)
+        .then(() => {
+          const entrySaved = treeDataProvider.findEntryByPath(
+            filePath,
+            FileEntrySource.local,
+          );
+          vscode.commands.executeCommand(
+            "livesync.fileEntryRefresh",
+            entrySaved,
+          );
+        })
+        .catch((err: any) => {
+          console.error("[handleFileSave] Error : ", err);
+        });
+    }
   }
 }

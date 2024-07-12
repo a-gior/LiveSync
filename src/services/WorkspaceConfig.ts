@@ -5,7 +5,7 @@ import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage
 
 export class WorkspaceConfig {
   private static instance: WorkspaceConfig;
-  private static _workspaceConfig: ConfigurationState;
+  private static _workspaceConfig: ConfigurationState | undefined;
 
   static getInstance(): WorkspaceConfig {
     if (!WorkspaceConfig.instance) {
@@ -37,6 +37,8 @@ export class WorkspaceConfig {
     const actionOnCreate = config.get<string>("actionOnCreate");
     const actionOnMove = config.get<string>("actionOnMove");
 
+    const ignoreList = config.get<string[]>("ignore");
+
     const workspaceConfig: ConfigurationState = {};
 
     // Return null if any value is empty or undefined
@@ -62,6 +64,10 @@ export class WorkspaceConfig {
         actionOnDelete: actionOnDelete,
         actionOnMove: actionOnMove,
       };
+    }
+
+    if (ignoreList) {
+      workspaceConfig.ignoreList = ignoreList;
     }
 
     WorkspaceConfig._workspaceConfig = workspaceConfig;
@@ -102,5 +108,11 @@ export class WorkspaceConfig {
   async update(paramName: string, value: any) {
     const config = workspace.getConfiguration("LiveSync");
     await config.update(paramName, value, ConfigurationTarget.Workspace);
+    this.reloadConfiguration();
+  }
+
+  reloadConfiguration() {
+    WorkspaceConfig._workspaceConfig = undefined;
+    this.getWorkspaceConfiguration();
   }
 }

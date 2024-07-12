@@ -11,6 +11,7 @@ import { getCorrespondingPath } from "./filePathUtils";
 import { ConnectionManager } from "../../services/ConnectionManager";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import pLimit = require("p-limit");
+import { LogManager } from "../../services/LogManager";
 
 // Set a limit for the number of concurrent file operations, from 10 onwards triggers a warning for too much event listeners
 const limit = pLimit(9);
@@ -31,11 +32,13 @@ async function createRemoteDirectories(
     if (entry.listChildren().length === 0) {
       if (entry.isDirectory()) {
         await sftpClient.getClient().mkdir(remotePath, true);
+        LogManager.log(`SFTP Created Dir ${remotePath}`);
       } else {
         const parentDirPath = path.dirname(remotePath);
         if (lastParentDir !== parentDirPath) {
           lastParentDir = parentDirPath;
           await sftpClient.getClient().mkdir(parentDirPath, true);
+          LogManager.log(`SFTP Created Dir ${remotePath}`);
         }
         filePaths.push({ localPath: entry.fullPath, remotePath });
       }
@@ -59,6 +62,7 @@ async function uploadFilesWithLimit(
   const uploadFile = async (localPath: string, remotePath: string) => {
     try {
       await sftpClient.getClient().fastPut(localPath, remotePath);
+      LogManager.log(`SFTP Upload ${localPath} ➜ ${remotePath}`);
     } catch (err) {
       console.error(`Failed to upload ${localPath} to ${remotePath}`, err);
     }
@@ -82,7 +86,7 @@ export async function uploadDirectory(rootEntry: FileEntry) {
 
       // Step 2: Upload files with concurrency limits
       await uploadFilesWithLimit(sftpClient, filePaths);
-    });
+    }, `Upload Dir ${rootEntry.fullPath}`);
   } catch (error: any) {
     console.error(`Failed to upload directory: ${error.message}`);
     window.showErrorMessage(`Failed to upload directory: ${error.message}`);
@@ -156,7 +160,7 @@ export async function downloadDirectory(remoteEntry: FileEntry) {
 
       // Step 2: Download files with concurrency limits
       await downloadFilesWithLimit(sftpClient, filePaths);
-    });
+    }, `Download Dir ${remoteEntry.fullPath}`);
   } catch (error: any) {
     console.error(`Failed to download directory: ${error.message}`);
     window.showErrorMessage(`Failed to download directory: ${error.message}`);
@@ -191,7 +195,7 @@ export async function deleteRemoteDirectory(
         }
       }
       await sftpClient.getClient().rmdir(remoteDir);
-    });
+    }, `Delete Dir ${fileEntry.fullPath}`);
   } catch (error: any) {
     console.error(`Failed to delete remote directory: ${error.message}`);
     window.showErrorMessage(

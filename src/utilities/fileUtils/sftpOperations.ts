@@ -24,7 +24,7 @@ export async function downloadRemoteFile(
       const dir = path.dirname(localTmpPath);
       await fs.promises.mkdir(dir, { recursive: true });
       await sftpClient.getClient().fastGet(remotePath, localTmpPath);
-    });
+    }, `Download ${remotePath}`);
   } catch (error: any) {
     console.error(`Failed to download file: ${error.message}`);
     window.showErrorMessage(`Failed to download file: ${error.message}`);
@@ -50,7 +50,7 @@ export async function uploadFile(
         }
       }
       await sftpClient.getClient().fastPut(localPath, remotePath);
-    });
+    }, `Upload to ${remotePath}`);
   } catch (error: any) {
     console.error(`Failed to upload file: ${error.message}`);
     window.showErrorMessage(`Failed to upload file: ${error.message}`);
@@ -148,7 +148,7 @@ export async function moveRemoteFile(
   try {
     await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
       await sftpClient.getClient().rename(oldRemotePath, newRemotePath);
-    });
+    }, `Move file from ${oldRemotePath} to ${newRemotePath}`);
   } catch (error: any) {
     console.error(`Failed to move remote file: ${error.message}`);
     window.showErrorMessage(`Failed to move remote file: ${error.message}`);
@@ -163,7 +163,7 @@ export async function deleteRemoteFile(remotePath: string): Promise<void> {
   try {
     await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
       await sftpClient.getClient().delete(remotePath);
-    });
+    }, `Delete ${remotePath}`);
   } catch (error: any) {
     console.error(`Failed to delete remote file: ${error.message}`);
     window.showErrorMessage(`Failed to delete remote file: ${error.message}`);
