@@ -32,14 +32,14 @@ suite("LiveSync Configuration Command Tests", () => {
     assert.equal(testResult, true, "Test Connection is KO");
 
     // Save Configuration
-    const currentConfig = WorkspaceConfig.getInstance().getAll();
+    const currentConfig = WorkspaceConfig.getAll();
     assert.equal(currentConfig, null, "Initial Config isnt null");
     try {
       await ConfigurationPanel.saveRemoteServerConfiguration(configurationTest);
     } catch (err: any) {
       console.log("Error updating config: ", err.message);
     }
-    const updatedConfig = WorkspaceConfig.getInstance().getAll();
+    const updatedConfig = WorkspaceConfig.getAll();
 
     assert.deepEqual(
       updatedConfig?.configuration,

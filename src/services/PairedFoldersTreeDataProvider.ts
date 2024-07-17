@@ -3,7 +3,6 @@ import * as path from "path";
 import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 import {
   FileEntry,
-  FileEntrySource,
   FileEntryStatus,
   FileEntryType,
 } from "../utilities/FileEntry";
@@ -47,7 +46,7 @@ export class PairedFoldersTreeDataProvider
 
   private rootElements: FileEntry[] = [];
   readonly workspaceConfiguration: ConfigurationState =
-    WorkspaceConfig.getInstance().getAll();
+    WorkspaceConfig.getAll();
 
   private fileEntryManager: FileEntryManager;
 
@@ -152,20 +151,20 @@ export class PairedFoldersTreeDataProvider
 
         if (!comparisonEntries || comparisonEntries.size === 0) {
           let rootFileEntries: FileEntry[] = [];
-          const pairedFolders =
-            WorkspaceConfig.getInstance().getPairedFoldersConfigured();
+          const pairedFolders = WorkspaceConfig.getPairedFoldersConfigured();
 
           for (const { localPath, remotePath } of pairedFolders) {
-            const rootName: string = `[local] ${path.basename(localPath)} / ${path.basename(remotePath)} [remote]`;
             ensureDirectoryExists(SAVE_DIR);
             const children: Map<string, FileEntry> =
               await this.getDirectoriesComparison(localPath, remotePath);
             let workspaceEntry = children.get(path.basename(localPath));
             if (workspaceEntry instanceof FileEntry) {
-              await FileEntryManager.getInstance().updateJsonFileEntry(
+              await this.fileEntryManager.updateJsonFileEntry(
                 workspaceEntry,
                 JsonType.COMPARE,
               );
+
+              const rootName: string = `[local] ${path.basename(localPath)} / ${path.basename(remotePath)} [remote]`;
               workspaceEntry.name = rootName;
               rootFileEntries.push(workspaceEntry);
             } else {
@@ -197,20 +196,24 @@ export class PairedFoldersTreeDataProvider
     remoteDir: string,
   ): Promise<Map<string, FileEntry>> {
     try {
-      const localFiles = await listLocalFilesRecursive(localDir);
-      const remoteFiles = await listRemoteFilesRecursive(remoteDir);
       console.log(`Comparing Directories...`);
 
-      await FileEntryManager.getInstance().updateJsonFileEntry(
+      const localFiles = await listLocalFilesRecursive(localDir);
+      console.log("Saving JSON LOCAL: ", localFiles);
+      await this.fileEntryManager.updateJsonFileEntry(
         localFiles,
         JsonType.LOCAL,
       );
-      await FileEntryManager.getInstance().updateJsonFileEntry(
+
+      const remoteFiles = await listRemoteFilesRecursive(remoteDir);
+      console.log("Saving JSON REMOTE: ", localFiles);
+      await this.fileEntryManager.updateJsonFileEntry(
         remoteFiles,
         JsonType.REMOTE,
       );
 
       const compareFiles = await compareLocalAndRemote(localFiles, remoteFiles);
+
       return compareFiles;
     } catch (error) {
       console.error("Error:", error);
@@ -220,10 +223,9 @@ export class PairedFoldersTreeDataProvider
 
   findEntryByPath(
     filePath: string,
-    fileSource: FileEntrySource,
     rootEntries: FileEntry[] = this.rootElements,
   ): FileEntry | undefined {
-    const relativePath = getRelativePath(filePath, fileSource);
+    const relativePath = getRelativePath(filePath);
     if (!relativePath) {
       return undefined;
     }

@@ -4,8 +4,7 @@ import { downloadRemoteFile } from "./sftpOperations";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 
 export async function handleFileDownload(fileEntry: any) {
-  const configuration =
-    WorkspaceConfig.getInstance().getRemoteServerConfigured();
+  const configuration = WorkspaceConfig.getRemoteServerConfigured();
 
   const remotePath = fileEntry.fullPath;
   const localPath = getCorrespondingPath(remotePath);

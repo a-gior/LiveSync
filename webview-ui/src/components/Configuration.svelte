@@ -214,8 +214,8 @@
     let tabs = [];
 
     $: configurationFormStore.setRemoteServerConfigFormData(remoteServerConfigFormData);
-    $: {configurationFormStore.setPairFolderFormData(pairFolderFormData);console.log("pairFolderFormData", pairFolderFormData);}
-    $: configurationFormStore.setFileEventActions(fileEventActions);
+    $: configurationFormStore.setPairFolderFormData(pairFolderFormData);
+    $: {configurationFormStore.setFileEventActions(fileEventActions);console.log("Reactive statement fileEventActions :", fileEventActions);}
     $: configurationFormStore.setPatterns(patterns);
 
     // Function to add new pair folders
@@ -290,18 +290,10 @@
                 actionOnMove,
             } = confState.fileEventActions;
 
-            fileEventActions.formGroups[
-                "file-event-actions-form-group-0"
-            ].fields[0].value = actionOnSave;
-            fileEventActions.formGroups[
-                "file-event-actions-form-group-0"
-            ].fields[1].value = actionOnCreate;
-            fileEventActions.formGroups[
-                "file-event-actions-form-group-0"
-            ].fields[2].value = actionOnDelete;
-            fileEventActions.formGroups[
-                "file-event-actions-form-group-0"
-            ].fields[3].value = actionOnMove;
+            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[0].value = actionOnSave;
+            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[1].value = actionOnCreate;
+            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[2].value = actionOnDelete;
+            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[3].value = actionOnMove;
         }
 
         if (confState.ignoreList) {
@@ -336,7 +328,7 @@
         
         configurationFormStore.remoteServerConfigFormStore.subscribe(value => remoteServerConfigFormData = value);
         configurationFormStore.pairFolderFormStore.subscribe(value => pairFolderFormData = value);
-        configurationFormStore.fileEventActionsStore.subscribe(value => fileEventActions = value);
+        configurationFormStore.fileEventActionsStore.subscribe(value => {fileEventActions = value;console.log("subcription fileEventActionsStore", fileEventActions);});
         configurationFormStore.patternsStore.subscribe(value => patterns = value);
 
         const previousState: ConfigurationState = vscode.getState();

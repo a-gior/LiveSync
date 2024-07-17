@@ -58,7 +58,7 @@ export class ConfigurationPanel extends Panel {
 
     const allWorkspaceConfig: FullConfigurationMessage = {
       command: "setInitialConfiguration",
-      ...WorkspaceConfig.getInstance().getAll(),
+      ...WorkspaceConfig.getAll(),
     };
     this.currentPanel?.getPanel().webview.postMessage(allWorkspaceConfig);
   }
@@ -67,8 +67,7 @@ export class ConfigurationPanel extends Panel {
     pairedFoldersArr: PairFoldersMessage["paths"][],
   ) {
     console.log("pairedFoldersArr", pairedFoldersArr);
-    const workspaceConfig = WorkspaceConfig.getInstance();
-    const configuration = workspaceConfig.getRemoteServerConfigured();
+    const configuration = WorkspaceConfig.getRemoteServerConfigured();
     // const pairedFolders = workspaceConfig.getPairedFoldersConfigured();
 
     const connectionManager = ConnectionManager.getInstance(configuration);
@@ -95,7 +94,7 @@ export class ConfigurationPanel extends Panel {
       }, "Saving PairedFolders")
       .then(async () => {
         // All good so we update the pairedFolders config
-        await workspaceConfig.update("pairedFolders", pairedFoldersArr);
+        await WorkspaceConfig.update("pairedFolders", pairedFoldersArr);
         console.log("Paired Folders are saved");
         window.showInformationMessage("Paired Folders are valid and saved");
       });
@@ -105,12 +104,11 @@ export class ConfigurationPanel extends Panel {
     actions: FileEventActionsMessage["actions"],
   ) {
     console.log("saveActions", actions);
-    const workspaceConfig = WorkspaceConfig.getInstance();
     if (actions) {
-      await workspaceConfig.update("actionOnSave", actions.actionOnSave);
-      await workspaceConfig.update("actionOnCreate", actions.actionOnCreate);
-      await workspaceConfig.update("actionOnDelete", actions.actionOnDelete);
-      await workspaceConfig.update("actionOnMove", actions.actionOnMove);
+      await WorkspaceConfig.update("actionOnSave", actions.actionOnSave);
+      await WorkspaceConfig.update("actionOnCreate", actions.actionOnCreate);
+      await WorkspaceConfig.update("actionOnDelete", actions.actionOnDelete);
+      await WorkspaceConfig.update("actionOnMove", actions.actionOnMove);
 
       console.log("File event actions saved successfully.");
       window.showInformationMessage("File event actions saved.");
@@ -127,7 +125,6 @@ export class ConfigurationPanel extends Panel {
   ) {
     if (configuration) {
       const connectionManager = ConnectionManager.getInstance(configuration);
-      const workspaceConfig = WorkspaceConfig.getInstance();
 
       connectionManager
         .doSSHOperation(async (sshClient: SSHClient) => {
@@ -137,12 +134,12 @@ export class ConfigurationPanel extends Panel {
           const { hostname, port, username, authMethod, password, sshKey } =
             configuration;
 
-          await workspaceConfig.update("hostname", hostname);
-          await workspaceConfig.update("port", port);
-          await workspaceConfig.update("username", username);
-          await workspaceConfig.update("authMethod", authMethod);
-          await workspaceConfig.update("password", password);
-          await workspaceConfig.update("sshKey", sshKey);
+          await WorkspaceConfig.update("hostname", hostname);
+          await WorkspaceConfig.update("port", port);
+          await WorkspaceConfig.update("username", username);
+          await WorkspaceConfig.update("authMethod", authMethod);
+          await WorkspaceConfig.update("password", password);
+          await WorkspaceConfig.update("sshKey", sshKey);
 
           console.log("Remote server configuration saved successfully.");
           window.showInformationMessage("Remote server configuration saved.");
@@ -163,11 +160,10 @@ export class ConfigurationPanel extends Panel {
 
   static async saveIgnoreList(ignoreList: IgnoreListMessage["ignoreList"]) {
     console.log(`<saveIgnoreList> list: `, ignoreList);
-    const workspaceConfig = WorkspaceConfig.getInstance();
 
     if (ignoreList) {
       try {
-        await workspaceConfig.update("ignore", ignoreList);
+        await WorkspaceConfig.update("ignore", ignoreList);
         console.log("Ignore list saved successfully.");
         window.showInformationMessage("Ignore list saved successfully.");
       } catch (error) {

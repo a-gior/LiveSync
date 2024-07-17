@@ -1,8 +1,8 @@
 import * as crypto from "crypto";
-import { createReadStream } from "fs";
+import { stat, createReadStream } from "fs";
 import { FileEntrySource, FileEntryType } from "../FileEntry";
 import { getRelativePath } from "./filePathUtils";
-import { getRemoteHash } from "./sftpOperations";
+import { getRemoteFileContentHash } from "./sftpOperations";
 
 export function generateHashFile(
   name: string,
@@ -24,7 +24,7 @@ export async function generateHash(
     return "";
   }
 
-  const relativePath = getRelativePath(filePath, fileSource);
+  const relativePath = getRelativePath(filePath);
 
   if (!relativePath && relativePath !== "") {
     throw new Error(
@@ -48,7 +48,7 @@ export async function generateHash(
         });
       });
     } else {
-      fileContentHash = (await getRemoteHash(filePath)) || "";
+      fileContentHash = (await getRemoteFileContentHash(filePath)) || "";
     }
   }
 
@@ -58,4 +58,47 @@ export async function generateHash(
   const filehash = hash.digest("hex");
 
   return filehash;
+}
+
+export function generateHash2(
+  fullPath: string,
+  fileType: FileEntryType,
+  fileContentHash: string,
+) {
+  const relativePath = getRelativePath(fullPath);
+  const hash = crypto.createHash("sha256");
+  // console.log(`Creating hash with fileContentHash: ${fileContentHash}`);
+  hash.update(`${relativePath}${fileType}${fileContentHash}`);
+  const filehash = hash.digest("hex");
+
+  return filehash;
+}
+
+export async function getLocalFileHash(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    // Check if the path is a directory
+    stat(filePath, (err, stats) => {
+      if (err) {
+        return reject(`Error reading file stats: ${err.message}`);
+      }
+
+      if (stats.isDirectory()) {
+        return resolve("");
+      }
+
+      const hash = crypto.createHash("sha256");
+      const stream = createReadStream(filePath);
+
+      stream.on("data", (data) => hash.update(data));
+
+      stream.on("end", () => {
+        const fileHash = hash.digest("hex");
+        resolve(fileHash);
+      });
+
+      stream.on("error", (err) => {
+        reject(`Error reading file: ${err.message}`);
+      });
+    });
+  });
 }

@@ -17,8 +17,7 @@ export function normalizePath(p: string): string {
 
 export function getCorrespondingPath(inputPath: string): string {
   const normalizedInputPath = normalizePath(inputPath);
-  const pairedFolders =
-    WorkspaceConfig.getInstance().getPairedFoldersConfigured();
+  const pairedFolders = WorkspaceConfig.getPairedFoldersConfigured();
 
   for (const folder of pairedFolders) {
     // Check if the inputPath is a local path
@@ -51,26 +50,16 @@ export function isRootPath(
   );
 }
 
-export function getRelativePath(
-  fullPath: string,
-  fileSource: FileEntrySource,
-): string {
-  const pairedFolders =
-    WorkspaceConfig.getInstance().getPairedFoldersConfigured();
+export function getRelativePath(fullPath: string): string {
+  const pairedFolders = WorkspaceConfig.getPairedFoldersConfigured();
   const normalizedTargetPath = normalizePath(fullPath);
 
   for (const folder of pairedFolders) {
-    if (
-      fileSource === FileEntrySource.local &&
-      normalizedTargetPath.startsWith(normalizePath(folder.localPath))
-    ) {
+    if (normalizedTargetPath.startsWith(normalizePath(folder.localPath))) {
       return path.relative(folder.localPath, fullPath);
     }
 
-    if (
-      fileSource === FileEntrySource.remote &&
-      normalizedTargetPath.startsWith(normalizePath(folder.remotePath))
-    ) {
+    if (normalizedTargetPath.startsWith(normalizePath(folder.remotePath))) {
       return path.relative(folder.remotePath, fullPath);
     }
   }

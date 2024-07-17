@@ -6,8 +6,7 @@ import { getCorrespondingPath } from "./filePathUtils";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 
 export async function showDiff(fileEntry: FileEntry) {
-  const configuration =
-    WorkspaceConfig.getInstance().getRemoteServerConfigured();
+  const configuration = WorkspaceConfig.getRemoteServerConfigured();
 
   const localFilePath = fileEntry.fullPath;
   const remoteFilePath = getCorrespondingPath(localFilePath);

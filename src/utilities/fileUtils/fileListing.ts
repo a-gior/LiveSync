@@ -9,6 +9,9 @@ import pLimit = require("p-limit");
 import { ConnectionManager } from "../../services/ConnectionManager";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import { LogManager } from "../../services/LogManager";
+import { shouldIgnore } from "../shouldIgnore";
+import { generateHash2, getLocalFileHash } from "./hashUtils";
+import { StatusBarManager } from "../../services/StatusBarManager";
 
 // Set a limit for the number of concurrent file operations, from 10 onwards triggers a warning for too much event listeners
 const limit = pLimit(9);
@@ -18,17 +21,18 @@ export async function listRemoteFilesRecursive(
 ): Promise<FileEntry> {
   console.log(`Listing remote ${remoteDir} recursively...`);
 
-  const configuration =
-    WorkspaceConfig.getInstance().getRemoteServerConfigured();
+  const configuration = WorkspaceConfig.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   try {
     return await connectionManager.doSSHOperation(async (sshClient) => {
       /**
+       * Commands to get the list of files
+       * find "${remoteDir}" -exec stat --format='%n,%s,%Y,%F' {} \\;
        * Commands to also get hash on the following line for files
-       * find /home/centos/test-workspace/ -exec sh -c 'if [ -d "$1" ]; then stat --format="%n,%s,%Y,%F," "$1"; else stat --format="%n,%s,%Y,%F" "$1" && sha256sum "$1" | awk "{printf \\"%s\\", \$1}"; fi' sh {} \;
+       * find "${remoteDir}" -exec sh -c 'if [ -d "$1" ]; then stat --format="%n,%s,%Y,%F," "$1"; else stat --format="%n,%s,%Y,%F" "$1" && sha256sum "$1" | awk "{printf \\"%s\\\n\\", \\$1}"; fi' sh {} \\;
        */
-      const command = `find "${remoteDir}" -exec stat --format='%n,%s,%Y,%F' {} \\;`;
+      const command = `find "${remoteDir}" -exec sh -c 'if [ -d "$1" ]; then stat --format="%n,%s,%Y,%F," "$1"; else stat --format="%n,%s,%Y,%F" "$1" && sha256sum "$1" | awk "{printf \\"%s\\\\n\\", \\\$1}"; fi' sh {} \\;`;
       const output = await sshClient.executeCommand(command);
 
       const lines = output.trim().split("\n");
@@ -47,10 +51,20 @@ export async function listRemoteFilesRecursive(
       // Process each line to build the tree
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i];
+        // Skip lines with only hash (result of skipping lines when ignored)
+        if (line.split(",").length <= 1) {
+          console.error("Skipping line: ", line);
+          continue;
+        }
         const [fullPath, size, modifyTime, type] = line.split(",");
-        LogManager.log(`List ${fullPath}`);
+
         const entryType =
           type === "directory" ? FileEntryType.directory : FileEntryType.file;
+
+        if (shouldIgnore(fullPath)) {
+          continue;
+        }
+        LogManager.log(`[${i}] List ${fullPath}`);
 
         const newEntry = new FileEntry(
           path.basename(fullPath),
@@ -60,6 +74,13 @@ export async function listRemoteFilesRecursive(
           FileEntrySource.remote,
           fullPath,
         );
+
+        let hash = "";
+        if (entryType === FileEntryType.file) {
+          // Get the hash from the next line if it's a file
+          hash = lines[++i];
+        }
+        newEntry.hash = generateHash2(fullPath, entryType, hash);
 
         const relativePath = path.relative(rootFullPath, fullPath);
         const pathParts = relativePath.split(path.sep);
@@ -96,6 +117,14 @@ export async function listLocalFilesRecursive(
   localDir: string,
 ): Promise<FileEntry> {
   console.log(`Listing local ${localDir} recursively...`);
+  StatusBarManager.showMessage(
+    `Listing files of ${localDir}`,
+    "",
+    "",
+    0,
+    "sync~spin",
+    true,
+  );
 
   const rootEntry = new FileEntry(
     path.basename(localDir),
@@ -114,6 +143,10 @@ export async function listLocalFilesRecursive(
       continue;
     }
 
+    if (shouldIgnore(currentEntry.fullPath)) {
+      continue;
+    }
+
     const currentDir = currentEntry.fullPath;
     const files = await fs.readdir(currentDir, { withFileTypes: true });
 
@@ -122,30 +155,35 @@ export async function listLocalFilesRecursive(
         const filePath = path.join(currentDir, file.name);
         const normalizedFilePath = path.normalize(filePath);
 
+        if (shouldIgnore(normalizedFilePath)) {
+          return;
+        }
+
         const stats = await fs.stat(normalizedFilePath);
+        const entryType = file.isDirectory()
+          ? FileEntryType.directory
+          : FileEntryType.file;
+
+        const newEntry = new FileEntry(
+          file.name,
+          entryType,
+          stats.size,
+          stats.mtime,
+          FileEntrySource.local,
+          normalizedFilePath,
+        );
+        const hashContent = await getLocalFileHash(normalizedFilePath);
+        newEntry.hash = generateHash2(
+          normalizedFilePath,
+          entryType,
+          hashContent,
+        );
 
         if (file.isDirectory()) {
-          const dirEntry = new FileEntry(
-            file.name,
-            FileEntryType.directory,
-            stats.size,
-            stats.mtime,
-            FileEntrySource.local,
-            normalizedFilePath,
-          );
-          currentEntry.addChild(dirEntry);
-          stack.push(dirEntry); // Add directory to stack for further processing
+          currentEntry.addChild(newEntry);
+          stack.push(newEntry); // Add directory to stack for further processing
         } else {
-          currentEntry.addChild(
-            new FileEntry(
-              file.name,
-              FileEntryType.file,
-              stats.size,
-              stats.mtime,
-              FileEntrySource.local,
-              normalizedFilePath,
-            ),
-          );
+          currentEntry.addChild(newEntry);
         }
       }),
     );

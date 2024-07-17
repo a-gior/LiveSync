@@ -11,8 +11,7 @@ import * as path from "path";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 
 export async function fileSave(uri: Uri) {
-  const actionOnSave =
-    WorkspaceConfig.getInstance().getParameter("actionOnSave");
+  const actionOnSave = WorkspaceConfig.getParameter("actionOnSave");
 
   if (actionOnSave !== "none") {
     const localPath = uri.fsPath;
@@ -63,10 +62,8 @@ export async function fileSave(uri: Uri) {
 }
 
 export async function fileMove(oldUri: Uri, newUri: Uri) {
-  const configuration =
-    WorkspaceConfig.getInstance().getRemoteServerConfigured();
-  const actionOnMove =
-    WorkspaceConfig.getInstance().getParameter("actionOnMove");
+  const configuration = WorkspaceConfig.getRemoteServerConfigured();
+  const actionOnMove = WorkspaceConfig.getParameter("actionOnMove");
 
   if (actionOnMove !== "none") {
     const localPathOld = oldUri.fsPath;
@@ -118,8 +115,7 @@ export async function fileMove(oldUri: Uri, newUri: Uri) {
 }
 
 export async function fileDelete(uri: Uri) {
-  const actionOnDelete =
-    WorkspaceConfig.getInstance().getParameter("actionOnDelete");
+  const actionOnDelete = WorkspaceConfig.getParameter("actionOnDelete");
 
   if (actionOnDelete !== "none") {
     const localPath = uri.fsPath;
@@ -162,8 +158,7 @@ export async function fileDelete(uri: Uri) {
 }
 
 export async function fileCreate(uri: Uri) {
-  const actionOnCreate =
-    WorkspaceConfig.getInstance().getParameter("actionOnCreate");
+  const actionOnCreate = WorkspaceConfig.getParameter("actionOnCreate");
 
   if (actionOnCreate !== "none") {
     const localPath = uri.fsPath;

@@ -75,8 +75,7 @@ async function uploadFilesWithLimit(
 }
 
 export async function uploadDirectory(rootEntry: FileEntry) {
-  const configuration =
-    WorkspaceConfig.getInstance().getRemoteServerConfigured();
+  const configuration = WorkspaceConfig.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   try {
@@ -149,8 +148,7 @@ async function downloadFilesWithLimit(
 }
 
 export async function downloadDirectory(remoteEntry: FileEntry) {
-  const configuration =
-    WorkspaceConfig.getInstance().getRemoteServerConfigured();
+  const configuration = WorkspaceConfig.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   try {
@@ -170,8 +168,7 @@ export async function downloadDirectory(remoteEntry: FileEntry) {
 export async function deleteRemoteDirectory(
   fileEntry: FileEntry,
 ): Promise<void> {
-  const configuration =
-    WorkspaceConfig.getInstance().getRemoteServerConfigured();
+  const configuration = WorkspaceConfig.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   try {

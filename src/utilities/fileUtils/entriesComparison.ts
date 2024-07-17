@@ -4,7 +4,6 @@ import {
   FileEntryStatus,
   FileEntryType,
 } from "../FileEntry";
-import { generateHash } from "./hashUtils";
 import { workspace } from "vscode";
 import { getCorrespondingPath } from "./filePathUtils";
 import {
@@ -51,16 +50,7 @@ async function compareEntries(
       localEntry.type === FileEntryType.file &&
       remoteEntry.type === FileEntryType.file
     ) {
-      const [localHash, remoteHash] = await Promise.all([
-        generateHash(localEntry.fullPath, localEntry.source, localEntry.type),
-        generateHash(
-          remoteEntry.fullPath,
-          remoteEntry.source,
-          remoteEntry.type,
-        ),
-      ]);
-
-      if (localHash !== remoteHash) {
+      if (localEntry.hash !== remoteEntry.hash) {
         currentEntry.updateStatus(FileEntryStatus.modified);
         parent.updateStatus(FileEntryStatus.modified);
       } else {

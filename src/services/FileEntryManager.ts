@@ -114,10 +114,7 @@ export default class FileEntryManager {
     const jsonFileName = this.getJsonFileName(jsonType);
 
     if (fileEntriesMap && jsonFileName) {
-      const relativePath = getRelativePath(
-        fileEntry.fullPath,
-        fileEntry.source,
-      );
+      const relativePath = getRelativePath(fileEntry.fullPath);
 
       this.updateEntryInJson(
         fileEntriesMap,

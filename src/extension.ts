@@ -4,11 +4,7 @@ import * as vscode from "vscode";
 import { ConfigurationPanel } from "./panels/ConfigurationPanel";
 import { PairedFoldersTreeDataProvider } from "./services/PairedFoldersTreeDataProvider";
 import { FileStatusDecorationProvider } from "./services/FileDecorationProvider";
-import {
-  FileEntry,
-  FileEntrySource,
-  FileEntryStatus,
-} from "./utilities/FileEntry";
+import { FileEntry, FileEntryStatus } from "./utilities/FileEntry";
 import { showDiff } from "./utilities/fileUtils/fileDiff";
 import { fileSave } from "./utilities/fileUtils/fileEventFunctions";
 import { handleFileDownload } from "./utilities/fileUtils/fileDownload";
@@ -97,13 +93,11 @@ export function activate(context: vscode.ExtensionContext) {
             element.status = FileEntryStatus.added;
             const parentEntry = pairedFoldersTreeDataProvider.findEntryByPath(
               path.dirname(element.fullPath),
-              FileEntrySource.local,
             );
             pairedFoldersTreeDataProvider.addElement(element, parentEntry);
           } else if (element.status === FileEntryStatus.deleted) {
             const parentEntry = pairedFoldersTreeDataProvider.findEntryByPath(
               path.dirname(element.fullPath),
-              FileEntrySource.local,
             );
             element.status = FileEntryStatus.removed;
             pairedFoldersTreeDataProvider.removeElement(element, parentEntry);

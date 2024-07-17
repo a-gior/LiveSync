@@ -2,19 +2,12 @@ import { workspace, window, ConfigurationTarget } from "vscode";
 import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 import { PairFoldersMessage } from "@shared/DTOs/messages/PairFoldersMessage";
 import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
+import { IgnoreListMessage } from "../DTOs/messages/IgnoreListMessage";
 
 export class WorkspaceConfig {
-  private static instance: WorkspaceConfig;
   private static _workspaceConfig: ConfigurationState | undefined;
 
-  static getInstance(): WorkspaceConfig {
-    if (!WorkspaceConfig.instance) {
-      WorkspaceConfig.instance = new WorkspaceConfig();
-    }
-    return WorkspaceConfig.instance;
-  }
-
-  getWorkspaceConfiguration(): ConfigurationState {
+  static getWorkspaceConfiguration(): ConfigurationState {
     if (WorkspaceConfig._workspaceConfig) {
       return WorkspaceConfig._workspaceConfig;
     }
@@ -74,7 +67,7 @@ export class WorkspaceConfig {
     return workspaceConfig;
   }
 
-  getRemoteServerConfigured(): ConfigurationMessage["configuration"] {
+  static getRemoteServerConfigured(): ConfigurationMessage["configuration"] {
     const workspaceConfig = this.getWorkspaceConfiguration();
 
     if (!workspaceConfig["configuration"]) {
@@ -85,7 +78,7 @@ export class WorkspaceConfig {
     return workspaceConfig["configuration"];
   }
 
-  getPairedFoldersConfigured(): PairFoldersMessage["paths"][] {
+  static getPairedFoldersConfigured(): PairFoldersMessage["paths"][] {
     const workspaceConfig = this.getWorkspaceConfiguration();
 
     if (!workspaceConfig["pairedFolders"]) {
@@ -96,22 +89,33 @@ export class WorkspaceConfig {
     return workspaceConfig["pairedFolders"];
   }
 
-  getAll() {
+  static getIgnoreList(): IgnoreListMessage["ignoreList"] {
+    const workspaceConfig = this.getWorkspaceConfiguration();
+
+    if (!workspaceConfig["ignoreList"]) {
+      window.showErrorMessage("Ignore List not configured");
+      throw Error("Ignore List not configured");
+    }
+
+    return workspaceConfig["ignoreList"];
+  }
+
+  static getAll() {
     return this.getWorkspaceConfiguration();
   }
 
-  getParameter(paramName: string) {
+  static getParameter(paramName: string) {
     const config = workspace.getConfiguration("LiveSync");
     return config.get<string>(paramName);
   }
 
-  async update(paramName: string, value: any) {
+  static async update(paramName: string, value: any) {
     const config = workspace.getConfiguration("LiveSync");
     await config.update(paramName, value, ConfigurationTarget.Workspace);
     this.reloadConfiguration();
   }
 
-  reloadConfiguration() {
+  static reloadConfiguration() {
     WorkspaceConfig._workspaceConfig = undefined;
     this.getWorkspaceConfiguration();
   }

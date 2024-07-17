@@ -1,10 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import {
-  FileEntry,
-  FileEntryStatus,
-  FileEntrySource,
-} from "../utilities/FileEntry";
+import { FileEntry, FileEntryStatus } from "../utilities/FileEntry";
 import { PairedFoldersTreeDataProvider } from "./PairedFoldersTreeDataProvider";
 
 import {
@@ -98,7 +94,6 @@ export class FileEventHandler {
         .then(() => {
           const entryToRemove = treeDataProvider.findEntryByPath(
             fileUri.fsPath,
-            FileEntrySource.local,
           );
           if (entryToRemove) {
             vscode.commands.executeCommand(
@@ -127,7 +122,6 @@ export class FileEventHandler {
         .then(() => {
           const entryToRenameOrMove = treeDataProvider.findEntryByPath(
             oldUri.fsPath,
-            FileEntrySource.local,
           );
 
           if (
@@ -142,13 +136,11 @@ export class FileEventHandler {
             // Moving the entry
             const oldParentEntry = treeDataProvider.findEntryByPath(
               path.dirname(oldUri.fsPath),
-              FileEntrySource.local,
             );
             treeDataProvider.removeElement(entryToRenameOrMove, oldParentEntry);
 
             const newParentEntry = treeDataProvider.findEntryByPath(
               path.dirname(newUri.fsPath),
-              FileEntrySource.local,
             );
             treeDataProvider.addElement(entryToRenameOrMove, newParentEntry);
           }
@@ -171,7 +163,6 @@ export class FileEventHandler {
     const changedFileUri = event.document.uri;
     const changedEntry = treeDataProvider.findEntryByPath(
       changedFileUri.fsPath,
-      FileEntrySource.local,
     );
     if (changedEntry) {
       // Perform necessary updates to the changedEntry
@@ -209,7 +200,7 @@ export class FileEventHandler {
       );
       return;
     } else if (isSettingsJson) {
-      WorkspaceConfig.getInstance().reloadConfiguration();
+      WorkspaceConfig.reloadConfiguration();
       console.log(
         `<handleFileSave> Event saving ${filePath}, reloaded WorkspaceConfig`,
       );
@@ -219,10 +210,7 @@ export class FileEventHandler {
 
       await fileSave(document.uri)
         .then(() => {
-          const entrySaved = treeDataProvider.findEntryByPath(
-            filePath,
-            FileEntrySource.local,
-          );
+          const entrySaved = treeDataProvider.findEntryByPath(filePath);
           vscode.commands.executeCommand(
             "livesync.fileEntryRefresh",
             entrySaved,

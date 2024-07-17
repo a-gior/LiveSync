@@ -16,8 +16,8 @@
             inputElement.type = inputType;
         }
 
-        if(options) {
-            // Set the default value based on the options' default field
+        if(options && formField.value === '') {
+            // Set the default value based on the options' default field if value is empty
             const defaultOption = options.find(option => option.default);
             if (defaultOption) {
                 formField.value = defaultOption.value;
@@ -34,6 +34,7 @@
     $: if (inputType === 'select' && options && formField.value) {
         let selectElement = inputElement;
         if (selectElement) {
+            console.log("formField.value: ", formField.value);
             selectElement.value = formField.value;
         }
     }
