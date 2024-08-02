@@ -1,10 +1,6 @@
 import path from "path";
 import * as fs from "fs";
-import {
-  FileEntry,
-  FileEntrySource,
-  FileEntryType,
-} from "../utilities/FileEntry";
+import { FileNode, FileNodeSource, FileNodeType } from "../utilities/FileNode";
 import {
   COMPARE_FILES_JSON,
   LOCAL_FILES_JSON,
@@ -12,6 +8,7 @@ import {
   SAVE_DIR,
 } from "../utilities/constants";
 import { getRelativePath } from "../utilities/fileUtils/filePathUtils";
+import { ComparisonFileNode } from "../utilities/ComparisonFileNode";
 
 export enum JsonType {
   LOCAL = "local",
@@ -19,22 +16,22 @@ export enum JsonType {
   COMPARE = "compare",
 }
 
-export default class FileEntryManager {
-  private static instance: FileEntryManager;
-  private localFileEntries: Map<string, FileEntry> | null = null;
-  private remoteFileEntries: Map<string, FileEntry> | null = null;
-  private comparisonFileEntries: Map<string, FileEntry> | null = null;
+export default class FileNodeManager {
+  private static instance: FileNodeManager;
+  private localFileEntries: Map<string, FileNode> | null = null;
+  private remoteFileEntries: Map<string, FileNode> | null = null;
+  private comparisonFileEntries: Map<string, ComparisonFileNode> | null = null;
   private jsonLoadedPromise: Promise<void>;
 
   private constructor() {
     this.jsonLoadedPromise = this.loadJsonData();
   }
 
-  public static getInstance(): FileEntryManager {
-    if (!FileEntryManager.instance) {
-      FileEntryManager.instance = new FileEntryManager();
+  public static getInstance(): FileNodeManager {
+    if (!FileNodeManager.instance) {
+      FileNodeManager.instance = new FileNodeManager();
     }
-    return FileEntryManager.instance;
+    return FileNodeManager.instance;
   }
 
   private async loadJsonData(): Promise<void> {
@@ -53,15 +50,15 @@ export default class FileEntryManager {
 
   private async loadJsonFromFile(
     fileName: string,
-  ): Promise<Map<string, FileEntry>> {
+  ): Promise<Map<string, FileNode>> {
     const filePath = path.join(SAVE_DIR, fileName);
-    let fileEntryMap = new Map<string, FileEntry>();
+    let fileEntryMap = new Map<string, FileNode>();
     if (fs.existsSync(filePath)) {
       const fileContent = await fs.promises.readFile(filePath, "utf-8");
       const json = JSON.parse(fileContent);
       //   return new Map(Object.entries(JSON.parse(fileContent)));
       for (const entryName in json) {
-        fileEntryMap.set(entryName, FileEntry.fromJSON(json[entryName]));
+        fileEntryMap.set(entryName, FileNode.fromJSON(json[entryName]));
       }
     }
     return fileEntryMap;
@@ -69,14 +66,14 @@ export default class FileEntryManager {
 
   private async saveJsonToFile(
     fileName: string,
-    data: Map<string, FileEntry>,
+    data: Map<string, FileNode>,
   ): Promise<void> {
     const filePath = path.join(SAVE_DIR, fileName);
     const jsonContent = JSON.stringify(Object.fromEntries(data));
     await fs.promises.writeFile(filePath, jsonContent, "utf-8");
   }
 
-  public getComparisonFileEntries(): Map<string, FileEntry> | null {
+  public getComparisonFileEntries(): Map<string, FileNode> | null {
     return this.comparisonFileEntries;
   }
 
@@ -92,7 +89,9 @@ export default class FileEntryManager {
     }
   }
 
-  private getFileEntriesMap(jsonType: JsonType): Map<string, FileEntry> | null {
+  private getFileEntriesMap(
+    jsonType: JsonType,
+  ): Map<string, ComparisonFileNode> | null {
     switch (jsonType) {
       case JsonType.LOCAL:
         return this.localFileEntries;
@@ -104,8 +103,8 @@ export default class FileEntryManager {
     }
   }
 
-  public async updateJsonFileEntry(
-    fileEntry: FileEntry,
+  public async updateJsonFileNode(
+    fileEntry: ComparisonFileNode,
     jsonType: JsonType,
   ): Promise<void> {
     await this.waitForJsonLoad();
@@ -114,7 +113,7 @@ export default class FileEntryManager {
     const jsonFileName = this.getJsonFileName(jsonType);
 
     if (fileEntriesMap && jsonFileName) {
-      const relativePath = getRelativePath(fileEntry.fullPath);
+      const relativePath = fileEntry.relativePath;
 
       this.updateEntryInJson(
         fileEntriesMap,
@@ -126,9 +125,9 @@ export default class FileEntryManager {
   }
 
   private updateEntryInJson(
-    fileEntriesMap: Map<string, FileEntry>,
+    fileEntriesMap: Map<string, ComparisonFileNode>,
     pathParts: string[],
-    fileEntry: FileEntry,
+    fileEntry: ComparisonFileNode,
   ): void {
     if (pathParts.length === 1 && pathParts[0] === "") {
       // Handle the case where the fileEntry is a root entry
@@ -144,12 +143,12 @@ export default class FileEntryManager {
       } else {
         let currentEntry = fileEntriesMap.get(currentPart);
         if (!currentEntry) {
-          currentEntry = new FileEntry(
+          currentEntry = new FileNode(
             currentPart,
-            FileEntryType.directory,
+            FileNodeType.directory,
             0,
             new Date(),
-            FileEntrySource.local,
+            FileNodeSource.local,
             path.join(fileEntry.fullPath, currentPart),
           );
           fileEntriesMap.set(currentPart, currentEntry);

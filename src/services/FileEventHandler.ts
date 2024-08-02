@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { FileEntry, FileEntryStatus } from "../utilities/FileEntry";
+import { FileNode, FileNodeStatus } from "../utilities/FileNode";
 import { PairedFoldersTreeDataProvider } from "./PairedFoldersTreeDataProvider";
 
 import {
@@ -69,8 +69,8 @@ export class FileEventHandler {
     for (const fileUri of event.files) {
       fileSave(fileUri)
         .then(() => {
-          const newEntry = FileEntry.getEntryFromLocalPath(fileUri.fsPath);
-          newEntry.updateStatus(FileEntryStatus.new);
+          const newEntry = FileNode.getEntryFromLocalPath(fileUri.fsPath);
+          newEntry.updateStatus(FileNodeStatus.new);
 
           vscode.commands.executeCommand("livesync.fileEntryRefresh", newEntry);
         })

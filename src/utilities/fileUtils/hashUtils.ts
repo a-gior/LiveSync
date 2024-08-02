@@ -1,6 +1,6 @@
 import * as crypto from "crypto";
 import { stat, createReadStream } from "fs";
-import { FileEntrySource, FileEntryType } from "../FileEntry";
+import { FileNodeSource, FileNodeType } from "../FileNode";
 import { getRelativePath } from "./filePathUtils";
 import { getRemoteFileContentHash } from "./sftpOperations";
 
@@ -16,8 +16,8 @@ export function generateHashFile(
 
 export async function generateHash(
   filePath: string,
-  fileSource: FileEntrySource,
-  fileType: FileEntryType,
+  fileSource: FileNodeSource,
+  fileType: FileNodeType,
 ) {
   if (!filePath) {
     console.log("Empty parameters passed to generateHash");
@@ -34,8 +34,8 @@ export async function generateHash(
 
   let fileContentHash: string = "";
 
-  if (fileType === FileEntryType.file) {
-    if (fileSource === FileEntrySource.local) {
+  if (fileType === FileNodeType.file) {
+    if (fileSource === FileNodeSource.local) {
       fileContentHash = await new Promise<string>((resolve, reject) => {
         const hash = crypto.createHash("sha256");
         const stream = createReadStream(filePath);
@@ -62,7 +62,7 @@ export async function generateHash(
 
 export function generateHash2(
   fullPath: string,
-  fileType: FileEntryType,
+  fileType: FileNodeType,
   fileContentHash: string,
 ) {
   const relativePath = getRelativePath(fullPath);

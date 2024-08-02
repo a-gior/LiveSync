@@ -6,13 +6,12 @@ import {
   deleteRemoteFile,
   moveRemoteFile,
 } from "./sftpOperations";
-import { FileEntry } from "../FileEntry";
+import { FileNode } from "../FileNode";
 import * as path from "path";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 
+const actionOnSave = WorkspaceConfig.getParameter("actionOnSave");
 export async function fileSave(uri: Uri) {
-  const actionOnSave = WorkspaceConfig.getParameter("actionOnSave");
-
   if (actionOnSave !== "none") {
     const localPath = uri.fsPath;
     const remotePath = getCorrespondingPath(localPath);
@@ -42,7 +41,7 @@ export async function fileSave(uri: Uri) {
         );
 
         if (userResponse === "Show Diff") {
-          const fileEntry = FileEntry.getEntryFromLocalPath(localPath); // Assuming you have this function
+          const fileEntry = FileNode.getEntryFromLocalPath(localPath); // Assuming you have this function
           if (fileEntry) {
             commands.executeCommand("livesync.fileEntryShowDiff", fileEntry);
           }
@@ -55,9 +54,6 @@ export async function fileSave(uri: Uri) {
     }
 
     await uploadFile(localPath, remotePath);
-    window.showInformationMessage(
-      `File ${localPath} uploaded to ${remotePath}`,
-    );
   }
 }
 
@@ -95,7 +91,7 @@ export async function fileMove(oldUri: Uri, newUri: Uri) {
         );
 
         if (userResponse === "Show Diff") {
-          const fileEntry = FileEntry.getEntryFromLocalPath(localPathOld); // Assuming you have this function
+          const fileEntry = FileNode.getEntryFromLocalPath(localPathOld); // Assuming you have this function
           if (fileEntry) {
             commands.executeCommand("livesync.fileEntryShowDiff", fileEntry);
           }

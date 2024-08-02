@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 import { ConfigurationPanel } from "./panels/ConfigurationPanel";
 import { PairedFoldersTreeDataProvider } from "./services/PairedFoldersTreeDataProvider";
 import { FileStatusDecorationProvider } from "./services/FileDecorationProvider";
-import { FileEntry, FileEntryStatus } from "./utilities/FileEntry";
+import { FileNode, FileNodeStatus } from "./utilities/FileNode";
 import { showDiff } from "./utilities/fileUtils/fileDiff";
 import { fileSave } from "./utilities/fileUtils/fileEventFunctions";
 import { handleFileDownload } from "./utilities/fileUtils/fileDownload";
@@ -16,7 +16,7 @@ import { FileEventHandler } from "./services/FileEventHandler";
 import path from "path";
 import { StatusBarManager } from "./services/StatusBarManager";
 import { compareCorrespondingEntry } from "./utilities/fileUtils/entriesComparison";
-import { LogManager } from "./services/LogManager";
+import { logErrorMessage, LogManager } from "./services/LogManager";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -84,26 +84,26 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "livesync.fileEntryRefresh",
-      (element?: FileEntry) => {
+      (element?: FileNode) => {
         console.log(`[Refresh command] element: `, element);
         if (!element) {
           pairedFoldersTreeDataProvider.refresh();
         } else {
-          if (element.status === FileEntryStatus.new) {
-            element.status = FileEntryStatus.added;
+          if (element.status === FileNodeStatus.new) {
+            element.status = FileNodeStatus.added;
             const parentEntry = pairedFoldersTreeDataProvider.findEntryByPath(
               path.dirname(element.fullPath),
             );
             pairedFoldersTreeDataProvider.addElement(element, parentEntry);
-          } else if (element.status === FileEntryStatus.deleted) {
+          } else if (element.status === FileNodeStatus.deleted) {
             const parentEntry = pairedFoldersTreeDataProvider.findEntryByPath(
               path.dirname(element.fullPath),
             );
-            element.status = FileEntryStatus.removed;
+            element.status = FileNodeStatus.removed;
             pairedFoldersTreeDataProvider.removeElement(element, parentEntry);
           } else {
             compareCorrespondingEntry(element).then(
-              (updatedElement: FileEntry) => {
+              (updatedElement: FileNode) => {
                 console.log(
                   `[Refresh command] updatedElement: `,
                   updatedElement,
@@ -117,20 +117,24 @@ export function activate(context: vscode.ExtensionContext) {
     ),
     vscode.commands.registerCommand(
       "livesync.fileEntryShowDiff",
-      (fileEntry: FileEntry) => {
+      (fileEntry: FileNode) => {
         showDiff(fileEntry);
       },
     ),
     vscode.commands.registerCommand(
       "livesync.fileEntryUpload",
-      async (fileEntry: FileEntry) => {
+      async (fileEntry: FileNode) => {
+        console.log("FileNode Upload: ", fileEntry);
         if (fileEntry.isDirectory()) {
           await uploadDirectory(fileEntry);
         } else {
-          const document = await vscode.workspace.openTextDocument(
-            fileEntry.fullPath,
-          );
-          await fileSave(document.uri);
+          try {
+            const fileUri = vscode.Uri.file(fileEntry.fullPath);
+            await fileSave(fileUri);
+            fileEntry.status = FileNodeStatus.unchanged;
+          } catch (error: any) {
+            logErrorMessage(`Failed to read file: ${error.message}`);
+          }
         }
         vscode.commands.executeCommand("livesync.fileEntryRefresh", fileEntry);
       },

@@ -1,4 +1,4 @@
-import { FileEntry } from "../FileEntry";
+import { FileNode } from "../FileNode";
 import { loadFromFile } from "./fileOperations";
 import {
   LOCAL_FILES_PATH,
@@ -6,31 +6,31 @@ import {
   COMPARE_FILES_PATH,
 } from "../constants";
 
-async function loadFileEntry(filePath: string): Promise<FileEntry> {
+async function loadFileNode(filePath: string): Promise<FileNode> {
   const data = await loadFromFile<any>(filePath);
-  return FileEntry.fromJSON(data);
+  return FileNode.fromJSON(data);
 }
 
 async function loadCompareFiles(
   filePath: string,
-): Promise<Map<string, FileEntry>> {
+): Promise<Map<string, FileNode>> {
   const data = await loadFromFile<{ [key: string]: any }>(filePath);
   const entries = Object.entries(data).map(
-    ([key, value]) => [key, FileEntry.fromJSON(value)] as [string, FileEntry],
+    ([key, value]) => [key, FileNode.fromJSON(value)] as [string, FileNode],
   );
-  return new Map<string, FileEntry>(entries);
+  return new Map<string, FileNode>(entries);
 }
 
 // Export functions to load the specific files
-async function loadLocalFiles(): Promise<FileEntry> {
-  return loadFileEntry(LOCAL_FILES_PATH);
+async function loadLocalFiles(): Promise<FileNode> {
+  return loadFileNode(LOCAL_FILES_PATH);
 }
 
-async function loadRemoteFiles(): Promise<FileEntry> {
-  return loadFileEntry(REMOTE_FILES_PATH);
+async function loadRemoteFiles(): Promise<FileNode> {
+  return loadFileNode(REMOTE_FILES_PATH);
 }
 
-async function loadCompareFilesData(): Promise<Map<string, FileEntry>> {
+async function loadCompareFilesData(): Promise<Map<string, FileNode>> {
   return loadCompareFiles(COMPARE_FILES_PATH);
 }
 

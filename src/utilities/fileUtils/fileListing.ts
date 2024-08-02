@@ -1,10 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import {
-  FileEntry,
-  FileEntrySource,
-  FileEntryType,
-} from "../../utilities/FileEntry";
+import { FileNode, FileNodeSource, FileNodeType } from "../FileNode";
 import pLimit = require("p-limit");
 import { ConnectionManager } from "../../services/ConnectionManager";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
@@ -18,7 +14,7 @@ const limit = pLimit(9);
 
 export async function listRemoteFilesRecursive(
   remoteDir: string,
-): Promise<FileEntry> {
+): Promise<FileNode> {
   console.log(`Listing remote ${remoteDir} recursively...`);
 
   const configuration = WorkspaceConfig.getRemoteServerConfigured();
@@ -27,7 +23,7 @@ export async function listRemoteFilesRecursive(
   try {
     return await connectionManager.doSSHOperation(async (sshClient) => {
       /**
-       * Commands to get the list of files
+       * Commands to get the list of paths for folders and files
        * find "${remoteDir}" -exec stat --format='%n,%s,%Y,%F' {} \\;
        * Commands to also get hash on the following line for files
        * find "${remoteDir}" -exec sh -c 'if [ -d "$1" ]; then stat --format="%n,%s,%Y,%F," "$1"; else stat --format="%n,%s,%Y,%F" "$1" && sha256sum "$1" | awk "{printf \\"%s\\\n\\", \\$1}"; fi' sh {} \\;
@@ -39,12 +35,12 @@ export async function listRemoteFilesRecursive(
 
       // Extract the first line to create the rootEntry
       const [rootFullPath, rootSize, rootModifyTime] = lines[0].split(",");
-      const rootEntry = new FileEntry(
+      const rootEntry = new FileNode(
         path.basename(rootFullPath),
-        FileEntryType.directory,
+        FileNodeType.directory,
         parseInt(rootSize, 10),
         new Date(parseInt(rootModifyTime, 10) * 1000),
-        FileEntrySource.remote,
+        FileNodeSource.remote,
         rootFullPath,
       );
 
@@ -59,24 +55,24 @@ export async function listRemoteFilesRecursive(
         const [fullPath, size, modifyTime, type] = line.split(",");
 
         const entryType =
-          type === "directory" ? FileEntryType.directory : FileEntryType.file;
+          type === "directory" ? FileNodeType.directory : FileNodeType.file;
 
         if (shouldIgnore(fullPath)) {
           continue;
         }
         LogManager.log(`[${i}] List ${fullPath}`);
 
-        const newEntry = new FileEntry(
+        const newEntry = new FileNode(
           path.basename(fullPath),
           entryType,
           parseInt(size, 10),
           new Date(parseInt(modifyTime, 10) * 1000),
-          FileEntrySource.remote,
+          FileNodeSource.remote,
           fullPath,
         );
 
         let hash = "";
-        if (entryType === FileEntryType.file) {
+        if (entryType === FileNodeType.file) {
           // Get the hash from the next line if it's a file
           hash = lines[++i];
         }
@@ -102,12 +98,12 @@ export async function listRemoteFilesRecursive(
     }, `Listing files from ${remoteDir}`);
   } catch (error) {
     console.error("Recursive remote listing failed:", error);
-    return new FileEntry(
+    return new FileNode(
       "",
-      FileEntryType.directory,
+      FileNodeType.directory,
       0,
       new Date(),
-      FileEntrySource.remote,
+      FileNodeSource.remote,
       "",
     );
   }
@@ -115,7 +111,7 @@ export async function listRemoteFilesRecursive(
 
 export async function listLocalFilesRecursive(
   localDir: string,
-): Promise<FileEntry> {
+): Promise<FileNode> {
   console.log(`Listing local ${localDir} recursively...`);
   StatusBarManager.showMessage(
     `Listing files of ${localDir}`,
@@ -126,12 +122,12 @@ export async function listLocalFilesRecursive(
     true,
   );
 
-  const rootEntry = new FileEntry(
+  const rootEntry = new FileNode(
     path.basename(localDir),
-    FileEntryType.directory,
+    FileNodeType.directory,
     (await fs.stat(localDir)).size,
     (await fs.stat(localDir)).mtime,
-    FileEntrySource.local,
+    FileNodeSource.local,
     path.normalize(localDir),
   );
 
@@ -161,15 +157,15 @@ export async function listLocalFilesRecursive(
 
         const stats = await fs.stat(normalizedFilePath);
         const entryType = file.isDirectory()
-          ? FileEntryType.directory
-          : FileEntryType.file;
+          ? FileNodeType.directory
+          : FileNodeType.file;
 
-        const newEntry = new FileEntry(
+        const newEntry = new FileNode(
           file.name,
           entryType,
           stats.size,
           stats.mtime,
-          FileEntrySource.local,
+          FileNodeSource.local,
           normalizedFilePath,
         );
         const hashContent = await getLocalFileHash(normalizedFilePath);

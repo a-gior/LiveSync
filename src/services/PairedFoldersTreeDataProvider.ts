@@ -1,11 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
-import {
-  FileEntry,
-  FileEntryStatus,
-  FileEntryType,
-} from "../utilities/FileEntry";
+import { FileNode, FileNodeStatus, FileNodeType } from "../utilities/FileNode";
 import { ensureDirectoryExists } from "../utilities/fileUtils/fileOperations";
 import {
   comparePaths,
@@ -33,32 +28,31 @@ import {
 } from "../utilities/constants";
 import { WorkspaceConfig } from "./WorkspaceConfig";
 import { compareLocalAndRemote } from "../utilities/fileUtils/entriesComparison";
-import FileEntryManager, { JsonType } from "./FileEntryManager";
+import FileNodeManager, { JsonType } from "./FileNodeManager";
+import { ComparisonFileNode } from "../utilities/ComparisonFileNode";
 
 export class PairedFoldersTreeDataProvider
-  implements vscode.TreeDataProvider<FileEntry>
+  implements vscode.TreeDataProvider<ComparisonFileNode>
 {
   private _onDidChangeTreeData: vscode.EventEmitter<
-    FileEntry | undefined | void
-  > = new vscode.EventEmitter<FileEntry | undefined | void>();
-  readonly onDidChangeTreeData: vscode.Event<FileEntry | undefined | void> =
-    this._onDidChangeTreeData.event;
+    ComparisonFileNode | undefined | void
+  > = new vscode.EventEmitter<ComparisonFileNode | undefined | void>();
+  readonly onDidChangeTreeData: vscode.Event<
+    ComparisonFileNode | undefined | void
+  > = this._onDidChangeTreeData.event;
 
-  private rootElements: FileEntry[] = [];
-  readonly workspaceConfiguration: ConfigurationState =
-    WorkspaceConfig.getAll();
-
-  private fileEntryManager: FileEntryManager;
+  private rootElements: ComparisonFileNode[] = [];
+  private fileNodeManager: FileNodeManager;
 
   constructor() {
-    this.fileEntryManager = FileEntryManager.getInstance();
+    this.fileNodeManager = FileNodeManager.getInstance();
 
     loadIconMappings(ICON_MAPPINGS_PATH);
     loadFolderIconMappings(FOLDER_ICON_MAPPINGS_PATH);
     loadLanguageIdMappings(LANGUAGEIDS_ICON_MAPPINGS_PATH);
   }
 
-  refresh(element?: FileEntry): void {
+  refresh(element?: ComparisonFileNode): void {
     if (!element) {
       console.debug("################ Refresh all ################");
     }
@@ -66,19 +60,19 @@ export class PairedFoldersTreeDataProvider
   }
 
   public async addElement(
-    newElement: FileEntry,
-    parentElement?: FileEntry,
+    newElement: ComparisonFileNode,
+    parentElement?: ComparisonFileNode,
   ): Promise<void> {
     if (parentElement) {
       parentElement.addChild(newElement);
-      await this.fileEntryManager.updateJsonFileEntry(
+      await this.fileNodeManager.updateJsonFileNode(
         parentElement,
         JsonType.COMPARE,
       );
       this.refresh(parentElement);
     } else {
       this.rootElements.push(newElement);
-      await this.fileEntryManager.updateJsonFileEntry(
+      await this.fileNodeManager.updateJsonFileNode(
         newElement,
         JsonType.COMPARE,
       );
@@ -87,12 +81,12 @@ export class PairedFoldersTreeDataProvider
   }
 
   public async removeElement(
-    elementToRemove: FileEntry,
-    parentElement?: FileEntry,
+    elementToRemove: ComparisonFileNode,
+    parentElement?: ComparisonFileNode,
   ): Promise<void> {
     if (parentElement) {
       parentElement.removeChild(elementToRemove.name);
-      await this.fileEntryManager.updateJsonFileEntry(
+      await this.fileNodeManager.updateJsonFileNode(
         parentElement,
         JsonType.COMPARE,
       );
@@ -101,7 +95,7 @@ export class PairedFoldersTreeDataProvider
       this.rootElements = this.rootElements.filter(
         (element) => element !== elementToRemove,
       );
-      await this.fileEntryManager.updateJsonFileEntry(
+      await this.fileNodeManager.updateJsonFileNode(
         elementToRemove,
         JsonType.COMPARE,
       );
@@ -109,18 +103,22 @@ export class PairedFoldersTreeDataProvider
     }
   }
 
-  getTreeItem(element: FileEntry): vscode.TreeItem {
+  getTreeItem(element: ComparisonFileNode): vscode.TreeItem {
+    console.log("GetTreeItem", element);
     const treeItem = new vscode.TreeItem(
       element.name,
-      element.type === FileEntryType.directory
+      element.type === FileNodeType.directory
         ? vscode.TreeItemCollapsibleState.Collapsed
         : vscode.TreeItemCollapsibleState.None,
     );
 
     if (element.status && element.type) {
       if (
-        this.workspaceConfiguration.pairedFolders &&
-        isRootPath(element.fullPath, this.workspaceConfiguration.pairedFolders)
+        WorkspaceConfig.getPairedFoldersConfigured() &&
+        isRootPath(
+          element.relativePath,
+          WorkspaceConfig.getPairedFoldersConfigured(),
+        )
       ) {
         treeItem.iconPath = getIconForFolder(
           "root_folder",
@@ -128,38 +126,42 @@ export class PairedFoldersTreeDataProvider
         );
       } else {
         treeItem.iconPath =
-          element.type === FileEntryType.directory
+          element.type === FileNodeType.directory
             ? getIconForFolder(element.name, DEFAULT_FOLDER_ICON)
             : getIconForFile(element.name, DEFAULT_FILE_ICON_PATH);
       }
       treeItem.contextValue = `fileEntry-${element.type}`;
-      treeItem.description = FileEntryStatus[element.status];
-      const query = `?status=${FileEntryStatus[element.status]}`;
-      treeItem.resourceUri = vscode.Uri.file(element.fullPath).with({ query });
+      treeItem.description = FileNodeStatus[element.status];
+      const query = `?status=${FileNodeStatus[element.status]}`;
+      treeItem.resourceUri = vscode.Uri.file(element.relativePath).with({
+        query,
+      });
     }
     return treeItem;
   }
 
-  async getChildren(element?: FileEntry): Promise<FileEntry[]> {
-    await this.fileEntryManager.waitForJsonLoad();
+  async getChildren(
+    element?: ComparisonFileNode,
+  ): Promise<ComparisonFileNode[]> {
+    await this.fileNodeManager.waitForJsonLoad();
 
     if (!element) {
       try {
         const comparisonEntries =
-          this.fileEntryManager.getComparisonFileEntries();
+          this.fileNodeManager.getComparisonFileEntries();
         console.log(`ComparisonEntries: `, comparisonEntries);
 
         if (!comparisonEntries || comparisonEntries.size === 0) {
-          let rootFileEntries: FileEntry[] = [];
+          let rootFileEntries: FileNode[] = [];
           const pairedFolders = WorkspaceConfig.getPairedFoldersConfigured();
 
           for (const { localPath, remotePath } of pairedFolders) {
             ensureDirectoryExists(SAVE_DIR);
-            const children: Map<string, FileEntry> =
+            const children: Map<string, FileNode> =
               await this.getDirectoriesComparison(localPath, remotePath);
             let workspaceEntry = children.get(path.basename(localPath));
-            if (workspaceEntry instanceof FileEntry) {
-              await this.fileEntryManager.updateJsonFileEntry(
+            if (workspaceEntry instanceof FileNode) {
+              await this.fileNodeManager.updateJsonFileNode(
                 workspaceEntry,
                 JsonType.COMPARE,
               );
@@ -191,23 +193,45 @@ export class PairedFoldersTreeDataProvider
     }
   }
 
-  async getDirectoriesComparison(
+  async getComparisonFileNode(
     localDir: string,
     remoteDir: string,
-  ): Promise<Map<string, FileEntry>> {
+  ): Promise<ComparisonFileNode> {
     try {
       console.log(`Comparing Directories...`);
 
       const localFiles = await listLocalFilesRecursive(localDir);
       console.log("Saving JSON LOCAL: ", localFiles);
-      await this.fileEntryManager.updateJsonFileEntry(
-        localFiles,
-        JsonType.LOCAL,
-      );
+      await this.fileNodeManager.updateJsonFileNode(localFiles, JsonType.LOCAL);
 
       const remoteFiles = await listRemoteFilesRecursive(remoteDir);
       console.log("Saving JSON REMOTE: ", localFiles);
-      await this.fileEntryManager.updateJsonFileEntry(
+      await this.fileNodeManager.updateJsonFileNode(
+        remoteFiles,
+        JsonType.REMOTE,
+      );
+
+      return ComparisonFileNode.compareFileNodes(localFiles, remoteFiles);
+    } catch (error) {
+      console.error("Error:", error);
+      return new Map();
+    }
+  }
+
+  async getDirectoriesComparison(
+    localDir: string,
+    remoteDir: string,
+  ): Promise<Map<string, FileNode>> {
+    try {
+      console.log(`Comparing Directories...`);
+
+      const localFiles = await listLocalFilesRecursive(localDir);
+      console.log("Saving JSON LOCAL: ", localFiles);
+      await this.fileNodeManager.updateJsonFileNode(localFiles, JsonType.LOCAL);
+
+      const remoteFiles = await listRemoteFilesRecursive(remoteDir);
+      console.log("Saving JSON REMOTE: ", localFiles);
+      await this.fileNodeManager.updateJsonFileNode(
         remoteFiles,
         JsonType.REMOTE,
       );
@@ -223,8 +247,8 @@ export class PairedFoldersTreeDataProvider
 
   findEntryByPath(
     filePath: string,
-    rootEntries: FileEntry[] = this.rootElements,
-  ): FileEntry | undefined {
+    rootEntries: FileNode[] = this.rootElements,
+  ): FileNode | undefined {
     const relativePath = getRelativePath(filePath);
     if (!relativePath) {
       return undefined;
@@ -232,7 +256,7 @@ export class PairedFoldersTreeDataProvider
     const pathParts = relativePath.split(path.sep);
 
     let currentEntries = rootEntries;
-    let foundEntry: FileEntry | undefined;
+    let foundEntry: FileNode | undefined;
 
     if (currentEntries === this.rootElements) {
       for (const rootEntry of currentEntries) {

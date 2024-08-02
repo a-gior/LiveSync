@@ -1,7 +1,7 @@
 import * as path from "path";
 import * as fs from "fs";
 import { PairFoldersMessage } from "../../DTOs/messages/PairFoldersMessage";
-import { FileEntrySource } from "../FileEntry";
+import { FileNodeSource } from "../FileNode";
 import { remotePathExists } from "./sftpOperations";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 
@@ -66,14 +66,14 @@ export function getRelativePath(fullPath: string): string {
   return "";
 }
 
-export async function pathExists(path: string, source: FileEntrySource) {
+export async function pathExists(path: string, source: FileNodeSource) {
   switch (source) {
-    case FileEntrySource.local:
+    case FileNodeSource.local:
       return fs.existsSync(path);
-    case FileEntrySource.remote:
+    case FileNodeSource.remote:
       return await remotePathExists(path);
     default:
-      throw Error("[FileEntry - exists()] Wrong FileEntry source.");
+      throw Error("[FileNode - exists()] Wrong FileNode source.");
   }
 }
 

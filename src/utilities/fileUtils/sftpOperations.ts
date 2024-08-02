@@ -1,17 +1,18 @@
 import * as fs from "fs";
 import * as path from "path";
 import { SFTPClient } from "../../services/SFTPClient";
-import { ConfigurationMessage } from "../../DTOs/messages/ConfigurationMessage";
+import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
 import { generateHash } from "./hashUtils";
 import { loadFromFile } from "./fileOperations";
 import { REMOTE_FILES_PATH } from "../constants";
-import { FileEntrySource, FileEntryType } from "../FileEntry";
+import { FileNodeSource, FileNodeType } from "../FileNode";
 import { SSHClient } from "../../services/SSHClient";
 import { window } from "vscode";
 import { ConnectionManager } from "../../services/ConnectionManager";
 import sftp from "ssh2-sftp-client";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import { shouldIgnore } from "../shouldIgnore";
+import { logErrorMessage, logInfoMessage } from "../../services/LogManager";
 
 export async function downloadRemoteFile(
   configuration: ConfigurationMessage["configuration"],
@@ -31,8 +32,7 @@ export async function downloadRemoteFile(
       await sftpClient.getClient().fastGet(remotePath, localTmpPath);
     }, `Download ${remotePath}`);
   } catch (error: any) {
-    console.error(`Failed to download file: ${error.message}`);
-    window.showErrorMessage(`Failed to download file: ${error.message}`);
+    logErrorMessage(`Failed to download file: ${error.message}`);
   }
 }
 
@@ -49,16 +49,20 @@ export async function uploadFile(
   }
 
   try {
-    await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
-      const remoteDir = path.dirname(remotePath);
-      if (checkParentDirExists) {
-        const dirExists = await sftpClient.getClient().exists(remoteDir);
-        if (!dirExists) {
-          await sftpClient.getClient().mkdir(remoteDir, true);
+    await connectionManager
+      .doSFTPOperation(async (sftpClient: SFTPClient) => {
+        const remoteDir = path.dirname(remotePath);
+        if (checkParentDirExists) {
+          const dirExists = await sftpClient.getClient().exists(remoteDir);
+          if (!dirExists) {
+            await sftpClient.getClient().mkdir(remoteDir, true);
+          }
         }
-      }
-      await sftpClient.getClient().fastPut(localPath, remotePath);
-    }, `Upload to ${remotePath}`);
+        await sftpClient.getClient().fastPut(localPath, remotePath);
+      }, `Upload to ${remotePath}`)
+      .then(() => {
+        logInfoMessage(`File ${localPath} uploaded to ${remotePath}`);
+      });
   } catch (error: any) {
     console.error(`Failed to upload file: ${error.message}`);
     window.showErrorMessage(`Failed to upload file: ${error.message}`);
@@ -71,8 +75,8 @@ export async function compareRemoteFileHash(
   try {
     const remoteFileHash = generateHash(
       remotePath,
-      FileEntrySource.remote,
-      FileEntryType.file,
+      FileNodeSource.remote,
+      FileNodeType.file,
     );
 
     const storedRemoteFiles = await loadFromFile<{ [key: string]: any }>(

@@ -1,11 +1,11 @@
 import * as path from "path";
 import { window, Uri, commands } from "vscode";
-import { FileEntry } from "../../utilities/FileEntry";
+import { FileNode } from "../FileNode";
 import { downloadRemoteFile } from "./sftpOperations";
 import { getCorrespondingPath } from "./filePathUtils";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 
-export async function showDiff(fileEntry: FileEntry) {
+export async function showDiff(fileEntry: FileNode) {
   const configuration = WorkspaceConfig.getRemoteServerConfigured();
 
   const localFilePath = fileEntry.fullPath;

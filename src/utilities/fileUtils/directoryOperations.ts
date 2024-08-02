@@ -2,30 +2,27 @@ import { window } from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { SFTPClient } from "../../services/SFTPClient";
-import {
-  FileEntry,
-  FileEntryType,
-  FileEntrySource,
-} from "../../utilities/FileEntry";
+import { FileNode, FileNodeSource } from "../FileNode";
 import { getCorrespondingPath } from "./filePathUtils";
 import { ConnectionManager } from "../../services/ConnectionManager";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import pLimit = require("p-limit");
 import { LogManager } from "../../services/LogManager";
+import { BaseNodeType } from "../BaseNode";
 
 // Set a limit for the number of concurrent file operations, from 10 onwards triggers a warning for too much event listeners
 const limit = pLimit(9);
 
 async function createRemoteDirectories(
   sftpClient: SFTPClient,
-  fileEntry: FileEntry,
+  fileEntry: FileNode,
 ) {
   let lastParentDir = "";
   const filePaths: { localPath: string; remotePath: string }[] = [];
 
-  const createDir = async (entry: FileEntry) => {
+  const createDir = async (entry: FileNode) => {
     const remotePath =
-      entry.source === FileEntrySource.local
+      entry.source === FileNodeSource.local
         ? getCorrespondingPath(entry.fullPath)
         : entry.fullPath;
 
@@ -74,7 +71,7 @@ async function uploadFilesWithLimit(
   await Promise.all(promises);
 }
 
-export async function uploadDirectory(rootEntry: FileEntry) {
+export async function uploadDirectory(rootEntry: FileNode) {
   const configuration = WorkspaceConfig.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
@@ -94,10 +91,10 @@ export async function uploadDirectory(rootEntry: FileEntry) {
 
 async function createLocalDirectories(
   sftpClient: SFTPClient,
-  remoteEntry: FileEntry,
+  remoteEntry: FileNode,
 ) {
   const filePaths: { remotePath: string; localPath: string }[] = [];
-  const createDir = async (entry: FileEntry, localBasePath: string) => {
+  const createDir = async (entry: FileNode, localBasePath: string) => {
     const localPath = path.join(localBasePath, path.basename(entry.fullPath));
 
     if (entry.isDirectory()) {
@@ -108,15 +105,13 @@ async function createLocalDirectories(
         const fullRemotePath = path
           .join(entry.fullPath, remoteEntry.name)
           .replace(/\\/g, "/");
-        const childEntry = new FileEntry(
+        const childEntry = new FileNode(
           remoteEntry.name,
-          remoteEntry.type === "d"
-            ? FileEntryType.directory
-            : FileEntryType.file,
+          remoteEntry.type === "d" ? BaseNodeType.directory : BaseNodeType.file,
           0,
           new Date(),
-          FileEntrySource.remote,
           fullRemotePath,
+          FileNodeSource.remote,
         );
         await createDir(childEntry, localPath);
       }
@@ -147,7 +142,7 @@ async function downloadFilesWithLimit(
   await Promise.all(promises);
 }
 
-export async function downloadDirectory(remoteEntry: FileEntry) {
+export async function downloadDirectory(remoteEntry: FileNode) {
   const configuration = WorkspaceConfig.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
@@ -166,7 +161,7 @@ export async function downloadDirectory(remoteEntry: FileEntry) {
 }
 
 export async function deleteRemoteDirectory(
-  fileEntry: FileEntry,
+  fileEntry: FileNode,
 ): Promise<void> {
   const configuration = WorkspaceConfig.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
@@ -178,13 +173,13 @@ export async function deleteRemoteDirectory(
       for (const child of children) {
         const childPath = path.join(remoteDir, child.name).replace(/\\/g, "/");
         if (child.type === "d") {
-          const subDirEntry = new FileEntry(
+          const subDirEntry = new FileNode(
             child.name,
-            FileEntryType.directory,
+            BaseNodeType.directory,
             0,
             new Date(child.modifyTime * 1000),
-            FileEntrySource.remote,
             childPath,
+            FileNodeSource.remote,
           );
           await deleteRemoteDirectory(subDirEntry);
         } else {
