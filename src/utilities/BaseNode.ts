@@ -100,4 +100,9 @@ export abstract class BaseNode<T extends BaseNode<any>> {
   isDirectory(): boolean {
     return this.type === BaseNodeType.directory;
   }
+
+  // Static method to convert a Map to an array
+  static toArray<T extends BaseNode<any>>(map: Map<string, T>): T[] {
+    return Array.from(map.values());
+  }
 }

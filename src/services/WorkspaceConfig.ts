@@ -72,7 +72,7 @@ export class WorkspaceConfig {
 
     if (!workspaceConfig["configuration"]) {
       window.showErrorMessage("Remote server not configured");
-      throw Error("Remote server not configured");
+      throw new Error("Remote server not configured");
     }
 
     return workspaceConfig["configuration"];
@@ -83,7 +83,7 @@ export class WorkspaceConfig {
 
     if (!workspaceConfig["pairedFolders"]) {
       window.showErrorMessage("Paired Folders not configured");
-      throw Error("Paired Folders not configured");
+      throw new Error("Paired Folders not configured");
     }
 
     return workspaceConfig["pairedFolders"];
@@ -94,7 +94,7 @@ export class WorkspaceConfig {
 
     if (!workspaceConfig["ignoreList"]) {
       window.showErrorMessage("Ignore List not configured");
-      throw Error("Ignore List not configured");
+      throw new Error("Ignore List not configured");
     }
 
     return workspaceConfig["ignoreList"];

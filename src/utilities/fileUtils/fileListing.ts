@@ -1,6 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
-import { FileNode, FileNodeSource, FileNodeType } from "../FileNode";
+import { FileNode, FileNodeSource } from "../FileNode";
 import pLimit = require("p-limit");
 import { ConnectionManager } from "../../services/ConnectionManager";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
@@ -8,6 +8,7 @@ import { LogManager } from "../../services/LogManager";
 import { shouldIgnore } from "../shouldIgnore";
 import { generateHash2, getLocalFileHash } from "./hashUtils";
 import { StatusBarManager } from "../../services/StatusBarManager";
+import { BaseNodeType } from "../BaseNode";
 
 // Set a limit for the number of concurrent file operations, from 10 onwards triggers a warning for too much event listeners
 const limit = pLimit(9);
@@ -37,11 +38,11 @@ export async function listRemoteFilesRecursive(
       const [rootFullPath, rootSize, rootModifyTime] = lines[0].split(",");
       const rootEntry = new FileNode(
         path.basename(rootFullPath),
-        FileNodeType.directory,
+        BaseNodeType.directory,
         parseInt(rootSize, 10),
         new Date(parseInt(rootModifyTime, 10) * 1000),
-        FileNodeSource.remote,
         rootFullPath,
+        FileNodeSource.remote
       );
 
       // Process each line to build the tree
@@ -55,7 +56,7 @@ export async function listRemoteFilesRecursive(
         const [fullPath, size, modifyTime, type] = line.split(",");
 
         const entryType =
-          type === "directory" ? FileNodeType.directory : FileNodeType.file;
+          type === "directory" ? BaseNodeType.directory : BaseNodeType.file;
 
         if (shouldIgnore(fullPath)) {
           continue;
@@ -67,12 +68,12 @@ export async function listRemoteFilesRecursive(
           entryType,
           parseInt(size, 10),
           new Date(parseInt(modifyTime, 10) * 1000),
-          FileNodeSource.remote,
           fullPath,
+          FileNodeSource.remote,
         );
 
         let hash = "";
-        if (entryType === FileNodeType.file) {
+        if (entryType === BaseNodeType.file) {
           // Get the hash from the next line if it's a file
           hash = lines[++i];
         }
@@ -100,11 +101,11 @@ export async function listRemoteFilesRecursive(
     console.error("Recursive remote listing failed:", error);
     return new FileNode(
       "",
-      FileNodeType.directory,
+      BaseNodeType.directory,
       0,
       new Date(),
-      FileNodeSource.remote,
       "",
+      FileNodeSource.remote,
     );
   }
 }
@@ -124,11 +125,11 @@ export async function listLocalFilesRecursive(
 
   const rootEntry = new FileNode(
     path.basename(localDir),
-    FileNodeType.directory,
+    BaseNodeType.directory,
     (await fs.stat(localDir)).size,
     (await fs.stat(localDir)).mtime,
-    FileNodeSource.local,
     path.normalize(localDir),
+    FileNodeSource.local,
   );
 
   const stack = [rootEntry];
@@ -157,16 +158,16 @@ export async function listLocalFilesRecursive(
 
         const stats = await fs.stat(normalizedFilePath);
         const entryType = file.isDirectory()
-          ? FileNodeType.directory
-          : FileNodeType.file;
+          ? BaseNodeType.directory
+          : BaseNodeType.file;
 
         const newEntry = new FileNode(
           file.name,
           entryType,
           stats.size,
           stats.mtime,
-          FileNodeSource.local,
           normalizedFilePath,
+          FileNodeSource.local,
         );
         const hashContent = await getLocalFileHash(normalizedFilePath);
         newEntry.hash = generateHash2(

@@ -4,6 +4,7 @@ import { PairFoldersMessage } from "../../DTOs/messages/PairFoldersMessage";
 import { FileNodeSource } from "../FileNode";
 import { remotePathExists } from "./sftpOperations";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
+import { ComparisonFileNode } from "../ComparisonFileNode";
 
 export function normalizePath(p: string): string {
   let normalizedPath = path.normalize(p);
@@ -13,6 +14,43 @@ export function normalizePath(p: string): string {
     normalizedPath = normalizedPath.replace(/\\/g, "/");
   }
   return normalizedPath;
+}
+
+/**
+ * Returns the full paths of a file based on its comparison status and relative path.
+ * 
+ * @param comparisonNode - The ComparisonFileNode object representing the file.
+ * @returns An object containing both the local and remote paths of the file.
+ * @throws Error if the paths cannot be found.
+ */
+export function getFullPaths(comparisonNode: ComparisonFileNode): { localPath: string | null, remotePath: string | null } {
+  const relativePath = normalizePath(comparisonNode.relativePath);
+  const pairedFolders = WorkspaceConfig.getPairedFoldersConfigured();
+
+  const createFullPath = (basePath: string) => normalizePath(path.join(basePath, relativePath));
+
+  let localPath: string | null = null;
+  let remotePath: string | null = null;
+
+  for (const folder of pairedFolders) {
+    const possibleLocalPath = createFullPath(folder.localPath);
+    const possibleRemotePath = createFullPath(folder.remotePath);
+
+    if (!localPath && fs.existsSync(possibleLocalPath)) {
+      localPath = possibleLocalPath;
+    }
+
+    if (!remotePath && fs.existsSync(possibleRemotePath)) {
+      remotePath = possibleRemotePath;
+    }
+
+    // If both paths are found, no need to continue
+    if (localPath && remotePath) {
+      break;
+    }
+  }
+
+  return { localPath, remotePath };
 }
 
 export function getCorrespondingPath(inputPath: string): string {
@@ -35,7 +73,7 @@ export function getCorrespondingPath(inputPath: string): string {
     }
   }
 
-  throw Error(`Couldnt find corresponding path of ${inputPath}`);
+  throw new Error(`Couldnt find corresponding path of ${inputPath}`);
 }
 
 export function isRootPath(
@@ -73,7 +111,7 @@ export async function pathExists(path: string, source: FileNodeSource) {
     case FileNodeSource.remote:
       return await remotePathExists(path);
     default:
-      throw Error("[FileNode - exists()] Wrong FileNode source.");
+      throw new Error("[FileNode - exists()] Wrong FileNode source.");
   }
 }
 

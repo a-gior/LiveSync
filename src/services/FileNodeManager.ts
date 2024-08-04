@@ -1,14 +1,14 @@
 import path from "path";
 import * as fs from "fs";
-import { FileNode, FileNodeSource, FileNodeType } from "../utilities/FileNode";
+import { FileNode, FileNodeData } from "../utilities/FileNode";
 import {
   COMPARE_FILES_JSON,
   LOCAL_FILES_JSON,
   REMOTE_FILES_JSON,
   SAVE_DIR,
 } from "../utilities/constants";
-import { getRelativePath } from "../utilities/fileUtils/filePathUtils";
-import { ComparisonFileNode } from "../utilities/ComparisonFileNode";
+import { ComparisonFileData, ComparisonFileNode } from "../utilities/ComparisonFileNode";
+import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
 
 export enum JsonType {
   LOCAL = "local",
@@ -36,44 +36,62 @@ export default class FileNodeManager {
 
   private async loadJsonData(): Promise<void> {
     // Load localFileEntries
-    this.localFileEntries = await this.loadJsonFromFile(LOCAL_FILES_JSON);
+    this.localFileEntries = await this.loadFileNodeFromJson(LOCAL_FILES_JSON);
     // Load remoteFileEntries
-    this.remoteFileEntries = await this.loadJsonFromFile(REMOTE_FILES_JSON);
+    this.remoteFileEntries = await this.loadFileNodeFromJson(REMOTE_FILES_JSON);
     // Load comparisonFileEntries
     this.comparisonFileEntries =
-      await this.loadJsonFromFile(COMPARE_FILES_JSON);
+      await this.loadComparisonFileNodeFromJson(COMPARE_FILES_JSON);
   }
 
   public async waitForJsonLoad(): Promise<void> {
     return this.jsonLoadedPromise;
   }
 
-  private async loadJsonFromFile(
+  private async loadFileNodeFromJson(
     fileName: string,
   ): Promise<Map<string, FileNode>> {
     const filePath = path.join(SAVE_DIR, fileName);
     let fileEntryMap = new Map<string, FileNode>();
     if (fs.existsSync(filePath)) {
       const fileContent = await fs.promises.readFile(filePath, "utf-8");
-      const json = JSON.parse(fileContent);
+      const json: FileNodeData = JSON.parse(fileContent);
       //   return new Map(Object.entries(JSON.parse(fileContent)));
       for (const entryName in json) {
-        fileEntryMap.set(entryName, FileNode.fromJSON(json[entryName]));
+        fileEntryMap.set(entryName, new FileNode(json));
       }
     }
+
     return fileEntryMap;
   }
 
-  private async saveJsonToFile(
+  private async loadComparisonFileNodeFromJson(
     fileName: string,
-    data: Map<string, FileNode>,
+  ): Promise<Map<string, ComparisonFileNode>> {
+    const filePath = path.join(SAVE_DIR, fileName);
+    let fileEntryMap = new Map<string, ComparisonFileNode>();
+    if (fs.existsSync(filePath)) {
+      const fileContent = await fs.promises.readFile(filePath, "utf-8");
+      const json: ComparisonFileData = JSON.parse(fileContent);
+      //   return new Map(Object.entries(JSON.parse(fileContent)));
+      for (const entryName in json) {
+        fileEntryMap.set(entryName, new ComparisonFileNode(json));
+      }
+    }
+
+    return fileEntryMap;
+  }
+
+  private async saveJson(
+    fileName: string,
+    data: Map<string, FileNode|ComparisonFileNode>,
   ): Promise<void> {
     const filePath = path.join(SAVE_DIR, fileName);
     const jsonContent = JSON.stringify(Object.fromEntries(data));
     await fs.promises.writeFile(filePath, jsonContent, "utf-8");
   }
 
-  public getComparisonFileEntries(): Map<string, FileNode> | null {
+  public getComparisonFileEntries(): Map<string, ComparisonFileNode> | null {
     return this.comparisonFileEntries;
   }
 
@@ -91,7 +109,7 @@ export default class FileNodeManager {
 
   private getFileEntriesMap(
     jsonType: JsonType,
-  ): Map<string, ComparisonFileNode> | null {
+  ): Map<string, ComparisonFileNode|FileNode> | null {
     switch (jsonType) {
       case JsonType.LOCAL:
         return this.localFileEntries;
@@ -103,60 +121,42 @@ export default class FileNodeManager {
     }
   }
 
+  public async updateFullJson(jsonType: JsonType, data: Map<string, FileNode|ComparisonFileNode>) {
+    const fileName = this.getJsonFileName(jsonType);
+    this.saveJson(fileName, data);
+  }
+
   public async updateJsonFileNode(
-    fileEntry: ComparisonFileNode,
+    fileEntry: ComparisonFileNode | FileNode,
     jsonType: JsonType,
   ): Promise<void> {
-    await this.waitForJsonLoad();
-
-    const fileEntriesMap = this.getFileEntriesMap(jsonType);
-    const jsonFileName = this.getJsonFileName(jsonType);
-
-    if (fileEntriesMap && jsonFileName) {
-      const relativePath = fileEntry.relativePath;
-
-      this.updateEntryInJson(
-        fileEntriesMap,
-        relativePath.split(path.sep),
-        fileEntry,
-      );
-      await this.saveJsonToFile(jsonFileName, fileEntriesMap);
-    }
-  }
-
-  private updateEntryInJson(
-    fileEntriesMap: Map<string, ComparisonFileNode>,
-    pathParts: string[],
-    fileEntry: ComparisonFileNode,
-  ): void {
-    if (pathParts.length === 1 && pathParts[0] === "") {
-      // Handle the case where the fileEntry is a root entry
-      fileEntriesMap.set(fileEntry.name, fileEntry);
-      return;
-    }
-
-    const currentPart = pathParts.shift();
-
-    if (currentPart) {
-      if (pathParts.length === 0) {
-        fileEntriesMap.set(currentPart, fileEntry);
-      } else {
-        let currentEntry = fileEntriesMap.get(currentPart);
-        if (!currentEntry) {
-          currentEntry = new FileNode(
-            currentPart,
-            FileNodeType.directory,
-            0,
-            new Date(),
-            FileNodeSource.local,
-            path.join(fileEntry.fullPath, currentPart),
-          );
-          fileEntriesMap.set(currentPart, currentEntry);
-        }
-        if (currentEntry.isDirectory()) {
-          this.updateEntryInJson(currentEntry.children, pathParts, fileEntry);
-        }
+    try {
+      await this.waitForJsonLoad();
+  
+      const fileEntriesMap = this.getFileEntriesMap(jsonType);
+      const jsonFileName = this.getJsonFileName(jsonType);
+  
+      if (!fileEntriesMap || !jsonFileName) {
+        logErrorMessage("File entries map or JSON file name is undefined.");
+        return;
       }
+  
+      let entryUpdated = false;
+      fileEntriesMap.forEach((value, key, map) => {
+        if (fileEntry.relativePath === value.relativePath && fileEntry.name === value.name) {
+          map.set(key, fileEntry);
+          entryUpdated = true;
+        }
+      });
+  
+      if (!entryUpdated) {
+        logInfoMessage(`No matching entry found for ${fileEntry.name} in ${jsonFileName}.`);
+      }
+  
+      await this.saveJson(jsonFileName, fileEntriesMap);
+      logInfoMessage(`Successfully updated ${fileEntry.name} in ${jsonFileName}.`);
+    } catch (error) {
+      logErrorMessage("Error updating JSON file node", LOG_FLAGS.ALL, error);
     }
-  }
+  }  
 }

@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { FileNode, FileNodeStatus } from "../utilities/FileNode";
+import { FileNode } from "../utilities/FileNode";
 import { PairedFoldersTreeDataProvider } from "./PairedFoldersTreeDataProvider";
 
 import {
@@ -9,6 +9,8 @@ import {
   fileSave,
 } from "../utilities/fileUtils/fileEventFunctions";
 import { WorkspaceConfig } from "./WorkspaceConfig";
+import { ComparisonFileNode, ComparisonStatus } from "../utilities/ComparisonFileNode";
+import { getRelativePath } from "../utilities/fileUtils/filePathUtils";
 
 export class FileEventHandler {
   /**
@@ -69,10 +71,10 @@ export class FileEventHandler {
     for (const fileUri of event.files) {
       fileSave(fileUri)
         .then(() => {
-          const newEntry = FileNode.getEntryFromLocalPath(fileUri.fsPath);
-          newEntry.updateStatus(FileNodeStatus.new);
+          const fileNode = FileNode.getEntryFromLocalPath(fileUri.fsPath);
+          const comparisonFileNode = new ComparisonFileNode(fileNode.name, fileNode.type, fileNode.size, fileNode.modifiedTime, fileNode.relativePath, ComparisonStatus.added);
 
-          vscode.commands.executeCommand("livesync.fileEntryRefresh", newEntry);
+          vscode.commands.executeCommand("livesync.fileEntryRefresh", comparisonFileNode);
         })
         .catch((err: any) => {
           console.error("[handleFileCreate] Error : ", err);
@@ -130,8 +132,13 @@ export class FileEventHandler {
           ) {
             // Renaming the entry
             entryToRenameOrMove.name = path.basename(newUri.fsPath);
-            entryToRenameOrMove.fullPath = newUri.fsPath;
-            treeDataProvider.refresh(entryToRenameOrMove);
+            entryToRenameOrMove.relativePath = getRelativePath(newUri.fsPath);
+            vscode.commands.executeCommand(
+              "livesync.fileEntryRefresh",
+              entryToRenameOrMove,
+            );
+            // TODO - TEST WHICH IS BETTER TO REFRESH
+            // treeDataProvider.refresh(entryToRenameOrMove);
           } else if (entryToRenameOrMove) {
             // Moving the entry
             const oldParentEntry = treeDataProvider.findEntryByPath(

@@ -5,7 +5,7 @@ import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage
 import { generateHash } from "./hashUtils";
 import { loadFromFile } from "./fileOperations";
 import { REMOTE_FILES_PATH } from "../constants";
-import { FileNodeSource, FileNodeType } from "../FileNode";
+import { FileNodeSource } from "../FileNode";
 import { SSHClient } from "../../services/SSHClient";
 import { window } from "vscode";
 import { ConnectionManager } from "../../services/ConnectionManager";
@@ -13,6 +13,7 @@ import sftp from "ssh2-sftp-client";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import { shouldIgnore } from "../shouldIgnore";
 import { logErrorMessage, logInfoMessage } from "../../services/LogManager";
+import { BaseNodeType } from "../BaseNode";
 
 export async function downloadRemoteFile(
   configuration: ConfigurationMessage["configuration"],
@@ -76,7 +77,7 @@ export async function compareRemoteFileHash(
     const remoteFileHash = generateHash(
       remotePath,
       FileNodeSource.remote,
-      FileNodeType.file,
+      BaseNodeType.file,
     );
 
     const storedRemoteFiles = await loadFromFile<{ [key: string]: any }>(

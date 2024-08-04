@@ -8,7 +8,7 @@ import {
 
 async function loadFileNode(filePath: string): Promise<FileNode> {
   const data = await loadFromFile<any>(filePath);
-  return FileNode.fromJSON(data);
+  return new FileNode(data);
 }
 
 async function loadCompareFiles(
@@ -16,7 +16,7 @@ async function loadCompareFiles(
 ): Promise<Map<string, FileNode>> {
   const data = await loadFromFile<{ [key: string]: any }>(filePath);
   const entries = Object.entries(data).map(
-    ([key, value]) => [key, FileNode.fromJSON(value)] as [string, FileNode],
+    ([key, value]) => [key, new FileNode(value)] as [string, FileNode],
   );
   return new Map<string, FileNode>(entries);
 }

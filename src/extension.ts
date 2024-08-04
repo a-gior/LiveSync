@@ -4,7 +4,6 @@ import * as vscode from "vscode";
 import { ConfigurationPanel } from "./panels/ConfigurationPanel";
 import { PairedFoldersTreeDataProvider } from "./services/PairedFoldersTreeDataProvider";
 import { FileStatusDecorationProvider } from "./services/FileDecorationProvider";
-import { FileNode, FileNodeStatus } from "./utilities/FileNode";
 import { showDiff } from "./utilities/fileUtils/fileDiff";
 import { fileSave } from "./utilities/fileUtils/fileEventFunctions";
 import { handleFileDownload } from "./utilities/fileUtils/fileDownload";
@@ -17,6 +16,8 @@ import path from "path";
 import { StatusBarManager } from "./services/StatusBarManager";
 import { compareCorrespondingEntry } from "./utilities/fileUtils/entriesComparison";
 import { logErrorMessage, LogManager } from "./services/LogManager";
+import { ComparisonFileNode, ComparisonStatus } from "./utilities/ComparisonFileNode";
+import { getFullPaths } from "./utilities/fileUtils/filePathUtils";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -84,26 +85,24 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "livesync.fileEntryRefresh",
-      (element?: FileNode) => {
+      (element?: ComparisonFileNode) => {
         console.log(`[Refresh command] element: `, element);
         if (!element) {
           pairedFoldersTreeDataProvider.refresh();
         } else {
-          if (element.status === FileNodeStatus.new) {
-            element.status = FileNodeStatus.added;
+          if (element.status === ComparisonStatus.added) {
             const parentEntry = pairedFoldersTreeDataProvider.findEntryByPath(
-              path.dirname(element.fullPath),
+              path.dirname(element.relativePath),
             );
             pairedFoldersTreeDataProvider.addElement(element, parentEntry);
-          } else if (element.status === FileNodeStatus.deleted) {
+          } else if (element.status === ComparisonStatus.removed) {
             const parentEntry = pairedFoldersTreeDataProvider.findEntryByPath(
-              path.dirname(element.fullPath),
+              path.dirname(element.relativePath),
             );
-            element.status = FileNodeStatus.removed;
             pairedFoldersTreeDataProvider.removeElement(element, parentEntry);
           } else {
             compareCorrespondingEntry(element).then(
-              (updatedElement: FileNode) => {
+              (updatedElement: ComparisonFileNode) => {
                 console.log(
                   `[Refresh command] updatedElement: `,
                   updatedElement,
@@ -117,21 +116,26 @@ export function activate(context: vscode.ExtensionContext) {
     ),
     vscode.commands.registerCommand(
       "livesync.fileEntryShowDiff",
-      (fileEntry: FileNode) => {
+      (fileEntry: ComparisonFileNode) => {
         showDiff(fileEntry);
       },
     ),
     vscode.commands.registerCommand(
       "livesync.fileEntryUpload",
-      async (fileEntry: FileNode) => {
+      async (fileEntry: ComparisonFileNode) => {
         console.log("FileNode Upload: ", fileEntry);
         if (fileEntry.isDirectory()) {
           await uploadDirectory(fileEntry);
         } else {
           try {
-            const fileUri = vscode.Uri.file(fileEntry.fullPath);
+            const { localPath } = getFullPaths(fileEntry);
+            if(!localPath) {
+              throw new Error(`No local path found for ${fileEntry.relativePath}`);
+            }
+
+            const fileUri = vscode.Uri.file(localPath);
             await fileSave(fileUri);
-            fileEntry.status = FileNodeStatus.unchanged;
+            fileEntry.status = ComparisonStatus.unchanged;
           } catch (error: any) {
             logErrorMessage(`Failed to read file: ${error.message}`);
           }
@@ -141,7 +145,7 @@ export function activate(context: vscode.ExtensionContext) {
     ),
     vscode.commands.registerCommand(
       "livesync.fileEntryDownload",
-      async (fileEntry) => {
+      async (fileEntry: ComparisonFileNode) => {
         if (fileEntry.isDirectory()) {
           await downloadDirectory(fileEntry);
         } else {

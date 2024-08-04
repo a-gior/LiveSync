@@ -5,7 +5,7 @@ import {
   FILE_ICONS_ZIP_PATH,
   FOLDER_ICONS_ZIP_PATH,
 } from "../utilities/constants";
-import { FileNodeType } from "../utilities/FileNode";
+import { BaseNodeType } from "../utilities/BaseNode";
 
 interface IconMappings {
   [key: string]: {
@@ -74,12 +74,12 @@ function getLanguageIdFromMapping(extension: string): string {
 function getIcon(
   name: string,
   defaultIconPath: string,
-  type: FileNodeType,
+  type: BaseNodeType,
   iconMappings: IconMappings,
   fileIconsZip: ZipWithMetadata,
   folderIconsZip: ZipWithMetadata,
 ): { light: string; dark: string } {
-  const zip = type === FileNodeType.file ? fileIconsZip : folderIconsZip;
+  const zip = type === BaseNodeType.file ? fileIconsZip : folderIconsZip;
 
   // Get the extension name without the dot
   const fileExtension = path.extname(name).toLowerCase().substring(1);
@@ -92,8 +92,8 @@ function getIcon(
       mappings.filenames.includes(basename) ||
       mappings.extensions.includes(fileExtension)
     ) {
-      const lightIconPath = `icons_light/${iconName}${type === FileNodeType.directory ? "_opened" : ""}.svg`;
-      const darkIconPath = `icons_dark/${iconName}${type === FileNodeType.directory ? "_opened" : ""}.svg`;
+      const lightIconPath = `icons_light/${iconName}${type === BaseNodeType.directory ? "_opened" : ""}.svg`;
+      const darkIconPath = `icons_dark/${iconName}${type === BaseNodeType.directory ? "_opened" : ""}.svg`;
 
       return {
         light: extractIconFromZip(zip, lightIconPath, darkIconPath),
@@ -143,7 +143,7 @@ export function getIconForFile(
   return getIcon(
     filename,
     defaultIconPath,
-    FileNodeType.file,
+    BaseNodeType.file,
     iconMappings,
     fileIconsZip,
     folderIconsZip,
@@ -162,7 +162,7 @@ export function getIconForFolder(
   return getIcon(
     foldername,
     defaultIconPath,
-    FileNodeType.directory,
+    BaseNodeType.directory,
     folderIconMappings,
     fileIconsZip,
     folderIconsZip,

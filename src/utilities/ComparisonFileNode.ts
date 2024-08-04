@@ -1,4 +1,4 @@
-import { BaseNode, BaseNodeType } from "./BaseNode";
+import { BaseNode, BaseNodeData, BaseNodeType } from "./BaseNode";
 import { FileNode } from "./FileNode";
 
 export enum ComparisonStatus {
@@ -8,11 +8,15 @@ export enum ComparisonStatus {
   unchanged = "unchanged",
 }
 
+export interface ComparisonFileData extends BaseNodeData {
+  status: ComparisonStatus;
+}
+
 export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
   status: ComparisonStatus;
 
   constructor(
-    nameOrJson: string | any,
+    nameOrJson: string | ComparisonFileData,
     type?: BaseNodeType,
     size?: number,
     modifiedTime?: Date,

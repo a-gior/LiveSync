@@ -3,31 +3,32 @@ import * as fs from "fs";
 import * as path from "path";
 import { SFTPClient } from "../../services/SFTPClient";
 import { FileNode, FileNodeSource } from "../FileNode";
-import { getCorrespondingPath } from "./filePathUtils";
+import { getFullPaths, getRelativePath } from "./filePathUtils";
 import { ConnectionManager } from "../../services/ConnectionManager";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import pLimit = require("p-limit");
 import { LogManager } from "../../services/LogManager";
 import { BaseNodeType } from "../BaseNode";
+import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
 
 // Set a limit for the number of concurrent file operations, from 10 onwards triggers a warning for too much event listeners
 const limit = pLimit(9);
 
 async function createRemoteDirectories(
   sftpClient: SFTPClient,
-  fileEntry: FileNode,
+  fileEntry: ComparisonFileNode,
 ) {
   let lastParentDir = "";
   const filePaths: { localPath: string; remotePath: string }[] = [];
 
-  const createDir = async (entry: FileNode) => {
-    const remotePath =
-      entry.source === FileNodeSource.local
-        ? getCorrespondingPath(entry.fullPath)
-        : entry.fullPath;
+  const createDir = async (node: ComparisonFileNode) => {
+    const { localPath, remotePath } = getFullPaths(node);
+    if(!remotePath || !localPath) {
+      throw new Error(`Couldnt find localPath or remotePath for ${node.relativePath}`);
+    }
 
-    if (entry.listChildren().length === 0) {
-      if (entry.isDirectory()) {
+    if (node.listChildren().length === 0) {
+      if (node.isDirectory()) {
         await sftpClient.getClient().mkdir(remotePath, true);
         LogManager.log(`SFTP Created Dir ${remotePath}`);
       } else {
@@ -37,11 +38,11 @@ async function createRemoteDirectories(
           await sftpClient.getClient().mkdir(parentDirPath, true);
           LogManager.log(`SFTP Created Dir ${remotePath}`);
         }
-        filePaths.push({ localPath: entry.fullPath, remotePath });
+        filePaths.push({ localPath, remotePath });
       }
     } else {
-      if (entry.isDirectory()) {
-        for (const child of entry.listChildren()) {
+      if (node.isDirectory()) {
+        for (const child of node.listChildren()) {
           await createDir(child);
         }
       }
@@ -71,7 +72,7 @@ async function uploadFilesWithLimit(
   await Promise.all(promises);
 }
 
-export async function uploadDirectory(rootEntry: FileNode) {
+export async function uploadDirectory(rootEntry: ComparisonFileNode) {
   const configuration = WorkspaceConfig.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
@@ -82,7 +83,7 @@ export async function uploadDirectory(rootEntry: FileNode) {
 
       // Step 2: Upload files with concurrency limits
       await uploadFilesWithLimit(sftpClient, filePaths);
-    }, `Upload Dir ${rootEntry.fullPath}`);
+    }, `Upload Dir ${rootEntry.relativePath}`);
   } catch (error: any) {
     console.error(`Failed to upload directory: ${error.message}`);
     window.showErrorMessage(`Failed to upload directory: ${error.message}`);
@@ -91,36 +92,43 @@ export async function uploadDirectory(rootEntry: FileNode) {
 
 async function createLocalDirectories(
   sftpClient: SFTPClient,
-  remoteEntry: FileNode,
+  node: ComparisonFileNode,
 ) {
+  const configuration = WorkspaceConfig.getRemoteServerConfigured();
+  const connectionManager = ConnectionManager.getInstance(configuration);
   const filePaths: { remotePath: string; localPath: string }[] = [];
-  const createDir = async (entry: FileNode, localBasePath: string) => {
-    const localPath = path.join(localBasePath, path.basename(entry.fullPath));
 
-    if (entry.isDirectory()) {
+  const createDir = async (node: ComparisonFileNode) => {
+    const { localPath, remotePath } = getFullPaths(node); 
+    if(!remotePath || !localPath) {
+      throw new Error(`Couldnt find localPath or remotePath for ${node.relativePath}`);
+    }
+
+    if (node.isDirectory()) {
       await fs.promises.mkdir(localPath, { recursive: true });
 
-      const remoteEntries = await sftpClient.getClient().list(entry.fullPath);
+      const remoteEntries = await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+        return await sftpClient.getClient().list(remotePath);
+      });
+
       for (const remoteEntry of remoteEntries) {
-        const fullRemotePath = path
-          .join(entry.fullPath, remoteEntry.name)
-          .replace(/\\/g, "/");
-        const childEntry = new FileNode(
+
+        const childEntry = new ComparisonFileNode(
           remoteEntry.name,
           remoteEntry.type === "d" ? BaseNodeType.directory : BaseNodeType.file,
-          0,
-          new Date(),
-          fullRemotePath,
-          FileNodeSource.remote,
+          remoteEntry.size,
+          new Date(remoteEntry.modifyTime * 1000),
+          getRelativePath(localPath),
+          ComparisonStatus.unchanged,
         );
-        await createDir(childEntry, localPath);
+        await createDir(childEntry);
       }
     } else {
-      filePaths.push({ remotePath: entry.fullPath, localPath });
+      filePaths.push({ localPath, remotePath });
     }
   };
 
-  await createDir(remoteEntry, remoteEntry.fullPath);
+  await createDir(node);
   return filePaths;
 }
 
@@ -142,7 +150,7 @@ async function downloadFilesWithLimit(
   await Promise.all(promises);
 }
 
-export async function downloadDirectory(remoteEntry: FileNode) {
+export async function downloadDirectory(remoteEntry: ComparisonFileNode) {
   const configuration = WorkspaceConfig.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
@@ -153,7 +161,7 @@ export async function downloadDirectory(remoteEntry: FileNode) {
 
       // Step 2: Download files with concurrency limits
       await downloadFilesWithLimit(sftpClient, filePaths);
-    }, `Download Dir ${remoteEntry.fullPath}`);
+    }, `Download Dir ${remoteEntry.relativePath}`);
   } catch (error: any) {
     console.error(`Failed to download directory: ${error.message}`);
     window.showErrorMessage(`Failed to download directory: ${error.message}`);

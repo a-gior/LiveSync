@@ -1,28 +1,27 @@
 import * as path from "path";
 import { window, Uri, commands } from "vscode";
-import { FileNode } from "../FileNode";
 import { downloadRemoteFile } from "./sftpOperations";
-import { getCorrespondingPath } from "./filePathUtils";
+import { getFullPaths } from "./filePathUtils";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
+import { ComparisonFileNode } from "../ComparisonFileNode";
 
-export async function showDiff(fileEntry: FileNode) {
+export async function showDiff(fileNode: ComparisonFileNode) {
   const configuration = WorkspaceConfig.getRemoteServerConfigured();
 
-  const localFilePath = fileEntry.fullPath;
-  const remoteFilePath = getCorrespondingPath(localFilePath);
+  const { localPath, remotePath } = getFullPaths(fileNode);
 
-  if (!remoteFilePath) {
-    window.showErrorMessage(`No remote path found for ${localFilePath}`);
+  if (!localPath || !remotePath) {
+    window.showErrorMessage(`No local or remote path found for ${fileNode.relativePath}`);
     return;
   }
 
   const tmpDir = path.join(__dirname, "..", "..", "tmp");
-  const localTmpPath = path.join(tmpDir, path.basename(remoteFilePath));
+  const localTmpPath = path.join(tmpDir, path.basename(remotePath));
 
   try {
-    await downloadRemoteFile(configuration, remoteFilePath, localTmpPath);
+    await downloadRemoteFile(configuration, remotePath, localTmpPath);
 
-    const localUri = Uri.file(localFilePath);
+    const localUri = Uri.file(localPath);
     const remoteUri = Uri.file(localTmpPath);
 
     await commands.executeCommand(
