@@ -27,7 +27,10 @@ import {
 } from "../utilities/constants";
 import { WorkspaceConfig } from "./WorkspaceConfig";
 import FileNodeManager, { JsonType } from "./FileNodeManager";
-import { ComparisonFileNode, ComparisonStatus } from "../utilities/ComparisonFileNode";
+import {
+  ComparisonFileNode,
+  ComparisonStatus,
+} from "../utilities/ComparisonFileNode";
 import { BaseNode, BaseNodeType } from "../utilities/BaseNode";
 import { LOG_FLAGS, logErrorMessage } from "./LogManager";
 
@@ -41,7 +44,10 @@ export class PairedFoldersTreeDataProvider
     ComparisonFileNode | undefined | void
   > = this._onDidChangeTreeData.event;
 
-  private rootElements: Map<string, ComparisonFileNode> = new Map<string, ComparisonFileNode>();
+  private rootElements: Map<string, ComparisonFileNode> = new Map<
+    string,
+    ComparisonFileNode
+  >();
   private fileNodeManager: FileNodeManager;
 
   constructor() {
@@ -153,10 +159,16 @@ export class PairedFoldersTreeDataProvider
         if (!comparisonEntries || comparisonEntries.size === 0) {
           ensureDirectoryExists(SAVE_DIR);
           const pairedFolders = WorkspaceConfig.getPairedFoldersConfigured();
-          let rootEntries: Map<string, ComparisonFileNode> = new Map<string, ComparisonFileNode>();
+          let rootEntries: Map<string, ComparisonFileNode> = new Map<
+            string,
+            ComparisonFileNode
+          >();
 
           for (const { localPath, remotePath } of pairedFolders) {
-            const comparisonFileNode = await this.getComparisonFileNode(localPath, remotePath);
+            const comparisonFileNode = await this.getComparisonFileNode(
+              localPath,
+              remotePath,
+            );
             rootEntries.set(comparisonFileNode.name, comparisonFileNode);
           }
 
@@ -170,10 +182,16 @@ export class PairedFoldersTreeDataProvider
           this.rootElements = comparisonEntries;
           return BaseNode.toArray(this.rootElements);
         } else {
-          throw Error("Comparison JSON data not found. Please run the initial comparison.");
+          throw Error(
+            "Comparison JSON data not found. Please run the initial comparison.",
+          );
         }
       } catch (error) {
-        logErrorMessage("Error fetching comparison data:", LOG_FLAGS.ALL, error);
+        logErrorMessage(
+          "Error fetching comparison data:",
+          LOG_FLAGS.ALL,
+          error,
+        );
         return [];
       }
     } else {
@@ -189,17 +207,23 @@ export class PairedFoldersTreeDataProvider
       console.log(`Comparing Directories...`);
 
       const localFiles = await listLocalFilesRecursive(localDir);
+      const remoteFiles = await listRemoteFilesRecursive(remoteDir);
+
+      const comparisonFileNode = ComparisonFileNode.compareFileNodes(
+        localFiles,
+        remoteFiles,
+      );
+
       console.log("Saving JSON LOCAL: ", localFiles);
       await this.fileNodeManager.updateJsonFileNode(localFiles, JsonType.LOCAL);
 
-      const remoteFiles = await listRemoteFilesRecursive(remoteDir);
       console.log("Saving JSON REMOTE: ", localFiles);
       await this.fileNodeManager.updateJsonFileNode(
         remoteFiles,
         JsonType.REMOTE,
       );
 
-      return ComparisonFileNode.compareFileNodes(localFiles, remoteFiles);
+      return comparisonFileNode;
     } catch (error) {
       console.error("Error:", error);
       throw Error("Error getting ComparisonFileNode");
@@ -215,10 +239,10 @@ export class PairedFoldersTreeDataProvider
       return undefined;
     }
     const pathParts = relativePath.split(path.sep);
-  
+
     let currentEntries = rootEntries;
     let foundEntry: ComparisonFileNode | undefined;
-  
+
     // If rootEntries is the same as this.rootElements, find the directory root entry
     if (currentEntries === this.rootElements) {
       for (const rootEntry of currentEntries.values()) {
@@ -228,7 +252,7 @@ export class PairedFoldersTreeDataProvider
         }
       }
     }
-  
+
     for (const part of pathParts) {
       foundEntry = Array.from(currentEntries.values()).find((entry) =>
         comparePaths(entry.name, part),
@@ -242,8 +266,7 @@ export class PairedFoldersTreeDataProvider
         break;
       }
     }
-  
+
     return foundEntry;
   }
-  
 }

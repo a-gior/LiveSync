@@ -1,15 +1,19 @@
 import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
-import { listLocalFilesRecursive, listRemoteFilesRecursive } from "./fileListing";
+import {
+  listLocalFilesRecursive,
+  listRemoteFilesRecursive,
+} from "./fileListing";
 import { getCorrespondingPath, getFullPaths } from "./filePathUtils";
 
 export async function compareCorrespondingEntry(
   fileEntry: ComparisonFileNode,
 ): Promise<ComparisonFileNode> {
   try {
-
     let { localPath, remotePath } = getFullPaths(fileEntry);
 
-    switch(fileEntry.status) {
+    console.log(`<compareCorrespondingEntry> Check: `, fileEntry);
+
+    switch (fileEntry.status) {
       case ComparisonStatus.added:
         remotePath = getCorrespondingPath(localPath!);
         break;
@@ -19,8 +23,10 @@ export async function compareCorrespondingEntry(
         break;
     }
 
-    if(!localPath || !remotePath) {
-      throw new Error(`Couldnt find remotePath or localPath of ${fileEntry.name} at ${fileEntry.relativePath}`);
+    if (!localPath || !remotePath) {
+      throw new Error(
+        `Couldnt find remotePath or localPath of ${fileEntry.name} at ${fileEntry.relativePath}`,
+      );
     }
 
     const localEntry = await listLocalFilesRecursive(localPath);

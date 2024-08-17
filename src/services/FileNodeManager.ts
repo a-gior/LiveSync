@@ -7,7 +7,10 @@ import {
   REMOTE_FILES_JSON,
   SAVE_DIR,
 } from "../utilities/constants";
-import { ComparisonFileData, ComparisonFileNode } from "../utilities/ComparisonFileNode";
+import {
+  ComparisonFileData,
+  ComparisonFileNode,
+} from "../utilities/ComparisonFileNode";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
 
 export enum JsonType {
@@ -84,7 +87,7 @@ export default class FileNodeManager {
 
   private async saveJson(
     fileName: string,
-    data: Map<string, FileNode|ComparisonFileNode>,
+    data: Map<string, FileNode | ComparisonFileNode>,
   ): Promise<void> {
     const filePath = path.join(SAVE_DIR, fileName);
     const jsonContent = JSON.stringify(Object.fromEntries(data));
@@ -109,7 +112,7 @@ export default class FileNodeManager {
 
   private getFileEntriesMap(
     jsonType: JsonType,
-  ): Map<string, ComparisonFileNode|FileNode> | null {
+  ): Map<string, ComparisonFileNode | FileNode> | null {
     switch (jsonType) {
       case JsonType.LOCAL:
         return this.localFileEntries;
@@ -121,7 +124,10 @@ export default class FileNodeManager {
     }
   }
 
-  public async updateFullJson(jsonType: JsonType, data: Map<string, FileNode|ComparisonFileNode>) {
+  public async updateFullJson(
+    jsonType: JsonType,
+    data: Map<string, FileNode | ComparisonFileNode>,
+  ) {
     const fileName = this.getJsonFileName(jsonType);
     this.saveJson(fileName, data);
   }
@@ -132,31 +138,43 @@ export default class FileNodeManager {
   ): Promise<void> {
     try {
       await this.waitForJsonLoad();
-  
+
       const fileEntriesMap = this.getFileEntriesMap(jsonType);
       const jsonFileName = this.getJsonFileName(jsonType);
-  
+
       if (!fileEntriesMap || !jsonFileName) {
         logErrorMessage("File entries map or JSON file name is undefined.");
         return;
       }
-  
+
       let entryUpdated = false;
-      fileEntriesMap.forEach((value, key, map) => {
-        if (fileEntry.relativePath === value.relativePath && fileEntry.name === value.name) {
-          map.set(key, fileEntry);
-          entryUpdated = true;
-        }
-      });
-  
-      if (!entryUpdated) {
-        logInfoMessage(`No matching entry found for ${fileEntry.name} in ${jsonFileName}.`);
+      if (fileEntriesMap.size === 0) {
+        fileEntriesMap.set(fileEntry.name, fileEntry);
+        entryUpdated = true;
+      } else {
+        fileEntriesMap.forEach((value, key, map) => {
+          if (
+            fileEntry.relativePath === value.relativePath &&
+            fileEntry.name === value.name
+          ) {
+            map.set(key, fileEntry);
+            entryUpdated = true;
+          }
+        });
       }
-  
+
+      if (!entryUpdated) {
+        logInfoMessage(
+          `No matching entry found for ${fileEntry.name} in ${jsonFileName}.`,
+        );
+      }
+
       await this.saveJson(jsonFileName, fileEntriesMap);
-      logInfoMessage(`Successfully updated ${fileEntry.name} in ${jsonFileName}.`);
+      logInfoMessage(
+        `Successfully updated ${fileEntry.name} in ${jsonFileName}.`,
+      );
     } catch (error) {
       logErrorMessage("Error updating JSON file node", LOG_FLAGS.ALL, error);
     }
-  }  
+  }
 }
