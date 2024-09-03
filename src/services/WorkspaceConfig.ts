@@ -116,7 +116,7 @@ export class WorkspaceConfig {
   }
 
   static reloadConfiguration() {
-    WorkspaceConfig._workspaceConfig = undefined;
+    this._workspaceConfig = undefined;
     this.getWorkspaceConfiguration();
   }
 }

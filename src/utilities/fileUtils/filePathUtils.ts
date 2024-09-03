@@ -4,7 +4,9 @@ import { PairFoldersMessage } from "../../DTOs/messages/PairFoldersMessage";
 import { FileNodeSource } from "../FileNode";
 import { remotePathExists } from "./sftpOperations";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
-import { ComparisonFileNode } from "../ComparisonFileNode";
+import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
+import { logErrorMessage, logInfoMessage } from "../../services/LogManager";
+import { BaseNodeType } from "../BaseNode";
 
 export function normalizePath(p: string): string {
   let normalizedPath = path.normalize(p);
@@ -17,17 +19,20 @@ export function normalizePath(p: string): string {
 }
 
 /**
- * Returns the full paths of a file based on its comparison status and relative path.
- * 
+ * Returns the local & remote paths of a file based on its comparison status and relative path.
+ *
  * @param comparisonNode - The ComparisonFileNode object representing the file.
  * @returns An object containing both the local and remote paths of the file.
  * @throws Error if the paths cannot be found.
  */
-export function getFullPaths(comparisonNode: ComparisonFileNode): { localPath: string | null, remotePath: string | null } {
+export async function getFullPaths(
+  comparisonNode: ComparisonFileNode,
+): Promise<{ localPath: string | null; remotePath: string | null }> {
   const relativePath = normalizePath(comparisonNode.relativePath);
   const pairedFolders = WorkspaceConfig.getPairedFoldersConfigured();
 
-  const createFullPath = (basePath: string) => normalizePath(path.join(basePath, relativePath));
+  const createFullPath = (basePath: string) =>
+    normalizePath(path.join(basePath, relativePath));
 
   let localPath: string | null = null;
   let remotePath: string | null = null;
@@ -36,20 +41,44 @@ export function getFullPaths(comparisonNode: ComparisonFileNode): { localPath: s
     const possibleLocalPath = createFullPath(folder.localPath);
     const possibleRemotePath = createFullPath(folder.remotePath);
 
-    if (!localPath && fs.existsSync(possibleLocalPath)) {
+    const localPathExists = await pathExists(
+      possibleLocalPath,
+      FileNodeSource.local,
+    );
+    const remotePathExists = await pathExists(
+      possibleRemotePath,
+      FileNodeSource.remote,
+    );
+
+    console.log(
+      `<getFullPaths> \n\tpossibleLocalPath: ${possibleLocalPath}, \n\tpossibleRemotePath: ${possibleRemotePath}, \n\tlocalPathExists:  ${localPathExists}, \n\tremotePathExists:  ${remotePathExists}`,
+    );
+
+    if (localPathExists && !remotePathExists) {
       localPath = possibleLocalPath;
-    }
-
-    if (!remotePath && fs.existsSync(possibleRemotePath)) {
       remotePath = possibleRemotePath;
+      comparisonNode.status = ComparisonStatus.added;
+      break;
     }
 
-    // If both paths are found, no need to continue
-    if (localPath && remotePath) {
+    if (!localPathExists && remotePathExists) {
+      localPath = possibleLocalPath;
+      remotePath = possibleRemotePath;
+      comparisonNode.status = ComparisonStatus.removed;
+      break;
+    }
+
+    if (localPathExists && remotePathExists) {
+      localPath = possibleLocalPath;
+      remotePath = possibleRemotePath;
+      comparisonNode.status = ComparisonStatus.unchanged;
       break;
     }
   }
 
+  logInfoMessage(
+    `<getFullPaths> \n\trelativePath: ${relativePath}, \n\tlocalPath: ${localPath}, \n\tremotePath: ${remotePath}`,
+  );
   return { localPath, remotePath };
 }
 
@@ -107,12 +136,24 @@ export function getRelativePath(fullPath: string): string {
 export async function pathExists(path: string, source: FileNodeSource) {
   switch (source) {
     case FileNodeSource.local:
-      return fs.existsSync(path);
+      return localPathExists(path);
     case FileNodeSource.remote:
       return await remotePathExists(path);
     default:
       throw new Error("[FileNode - exists()] Wrong FileNode source.");
   }
+}
+
+function localPathExists(path: string): BaseNodeType | false {
+  if (fs.existsSync(path)) {
+    const stats = fs.lstatSync(path);
+    if (stats.isDirectory()) {
+      return BaseNodeType.directory;
+    } else if (stats.isFile()) {
+      return BaseNodeType.file;
+    }
+  }
+  return false;
 }
 
 export function comparePaths(path1: string, path2: string): boolean {

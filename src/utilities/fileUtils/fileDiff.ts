@@ -8,10 +8,12 @@ import { ComparisonFileNode } from "../ComparisonFileNode";
 export async function showDiff(fileNode: ComparisonFileNode) {
   const configuration = WorkspaceConfig.getRemoteServerConfigured();
 
-  const { localPath, remotePath } = getFullPaths(fileNode);
+  const { localPath, remotePath } = await getFullPaths(fileNode);
 
-  if (!localPath || !remotePath) {
-    window.showErrorMessage(`No local or remote path found for ${fileNode.relativePath}`);
+  if (!localPath || !remotePath) {
+    window.showErrorMessage(
+      `No local or remote path found for ${fileNode.relativePath}`,
+    );
     return;
   }
 

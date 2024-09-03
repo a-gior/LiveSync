@@ -122,7 +122,7 @@ export class ConfigurationPanel extends Panel {
 
   static async saveRemoteServerConfiguration(
     configuration: ConfigurationState["configuration"],
-  ) {
+  ): Promise<void> {
     if (configuration) {
       const connectionManager = ConnectionManager.getInstance(configuration);
 
@@ -149,12 +149,13 @@ export class ConfigurationPanel extends Panel {
           window.showErrorMessage(
             `Remote server configuration couldn't be saved. \n${err.message}`,
           );
+          throw err;
         });
     } else {
       window.showErrorMessage(
         "No configuration found or missing properties. Please configure LiveSync correctly.",
       );
-      return;
+      return Promise.reject(new Error("Invalid configuration"));
     }
   }
 

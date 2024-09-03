@@ -72,13 +72,25 @@ export default class FileNodeManager {
     fileName: string,
   ): Promise<Map<string, ComparisonFileNode>> {
     const filePath = path.join(SAVE_DIR, fileName);
-    let fileEntryMap = new Map<string, ComparisonFileNode>();
+    const fileEntryMap = new Map<string, ComparisonFileNode>();
+
     if (fs.existsSync(filePath)) {
-      const fileContent = await fs.promises.readFile(filePath, "utf-8");
-      const json: ComparisonFileData = JSON.parse(fileContent);
-      //   return new Map(Object.entries(JSON.parse(fileContent)));
-      for (const entryName in json) {
-        fileEntryMap.set(entryName, new ComparisonFileNode(json));
+      try {
+        const fileContent = await fs.promises.readFile(filePath, "utf-8");
+        const json = JSON.parse(fileContent);
+
+        for (const entryName in json) {
+          if (json.hasOwnProperty(entryName)) {
+            const entry: ComparisonFileData = json[entryName];
+            fileEntryMap.set(entryName, new ComparisonFileNode(entry));
+          }
+        }
+      } catch (error) {
+        logErrorMessage(
+          `Failed to load comparison file node from JSON`,
+          LOG_FLAGS.ALL,
+          error,
+        );
       }
     }
 

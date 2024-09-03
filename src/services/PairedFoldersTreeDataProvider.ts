@@ -2,7 +2,6 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { ensureDirectoryExists } from "../utilities/fileUtils/fileOperations";
 import {
-  comparePaths,
   getRelativePath,
   isRootPath,
 } from "../utilities/fileUtils/filePathUtils";
@@ -61,8 +60,17 @@ export class PairedFoldersTreeDataProvider
   refresh(element?: ComparisonFileNode): void {
     if (!element) {
       console.debug("################ Refresh all ################");
+      this._onDidChangeTreeData.fire(undefined);
+    } else {
+      // Find the corresponding element in the tree using findEntryByPath
+      let foundElement = this.findEntryByPath(element.relativePath, true);
+      if (foundElement) {
+        Object.assign(foundElement, element);
+        this._onDidChangeTreeData.fire(foundElement);
+      } else {
+        console.warn("Element not found in tree structure:", element);
+      }
     }
-    this._onDidChangeTreeData.fire(element);
   }
 
   public async addElement(
@@ -159,25 +167,21 @@ export class PairedFoldersTreeDataProvider
         if (!comparisonEntries || comparisonEntries.size === 0) {
           ensureDirectoryExists(SAVE_DIR);
           const pairedFolders = WorkspaceConfig.getPairedFoldersConfigured();
-          let rootEntries: Map<string, ComparisonFileNode> = new Map<
-            string,
-            ComparisonFileNode
-          >();
 
           for (const { localPath, remotePath } of pairedFolders) {
             const comparisonFileNode = await this.getComparisonFileNode(
               localPath,
               remotePath,
             );
-            rootEntries.set(comparisonFileNode.name, comparisonFileNode);
+            this.rootElements.set(comparisonFileNode.name, comparisonFileNode);
           }
 
           await this.fileNodeManager.updateFullJson(
             JsonType.COMPARE,
-            rootEntries,
+            this.rootElements,
           );
 
-          return BaseNode.toArray(rootEntries);
+          return BaseNode.toArray(this.rootElements);
         } else if (comparisonEntries) {
           this.rootElements = comparisonEntries;
           return BaseNode.toArray(this.rootElements);
@@ -214,14 +218,21 @@ export class PairedFoldersTreeDataProvider
         remoteFiles,
       );
 
-      console.log("Saving JSON LOCAL: ", localFiles);
-      await this.fileNodeManager.updateJsonFileNode(localFiles, JsonType.LOCAL);
+      if (localFiles) {
+        console.log("Saving JSON LOCAL: ", localFiles);
+        await this.fileNodeManager.updateJsonFileNode(
+          localFiles,
+          JsonType.LOCAL,
+        );
+      }
 
-      console.log("Saving JSON REMOTE: ", localFiles);
-      await this.fileNodeManager.updateJsonFileNode(
-        remoteFiles,
-        JsonType.REMOTE,
-      );
+      if (remoteFiles) {
+        console.log("Saving JSON REMOTE: ", localFiles);
+        await this.fileNodeManager.updateJsonFileNode(
+          remoteFiles,
+          JsonType.REMOTE,
+        );
+      }
 
       return comparisonFileNode;
     } catch (error) {
@@ -232,9 +243,10 @@ export class PairedFoldersTreeDataProvider
 
   findEntryByPath(
     filePath: string,
+    isPathRelative: boolean = false,
     rootEntries: Map<string, ComparisonFileNode> = this.rootElements,
   ): ComparisonFileNode | undefined {
-    const relativePath = getRelativePath(filePath);
+    const relativePath = isPathRelative ? filePath : getRelativePath(filePath);
     if (!relativePath) {
       return undefined;
     }
@@ -254,19 +266,24 @@ export class PairedFoldersTreeDataProvider
     }
 
     for (const part of pathParts) {
-      foundEntry = Array.from(currentEntries.values()).find((entry) =>
-        comparePaths(entry.name, part),
-      );
+      foundEntry = currentEntries.get(part);
       if (!foundEntry) {
         return undefined;
       }
+
+      // If we've reached the last part of the path, return the found entry
+      if (part === pathParts[pathParts.length - 1]) {
+        return foundEntry;
+      }
+
       if (foundEntry.isDirectory()) {
         currentEntries = foundEntry.children;
       } else {
-        break;
+        break; // Stop if it's a file before reaching the last part
       }
     }
 
+    console.log(`<findEntryByPath> foundEntry: `, foundEntry);
     return foundEntry;
   }
 }

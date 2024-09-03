@@ -9,15 +9,12 @@ export async function compareCorrespondingEntry(
   fileEntry: ComparisonFileNode,
 ): Promise<ComparisonFileNode> {
   try {
-    let { localPath, remotePath } = getFullPaths(fileEntry);
-
-    console.log(`<compareCorrespondingEntry> Check: `, fileEntry);
+    let { localPath, remotePath } = await getFullPaths(fileEntry);
 
     switch (fileEntry.status) {
       case ComparisonStatus.added:
         remotePath = getCorrespondingPath(localPath!);
         break;
-
       case ComparisonStatus.removed:
         localPath = getCorrespondingPath(remotePath!);
         break;
@@ -29,6 +26,7 @@ export async function compareCorrespondingEntry(
       );
     }
 
+    console.log(`<compareCorrespondingEntry> fileEntry: `, fileEntry);
     const localEntry = await listLocalFilesRecursive(localPath);
     const remoteEntry = await listRemoteFilesRecursive(remotePath);
 

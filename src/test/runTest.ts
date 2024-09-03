@@ -13,10 +13,10 @@ async function main() {
     // Passed to --extensionTestsPath
     const extensionTestsPath = path.resolve(__dirname, "./suite/index");
 
-    const testWorkspace = path.resolve(
-      __dirname,
-      "../../out/src/test/workspace-test",
-    );
+    // const testWorkspace = path.resolve(
+    //   __dirname,
+    //   "../../out/src/test/workspace-test",
+    // );
 
     const { path: tempdir, cleanup } = await dir({ unsafeCleanup: true });
 

@@ -4,94 +4,104 @@ import { FileNode, FileNodeSource } from "../FileNode";
 import pLimit = require("p-limit");
 import { ConnectionManager } from "../../services/ConnectionManager";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
-import { LogManager } from "../../services/LogManager";
+import {
+  LOG_FLAGS,
+  logErrorMessage,
+  LogManager,
+} from "../../services/LogManager";
 import { shouldIgnore } from "../shouldIgnore";
 import { generateHash2, getLocalFileHash } from "./hashUtils";
 import { StatusBarManager } from "../../services/StatusBarManager";
 import { BaseNodeType } from "../BaseNode";
+import { pathExists } from "./filePathUtils";
+import { rejects } from "assert";
 
 // Set a limit for the number of concurrent file operations, from 10 onwards triggers a warning for too much event listeners
 const limit = pLimit(9);
 
 export async function listRemoteFilesRecursive(
   remoteDir: string,
-): Promise<FileNode> {
+): Promise<FileNode | undefined> {
   console.log(`Listing remote ${remoteDir} recursively...`);
 
   const configuration = WorkspaceConfig.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
+  if (!(await pathExists(remoteDir, FileNodeSource.remote))) {
+    logErrorMessage(
+      `Could not find remotely the specified file/folder at ${remoteDir}`,
+      LOG_FLAGS.CONSOLE_AND_LOG_MANAGER,
+    );
+    return undefined;
+  }
+
   try {
     return await connectionManager.doSSHOperation(async (sshClient) => {
-      /**
-       * Commands to get the list of paths for folders and files
-       * find "${remoteDir}" -exec stat --format='%n,%s,%Y,%F' {} \\;
-       * Commands to also get hash on the following line for files
-       * find "${remoteDir}" -exec sh -c 'if [ -d "$1" ]; then stat --format="%n,%s,%Y,%F," "$1"; else stat --format="%n,%s,%Y,%F" "$1" && sha256sum "$1" | awk "{printf \\"%s\\\n\\", \\$1}"; fi' sh {} \\;
-       */
       const command = `find "${remoteDir}" -exec sh -c 'if [ -d "$1" ]; then stat --format="%n,%s,%Y,%F," "$1"; else stat --format="%n,%s,%Y,%F" "$1" && sha256sum "$1" | awk "{printf \\"%s\\\\n\\", \\\$1}"; fi' sh {} \\;`;
-      const output = await sshClient.executeCommand(command);
 
-      const lines = output.trim().split("\n");
+      let rootEntry: FileNode | undefined;
+      let currentEntry: FileNode | undefined;
 
-      // Extract the first line to create the rootEntry
-      const [rootFullPath, rootSize, rootModifyTime] = lines[0].split(",");
-      const rootEntry = new FileNode(
-        path.basename(rootFullPath),
-        BaseNodeType.directory,
-        parseInt(rootSize, 10),
-        new Date(parseInt(rootModifyTime, 10) * 1000),
-        rootFullPath,
-        FileNodeSource.remote
-      );
+      await sshClient.executeCommand(command, (data?: string) => {
+        if (!data) return;
+        const lines = data.trim().split("\n");
 
-      // Process each line to build the tree
-      for (let i = 1; i < lines.length; i++) {
-        const line = lines[i];
-        // Skip lines with only hash (result of skipping lines when ignored)
-        if (line.split(",").length <= 1) {
-          console.error("Skipping line: ", line);
-          continue;
-        }
-        const [fullPath, size, modifyTime, type] = line.split(",");
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
 
-        const entryType =
-          type === "directory" ? BaseNodeType.directory : BaseNodeType.file;
+          if (line.split(",").length <= 1) {
+            console.error("Skipping line: ", line);
+            continue;
+          }
 
-        if (shouldIgnore(fullPath)) {
-          continue;
-        }
-        LogManager.log(`[${i}] List ${fullPath}`);
+          const [fullPath, size, modifyTime, type] = line.split(",");
+          const entryType =
+            type === "directory" ? BaseNodeType.directory : BaseNodeType.file;
 
-        const newEntry = new FileNode(
-          path.basename(fullPath),
-          entryType,
-          parseInt(size, 10),
-          new Date(parseInt(modifyTime, 10) * 1000),
-          fullPath,
-          FileNodeSource.remote,
-        );
+          if (shouldIgnore(fullPath)) {
+            continue;
+          }
 
-        let hash = "";
-        if (entryType === BaseNodeType.file) {
-          // Get the hash from the next line if it's a file
-          hash = lines[++i];
-        }
-        newEntry.hash = generateHash2(fullPath, entryType, hash);
+          const newEntry = new FileNode(
+            path.basename(fullPath),
+            entryType,
+            parseInt(size, 10),
+            new Date(parseInt(modifyTime, 10) * 1000),
+            fullPath,
+            FileNodeSource.remote,
+          );
 
-        const relativePath = path.relative(rootFullPath, fullPath);
-        const pathParts = relativePath.split(path.sep);
-
-        let currentEntry = rootEntry;
-
-        for (const part of pathParts) {
-          if (currentEntry.children.has(part)) {
-            currentEntry = currentEntry.children.get(part)!;
+          if (!rootEntry) {
+            rootEntry = newEntry;
+            currentEntry = rootEntry;
           } else {
-            currentEntry.addChild(newEntry);
-            break;
+            let hash = "";
+            if (entryType === BaseNodeType.file && i + 1 < lines.length) {
+              hash = lines[++i];
+            }
+            newEntry.hash = generateHash2(fullPath, entryType, hash);
+
+            const relativePath = path.relative(rootEntry.fullPath, fullPath);
+            const pathParts = relativePath.split(path.sep);
+
+            let tempEntry = currentEntry;
+
+            for (const part of pathParts) {
+              if (tempEntry!.children.has(part)) {
+                tempEntry = tempEntry!.children.get(part)!;
+              } else {
+                tempEntry!.addChild(newEntry);
+                break;
+              }
+            }
           }
         }
+      });
+
+      if (!rootEntry) {
+        throw new Error(
+          `Could not find remotely the specified file/folder at ${remoteDir}`,
+        );
       }
 
       console.log("Root Entry: ", rootEntry);
@@ -112,7 +122,7 @@ export async function listRemoteFilesRecursive(
 
 export async function listLocalFilesRecursive(
   localDir: string,
-): Promise<FileNode> {
+): Promise<FileNode | undefined> {
   console.log(`Listing local ${localDir} recursively...`);
   StatusBarManager.showMessage(
     `Listing files of ${localDir}`,
@@ -123,9 +133,18 @@ export async function listLocalFilesRecursive(
     true,
   );
 
+  const nodeType = await pathExists(localDir, FileNodeSource.local);
+  if (!nodeType) {
+    logErrorMessage(
+      `Could not find locally the specified file/folder at ${localDir}`,
+      LOG_FLAGS.CONSOLE_AND_LOG_MANAGER,
+    );
+    return undefined;
+  }
+
   const rootEntry = new FileNode(
     path.basename(localDir),
-    BaseNodeType.directory,
+    nodeType,
     (await fs.stat(localDir)).size,
     (await fs.stat(localDir)).mtime,
     path.normalize(localDir),
@@ -136,11 +155,11 @@ export async function listLocalFilesRecursive(
 
   while (stack.length > 0) {
     const currentEntry = stack.pop();
-    if (!currentEntry) {
-      continue;
-    }
-
-    if (shouldIgnore(currentEntry.fullPath)) {
+    if (
+      !currentEntry ||
+      shouldIgnore(currentEntry.fullPath) ||
+      !rootEntry.isDirectory()
+    ) {
       continue;
     }
 

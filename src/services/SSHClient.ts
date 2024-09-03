@@ -92,7 +92,10 @@ export class SSHClient {
     }
   }
 
-  async executeCommand(command: string): Promise<string> {
+  async executeCommand(
+    command: string,
+    dataCallback?: (data: string) => void,
+  ): Promise<string> {
     return new Promise<string>((resolve, reject) => {
       this._client.exec(command, (err, stream) => {
         if (err) {
@@ -113,7 +116,11 @@ export class SSHClient {
             resolve(output);
           })
           .on("data", (data: Buffer) => {
-            output += data.toString();
+            const dataString = data.toString();
+            if (dataCallback) {
+              dataCallback(dataString);
+            }
+            output += dataString;
           })
           .stderr.on("data", (data: Buffer) => {
             output += data.toString();

@@ -1,8 +1,13 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import * as assert from "assert";
 import { ConfigurationPanel } from "../../panels/ConfigurationPanel";
 import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 suite("LiveSync Configuration Command Tests", () => {
   // let extensionContext: vscode.ExtensionContext;
@@ -12,13 +17,24 @@ suite("LiveSync Configuration Command Tests", () => {
   );
 
   suiteSetup(async function () {
-    console.log("suiteSetup");
+    console.log("Suite Test Setup");
+
+    const testWorkspace = path.resolve(
+      __dirname,
+      "../../out/src/test/workspace-test",
+    );
+
+    console.log("workspacePath: ", testWorkspace);
+    // Ensure workspace is opened
+    vscode.workspace.updateWorkspaceFolders(0, null, {
+      uri: vscode.Uri.file(testWorkspace),
+    });
   });
 
   test("TestConnection & Save Configuration", async () => {
     // Local VM credentials used for testing
     const configurationTest: ConfigurationMessage["configuration"] = {
-      hostname: "192.168.56.101",
+      hostname: "192.168.1.18",
       port: 22,
       authMethod: "auth-password",
       username: "centos",
@@ -33,19 +49,33 @@ suite("LiveSync Configuration Command Tests", () => {
 
     // Save Configuration
     const currentConfig = WorkspaceConfig.getAll();
-    assert.equal(currentConfig, null, "Initial Config isnt null");
-    try {
-      await ConfigurationPanel.saveRemoteServerConfiguration(configurationTest);
-    } catch (err: any) {
-      console.log("Error updating config: ", err.message);
-    }
-    const updatedConfig = WorkspaceConfig.getAll();
+    const baseConfig = {
+      configuration: configurationTest,
+      pairedFolders: [],
+      fileEventActions: {
+        actionOnSave: "check&save",
+        actionOnCreate: "check&create",
+        actionOnDelete: "check&delete",
+        actionOnMove: "check&move",
+      },
+      ignoreList: [],
+    };
 
+    assert.deepEqual(
+      currentConfig,
+      baseConfig,
+      "Initial Config isnt equal to the base config",
+    );
+    await ConfigurationPanel.saveRemoteServerConfiguration(configurationTest);
+
+    const updatedConfig = WorkspaceConfig.getAll();
     assert.deepEqual(
       updatedConfig?.configuration,
       configurationTest,
       "Config is not updated",
     );
+
+    await delay(5000); // 5 seconds delay
   });
 
   suiteTeardown(async () => {

@@ -83,12 +83,20 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
       status = ComparisonStatus.added;
     } else if (localNode && remoteNode) {
       if (localNode.type !== remoteNode.type) {
+        console.log(
+          `TYPES modified: local-${localNode.type} <=> remote-${remoteNode.type}`,
+          localNode,
+          remoteNode,
+        );
         status = ComparisonStatus.modified;
       } else if (
         localNode.type === BaseNodeType.file &&
         remoteNode.type === BaseNodeType.file
       ) {
         if (localNode.hash !== remoteNode.hash) {
+          console.log(
+            `HASHES modified: local-${localNode.hash} <=> remote-${remoteNode.hash}`,
+          );
           status = ComparisonStatus.modified;
         }
       }
@@ -110,6 +118,8 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
       ...(remoteNode?.children.keys() || []),
     ]);
 
+    let previousChildStatus: ComparisonStatus | undefined = undefined;
+
     for (const childName of allChildrenNames) {
       const localChild = localNode?.getChild(childName);
       const remoteChild = remoteNode?.getChild(childName);
@@ -119,10 +129,22 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
       );
       comparisonNode.addChild(childComparisonNode);
 
+      if (!previousChildStatus) {
+        previousChildStatus = childComparisonNode.status;
+      }
+
       // If any child is added, removed, or modified, mark the current node as modified
-      if (childComparisonNode.status !== ComparisonStatus.unchanged) {
+      if (childComparisonNode.status !== previousChildStatus) {
+        console.log(`CHILD modified: `, childComparisonNode);
         comparisonNode.status = ComparisonStatus.modified;
       }
+    }
+
+    if (
+      comparisonNode.status !== ComparisonStatus.modified &&
+      previousChildStatus
+    ) {
+      comparisonNode.status = previousChildStatus;
     }
 
     return comparisonNode;

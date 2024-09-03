@@ -22,9 +22,11 @@ async function createRemoteDirectories(
   const filePaths: { localPath: string; remotePath: string }[] = [];
 
   const createDir = async (node: ComparisonFileNode) => {
-    const { localPath, remotePath } = getFullPaths(node);
-    if(!remotePath || !localPath) {
-      throw new Error(`Couldnt find localPath or remotePath for ${node.relativePath}`);
+    const { localPath, remotePath } = await getFullPaths(node);
+    if (!remotePath || !localPath) {
+      throw new Error(
+        `Couldnt find localPath or remotePath for ${node.relativePath}`,
+      );
     }
 
     if (node.listChildren().length === 0) {
@@ -99,20 +101,23 @@ async function createLocalDirectories(
   const filePaths: { remotePath: string; localPath: string }[] = [];
 
   const createDir = async (node: ComparisonFileNode) => {
-    const { localPath, remotePath } = getFullPaths(node); 
-    if(!remotePath || !localPath) {
-      throw new Error(`Couldnt find localPath or remotePath for ${node.relativePath}`);
+    const { localPath, remotePath } = await getFullPaths(node);
+    if (!remotePath || !localPath) {
+      throw new Error(
+        `Couldnt find localPath or remotePath for ${node.relativePath}`,
+      );
     }
 
     if (node.isDirectory()) {
       await fs.promises.mkdir(localPath, { recursive: true });
 
-      const remoteEntries = await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
-        return await sftpClient.getClient().list(remotePath);
-      });
+      const remoteEntries = await connectionManager.doSFTPOperation(
+        async (sftpClient: SFTPClient) => {
+          return await sftpClient.getClient().list(remotePath);
+        },
+      );
 
       for (const remoteEntry of remoteEntries) {
-
         const childEntry = new ComparisonFileNode(
           remoteEntry.name,
           remoteEntry.type === "d" ? BaseNodeType.directory : BaseNodeType.file,

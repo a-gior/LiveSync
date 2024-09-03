@@ -29,16 +29,31 @@ export class FileNode extends BaseNode<FileNode> {
     source?: FileNodeSource,
   ) {
     if (typeof data === "string") {
+      if (
+        !data ||
+        !type ||
+        size === undefined ||
+        !modifiedTime ||
+        !fullPath ||
+        !source
+      ) {
+        throw new Error(
+          `Missing parameters to instantiate FileNode. Required : data: ${data}, type: ${type}, size:  ${size}, modifiedTime:  ${modifiedTime}, fullPath:  ${fullPath}, source:  ${source} `,
+        );
+      }
+
       // Traditional constructor parameters
-      super(data, type!, size!, modifiedTime!, fullPath!);
-      this.source = source!;
-      this.fullPath = fullPath!;
+      super(data, type, size, modifiedTime, fullPath);
+      this.source = source;
+      this.fullPath = fullPath;
+      this.relativePath = getRelativePath(fullPath);
     } else {
       // JSON-like object initialization
       super(data);
       this.source = data.source;
       this.fullPath = data.fullPath;
       this.hash = data.hash;
+      this.relativePath = data.relativePath;
     }
   }
 

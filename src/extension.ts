@@ -12,11 +12,13 @@ import {
   uploadDirectory,
 } from "./utilities/fileUtils/directoryOperations";
 import { FileEventHandler } from "./services/FileEventHandler";
-import path from "path";
 import { StatusBarManager } from "./services/StatusBarManager";
 import { compareCorrespondingEntry } from "./utilities/fileUtils/entriesComparison";
 import { logErrorMessage, LogManager } from "./services/LogManager";
-import { ComparisonFileNode, ComparisonStatus } from "./utilities/ComparisonFileNode";
+import {
+  ComparisonFileNode,
+  ComparisonStatus,
+} from "./utilities/ComparisonFileNode";
 import { getFullPaths } from "./utilities/fileUtils/filePathUtils";
 
 // This method is called when your extension is activated
@@ -90,27 +92,12 @@ export function activate(context: vscode.ExtensionContext) {
         if (!element) {
           pairedFoldersTreeDataProvider.refresh();
         } else {
-          if (element.status === ComparisonStatus.added) {
-            const parentEntry = pairedFoldersTreeDataProvider.findEntryByPath(
-              path.dirname(element.relativePath),
-            );
-            pairedFoldersTreeDataProvider.addElement(element, parentEntry);
-          } else if (element.status === ComparisonStatus.removed) {
-            const parentEntry = pairedFoldersTreeDataProvider.findEntryByPath(
-              path.dirname(element.relativePath),
-            );
-            pairedFoldersTreeDataProvider.removeElement(element, parentEntry);
-          } else {
-            compareCorrespondingEntry(element).then(
-              (updatedElement: ComparisonFileNode) => {
-                console.log(
-                  `[Refresh command] updatedElement: `,
-                  updatedElement,
-                );
-                pairedFoldersTreeDataProvider.refresh(updatedElement);
-              },
-            );
-          }
+          compareCorrespondingEntry(element).then(
+            (updatedElement: ComparisonFileNode) => {
+              console.log(`[Refresh command] updatedElement: `, updatedElement);
+              pairedFoldersTreeDataProvider.refresh(updatedElement);
+            },
+          );
         }
       },
     ),
@@ -128,9 +115,12 @@ export function activate(context: vscode.ExtensionContext) {
           await uploadDirectory(fileEntry);
         } else {
           try {
-            const { localPath } = getFullPaths(fileEntry);
-            if(!localPath) {
-              throw new Error(`No local path found for ${fileEntry.relativePath}`);
+            const { localPath } = await getFullPaths(fileEntry);
+            console.log(`localPath: ${localPath}`);
+            if (!localPath) {
+              throw new Error(
+                `No local path found for ${fileEntry.relativePath}`,
+              );
             }
 
             const fileUri = vscode.Uri.file(localPath);

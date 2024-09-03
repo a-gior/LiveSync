@@ -2,6 +2,7 @@ import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage
 import { SFTPError } from "@shared/DTOs/sftpErrorDTO";
 import Client = require("ssh2-sftp-client");
 import * as fs from "fs";
+import { BaseNodeType } from "../utilities/BaseNode";
 
 export class SFTPClient {
   private static instance: SFTPClient;
@@ -142,8 +143,16 @@ export class SFTPClient {
     }
   }
 
-  async pathExists(remotePath: string) {
-    return this._client.exists(remotePath);
+  async pathExists(remotePath: string): Promise<BaseNodeType | false> {
+    const result = await this._client.exists(remotePath);
+    if (result === false) {
+      return false;
+    } else if (result === "-") {
+      return BaseNodeType.file;
+    } else if (result === "d") {
+      return BaseNodeType.directory;
+    }
+    return false; // In case of any unexpected result
   }
 
   private _addError(msg: string, err: any) {
