@@ -6,7 +6,7 @@ import { ConnectionManager } from "../../services/ConnectionManager";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import { LOG_FLAGS, logErrorMessage } from "../../services/LogManager";
 import { shouldIgnore } from "../shouldIgnore";
-import { generateHash2, getLocalFileHash } from "./hashUtils";
+import { generateHash } from "./hashUtils";
 import { StatusBarManager } from "../../services/StatusBarManager";
 import { BaseNodeType } from "../BaseNode";
 import { getRootFolderName, pathExists } from "./filePathUtils";
@@ -53,8 +53,9 @@ export async function listRemoteFilesRecursive(
           if (splitLine.length === 1) {
             // It's a hash, apply it to the last buffered file
             if (lastBufferedFile) {
-              lastBufferedFile.hash = generateHash2(
+              lastBufferedFile.hash = await generateHash(
                 lastBufferedFile.fullPath,
+                FileNodeSource.remote,
                 BaseNodeType.file,
                 line,
               );
@@ -117,7 +118,6 @@ export async function listRemoteFilesRecursive(
         );
       }
 
-      console.log("Root Entry: ", rootEntry);
       return rootEntry;
     }, `Listing files from ${remoteDir}`);
   } catch (error) {
@@ -166,6 +166,12 @@ export async function listLocalFilesRecursive(
     FileNodeSource.local,
   );
 
+  rootEntry.hash = await generateHash(
+    path.normalize(localDir),
+    FileNodeSource.local,
+    nodeType,
+  );
+
   const stack = [rootEntry];
 
   while (stack.length > 0) {
@@ -204,11 +210,11 @@ export async function listLocalFilesRecursive(
           normalizedFilePath,
           FileNodeSource.local,
         );
-        const hashContent = await getLocalFileHash(normalizedFilePath);
-        newEntry.hash = generateHash2(
+
+        newEntry.hash = await generateHash(
           normalizedFilePath,
+          FileNodeSource.local,
           entryType,
-          hashContent,
         );
 
         if (file.isDirectory()) {

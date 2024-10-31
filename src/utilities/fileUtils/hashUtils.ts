@@ -18,6 +18,7 @@ export async function generateHash(
   filePath: string,
   fileSource: FileNodeSource,
   fileType: BaseNodeType,
+  fileContentHash: string = "",
 ) {
   if (!filePath) {
     console.log("Empty parameters passed to generateHash");
@@ -32,9 +33,7 @@ export async function generateHash(
     );
   }
 
-  let fileContentHash: string = "";
-
-  if (fileType === BaseNodeType.file) {
+  if (fileType === BaseNodeType.file && fileContentHash === "") {
     if (fileSource === FileNodeSource.local) {
       fileContentHash = await new Promise<string>((resolve, reject) => {
         const hash = crypto.createHash("sha256");
