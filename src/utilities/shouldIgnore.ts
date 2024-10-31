@@ -1,5 +1,5 @@
 import path from "path";
-import { LogManager } from "../services/LogManager";
+import { LOG_FLAGS, logInfoMessage } from "../services/LogManager";
 import { WorkspaceConfig } from "../services/WorkspaceConfig";
 import { minimatch } from "minimatch";
 
@@ -12,8 +12,7 @@ export function shouldIgnore(filePath: string): boolean {
   );
 
   if (shouldIgnore) {
-    console.log(`Ignored: ${filePath}`);
-    LogManager.log(`Ignored: ${filePath}`);
+    logInfoMessage(`Ignored: ${filePath}`, LOG_FLAGS.CONSOLE_AND_LOG_MANAGER);
   }
 
   return shouldIgnore;

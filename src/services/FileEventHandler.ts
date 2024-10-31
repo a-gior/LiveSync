@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { FileNode } from "../utilities/FileNode";
+import { FileNode, getFileNodeInfo } from "../utilities/FileNode";
 import { PairedFoldersTreeDataProvider } from "./PairedFoldersTreeDataProvider";
 
 import {
@@ -9,8 +9,11 @@ import {
   fileSave,
 } from "../utilities/fileUtils/fileEventFunctions";
 import { WorkspaceConfig } from "./WorkspaceConfig";
-import { ComparisonFileNode, ComparisonStatus } from "../utilities/ComparisonFileNode";
-import { getRelativePath } from "../utilities/fileUtils/filePathUtils";
+import {
+  ComparisonFileNode,
+  ComparisonStatus,
+} from "../utilities/ComparisonFileNode";
+import FileNodeManager from "./FileNodeManager";
 
 export class FileEventHandler {
   /**
@@ -25,7 +28,7 @@ export class FileEventHandler {
     context.subscriptions.push(
       // Handle file create events
       vscode.workspace.onDidCreateFiles(async (event) => {
-        await FileEventHandler.handleFileCreate(event);
+        await FileEventHandler.handleFileCreate(event, treeDataProvider);
       }),
 
       // Handle file delete events
@@ -67,14 +70,28 @@ export class FileEventHandler {
    * @param event - The file create event
    * @param treeDataProvider - The tree data provider
    */
-  static async handleFileCreate(event: vscode.FileCreateEvent) {
+  static async handleFileCreate(
+    event: vscode.FileCreateEvent,
+    treeDataProvider: PairedFoldersTreeDataProvider,
+  ) {
     for (const fileUri of event.files) {
-      fileSave(fileUri)
-        .then(() => {
-          const fileNode = FileNode.getEntryFromLocalPath(fileUri.fsPath);
-          const comparisonFileNode = new ComparisonFileNode(fileNode.name, fileNode.type, fileNode.size, fileNode.modifiedTime, fileNode.relativePath, ComparisonStatus.added);
+      fileSave(fileUri, treeDataProvider)
+        .then(async () => {
+          const fileNode = await FileNode.getEntryFromLocalPath(fileUri.fsPath);
+          const comparisonFileNode = new ComparisonFileNode(
+            fileNode.name,
+            fileNode.pairedFolderName,
+            fileNode.type,
+            fileNode.size,
+            fileNode.modifiedTime,
+            fileNode.relativePath,
+            ComparisonStatus.added,
+          );
 
-          vscode.commands.executeCommand("livesync.fileEntryRefresh", comparisonFileNode);
+          vscode.commands.executeCommand(
+            "livesync.fileEntryRefresh",
+            comparisonFileNode,
+          );
         })
         .catch((err: any) => {
           console.error("[handleFileCreate] Error : ", err);
@@ -92,10 +109,11 @@ export class FileEventHandler {
     treeDataProvider: PairedFoldersTreeDataProvider,
   ) {
     for (const fileUri of event.files) {
-      fileDelete(fileUri)
+      fileDelete(fileUri, treeDataProvider)
         .then(() => {
-          const entryToRemove = treeDataProvider.findEntryByPath(
+          const entryToRemove = FileNodeManager.findEntryByPath(
             fileUri.fsPath,
+            treeDataProvider.rootElements,
           );
           if (entryToRemove) {
             vscode.commands.executeCommand(
@@ -120,10 +138,11 @@ export class FileEventHandler {
     treeDataProvider: PairedFoldersTreeDataProvider,
   ) {
     for (const { oldUri, newUri } of event.files) {
-      fileMove(oldUri, newUri)
+      fileMove(oldUri, newUri, treeDataProvider)
         .then(() => {
-          const entryToRenameOrMove = treeDataProvider.findEntryByPath(
+          const entryToRenameOrMove = FileNodeManager.findEntryByPath(
             oldUri.fsPath,
+            treeDataProvider.rootElements,
           );
 
           if (
@@ -132,7 +151,9 @@ export class FileEventHandler {
           ) {
             // Renaming the entry
             entryToRenameOrMove.name = path.basename(newUri.fsPath);
-            entryToRenameOrMove.relativePath = getRelativePath(newUri.fsPath);
+            entryToRenameOrMove.relativePath = getFileNodeInfo(
+              newUri.fsPath,
+            )!.relativePath;
             vscode.commands.executeCommand(
               "livesync.fileEntryRefresh",
               entryToRenameOrMove,
@@ -141,13 +162,15 @@ export class FileEventHandler {
             // treeDataProvider.refresh(entryToRenameOrMove);
           } else if (entryToRenameOrMove) {
             // Moving the entry
-            const oldParentEntry = treeDataProvider.findEntryByPath(
+            const oldParentEntry = FileNodeManager.findEntryByPath(
               path.dirname(oldUri.fsPath),
+              treeDataProvider.rootElements,
             );
             treeDataProvider.removeElement(entryToRenameOrMove, oldParentEntry);
 
-            const newParentEntry = treeDataProvider.findEntryByPath(
+            const newParentEntry = FileNodeManager.findEntryByPath(
               path.dirname(newUri.fsPath),
+              treeDataProvider.rootElements,
             );
             treeDataProvider.addElement(entryToRenameOrMove, newParentEntry);
           }
@@ -168,13 +191,16 @@ export class FileEventHandler {
     treeDataProvider: PairedFoldersTreeDataProvider,
   ) {
     const changedFileUri = event.document.uri;
-    const changedEntry = treeDataProvider.findEntryByPath(
+    // const changedEntry = FileNodeManager.findEntryByPath(changedFileUri.fsPath, treeDataProvider.rootElements);
+    FileNodeManager.findEntryByPath(
       changedFileUri.fsPath,
+      treeDataProvider.rootElements,
     );
-    if (changedEntry) {
-      // Perform necessary updates to the changedEntry
-      // treeDataProvider.refresh(changedEntry);
-    }
+
+    // if (changedEntry) {
+    //   // Perform necessary updates to the changedEntry
+    //   // treeDataProvider.refresh(changedEntry);
+    // }
   }
 
   /**
@@ -215,9 +241,12 @@ export class FileEventHandler {
     } else {
       console.log(`<handleFileSave> Event saving ${filePath}`);
 
-      await fileSave(document.uri)
+      await fileSave(document.uri, treeDataProvider)
         .then(() => {
-          const entrySaved = treeDataProvider.findEntryByPath(filePath);
+          const entrySaved = FileNodeManager.findEntryByPath(
+            filePath,
+            treeDataProvider.rootElements,
+          );
           vscode.commands.executeCommand(
             "livesync.fileEntryRefresh",
             entrySaved,

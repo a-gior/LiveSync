@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { SFTPClient } from "../../services/SFTPClient";
 import { FileNode, FileNodeSource } from "../FileNode";
-import { getFullPaths, getRelativePath } from "./filePathUtils";
+import { getFullPaths, getRootFolderName } from "./filePathUtils";
 import { ConnectionManager } from "../../services/ConnectionManager";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import pLimit = require("p-limit");
@@ -92,10 +92,7 @@ export async function uploadDirectory(rootEntry: ComparisonFileNode) {
   }
 }
 
-async function createLocalDirectories(
-  sftpClient: SFTPClient,
-  node: ComparisonFileNode,
-) {
+async function createLocalDirectories(node: ComparisonFileNode) {
   const configuration = WorkspaceConfig.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
   const filePaths: { remotePath: string; localPath: string }[] = [];
@@ -118,12 +115,14 @@ async function createLocalDirectories(
       );
 
       for (const remoteEntry of remoteEntries) {
+        const remoteEntryPath = path.join(localPath, remoteEntry.name);
         const childEntry = new ComparisonFileNode(
           remoteEntry.name,
+          await getRootFolderName(remoteEntryPath),
           remoteEntry.type === "d" ? BaseNodeType.directory : BaseNodeType.file,
           remoteEntry.size,
           new Date(remoteEntry.modifyTime * 1000),
-          getRelativePath(localPath),
+          remoteEntryPath,
           ComparisonStatus.unchanged,
         );
         await createDir(childEntry);
@@ -162,7 +161,8 @@ export async function downloadDirectory(remoteEntry: ComparisonFileNode) {
   try {
     await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
       // Step 1: Create local directories and collect file paths
-      const filePaths = await createLocalDirectories(sftpClient, remoteEntry);
+      const filePaths = await createLocalDirectories(remoteEntry);
+      console.log(`FilePaths: `, filePaths);
 
       // Step 2: Download files with concurrency limits
       await downloadFilesWithLimit(sftpClient, filePaths);
@@ -188,6 +188,7 @@ export async function deleteRemoteDirectory(
         if (child.type === "d") {
           const subDirEntry = new FileNode(
             child.name,
+            await getRootFolderName(childPath),
             BaseNodeType.directory,
             0,
             new Date(child.modifyTime * 1000),

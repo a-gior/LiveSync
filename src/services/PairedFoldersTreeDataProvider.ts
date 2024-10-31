@@ -1,10 +1,6 @@
 import * as vscode from "vscode";
-import * as path from "path";
 import { ensureDirectoryExists } from "../utilities/fileUtils/fileOperations";
-import {
-  getRelativePath,
-  isRootPath,
-} from "../utilities/fileUtils/filePathUtils";
+import { isRootPath } from "../utilities/fileUtils/filePathUtils";
 import {
   listLocalFilesRecursive,
   listRemoteFilesRecursive,
@@ -25,7 +21,10 @@ import {
   SAVE_DIR,
 } from "../utilities/constants";
 import { WorkspaceConfig } from "./WorkspaceConfig";
-import FileNodeManager, { JsonType } from "./FileNodeManager";
+import FileNodeManager, {
+  isComparisonFileNodeMap,
+  JsonType,
+} from "./FileNodeManager";
 import {
   ComparisonFileNode,
   ComparisonStatus,
@@ -43,7 +42,7 @@ export class PairedFoldersTreeDataProvider
     ComparisonFileNode | undefined | void
   > = this._onDidChangeTreeData.event;
 
-  private rootElements: Map<string, ComparisonFileNode> = new Map<
+  public rootElements: Map<string, ComparisonFileNode> = new Map<
     string,
     ComparisonFileNode
   >();
@@ -57,18 +56,32 @@ export class PairedFoldersTreeDataProvider
     loadLanguageIdMappings(LANGUAGEIDS_ICON_MAPPINGS_PATH);
   }
 
-  refresh(element?: ComparisonFileNode): void {
+  async loadRootElements(): Promise<void> {
+    // Simulate async loading of root elements (e.g., from a JSON file)
+    const comparisonEntries = await this.fileNodeManager.getFileEntriesMap(
+      JsonType.COMPARE,
+    );
+
+    if (comparisonEntries && isComparisonFileNodeMap(comparisonEntries)) {
+      this.rootElements = comparisonEntries;
+      console.log(" $$$$$$$$$$$$$$ Root elements loaded:", this.rootElements); // Debug log
+    }
+  }
+
+  async refresh(element?: ComparisonFileNode): Promise<void> {
     if (!element) {
       console.debug("################ Refresh all ################");
       this._onDidChangeTreeData.fire(undefined);
     } else {
-      // Find the corresponding element in the tree using findEntryByPath
-      let foundElement = this.findEntryByPath(element.relativePath, true);
-      if (foundElement) {
-        Object.assign(foundElement, element);
-        this._onDidChangeTreeData.fire(foundElement);
-      } else {
-        console.warn("Element not found in tree structure:", element);
+      // Let updateComparisonFileNode handle both finding and updating the element
+      const updatedElement = await FileNodeManager.updateComparisonFileNode(
+        element,
+        this.rootElements,
+      );
+
+      if (updatedElement && updatedElement instanceof ComparisonFileNode) {
+        this._onDidChangeTreeData.fire(updatedElement);
+        this.fileNodeManager.updateJsonFileNode(element, JsonType.COMPARE);
       }
     }
   }
@@ -117,7 +130,6 @@ export class PairedFoldersTreeDataProvider
   }
 
   getTreeItem(element: ComparisonFileNode): vscode.TreeItem {
-    console.log("GetTreeItem", element);
     const treeItem = new vscode.TreeItem(
       element.name,
       element.type === BaseNodeType.directory
@@ -150,19 +162,18 @@ export class PairedFoldersTreeDataProvider
         query,
       });
     }
+
     return treeItem;
   }
 
   async getChildren(
     element?: ComparisonFileNode,
   ): Promise<ComparisonFileNode[]> {
-    await this.fileNodeManager.waitForJsonLoad();
-
     if (!element) {
       try {
-        const comparisonEntries =
-          this.fileNodeManager.getComparisonFileEntries();
-        console.log(`ComparisonEntries: `, comparisonEntries);
+        const comparisonEntries = await this.fileNodeManager.getFileEntriesMap(
+          JsonType.COMPARE,
+        );
 
         if (!comparisonEntries || comparisonEntries.size === 0) {
           ensureDirectoryExists(SAVE_DIR);
@@ -182,7 +193,10 @@ export class PairedFoldersTreeDataProvider
           );
 
           return BaseNode.toArray(this.rootElements);
-        } else if (comparisonEntries) {
+        } else if (
+          comparisonEntries &&
+          isComparisonFileNodeMap(comparisonEntries)
+        ) {
           this.rootElements = comparisonEntries;
           return BaseNode.toArray(this.rootElements);
         } else {
@@ -239,51 +253,5 @@ export class PairedFoldersTreeDataProvider
       console.error("Error:", error);
       throw Error("Error getting ComparisonFileNode");
     }
-  }
-
-  findEntryByPath(
-    filePath: string,
-    isPathRelative: boolean = false,
-    rootEntries: Map<string, ComparisonFileNode> = this.rootElements,
-  ): ComparisonFileNode | undefined {
-    const relativePath = isPathRelative ? filePath : getRelativePath(filePath);
-    if (!relativePath) {
-      return undefined;
-    }
-    const pathParts = relativePath.split(path.sep);
-
-    let currentEntries = rootEntries;
-    let foundEntry: ComparisonFileNode | undefined;
-
-    // If rootEntries is the same as this.rootElements, find the directory root entry
-    if (currentEntries === this.rootElements) {
-      for (const rootEntry of currentEntries.values()) {
-        if (rootEntry.isDirectory()) {
-          currentEntries = rootEntry.children;
-          break;
-        }
-      }
-    }
-
-    for (const part of pathParts) {
-      foundEntry = currentEntries.get(part);
-      if (!foundEntry) {
-        return undefined;
-      }
-
-      // If we've reached the last part of the path, return the found entry
-      if (part === pathParts[pathParts.length - 1]) {
-        return foundEntry;
-      }
-
-      if (foundEntry.isDirectory()) {
-        currentEntries = foundEntry.children;
-      } else {
-        break; // Stop if it's a file before reaching the last part
-      }
-    }
-
-    console.log(`<findEntryByPath> foundEntry: `, foundEntry);
-    return foundEntry;
   }
 }

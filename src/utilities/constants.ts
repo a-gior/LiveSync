@@ -1,5 +1,7 @@
 import * as path from "path";
 
+export const ROOT_FOLDER_NAME = "%%ROOT%%";
+
 export const SAVE_DIR = path.join(__dirname, "..", "saved_data");
 
 export const LOCAL_FILES_JSON = "localFiles.json";

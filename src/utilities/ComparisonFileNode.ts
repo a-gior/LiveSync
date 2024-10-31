@@ -10,6 +10,7 @@ export enum ComparisonStatus {
 
 export interface ComparisonFileData extends BaseNodeData {
   status: ComparisonStatus;
+  pairedFolderName: string;
 }
 
 export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
@@ -17,6 +18,7 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
 
   constructor(
     nameOrJson: string | ComparisonFileData,
+    pairedFolderName?: string,
     type?: BaseNodeType,
     size?: number,
     modifiedTime?: Date,
@@ -25,19 +27,28 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
   ) {
     if (typeof nameOrJson === "string") {
       // Regular constructor logic
-      super(nameOrJson, type, size, modifiedTime, relativePath);
+      super(
+        nameOrJson,
+        pairedFolderName,
+        type,
+        size,
+        modifiedTime,
+        relativePath,
+      );
       this.status = status;
     } else {
       // Constructor from JSON
       const json = nameOrJson;
       super(
         json.name,
+        json.pairedFolderName,
         json.type,
         json.size,
         new Date(json.modifiedTime),
         json.relativePath,
       );
       this.status = json.status;
+
       if (json.children) {
         this.setChildren(
           new Map(
@@ -65,6 +76,9 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
   ): ComparisonFileNode {
     // Determine the common properties for the ComparisonFileNode
     const name = localNode ? localNode.name : remoteNode!.name;
+    const pairedFolderName = localNode
+      ? localNode.pairedFolderName
+      : remoteNode!.pairedFolderName;
     const type = localNode ? localNode.type : remoteNode!.type;
     const size = localNode ? localNode.size : remoteNode!.size;
     const modifiedTime = localNode
@@ -83,20 +97,12 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
       status = ComparisonStatus.added;
     } else if (localNode && remoteNode) {
       if (localNode.type !== remoteNode.type) {
-        console.log(
-          `TYPES modified: local-${localNode.type} <=> remote-${remoteNode.type}`,
-          localNode,
-          remoteNode,
-        );
         status = ComparisonStatus.modified;
       } else if (
         localNode.type === BaseNodeType.file &&
         remoteNode.type === BaseNodeType.file
       ) {
         if (localNode.hash !== remoteNode.hash) {
-          console.log(
-            `HASHES modified: local-${localNode.hash} <=> remote-${remoteNode.hash}`,
-          );
           status = ComparisonStatus.modified;
         }
       }
@@ -105,6 +111,7 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     // Create the ComparisonFileNode
     const comparisonNode = new ComparisonFileNode(
       name,
+      pairedFolderName,
       type,
       size,
       modifiedTime,
@@ -135,7 +142,6 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
 
       // If any child is added, removed, or modified, mark the current node as modified
       if (childComparisonNode.status !== previousChildStatus) {
-        console.log(`CHILD modified: `, childComparisonNode);
         comparisonNode.status = ComparisonStatus.modified;
       }
     }
@@ -160,6 +166,7 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
       ...baseJson,
       relativePath: this.relativePath,
       status: this.status,
+      pairedFolderName: this.pairedFolderName,
     };
   }
 

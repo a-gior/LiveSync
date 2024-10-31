@@ -14,20 +14,25 @@ import {
 import { FileEventHandler } from "./services/FileEventHandler";
 import { StatusBarManager } from "./services/StatusBarManager";
 import { compareCorrespondingEntry } from "./utilities/fileUtils/entriesComparison";
-import { logErrorMessage, LogManager } from "./services/LogManager";
 import {
-  ComparisonFileNode,
-  ComparisonStatus,
-} from "./utilities/ComparisonFileNode";
+  LOG_FLAGS,
+  logErrorMessage,
+  logInfoMessage,
+  LogManager,
+} from "./services/LogManager";
+import { ComparisonFileNode } from "./utilities/ComparisonFileNode";
 import { getFullPaths } from "./utilities/fileUtils/filePathUtils";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   console.log(
     "Activating, show context.subscriptions: ",
     context.subscriptions,
   );
+
+  const pairedFoldersTreeDataProvider = new PairedFoldersTreeDataProvider();
+  await pairedFoldersTreeDataProvider.loadRootElements();
 
   // Create the permanent status bar icon
   StatusBarManager.createPermanentIcon();
@@ -43,7 +48,6 @@ export function activate(context: vscode.ExtensionContext) {
   //     ? vscode.workspace.workspaceFolders[0].uri.fsPath
   //     : undefined;
 
-  const pairedFoldersTreeDataProvider = new PairedFoldersTreeDataProvider();
   vscode.window.registerTreeDataProvider(
     "nodeDependencies",
     pairedFoldersTreeDataProvider,
@@ -88,7 +92,11 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       "livesync.fileEntryRefresh",
       (element?: ComparisonFileNode) => {
-        console.log(`[Refresh command] element: `, element);
+        logInfoMessage(
+          "[Refresh command] element:",
+          LOG_FLAGS.CONSOLE_ONLY,
+          element,
+        );
         if (!element) {
           pairedFoldersTreeDataProvider.refresh();
         } else {
@@ -124,8 +132,7 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             const fileUri = vscode.Uri.file(localPath);
-            await fileSave(fileUri);
-            fileEntry.status = ComparisonStatus.unchanged;
+            await fileSave(fileUri, pairedFoldersTreeDataProvider);
           } catch (error: any) {
             logErrorMessage(`Failed to read file: ${error.message}`);
           }
@@ -136,10 +143,16 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       "livesync.fileEntryDownload",
       async (fileEntry: ComparisonFileNode) => {
-        if (fileEntry.isDirectory()) {
-          await downloadDirectory(fileEntry);
-        } else {
-          await handleFileDownload(fileEntry);
+        try {
+          if (fileEntry.isDirectory()) {
+            await downloadDirectory(fileEntry);
+          } else {
+            await handleFileDownload(fileEntry);
+          }
+        } catch (error: any) {
+          const errorMessage = `Failed to read file: ${error.message}`;
+          const errorStack = error.stack ? `\nStack Trace: ${error.stack}` : "";
+          logErrorMessage(`${errorMessage}${errorStack}`);
         }
         vscode.commands.executeCommand("livesync.fileEntryRefresh", fileEntry);
       },

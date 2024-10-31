@@ -1,3 +1,5 @@
+import { ROOT_FOLDER_NAME } from "./constants";
+
 export enum BaseNodeType {
   file = "file",
   directory = "directory",
@@ -5,6 +7,7 @@ export enum BaseNodeType {
 
 export interface BaseNodeData {
   name: string;
+  pairedFolderName: string;
   type: BaseNodeType;
   size: number;
   modifiedTime: Date | string;
@@ -19,9 +22,11 @@ export abstract class BaseNode<T extends BaseNode<any>> {
   modifiedTime: Date;
   relativePath: string;
   children: Map<string, T>;
+  pairedFolderName: string;
 
   constructor(
     data: BaseNodeData | string,
+    pairedFolderName: string = ROOT_FOLDER_NAME,
     type?: BaseNodeType,
     size?: number,
     modifiedTime?: Date,
@@ -30,6 +35,7 @@ export abstract class BaseNode<T extends BaseNode<any>> {
     if (typeof data === "string") {
       // Traditional constructor parameters
       this.name = data;
+      this.pairedFolderName = pairedFolderName;
       this.type = type!;
       this.size = size!;
       this.modifiedTime = modifiedTime!;
@@ -38,6 +44,7 @@ export abstract class BaseNode<T extends BaseNode<any>> {
     } else {
       // JSON-like object initialization
       this.name = data.name;
+      this.pairedFolderName = data.pairedFolderName;
       this.type = data.type;
       this.size = data.size;
       this.modifiedTime = new Date(data.modifiedTime);
@@ -72,6 +79,7 @@ export abstract class BaseNode<T extends BaseNode<any>> {
       size: this.size,
       modifiedTime: this.modifiedTime.toISOString(),
       relativePath: this.relativePath,
+      pairedFolderName: this.pairedFolderName,
       children: Object.fromEntries(
         Array.from(this.children.entries()).map(([key, value]) => [
           key,

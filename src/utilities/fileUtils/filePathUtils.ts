@@ -5,7 +5,7 @@ import { FileNodeSource } from "../FileNode";
 import { remotePathExists } from "./sftpOperations";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
-import { logErrorMessage, logInfoMessage } from "../../services/LogManager";
+import { logInfoMessage } from "../../services/LogManager";
 import { BaseNodeType } from "../BaseNode";
 
 export function normalizePath(p: string): string {
@@ -20,7 +20,6 @@ export function normalizePath(p: string): string {
 
 /**
  * Returns the local & remote paths of a file based on its comparison status and relative path.
- *
  * @param comparisonNode - The ComparisonFileNode object representing the file.
  * @returns An object containing both the local and remote paths of the file.
  * @throws Error if the paths cannot be found.
@@ -34,52 +33,46 @@ export async function getFullPaths(
   const createFullPath = (basePath: string) =>
     normalizePath(path.join(basePath, relativePath));
 
-  let localPath: string | null = null;
-  let remotePath: string | null = null;
-
+  // Iterate over the paired folders and check paths based on the comparison status
   for (const folder of pairedFolders) {
-    const possibleLocalPath = createFullPath(folder.localPath);
-    const possibleRemotePath = createFullPath(folder.remotePath);
+    const { localPath, remotePath } = {
+      localPath: createFullPath(folder.localPath),
+      remotePath: createFullPath(folder.remotePath),
+    };
+    console.log(`<getFullPaths> AA`, { localPath, remotePath });
 
-    const localPathExists = await pathExists(
-      possibleLocalPath,
-      FileNodeSource.local,
-    );
-    const remotePathExists = await pathExists(
-      possibleRemotePath,
-      FileNodeSource.remote,
-    );
+    switch (comparisonNode.status) {
+      case ComparisonStatus.added:
+        if (await pathExists(localPath, FileNodeSource.local)) {
+          return { localPath, remotePath }; // Only check local path for "added"
+        }
+        break;
+      case ComparisonStatus.removed:
+        if (await pathExists(remotePath, FileNodeSource.remote)) {
+          return { localPath, remotePath }; // Only check remote path for "removed"
+        }
+        break;
+      case ComparisonStatus.modified:
+      case ComparisonStatus.unchanged: {
+        // Check local and remote paths in parallel
+        const [localExists, remoteExists] = await Promise.all([
+          pathExists(localPath, FileNodeSource.local),
+          pathExists(remotePath, FileNodeSource.remote),
+        ]);
 
-    console.log(
-      `<getFullPaths> \n\tpossibleLocalPath: ${possibleLocalPath}, \n\tpossibleRemotePath: ${possibleRemotePath}, \n\tlocalPathExists:  ${localPathExists}, \n\tremotePathExists:  ${remotePathExists}`,
-    );
-
-    if (localPathExists && !remotePathExists) {
-      localPath = possibleLocalPath;
-      remotePath = possibleRemotePath;
-      comparisonNode.status = ComparisonStatus.added;
-      break;
-    }
-
-    if (!localPathExists && remotePathExists) {
-      localPath = possibleLocalPath;
-      remotePath = possibleRemotePath;
-      comparisonNode.status = ComparisonStatus.removed;
-      break;
-    }
-
-    if (localPathExists && remotePathExists) {
-      localPath = possibleLocalPath;
-      remotePath = possibleRemotePath;
-      comparisonNode.status = ComparisonStatus.unchanged;
-      break;
+        if (localExists && remoteExists) {
+          return { localPath, remotePath }; // Both must exist for "modified" or "unchanged"
+        }
+        break;
+      }
     }
   }
 
+  // Log and return null paths if not found
   logInfoMessage(
-    `<getFullPaths> \n\trelativePath: ${relativePath}, \n\tlocalPath: ${localPath}, \n\tremotePath: ${remotePath}`,
+    `<getFullPaths> \n\trelativePath: ${relativePath}, \n\tlocalPath: null, \n\tremotePath: null`,
   );
-  return { localPath, remotePath };
+  return { localPath: null, remotePath: null };
 }
 
 export function getCorrespondingPath(inputPath: string): string {
@@ -117,20 +110,24 @@ export function isRootPath(
   );
 }
 
-export function getRelativePath(fullPath: string): string {
+export async function getRootFolderName(targetPath: string): Promise<string> {
   const pairedFolders = WorkspaceConfig.getPairedFoldersConfigured();
-  const normalizedTargetPath = normalizePath(fullPath);
+  const normalizedTargetPath = normalizePath(targetPath);
 
   for (const folder of pairedFolders) {
-    if (normalizedTargetPath.startsWith(normalizePath(folder.localPath))) {
-      return path.relative(folder.localPath, fullPath);
-    }
+    const normalizedLocalPath = normalizePath(folder.localPath);
+    const normalizedRemotePath = normalizePath(folder.remotePath);
 
-    if (normalizedTargetPath.startsWith(normalizePath(folder.remotePath))) {
-      return path.relative(folder.remotePath, fullPath);
+    // Check if targetPath is within either localPath or remotePath
+    if (normalizedTargetPath.startsWith(normalizedLocalPath)) {
+      return Promise.resolve(path.basename(normalizedLocalPath));
+    }
+    if (normalizedTargetPath.startsWith(normalizedRemotePath)) {
+      return Promise.resolve(path.basename(normalizedRemotePath));
     }
   }
-  return "";
+
+  throw new Error(`Couldn't find a Root Folder name for ${targetPath}`);
 }
 
 export async function pathExists(path: string, source: FileNodeSource) {

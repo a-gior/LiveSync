@@ -12,12 +12,55 @@ export const LOG_FLAGS = {
 };
 type LogFlags = (typeof LOG_FLAGS)[keyof typeof LOG_FLAGS];
 
-/**
- * Logs an error message to the console, LogManager, and/or shows a VS Code error message.
- * @param error - The error message to log.
- * @param flags - A combination of LOG_FLAGS to specify where to log the message.
- * @param details - Additional details to log only to the console.
- */
+function deepClone<T>(obj: T): T {
+  // Handle null or undefined
+  if (obj === null || typeof obj !== "object") {
+    return obj;
+  }
+
+  // Handle Date
+  if (obj instanceof Date) {
+    return new Date(obj.getTime()) as any;
+  }
+
+  // Handle Array
+  if (Array.isArray(obj)) {
+    return obj.map((item) => deepClone(item)) as any;
+  }
+
+  // Handle Map
+  if (obj instanceof Map) {
+    const clonedMap = new Map();
+    obj.forEach((value, key) => {
+      clonedMap.set(key, deepClone(value));
+    });
+    return clonedMap as any;
+  }
+
+  // Handle Set
+  if (obj instanceof Set) {
+    const clonedSet = new Set();
+    obj.forEach((value) => {
+      clonedSet.add(deepClone(value));
+    });
+    return clonedSet as any;
+  }
+
+  // Handle Object
+  if (obj instanceof Object) {
+    const clonedObj: any = {};
+    for (const key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        clonedObj[key] = deepClone(obj[key]);
+      }
+    }
+    return clonedObj as T;
+  }
+
+  // Handle any other types (e.g., functions, etc.)
+  return obj;
+}
+
 export function logErrorMessage(
   error: string,
   flags: LogFlags = LOG_FLAGS.ALL,
@@ -25,25 +68,20 @@ export function logErrorMessage(
 ) {
   if (flags.console) {
     if (details !== undefined) {
-      console.error(`Error: ${error}`, details);
+      const serializedDetails = deepClone(details); // Use custom serialization for complex objects
+      console.error(`[ERROR] ${error}`, serializedDetails);
     } else {
-      console.error(`Error: ${error}`);
+      console.error(`[ERROR]: ${error}`);
     }
   }
   if (flags.logManager) {
-    LogManager.log(`Error: ${error}`);
+    LogManager.log(`[ERROR]: ${error}`);
   }
   if (flags.vscode) {
     vscode.window.showErrorMessage(`Error: ${error}`);
   }
 }
 
-/**
- * Logs an informational message to the console, LogManager, and/or shows a VS Code info message.
- * @param message - The informational message to log.
- * @param flags - A combination of LOG_FLAGS to specify where to log the message.
- * @param details - Additional details to log only to the console.
- */
 export function logInfoMessage(
   message: string,
   flags: LogFlags = LOG_FLAGS.ALL,
@@ -51,7 +89,8 @@ export function logInfoMessage(
 ) {
   if (flags.console) {
     if (details !== undefined) {
-      console.info(`[INFO] ${message}`, details);
+      const serializedDetails = deepClone(details); // Use custom serialization for complex objects
+      console.info(`[INFO] ${message}`, serializedDetails);
     } else {
       console.info(`[INFO] ${message}`);
     }

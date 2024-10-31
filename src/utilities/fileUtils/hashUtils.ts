@@ -1,7 +1,6 @@
 import * as crypto from "crypto";
 import { stat, createReadStream } from "fs";
-import { FileNodeSource } from "../FileNode";
-import { getRelativePath } from "./filePathUtils";
+import { FileNodeSource, getFileNodeInfo } from "../FileNode";
 import { getRemoteFileContentHash } from "./sftpOperations";
 import { BaseNodeType } from "../BaseNode";
 
@@ -25,7 +24,7 @@ export async function generateHash(
     return "";
   }
 
-  const relativePath = getRelativePath(filePath);
+  const relativePath = getFileNodeInfo(filePath)!.relativePath;
 
   if (!relativePath && relativePath !== "") {
     throw new Error(
@@ -66,7 +65,7 @@ export function generateHash2(
   fileType: BaseNodeType,
   fileContentHash: string,
 ) {
-  const relativePath = getRelativePath(fullPath);
+  const relativePath = getFileNodeInfo(fullPath)!.relativePath;
   const hash = crypto.createHash("sha256");
   // console.log(`Creating hash with fileContentHash: ${fileContentHash}`);
   hash.update(`${relativePath}${fileType}${fileContentHash}`);

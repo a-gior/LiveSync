@@ -3,8 +3,6 @@ import * as path from "path";
 import { SFTPClient } from "../../services/SFTPClient";
 import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
 import { generateHash } from "./hashUtils";
-import { loadFromFile } from "./fileOperations";
-import { REMOTE_FILES_PATH } from "../constants";
 import { FileNodeSource } from "../FileNode";
 import { SSHClient } from "../../services/SSHClient";
 import { window } from "vscode";
@@ -14,6 +12,12 @@ import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import { shouldIgnore } from "../shouldIgnore";
 import { logErrorMessage, logInfoMessage } from "../../services/LogManager";
 import { BaseNodeType } from "../BaseNode";
+import { getFullPaths } from "./filePathUtils";
+import { ComparisonFileNode } from "../ComparisonFileNode";
+import FileNodeManager, {
+  isFileNodeMap,
+  JsonType,
+} from "../../services/FileNodeManager";
 
 export async function downloadRemoteFile(
   configuration: ConfigurationMessage["configuration"],
@@ -71,21 +75,42 @@ export async function uploadFile(
 }
 
 export async function compareRemoteFileHash(
-  remotePath: string,
+  comparisonNode: ComparisonFileNode,
 ): Promise<boolean> {
   try {
-    const remoteFileHash = generateHash(
+    const { localPath, remotePath } = await getFullPaths(comparisonNode);
+    if (!remotePath || !localPath) {
+      window.showErrorMessage(
+        `No local or remote folder paired: ${remotePath}`,
+      );
+      return false;
+    }
+
+    // Get the remote JSON entries
+    const fileNodemanager = FileNodeManager.getInstance();
+    const remoteFileEntriesMap = await fileNodemanager.getFileEntriesMap(
+      JsonType.REMOTE,
+    );
+    if (!remoteFileEntriesMap || !isFileNodeMap(remoteFileEntriesMap)) {
+      window.showErrorMessage(`No remote JSON found`);
+      return false;
+    }
+    const remoteEntry = FileNodeManager.findEntryByPath(
+      remotePath,
+      remoteFileEntriesMap,
+    );
+    if (!remoteEntry) {
+      window.showErrorMessage(`No remote FileNode found`);
+      return false;
+    }
+
+    const remoteFileHash = await generateHash(
       remotePath,
       FileNodeSource.remote,
       BaseNodeType.file,
     );
 
-    const storedRemoteFiles = await loadFromFile<{ [key: string]: any }>(
-      REMOTE_FILES_PATH,
-    );
-    const storedHash = storedRemoteFiles[remotePath]?.hash;
-
-    return remoteFileHash === storedHash;
+    return remoteEntry.hash === remoteFileHash;
   } catch (error) {
     console.error("Error comparing remote file hash:", error);
     return false;

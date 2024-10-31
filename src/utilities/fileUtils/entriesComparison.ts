@@ -26,7 +26,6 @@ export async function compareCorrespondingEntry(
       );
     }
 
-    console.log(`<compareCorrespondingEntry> fileEntry: `, fileEntry);
     const localEntry = await listLocalFilesRecursive(localPath);
     const remoteEntry = await listRemoteFilesRecursive(remotePath);
 

@@ -4,17 +4,12 @@ import { FileNode, FileNodeSource } from "../FileNode";
 import pLimit = require("p-limit");
 import { ConnectionManager } from "../../services/ConnectionManager";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
-import {
-  LOG_FLAGS,
-  logErrorMessage,
-  LogManager,
-} from "../../services/LogManager";
+import { LOG_FLAGS, logErrorMessage } from "../../services/LogManager";
 import { shouldIgnore } from "../shouldIgnore";
 import { generateHash2, getLocalFileHash } from "./hashUtils";
 import { StatusBarManager } from "../../services/StatusBarManager";
 import { BaseNodeType } from "../BaseNode";
-import { pathExists } from "./filePathUtils";
-import { rejects } from "assert";
+import { getRootFolderName, pathExists } from "./filePathUtils";
 
 // Set a limit for the number of concurrent file operations, from 10 onwards triggers a warning for too much event listeners
 const limit = pLimit(9);
@@ -26,6 +21,8 @@ export async function listRemoteFilesRecursive(
 
   const configuration = WorkspaceConfig.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
+
+  let lastBufferedFile: FileNode | undefined; // Always buffer the last file entry for the hash
 
   if (!(await pathExists(remoteDir, FileNodeSource.remote))) {
     logErrorMessage(
@@ -42,19 +39,34 @@ export async function listRemoteFilesRecursive(
       let rootEntry: FileNode | undefined;
       let currentEntry: FileNode | undefined;
 
-      await sshClient.executeCommand(command, (data?: string) => {
-        if (!data) return;
+      await sshClient.executeCommand(command, async (data?: string) => {
+        if (!data) {
+          return;
+        }
+
         const lines = data.trim().split("\n");
 
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i];
 
-          if (line.split(",").length <= 1) {
-            console.error("Skipping line: ", line);
-            continue;
+          const splitLine = line.split(",");
+          if (splitLine.length === 1) {
+            // It's a hash, apply it to the last buffered file
+            if (lastBufferedFile) {
+              lastBufferedFile.hash = generateHash2(
+                lastBufferedFile.fullPath,
+                BaseNodeType.file,
+                line,
+              );
+              lastBufferedFile = undefined; // Clear the buffer after applying the hash
+            } else {
+              // console.warn(`Unexpected hash with no buffered file. It may be due to a previously ignored or skipped file. Hash: ${line}`);
+            }
+            continue; // Move on to the next line
           }
 
-          const [fullPath, size, modifyTime, type] = line.split(",");
+          // Process the metadata line
+          const [fullPath, size, modifyTime, type] = splitLine;
           const entryType =
             type === "directory" ? BaseNodeType.directory : BaseNodeType.file;
 
@@ -64,6 +76,7 @@ export async function listRemoteFilesRecursive(
 
           const newEntry = new FileNode(
             path.basename(fullPath),
+            await getRootFolderName(fullPath),
             entryType,
             parseInt(size, 10),
             new Date(parseInt(modifyTime, 10) * 1000),
@@ -71,16 +84,16 @@ export async function listRemoteFilesRecursive(
             FileNodeSource.remote,
           );
 
+          // Buffer the file if it's not a directory (we'll process its hash when it appears)
+          if (entryType === BaseNodeType.file) {
+            lastBufferedFile = newEntry;
+          }
+
+          // Handle the root entry or current entry for directories
           if (!rootEntry) {
             rootEntry = newEntry;
             currentEntry = rootEntry;
           } else {
-            let hash = "";
-            if (entryType === BaseNodeType.file && i + 1 < lines.length) {
-              hash = lines[++i];
-            }
-            newEntry.hash = generateHash2(fullPath, entryType, hash);
-
             const relativePath = path.relative(rootEntry.fullPath, fullPath);
             const pathParts = relativePath.split(path.sep);
 
@@ -110,6 +123,7 @@ export async function listRemoteFilesRecursive(
   } catch (error) {
     console.error("Recursive remote listing failed:", error);
     return new FileNode(
+      "",
       "",
       BaseNodeType.directory,
       0,
@@ -144,6 +158,7 @@ export async function listLocalFilesRecursive(
 
   const rootEntry = new FileNode(
     path.basename(localDir),
+    await getRootFolderName(path.normalize(localDir)),
     nodeType,
     (await fs.stat(localDir)).size,
     (await fs.stat(localDir)).mtime,
@@ -182,6 +197,7 @@ export async function listLocalFilesRecursive(
 
         const newEntry = new FileNode(
           file.name,
+          await getRootFolderName(normalizedFilePath),
           entryType,
           stats.size,
           stats.mtime,

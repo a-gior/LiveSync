@@ -1,17 +1,20 @@
 import * as vscode from "vscode";
-import { getCorrespondingPath } from "./filePathUtils";
+import { getFullPaths } from "./filePathUtils";
 import { downloadRemoteFile } from "./sftpOperations";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
+import { ComparisonFileNode } from "../ComparisonFileNode";
+import { LOG_FLAGS, logErrorMessage } from "../../services/LogManager";
 
-export async function handleFileDownload(fileEntry: any) {
+export async function handleFileDownload(fileEntry: ComparisonFileNode) {
   const configuration = WorkspaceConfig.getRemoteServerConfigured();
 
-  const remotePath = fileEntry.fullPath;
-  const localPath = getCorrespondingPath(remotePath);
+  const { localPath, remotePath } = await getFullPaths(fileEntry);
 
-  if (!localPath) {
-    vscode.window.showErrorMessage(
-      `No local folder paired with remote folder: ${remotePath}`,
+  if (!remotePath || !localPath) {
+    logErrorMessage(
+      `No local or remote path found, localPath: ${localPath} / remotePath: ${remotePath}`,
+      LOG_FLAGS.ALL,
+      fileEntry,
     );
     return;
   }

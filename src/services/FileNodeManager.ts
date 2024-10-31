@@ -1,6 +1,6 @@
 import path from "path";
 import * as fs from "fs";
-import { FileNode, FileNodeData } from "../utilities/FileNode";
+import { FileNode, FileNodeData, getFileNodeInfo } from "../utilities/FileNode";
 import {
   COMPARE_FILES_JSON,
   LOCAL_FILES_JSON,
@@ -12,6 +12,7 @@ import {
   ComparisonFileNode,
 } from "../utilities/ComparisonFileNode";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
+import { getFullPaths } from "../utilities/fileUtils/filePathUtils";
 
 export enum JsonType {
   LOCAL = "local",
@@ -106,10 +107,6 @@ export default class FileNodeManager {
     await fs.promises.writeFile(filePath, jsonContent, "utf-8");
   }
 
-  public getComparisonFileEntries(): Map<string, ComparisonFileNode> | null {
-    return this.comparisonFileEntries;
-  }
-
   private getJsonFileName(jsonType: JsonType): string {
     switch (jsonType) {
       case JsonType.LOCAL:
@@ -122,9 +119,11 @@ export default class FileNodeManager {
     }
   }
 
-  private getFileEntriesMap(
+  public async getFileEntriesMap(
     jsonType: JsonType,
-  ): Map<string, ComparisonFileNode | FileNode> | null {
+  ): Promise<Map<string, FileNode | ComparisonFileNode> | null> {
+    await this.loadJsonData();
+
     switch (jsonType) {
       case JsonType.LOCAL:
         return this.localFileEntries;
@@ -149,9 +148,7 @@ export default class FileNodeManager {
     jsonType: JsonType,
   ): Promise<void> {
     try {
-      await this.waitForJsonLoad();
-
-      const fileEntriesMap = this.getFileEntriesMap(jsonType);
+      const fileEntriesMap = await this.getFileEntriesMap(jsonType);
       const jsonFileName = this.getJsonFileName(jsonType);
 
       if (!fileEntriesMap || !jsonFileName) {
@@ -160,20 +157,41 @@ export default class FileNodeManager {
       }
 
       let entryUpdated = false;
-      if (fileEntriesMap.size === 0) {
-        fileEntriesMap.set(fileEntry.name, fileEntry);
-        entryUpdated = true;
-      } else {
-        fileEntriesMap.forEach((value, key, map) => {
+
+      // Recursive function to find and update the matching entry in the hierarchy
+      const updateEntryRecursively = (
+        targetEntry: ComparisonFileNode | FileNode,
+        currentEntries: Map<string, ComparisonFileNode | FileNode>,
+      ): boolean => {
+        for (const [key, currentEntry] of currentEntries.entries()) {
           if (
-            fileEntry.relativePath === value.relativePath &&
-            fileEntry.name === value.name
+            targetEntry.relativePath === currentEntry.relativePath &&
+            targetEntry.name === currentEntry.name
           ) {
-            map.set(key, fileEntry);
-            entryUpdated = true;
+            // Update the entry
+            currentEntries.set(key, targetEntry);
+            return true;
           }
-        });
-      }
+
+          // If the current entry is a directory, recursively search its children
+          if (currentEntry.isDirectory()) {
+            const childrenUpdated = updateEntryRecursively(
+              targetEntry,
+              currentEntry.children as Map<
+                string,
+                ComparisonFileNode | FileNode
+              >,
+            );
+            if (childrenUpdated) {
+              return true;
+            }
+          }
+        }
+        return false;
+      };
+
+      // Start the recursive update from the root entries
+      entryUpdated = updateEntryRecursively(fileEntry, fileEntriesMap);
 
       if (!entryUpdated) {
         logInfoMessage(
@@ -189,4 +207,134 @@ export default class FileNodeManager {
       logErrorMessage("Error updating JSON file node", LOG_FLAGS.ALL, error);
     }
   }
+
+  /**
+   * Finds an entry using a ComparisonFileNode object directly.
+   * If the element is a root element (i.e., empty relativePath), it compares its name against the rootElements.
+   * @param element The ComparisonFileNode object to find.
+   * @param rootEntries The root elements map (from TreeDataProvider).
+   * @returns The found ComparisonFileNode or undefined if not found.
+   */
+  static async findEntryByNode(
+    element: ComparisonFileNode,
+    rootEntries: Map<string, ComparisonFileNode>,
+  ): Promise<ComparisonFileNode | undefined> {
+    if (!element.relativePath) {
+      // If no relativePath, check by name in rootElements
+      for (const rootEntry of rootEntries.values()) {
+        if (rootEntry.name === element.pairedFolderName) {
+          return rootEntry;
+        }
+      }
+      return undefined;
+    }
+
+    const { localPath, remotePath } = await getFullPaths(element);
+    const fullPath = localPath ?? remotePath;
+    if (!fullPath) {
+      throw new Error(
+        `Couldn't find a local or remote path for ${element.relativePath}`,
+      );
+    }
+
+    // If relativePath exists, use the findEntryByPath method
+    return this.findEntryByPath(fullPath, rootEntries);
+  }
+
+  /**
+   * Finds a ComparisonFileNode using a relative or absolute path.
+   * @param filePath The full path of the node to find.
+   * @param rootEntries The root elements map (from TreeDataProvider).
+   * @param isPathRelative Whether the filePath is relative.
+   * @returns The found ComparisonFileNode or undefined if not found.
+   */
+  static findEntryByPath<T extends ComparisonFileNode | FileNode>(
+    filePath: string,
+    rootEntries: Map<string, T>,
+  ): T | undefined {
+    const fileNodeInfo = getFileNodeInfo(filePath);
+    if (!fileNodeInfo) {
+      logErrorMessage(
+        `<findEntryByPath> Couldnt get FileNodeInfo for ${filePath}`,
+      );
+      return undefined;
+    }
+
+    const relativePath = fileNodeInfo.relativePath;
+    if (!relativePath) {
+      return undefined;
+    }
+
+    const pathParts = [
+      ...(fileNodeInfo ? [fileNodeInfo.pairedFolderName] : []),
+      ...relativePath.split(path.sep),
+    ];
+    let currentEntries = rootEntries;
+    let foundEntry: T | undefined;
+
+    // Traverse through path parts
+    for (const part of pathParts) {
+      foundEntry = currentEntries.get(part);
+      if (!foundEntry) {
+        return undefined;
+      }
+
+      // If we've reached the last part of the path, return the found entry
+      if (part === pathParts[pathParts.length - 1]) {
+        return foundEntry;
+      }
+
+      if (foundEntry.isDirectory()) {
+        currentEntries = foundEntry.children as Map<string, T>;
+      } else {
+        break; // Stop if it's a file before reaching the last part
+      }
+    }
+
+    return foundEntry;
+  }
+
+  /**
+   * Updates the found ComparisonFileNode with the data from the element passed.
+   * @param element The updated element.
+   * @param rootEntries The root elements map (from TreeDataProvider).
+   */
+  static async updateComparisonFileNode(
+    element: ComparisonFileNode,
+    rootEntries: Map<string, ComparisonFileNode>,
+  ): Promise<ComparisonFileNode | FileNode | undefined> {
+    const foundElement = await this.findEntryByNode(element, rootEntries);
+
+    if (foundElement) {
+      Object.assign(foundElement, element); // Updates the found element with new data
+      return foundElement;
+    }
+
+    logErrorMessage(
+      "<updateComparisonFileNode> Element not found in the root elements",
+      LOG_FLAGS.ALL,
+      rootEntries,
+    );
+    return undefined;
+  }
+}
+
+export function isFileNodeMap(map: any): map is Map<string, FileNode> {
+  if (!(map instanceof Map)) {
+    return false;
+  }
+
+  const firstValue = map.values().next().value;
+  return firstValue instanceof FileNode;
+}
+
+export function isComparisonFileNodeMap(
+  map: any,
+): map is Map<string, ComparisonFileNode> {
+  if (!(map instanceof Map)) {
+    return false;
+  }
+
+  const firstValue = map.values().next().value;
+  return firstValue instanceof ComparisonFileNode;
 }
