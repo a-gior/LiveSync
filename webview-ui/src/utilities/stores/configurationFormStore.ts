@@ -216,18 +216,21 @@ class ConfigurationFormStore {
 
   saveFileEventActions() {
     const actions = {
-      actionOnSave:
+      actionOnUpload:
         this.getFileEventActions().formGroups["file-event-actions-form-group-0"]
           .fields[0].value,
-      actionOnCreate:
+      actionOnSave:
         this.getFileEventActions().formGroups["file-event-actions-form-group-0"]
           .fields[1].value,
-      actionOnDelete:
+      actionOnCreate:
         this.getFileEventActions().formGroups["file-event-actions-form-group-0"]
           .fields[2].value,
-      actionOnMove:
+      actionOnDelete:
         this.getFileEventActions().formGroups["file-event-actions-form-group-0"]
           .fields[3].value,
+      actionOnMove:
+        this.getFileEventActions().formGroups["file-event-actions-form-group-0"]
+          .fields[4].value,
     };
     const fileEventActionsMessage: FullConfigurationMessage = {
       command: "updateConfiguration",

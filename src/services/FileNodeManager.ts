@@ -1,6 +1,6 @@
 import path from "path";
 import * as fs from "fs";
-import { FileNode, FileNodeData, getFileNodeInfo } from "../utilities/FileNode";
+import { FileNode, getFileNodeInfo } from "../utilities/FileNode";
 import {
   COMPARE_FILES_JSON,
   LOCAL_FILES_JSON,
@@ -40,29 +40,52 @@ export default class FileNodeManager {
 
   private async loadJsonData(): Promise<void> {
     // Load localFileEntries
-    this.localFileEntries = await this.loadFileNodeFromJson(LOCAL_FILES_JSON);
+    this.localFileEntries = await this.loadNodeFromJson<FileNode>(
+      LOCAL_FILES_JSON,
+      FileNode,
+    );
     // Load remoteFileEntries
-    this.remoteFileEntries = await this.loadFileNodeFromJson(REMOTE_FILES_JSON);
+    this.remoteFileEntries = await this.loadNodeFromJson<FileNode>(
+      REMOTE_FILES_JSON,
+      FileNode,
+    );
     // Load comparisonFileEntries
     this.comparisonFileEntries =
-      await this.loadComparisonFileNodeFromJson(COMPARE_FILES_JSON);
+      await this.loadNodeFromJson<ComparisonFileNode>(
+        COMPARE_FILES_JSON,
+        ComparisonFileNode,
+      );
   }
 
   public async waitForJsonLoad(): Promise<void> {
     return this.jsonLoadedPromise;
   }
 
-  private async loadFileNodeFromJson(
+  private async loadNodeFromJson<T>(
     fileName: string,
-  ): Promise<Map<string, FileNode>> {
+    NodeConstructor: new (data: any) => T,
+  ): Promise<Map<string, T>> {
     const filePath = path.join(SAVE_DIR, fileName);
-    let fileEntryMap = new Map<string, FileNode>();
+    const fileEntryMap = new Map<string, T>();
+
     if (fs.existsSync(filePath)) {
-      const fileContent = await fs.promises.readFile(filePath, "utf-8");
-      const json: FileNodeData = JSON.parse(fileContent);
-      //   return new Map(Object.entries(JSON.parse(fileContent)));
-      for (const entryName in json) {
-        fileEntryMap.set(entryName, new FileNode(json));
+      try {
+        const fileContent = await fs.promises.readFile(filePath, "utf-8");
+        const json = JSON.parse(fileContent);
+
+        for (const entryName in json) {
+          if (json.hasOwnProperty(entryName)) {
+            const entryData = json[entryName];
+            // Properly instantiate a new Node from the JSON data using the provided constructor
+            fileEntryMap.set(entryName, new NodeConstructor(entryData));
+          }
+        }
+      } catch (error) {
+        logErrorMessage(
+          `Failed to load node from JSON: ${fileName}`,
+          LOG_FLAGS.ALL,
+          error,
+        );
       }
     }
 
@@ -199,6 +222,10 @@ export default class FileNodeManager {
         );
       }
 
+      console.log(
+        `<updateJsonFileNode> Saving JSON: ${jsonFileName}`,
+        fileEntriesMap,
+      );
       await this.saveJson(jsonFileName, fileEntriesMap);
       logInfoMessage(
         `Successfully updated ${fileEntry.name} in ${jsonFileName}.`,

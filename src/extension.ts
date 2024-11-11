@@ -5,7 +5,7 @@ import { ConfigurationPanel } from "./panels/ConfigurationPanel";
 import { PairedFoldersTreeDataProvider } from "./services/PairedFoldersTreeDataProvider";
 import { FileStatusDecorationProvider } from "./services/FileDecorationProvider";
 import { showDiff } from "./utilities/fileUtils/fileDiff";
-import { fileSave } from "./utilities/fileUtils/fileEventFunctions";
+import { fileUpload } from "./utilities/fileUtils/fileEventFunctions";
 import { handleFileDownload } from "./utilities/fileUtils/fileDownload";
 import {
   downloadDirectory,
@@ -132,7 +132,7 @@ export async function activate(context: vscode.ExtensionContext) {
             }
 
             const fileUri = vscode.Uri.file(localPath);
-            await fileSave(fileUri, pairedFoldersTreeDataProvider);
+            await fileUpload(fileUri, pairedFoldersTreeDataProvider);
           } catch (error: any) {
             logErrorMessage(`Failed to read file: ${error.message}`);
           }

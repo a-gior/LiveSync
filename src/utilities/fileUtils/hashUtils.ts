@@ -35,7 +35,7 @@ export async function generateHash(
 
   if (fileType === BaseNodeType.file && fileContentHash === "") {
     if (fileSource === FileNodeSource.local) {
-      fileContentHash = await new Promise<string>((resolve, reject) => {
+      fileContentHash = await new Promise<string>((resolve) => {
         const hash = crypto.createHash("sha256");
         const stream = createReadStream(filePath);
         stream.on("data", (data) => hash.update(data));
@@ -43,7 +43,9 @@ export async function generateHash(
           resolve(hash.digest("hex"));
         });
         stream.on("error", (err) => {
-          reject(err);
+          // reject(err);
+          console.error("<generateHash> Error reading file: ", err.message);
+          resolve(""); // Return an empty string if there's an error (mainly unhashable files like .asar, for instance)
         });
       });
     } else {

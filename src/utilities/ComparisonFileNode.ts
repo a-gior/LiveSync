@@ -1,3 +1,5 @@
+import path from "path";
+import { logErrorMessage } from "../services/LogManager";
 import { BaseNode, BaseNodeData, BaseNodeType } from "./BaseNode";
 import { FileNode } from "./FileNode";
 
@@ -172,5 +174,62 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
 
   setStatus(status: ComparisonStatus) {
     this.status = status;
+  }
+
+  /**
+   * Updates the status of parent directories based on the status of their children.
+   * If all children are `unchanged`, the parent directory is marked as `unchanged`.
+   * @param rootEntries The root elements map (from TreeDataProvider).
+   * @param relativePath The relative path of the modified node.
+   */
+  static updateParentDirectoriesStatus(
+    rootEntries: Map<string, ComparisonFileNode>,
+    element: ComparisonFileNode,
+  ): ComparisonFileNode {
+    const pairedFolderName = element.pairedFolderName;
+    const relativePath = element.relativePath;
+    let topMostUpdatedEntry: ComparisonFileNode | null = null;
+
+    // Find the initial root folder in rootEntries based on the pairedFolderName
+    let currentEntry = rootEntries.get(pairedFolderName);
+    if (!currentEntry || !currentEntry.isDirectory()) {
+      logErrorMessage(
+        `Paired folder "${pairedFolderName}" not found in root entries.`,
+      );
+      return element;
+    }
+
+    const pathParts = relativePath.split(path.sep);
+    for (let i = 0; i < pathParts.length - 1; i++) {
+      const part = pathParts[i];
+      currentEntry = currentEntry.children.get(part);
+
+      if (!currentEntry || !currentEntry.isDirectory()) {
+        // If the current entry is not found or is not a directory, we stop
+        return topMostUpdatedEntry ?? element;
+      }
+
+      let newStatus: ComparisonStatus | null = null;
+      for (const child of currentEntry.children.values()) {
+        if (newStatus === null) {
+          newStatus = child.status;
+        } else if (child.status !== newStatus) {
+          newStatus = ComparisonStatus.modified;
+          break; // Early exit if any child has a different status
+        }
+      }
+
+      const isStatusDifferent = currentEntry.status !== newStatus;
+
+      if (newStatus !== null) {
+        currentEntry.status = newStatus;
+      }
+
+      if (!topMostUpdatedEntry && isStatusDifferent) {
+        topMostUpdatedEntry = currentEntry; // Track the highest-level folder updated
+      }
+    }
+
+    return topMostUpdatedEntry ?? element;
   }
 }

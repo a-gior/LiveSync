@@ -143,6 +143,17 @@
           "default": [],
           "description": "Array of paired local and remote folders"
         },
+        "LiveSync.actionOnUpload": {
+          "type": "string",
+          "default": "check&upload",
+          "enum": [
+            "upload",
+            "check",
+            "check&upload",
+            "none"
+          ],
+          "description": "Action to perform on file upload.\n\nOptions:\n- save: Automatically uploads the file to the remote server on upload.\n- check: Only checks if the file has been modified on the remote server without uploading.\n- check&save: Checks if the file has been modified on the remote server and uploads if it hasn't.\n- none: No action is performed on file upload."
+        },
         "LiveSync.actionOnSave": {
           "type": "string",
           "default": "check&save",

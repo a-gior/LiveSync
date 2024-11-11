@@ -31,6 +31,8 @@ import {
 } from "../utilities/ComparisonFileNode";
 import { BaseNode, BaseNodeType } from "../utilities/BaseNode";
 import { LOG_FLAGS, logErrorMessage } from "./LogManager";
+import { StatusBarManager } from "./StatusBarManager";
+import { FileNode } from "../utilities/FileNode";
 
 export class PairedFoldersTreeDataProvider
   implements vscode.TreeDataProvider<ComparisonFileNode>
@@ -80,7 +82,11 @@ export class PairedFoldersTreeDataProvider
       );
 
       if (updatedElement && updatedElement instanceof ComparisonFileNode) {
-        this._onDidChangeTreeData.fire(updatedElement);
+        const updatedNode = ComparisonFileNode.updateParentDirectoriesStatus(
+          this.rootElements,
+          updatedElement,
+        );
+        this._onDidChangeTreeData.fire(updatedNode);
         this.fileNodeManager.updateJsonFileNode(element, JsonType.COMPARE);
       }
     }
@@ -221,9 +227,9 @@ export class PairedFoldersTreeDataProvider
     localDir: string,
     remoteDir: string,
   ): Promise<ComparisonFileNode> {
+    const startTime = performance.now(); // Start timing
     try {
       console.log(`Comparing Directories...`);
-
       const localFiles = await listLocalFilesRecursive(localDir);
       const remoteFiles = await listRemoteFilesRecursive(remoteDir);
 
@@ -232,26 +238,34 @@ export class PairedFoldersTreeDataProvider
         remoteFiles,
       );
 
-      if (localFiles) {
-        console.log("Saving JSON LOCAL: ", localFiles);
-        await this.fileNodeManager.updateJsonFileNode(
-          localFiles,
-          JsonType.LOCAL,
-        );
-      }
-
       if (remoteFiles) {
-        console.log("Saving JSON REMOTE: ", localFiles);
-        await this.fileNodeManager.updateJsonFileNode(
-          remoteFiles,
+        const remoteFilesMap = new Map<string, FileNode>();
+        remoteFilesMap.set(remoteFiles.pairedFolderName, remoteFiles);
+
+        console.log("Saving JSON REMOTE Map: ", remoteFilesMap);
+        await this.fileNodeManager.updateFullJson(
           JsonType.REMOTE,
+          remoteFilesMap,
         );
       }
 
       return comparisonFileNode;
     } catch (error) {
-      console.error("Error:", error);
+      StatusBarManager.showMessage(
+        "SFTP operation failed",
+        "",
+        "",
+        3000,
+        "error",
+      );
+      console.error("<getComparisonFileNode> Error:", error);
       throw Error("Error getting ComparisonFileNode");
+    } finally {
+      const endTime = performance.now(); // End timing
+      const executionTime = endTime - startTime; // Calculate the elapsed time in milliseconds
+      console.log(
+        `Comparing directories execution time: ${executionTime.toFixed(2)} ms`,
+      ); // Log the execution time
     }
   }
 }

@@ -13,13 +13,12 @@ import FileNodeManager from "../../services/FileNodeManager";
 import { PairedFoldersTreeDataProvider } from "../../services/PairedFoldersTreeDataProvider";
 import { LOG_FLAGS, logErrorMessage } from "../../services/LogManager";
 
-export async function fileSave(
+async function handleFileAction(
   uri: Uri,
   treeDataProvider: PairedFoldersTreeDataProvider,
+  actionParameter: string,
 ) {
-  const actionOnSave = WorkspaceConfig.getParameter("actionOnSave");
-
-  if (actionOnSave === "none") {
+  if (actionParameter === "none") {
     return; // If no action is needed, stop here
   }
 
@@ -28,6 +27,7 @@ export async function fileSave(
     localPath,
     treeDataProvider.rootElements,
   );
+
   if (!comparisonNode) {
     logErrorMessage(
       `File ${localPath} is not tracked in comparison JSON.`,
@@ -44,14 +44,14 @@ export async function fileSave(
   }
 
   // "check&save" or "check" - Perform the comparison
-  if (actionOnSave === "check&save" || actionOnSave === "check") {
+  if (actionParameter.includes("check")) {
     const isSame = await compareRemoteFileHash(comparisonNode);
 
-    if (actionOnSave === "check") {
+    if (actionParameter === "check") {
       window.showInformationMessage(
-        `File ${path.basename(localPath)} ${isSame ? "can" : "cannot"} be saved.`,
+        `File ${path.basename(localPath)} ${isSame ? "can" : "cannot"} be processed.`,
       );
-      return; // Only perform a check, don't upload
+      return; // Only perform a check, don't proceed further
     }
 
     // If hash differs, ask the user for confirmation
@@ -74,8 +74,25 @@ export async function fileSave(
     }
   }
 
-  // Upload the file if no discrepancies or user confirmed to overwrite
+  // Upload or Save the file if no discrepancies or user confirmed to overwrite
   await uploadFile(localPath, remotePath);
+}
+
+export async function fileSave(
+  uri: Uri,
+  treeDataProvider: PairedFoldersTreeDataProvider,
+) {
+  const actionOnSave = WorkspaceConfig.getParameter("actionOnSave") ?? "none";
+  await handleFileAction(uri, treeDataProvider, actionOnSave);
+}
+
+export async function fileUpload(
+  uri: Uri,
+  treeDataProvider: PairedFoldersTreeDataProvider,
+) {
+  const actionOnUpload =
+    WorkspaceConfig.getParameter("actionOnUpload") ?? "none";
+  await handleFileAction(uri, treeDataProvider, actionOnUpload);
 }
 
 export async function fileMove(

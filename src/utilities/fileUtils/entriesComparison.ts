@@ -1,3 +1,4 @@
+import FileNodeManager, { JsonType } from "../../services/FileNodeManager";
 import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
 import {
   listLocalFilesRecursive,
@@ -28,10 +29,17 @@ export async function compareCorrespondingEntry(
 
     const localEntry = await listLocalFilesRecursive(localPath);
     const remoteEntry = await listRemoteFilesRecursive(remotePath);
+    if (remoteEntry) {
+      console.log("Saving JSON REMOTE: ", remoteEntry);
+      await FileNodeManager.getInstance().updateJsonFileNode(
+        remoteEntry,
+        JsonType.REMOTE,
+      );
+    }
 
     return ComparisonFileNode.compareFileNodes(localEntry, remoteEntry);
   } catch (error: any) {
-    console.error("Error:", error);
+    console.error("<compareCorrespondingEntry> Error:", error);
     throw new Error(error.message);
   }
 }

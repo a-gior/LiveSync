@@ -134,6 +134,24 @@
                 deletable: false,
                 fields: [
                     {
+                        name: "actionOnUpload",
+                        label: "ActionOnUpload",
+                        type: "select",
+                        required: true,
+                        value: "",
+                        visible: true,
+                        options: [
+                            { label: "check", value: "check" },
+                            {
+                                label: "check&upload",
+                                value: "check&upload",
+                                default: true,
+                            },
+                            { label: "upload", value: "upload" },
+                            { label: "none", value: "none" },
+                        ],
+                    },
+                    {
                         name: "actionOnSave",
                         label: "ActionOnSave",
                         type: "select",
@@ -284,16 +302,18 @@
 
         if (confState.fileEventActions) {
             const {
+                actionOnUpload,
                 actionOnSave,
                 actionOnCreate,
                 actionOnDelete,
                 actionOnMove,
             } = confState.fileEventActions;
 
-            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[0].value = actionOnSave;
-            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[1].value = actionOnCreate;
-            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[2].value = actionOnDelete;
-            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[3].value = actionOnMove;
+            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[0].value = actionOnUpload;
+            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[1].value = actionOnSave;
+            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[2].value = actionOnCreate;
+            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[3].value = actionOnDelete;
+            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[4].value = actionOnMove;
         }
 
         if (confState.ignoreList) {
@@ -350,6 +370,10 @@
 
 <style>
     configuration-container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh; /* Make it take the full viewport height */
         margin: 0;
+        overflow: hidden; /* Prevent the whole page from scrolling */
     }
 </style>

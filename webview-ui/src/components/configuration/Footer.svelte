@@ -61,12 +61,14 @@
             remotePath: form.fields[1].value
         }))
 
-        const currentActionOnSave =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[0].value;
-        const currentActionOnCreate =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[1].value;
-        const currentActionOnDelete =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[2].value;
-        const currentActionOnMove =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[3].value;
+        const currentActionOnUpload =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[0].value;
+        const currentActionOnSave =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[1].value;
+        const currentActionOnCreate =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[2].value;
+        const currentActionOnDelete =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[3].value;
+        const currentActionOnMove =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[4].value;
 
         const currentFileEventActions = {
+            actionOnUpload: currentActionOnUpload,
             actionOnSave: currentActionOnSave,
             actionOnCreate: currentActionOnCreate,
             actionOnDelete: currentActionOnDelete,
@@ -104,14 +106,14 @@
 
     /* Styles for the footer container */
     footer-container {
-    position: fixed; /* Fixed position to keep it at the bottom */
-    left: 0;
-    right: 0;
-    bottom: 0;
-    border-top: 1px solid #969696;
-    background-color: #1a1a1a; /*var(--vscode-editor-background); TODO: change for vscode color later /* Even darker background color for the footer */
-    padding: 10px 20px; /* Padding for spacing inside the footer */
-    text-align: right; /* Aligns the button to the right */
-    z-index: 1000; /* Ensures the footer is above other content */
+        position: fixed; /* Fixed position to keep it at the bottom */
+        left: 0;
+        right: 0;
+        bottom: 0;
+        border-top: 1px solid #969696;
+        background-color: #1a1a1a; /*var(--vscode-editor-background); TODO: change for vscode color later /* Even darker background color for the footer */
+        padding: 10px 20px; /* Padding for spacing inside the footer */
+        text-align: right; /* Aligns the button to the right */
+        z-index: 1000; /* Ensures the footer is above other content */
     }
   </style>

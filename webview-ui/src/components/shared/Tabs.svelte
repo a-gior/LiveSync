@@ -27,42 +27,43 @@
   </script>
   
   <style>
-.tabs {
-  display: flex;
-  border-bottom: 1px solid var(--vscode-editorGroup-border);
-  margin-bottom: 10px;
-}
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--vscode-editorGroup-border);
+    margin-bottom: 10px;
+  }
 
-.tab {
-  padding: 10px 15px;
-  cursor: pointer;
-  border: 1px solid transparent;
-  border-bottom: none;
-  background-color: var(--vscode-tab-inactiveBackground);
-  color: var(--vscode-tab-inactiveForeground);
-  transition: background-color 0.3s, color 0.3s;
-}
+  .tab {
+    padding: 10px 15px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-bottom: none;
+    background-color: var(--vscode-tab-inactiveBackground);
+    color: var(--vscode-tab-inactiveForeground);
+    transition: background-color 0.3s, color 0.3s;
+  }
 
-.tab.active {
-  background-color: var(--vscode-tab-activeBackground);
-  color: var(--vscode-tab-activeForeground);
-  border-color: var(--vscode-tab-activeBorder);
-  /* border-top-color: var(--panel-tab-active-border); */
-  border-top-color: var(--button-primary-background);
-  border-bottom: 1px solid var(--vscode-editor-background);
-}
+  .tab.active {
+    background-color: var(--vscode-tab-activeBackground);
+    color: var(--vscode-tab-activeForeground);
+    border-color: var(--vscode-tab-activeBorder);
+    /* border-top-color: var(--panel-tab-active-border); */
+    border-top-color: var(--button-primary-background);
+    border-bottom: 1px solid var(--vscode-editor-background);
+  }
 
-.tab:hover {
-  background-color: var(--vscode-tab-hoverBackground);
-  color: var(--vscode-tab-hoverForeground);
-}
+  .tab:hover {
+    background-color: var(--vscode-tab-hoverBackground);
+    color: var(--vscode-tab-hoverForeground);
+  }
 
-.tab-content {
-  padding: 10px;
-  border-bottom: 1px solid var(--vscode-editorGroup-border);
-  background-color: var(--vscode-editor-background);
-  color: var(--vscode-editor-foreground);
-}
+  .tab-content {
+    padding: 10px;
+    border-bottom: 1px solid var(--vscode-editorGroup-border);
+    background-color: var(--vscode-editor-background);
+    color: var(--vscode-editor-foreground);
+    overflow-y: auto; /* Make only this container scrollable when content overflows */
+  }
 
   </style>
   
