@@ -55,8 +55,8 @@ suite("LiveSync Configuration Command Tests", () => {
       fileEventActions: {
         actionOnUpload: "check&save",
         actionOnSave: "check&save",
-        actionOnCreate: "check&create",
-        actionOnDelete: "check&delete",
+        actionOnCreate: "create",
+        actionOnDelete: "none",
         actionOnMove: "check&move",
       },
       ignoreList: [],

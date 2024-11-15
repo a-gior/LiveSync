@@ -22,6 +22,7 @@ import {
 } from "./services/LogManager";
 import { ComparisonFileNode } from "./utilities/ComparisonFileNode";
 import { getFullPaths } from "./utilities/fileUtils/filePathUtils";
+import { Action } from "./utilities/enums";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -91,18 +92,25 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "livesync.fileEntryRefresh",
-      (element?: ComparisonFileNode) => {
-        logInfoMessage(
-          "[Refresh command] element:",
-          LOG_FLAGS.CONSOLE_ONLY,
-          element,
-        );
+      async (element?: ComparisonFileNode) => {
         if (!element) {
+          logInfoMessage(
+            "[Refresh command] all:",
+            LOG_FLAGS.CONSOLE_ONLY,
+            element,
+          );
           pairedFoldersTreeDataProvider.refresh();
         } else {
           compareCorrespondingEntry(element).then(
-            (updatedElement: ComparisonFileNode) => {
-              console.log(`[Refresh command] updatedElement: `, updatedElement);
+            async (updatedElement: ComparisonFileNode) => {
+              logInfoMessage(
+                `[Refresh command] updatedElement: `,
+                LOG_FLAGS.CONSOLE_ONLY,
+                updatedElement,
+              );
+              await pairedFoldersTreeDataProvider
+                .updateRootElements(Action.Update, updatedElement)
+                .then();
               pairedFoldersTreeDataProvider.refresh(updatedElement);
             },
           );
@@ -137,6 +145,10 @@ export async function activate(context: vscode.ExtensionContext) {
             logErrorMessage(`Failed to read file: ${error.message}`);
           }
         }
+        await pairedFoldersTreeDataProvider.updateRootElements(
+          Action.Update,
+          fileEntry,
+        );
         vscode.commands.executeCommand("livesync.fileEntryRefresh", fileEntry);
       },
     ),
@@ -154,6 +166,10 @@ export async function activate(context: vscode.ExtensionContext) {
           const errorStack = error.stack ? `\nStack Trace: ${error.stack}` : "";
           logErrorMessage(`${errorMessage}${errorStack}`);
         }
+        await pairedFoldersTreeDataProvider.updateRootElements(
+          Action.Update,
+          fileEntry,
+        );
         vscode.commands.executeCommand("livesync.fileEntryRefresh", fileEntry);
       },
     ),

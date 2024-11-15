@@ -167,11 +167,9 @@
         },
         "LiveSync.actionOnDelete": {
           "type": "string",
-          "default": "check&delete",
+          "default": "none",
           "enum": [
             "delete",
-            "check",
-            "check&delete",
             "none"
           ],
           "description": "Action to perform on file delete.\n\nOptions:\n- delete: Automatically deletes the file on the remote server on delete.\n- check: Only checks if the file has been deleted on the remote server without deleting.\n- check&delete: Checks if the file has been deleted on the remote server and deletes if it hasn't.\n- none: No action is performed on file delete."
@@ -189,11 +187,9 @@
         },
         "LiveSync.actionOnCreate": {
           "type": "string",
-          "default": "check&create",
+          "default": "create",
           "enum": [
             "create",
-            "check",
-            "check&create",
             "none"
           ],
           "description": "Action to perform on file create.\n\nOptions:\n- create: Automatically creates the file on the remote server on create.\n- check: Only checks if the file has been created on the remote server without creating.\n- check&create: Checks if the file has been created on the remote server and creates if it hasn't.\n- none: No action is performed on file create."

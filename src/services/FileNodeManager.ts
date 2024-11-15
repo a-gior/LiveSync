@@ -8,11 +8,10 @@ import {
   SAVE_DIR,
 } from "../utilities/constants";
 import {
-  ComparisonFileData,
   ComparisonFileNode,
+  ComparisonStatus,
 } from "../utilities/ComparisonFileNode";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
-import { getFullPaths } from "../utilities/fileUtils/filePathUtils";
 
 export enum JsonType {
   LOCAL = "local",
@@ -28,7 +27,7 @@ export default class FileNodeManager {
   private jsonLoadedPromise: Promise<void>;
 
   private constructor() {
-    this.jsonLoadedPromise = this.loadJsonData();
+    this.jsonLoadedPromise = this.initializeJsonData();
   }
 
   public static getInstance(): FileNodeManager {
@@ -38,23 +37,24 @@ export default class FileNodeManager {
     return FileNodeManager.instance;
   }
 
-  private async loadJsonData(): Promise<void> {
-    // Load localFileEntries
-    this.localFileEntries = await this.loadNodeFromJson<FileNode>(
-      LOCAL_FILES_JSON,
-      FileNode,
-    );
-    // Load remoteFileEntries
-    this.remoteFileEntries = await this.loadNodeFromJson<FileNode>(
-      REMOTE_FILES_JSON,
-      FileNode,
-    );
-    // Load comparisonFileEntries
-    this.comparisonFileEntries =
-      await this.loadNodeFromJson<ComparisonFileNode>(
-        COMPARE_FILES_JSON,
-        ComparisonFileNode,
-      );
+  private async initializeJsonData(): Promise<void> {
+    try {
+      const [local, remote, comparison] = await Promise.all([
+        this.loadNodeFromJson<FileNode>(LOCAL_FILES_JSON, FileNode),
+        this.loadNodeFromJson<FileNode>(REMOTE_FILES_JSON, FileNode),
+        this.loadNodeFromJson<ComparisonFileNode>(
+          COMPARE_FILES_JSON,
+          ComparisonFileNode,
+        ),
+      ]);
+
+      this.localFileEntries = local;
+      this.remoteFileEntries = remote;
+      this.comparisonFileEntries = comparison;
+    } catch (error) {
+      logErrorMessage("Failed to initialize JSON data", LOG_FLAGS.ALL, error);
+      throw error;
+    }
   }
 
   public async waitForJsonLoad(): Promise<void> {
@@ -68,57 +68,24 @@ export default class FileNodeManager {
     const filePath = path.join(SAVE_DIR, fileName);
     const fileEntryMap = new Map<string, T>();
 
-    if (fs.existsSync(filePath)) {
-      try {
-        const fileContent = await fs.promises.readFile(filePath, "utf-8");
-        const json = JSON.parse(fileContent);
-
-        for (const entryName in json) {
-          if (json.hasOwnProperty(entryName)) {
-            const entryData = json[entryName];
-            // Properly instantiate a new Node from the JSON data using the provided constructor
-            fileEntryMap.set(entryName, new NodeConstructor(entryData));
-          }
-        }
-      } catch (error) {
-        logErrorMessage(
-          `Failed to load node from JSON: ${fileName}`,
-          LOG_FLAGS.ALL,
-          error,
-        );
-      }
+    if (!fs.existsSync(filePath)) {
+      return fileEntryMap;
     }
 
-    return fileEntryMap;
-  }
+    try {
+      const fileContent = await fs.promises.readFile(filePath, "utf-8");
+      const json = JSON.parse(fileContent);
 
-  private async loadComparisonFileNodeFromJson(
-    fileName: string,
-  ): Promise<Map<string, ComparisonFileNode>> {
-    const filePath = path.join(SAVE_DIR, fileName);
-    const fileEntryMap = new Map<string, ComparisonFileNode>();
+      Object.entries(json).forEach(([entryName, entryData]) => {
+        fileEntryMap.set(entryName, new NodeConstructor(entryData));
+      });
 
-    if (fs.existsSync(filePath)) {
-      try {
-        const fileContent = await fs.promises.readFile(filePath, "utf-8");
-        const json = JSON.parse(fileContent);
-
-        for (const entryName in json) {
-          if (json.hasOwnProperty(entryName)) {
-            const entry: ComparisonFileData = json[entryName];
-            fileEntryMap.set(entryName, new ComparisonFileNode(entry));
-          }
-        }
-      } catch (error) {
-        logErrorMessage(
-          `Failed to load comparison file node from JSON`,
-          LOG_FLAGS.ALL,
-          error,
-        );
-      }
+      return fileEntryMap;
+    } catch (error: any) {
+      throw new Error(
+        `Failed to load node from JSON ${fileName}: ${error.message}`,
+      );
     }
-
-    return fileEntryMap;
   }
 
   private async saveJson(
@@ -126,223 +93,265 @@ export default class FileNodeManager {
     data: Map<string, FileNode | ComparisonFileNode>,
   ): Promise<void> {
     const filePath = path.join(SAVE_DIR, fileName);
-    const jsonContent = JSON.stringify(Object.fromEntries(data));
-    await fs.promises.writeFile(filePath, jsonContent, "utf-8");
+    const jsonContent = JSON.stringify(Object.fromEntries(data), null, 2);
+
+    try {
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.promises.writeFile(filePath, jsonContent, "utf-8");
+    } catch (error: any) {
+      throw new Error(`Failed to save JSON ${fileName}: ${error.message}`);
+    }
   }
 
   private getJsonFileName(jsonType: JsonType): string {
-    switch (jsonType) {
-      case JsonType.LOCAL:
-        return LOCAL_FILES_JSON;
-      case JsonType.REMOTE:
-        return REMOTE_FILES_JSON;
-      case JsonType.COMPARE:
-      default:
-        return COMPARE_FILES_JSON;
-    }
+    const fileNames = {
+      [JsonType.LOCAL]: LOCAL_FILES_JSON,
+      [JsonType.REMOTE]: REMOTE_FILES_JSON,
+      [JsonType.COMPARE]: COMPARE_FILES_JSON,
+    };
+    return fileNames[jsonType] || COMPARE_FILES_JSON;
   }
 
   public async getFileEntriesMap(
     jsonType: JsonType,
   ): Promise<Map<string, FileNode | ComparisonFileNode> | null> {
-    await this.loadJsonData();
+    await this.waitForJsonLoad();
 
-    switch (jsonType) {
-      case JsonType.LOCAL:
-        return this.localFileEntries;
-      case JsonType.REMOTE:
-        return this.remoteFileEntries;
-      case JsonType.COMPARE:
-      default:
-        return this.comparisonFileEntries;
-    }
+    const entriesMap = {
+      [JsonType.LOCAL]: this.localFileEntries,
+      [JsonType.REMOTE]: this.remoteFileEntries,
+      [JsonType.COMPARE]: this.comparisonFileEntries,
+    };
+    return entriesMap[jsonType] || null;
   }
 
   public async updateFullJson(
     jsonType: JsonType,
     data: Map<string, FileNode | ComparisonFileNode>,
-  ) {
-    const fileName = this.getJsonFileName(jsonType);
-    this.saveJson(fileName, data);
-  }
-
-  public async updateJsonFileNode(
-    fileEntry: ComparisonFileNode | FileNode,
-    jsonType: JsonType,
   ): Promise<void> {
     try {
-      const fileEntriesMap = await this.getFileEntriesMap(jsonType);
-      const jsonFileName = this.getJsonFileName(jsonType);
+      // Get the existing JSON data
+      const fileName = this.getJsonFileName(jsonType);
+      const jsonData = await this.getFileEntriesMap(jsonType);
 
-      if (!fileEntriesMap || !jsonFileName) {
-        logErrorMessage("File entries map or JSON file name is undefined.");
+      if (!jsonData) {
+        logErrorMessage(`Unable to load existing JSON data for ${fileName}`);
         return;
       }
 
-      let entryUpdated = false;
+      // Merge the new data into jsonData
+      data.forEach((value, key) => {
+        jsonData.set(key, value);
+      });
 
-      // Recursive function to find and update the matching entry in the hierarchy
-      const updateEntryRecursively = (
-        targetEntry: ComparisonFileNode | FileNode,
-        currentEntries: Map<string, ComparisonFileNode | FileNode>,
-      ): boolean => {
-        for (const [key, currentEntry] of currentEntries.entries()) {
-          if (
-            targetEntry.relativePath === currentEntry.relativePath &&
-            targetEntry.name === currentEntry.name
-          ) {
-            // Update the entry
-            currentEntries.set(key, targetEntry);
-            return true;
-          }
+      // Save the merged data back to the JSON file
+      await this.saveJson(fileName, jsonData);
 
-          // If the current entry is a directory, recursively search its children
-          if (currentEntry.isDirectory()) {
-            const childrenUpdated = updateEntryRecursively(
-              targetEntry,
-              currentEntry.children as Map<
-                string,
-                ComparisonFileNode | FileNode
-              >,
-            );
-            if (childrenUpdated) {
-              return true;
-            }
-          }
-        }
-        return false;
-      };
-
-      // Start the recursive update from the root entries
-      entryUpdated = updateEntryRecursively(fileEntry, fileEntriesMap);
-
-      if (!entryUpdated) {
-        logInfoMessage(
-          `No matching entry found for ${fileEntry.name} in ${jsonFileName}.`,
-        );
-      }
-
-      console.log(
-        `<updateJsonFileNode> Saving JSON: ${jsonFileName}`,
-        fileEntriesMap,
-      );
-      await this.saveJson(jsonFileName, fileEntriesMap);
-      logInfoMessage(
-        `Successfully updated ${fileEntry.name} in ${jsonFileName}.`,
-      );
+      logInfoMessage(`Successfully updated the full JSON for ${fileName}`);
     } catch (error) {
-      logErrorMessage("Error updating JSON file node", LOG_FLAGS.ALL, error);
+      logErrorMessage("Failed to update full JSON", LOG_FLAGS.ALL, error);
+      throw error;
     }
   }
 
-  /**
-   * Finds an entry using a ComparisonFileNode object directly.
-   * If the element is a root element (i.e., empty relativePath), it compares its name against the rootElements.
-   * @param element The ComparisonFileNode object to find.
-   * @param rootEntries The root elements map (from TreeDataProvider).
-   * @returns The found ComparisonFileNode or undefined if not found.
-   */
-  static async findEntryByNode(
-    element: ComparisonFileNode,
-    rootEntries: Map<string, ComparisonFileNode>,
-  ): Promise<ComparisonFileNode | undefined> {
-    if (!element.relativePath) {
-      // If no relativePath, check by name in rootElements
-      for (const rootEntry of rootEntries.values()) {
-        if (rootEntry.name === element.pairedFolderName) {
-          return rootEntry;
-        }
-      }
+  private static async findNodeInHierarchy<
+    T extends FileNode | ComparisonFileNode,
+  >(
+    targetPath: string,
+    currentNode: T,
+    pathParts: string[],
+  ): Promise<T | undefined> {
+    if (pathParts.length === 0) {
+      return currentNode;
+    }
+
+    if (!currentNode.isDirectory()) {
       return undefined;
     }
 
-    const { localPath, remotePath } = await getFullPaths(element);
-    const fullPath = localPath ?? remotePath;
-    if (!fullPath) {
-      throw new Error(
-        `Couldn't find a local or remote path for ${element.relativePath}`,
-      );
+    const [currentPart, ...remainingParts] = pathParts;
+    const childNode = currentNode.children.get(currentPart) as T;
+
+    if (!childNode) {
+      return undefined;
     }
 
-    // If relativePath exists, use the findEntryByPath method
-    return this.findEntryByPath(fullPath, rootEntries);
+    return this.findNodeInHierarchy(targetPath, childNode, remainingParts);
   }
 
-  /**
-   * Finds a ComparisonFileNode using a relative or absolute path.
-   * @param filePath The full path of the node to find.
-   * @param rootEntries The root elements map (from TreeDataProvider).
-   * @param isPathRelative Whether the filePath is relative.
-   * @returns The found ComparisonFileNode or undefined if not found.
-   */
-  static findEntryByPath<T extends ComparisonFileNode | FileNode>(
+  public static async findEntryByPath<T extends FileNode | ComparisonFileNode>(
     filePath: string,
     rootEntries: Map<string, T>,
-  ): T | undefined {
-    const fileNodeInfo = getFileNodeInfo(filePath);
-    if (!fileNodeInfo) {
+    pairedFolderName?: string,
+  ): Promise<T | undefined> {
+    if (!filePath || filePath === "." || filePath === "") {
+      return pairedFolderName ? rootEntries.get(pairedFolderName) : undefined;
+    }
+
+    try {
+      if (pairedFolderName) {
+        const rootNode = rootEntries.get(pairedFolderName);
+        if (!rootNode) {
+          throw new Error(`Root node not found: ${pairedFolderName}`);
+        }
+
+        const pathParts = filePath.split(path.sep).filter(Boolean);
+        return this.findNodeInHierarchy(filePath, rootNode, pathParts);
+      }
+
+      const fileNodeInfo = getFileNodeInfo(filePath);
+      if (!fileNodeInfo?.relativePath || !fileNodeInfo?.pairedFolderName) {
+        throw new Error(`Invalid path info: ${filePath}`);
+      }
+
+      return this.findEntryByPath(
+        fileNodeInfo.relativePath,
+        rootEntries,
+        fileNodeInfo.pairedFolderName,
+      );
+    } catch (error: any) {
       logErrorMessage(
-        `<findEntryByPath> Couldnt get FileNodeInfo for ${filePath}`,
+        `Find entry failed: ${filePath}`,
+        LOG_FLAGS.ALL,
+        error.message,
       );
       return undefined;
     }
-
-    const relativePath = fileNodeInfo.relativePath;
-    if (!relativePath) {
-      return undefined;
-    }
-
-    const pathParts = [
-      ...(fileNodeInfo ? [fileNodeInfo.pairedFolderName] : []),
-      ...relativePath.split(path.sep),
-    ];
-    let currentEntries = rootEntries;
-    let foundEntry: T | undefined;
-
-    // Traverse through path parts
-    for (const part of pathParts) {
-      foundEntry = currentEntries.get(part);
-      if (!foundEntry) {
-        return undefined;
-      }
-
-      // If we've reached the last part of the path, return the found entry
-      if (part === pathParts[pathParts.length - 1]) {
-        return foundEntry;
-      }
-
-      if (foundEntry.isDirectory()) {
-        currentEntries = foundEntry.children as Map<string, T>;
-      } else {
-        break; // Stop if it's a file before reaching the last part
-      }
-    }
-
-    return foundEntry;
   }
 
-  /**
-   * Updates the found ComparisonFileNode with the data from the element passed.
-   * @param element The updated element.
-   * @param rootEntries The root elements map (from TreeDataProvider).
-   */
-  static async updateComparisonFileNode(
+  public static async addComparisonFileNode(
     element: ComparisonFileNode,
     rootEntries: Map<string, ComparisonFileNode>,
-  ): Promise<ComparisonFileNode | FileNode | undefined> {
-    const foundElement = await this.findEntryByNode(element, rootEntries);
+  ): Promise<ComparisonFileNode> {
+    try {
+      const parentPath = path.dirname(element.relativePath);
+      const parentNode = await this.findEntryByPath(
+        parentPath,
+        rootEntries,
+        element.pairedFolderName,
+      );
 
-    if (foundElement) {
-      Object.assign(foundElement, element); // Updates the found element with new data
-      return foundElement;
+      if (!parentNode?.isDirectory()) {
+        throw new Error(`Invalid parent: ${parentPath}`);
+      }
+
+      parentNode.addChild(element);
+
+      return ComparisonFileNode.updateParentDirectoriesStatus(
+        rootEntries,
+        element,
+      );
+    } catch (error) {
+      logErrorMessage("Add node failed", LOG_FLAGS.ALL, error);
+      throw new Error("Adding node to rootElements failed");
     }
+  }
 
-    logErrorMessage(
-      "<updateComparisonFileNode> Element not found in the root elements",
-      LOG_FLAGS.ALL,
-      rootEntries,
-    );
-    return undefined;
+  public static async deleteComparisonFileNode(
+    element: ComparisonFileNode,
+    rootEntries: Map<string, ComparisonFileNode>,
+  ): Promise<ComparisonFileNode> {
+    try {
+      const parentPath = path.dirname(element.relativePath);
+      const parentNode = await this.findEntryByPath(
+        parentPath,
+        rootEntries,
+        element.pairedFolderName,
+      );
+
+      if (!parentNode) {
+        throw new Error(`Parent not found: ${parentPath}`);
+      }
+
+      parentNode.children.delete(element.name);
+
+      const tempNode = new ComparisonFileNode(
+        element.name,
+        element.pairedFolderName,
+        element.type,
+        element.size,
+        element.modifiedTime,
+        element.relativePath,
+        ComparisonStatus.removed,
+      );
+
+      return ComparisonFileNode.updateParentDirectoriesStatus(
+        rootEntries,
+        tempNode,
+      );
+    } catch (error) {
+      logErrorMessage("Delete node failed", LOG_FLAGS.ALL, error);
+      throw new Error("Deleting node to rootElements failed");
+    }
+  }
+
+  public static async moveComparisonFileNode(
+    element: ComparisonFileNode,
+    newPath: string,
+    rootEntries: Map<string, ComparisonFileNode>,
+  ): Promise<ComparisonFileNode> {
+    try {
+      const [oldParentNode, newParentNode] = await Promise.all([
+        this.findEntryByPath(
+          path.dirname(element.relativePath),
+          rootEntries,
+          element.pairedFolderName,
+        ),
+        this.findEntryByPath(
+          path.dirname(newPath),
+          rootEntries,
+          element.pairedFolderName,
+        ),
+      ]);
+
+      if (!oldParentNode || !newParentNode) {
+        throw new Error("Parent node not found");
+      }
+
+      oldParentNode.children.delete(element.name);
+      element.relativePath = newPath;
+      element.name = path.basename(newPath);
+      element.setStatus(ComparisonStatus.modified);
+      newParentNode.addChild(element);
+
+      await ComparisonFileNode.updateParentDirectoriesStatus(
+        rootEntries,
+        oldParentNode,
+      );
+      return ComparisonFileNode.updateParentDirectoriesStatus(
+        rootEntries,
+        element,
+      );
+    } catch (error) {
+      logErrorMessage("Move node failed", LOG_FLAGS.ALL, error);
+      throw new Error("Moving node to rootElements failed");
+    }
+  }
+
+  public static async updateComparisonFileNode(
+    element: ComparisonFileNode,
+    rootEntries: Map<string, ComparisonFileNode>,
+  ): Promise<ComparisonFileNode> {
+    try {
+      const foundElement = await this.findEntryByPath(
+        element.relativePath,
+        rootEntries,
+        element.pairedFolderName,
+      );
+
+      if (!foundElement) {
+        throw new Error("Element not found");
+      }
+
+      Object.assign(foundElement, element);
+      return ComparisonFileNode.updateParentDirectoriesStatus(
+        rootEntries,
+        foundElement,
+      );
+    } catch (error: any) {
+      logErrorMessage("Update node failed", LOG_FLAGS.ALL, error.message);
+      throw new Error("Updating node to rootElements failed");
+    }
   }
 }
 
@@ -350,7 +359,6 @@ export function isFileNodeMap(map: any): map is Map<string, FileNode> {
   if (!(map instanceof Map)) {
     return false;
   }
-
   const firstValue = map.values().next().value;
   return firstValue instanceof FileNode;
 }
@@ -361,7 +369,6 @@ export function isComparisonFileNodeMap(
   if (!(map instanceof Map)) {
     return false;
   }
-
   const firstValue = map.values().next().value;
   return firstValue instanceof ComparisonFileNode;
 }

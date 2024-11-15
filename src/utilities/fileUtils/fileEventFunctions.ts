@@ -23,7 +23,7 @@ async function handleFileAction(
   }
 
   const localPath = uri.fsPath;
-  const comparisonNode = FileNodeManager.findEntryByPath(
+  const comparisonNode = await FileNodeManager.findEntryByPath(
     localPath,
     treeDataProvider.rootElements,
   );
@@ -116,7 +116,7 @@ export async function fileMove(
       return;
     }
 
-    const comparisonNode = FileNodeManager.findEntryByPath(
+    const comparisonNode = await FileNodeManager.findEntryByPath(
       remotePathOld,
       treeDataProvider.rootElements,
     );
@@ -173,7 +173,7 @@ export async function fileDelete(
     const localPath = uri.fsPath;
     const remotePath = getCorrespondingPath(localPath);
 
-    const comparisonNode = FileNodeManager.findEntryByPath(
+    const comparisonNode = await FileNodeManager.findEntryByPath(
       localPath,
       treeDataProvider.rootElements,
     );
@@ -220,53 +220,19 @@ export async function fileDelete(
   }
 }
 
-export async function fileCreate(
-  uri: Uri,
-  treeDataProvider: PairedFoldersTreeDataProvider,
-) {
+export async function fileCreate(uri: Uri): Promise<boolean> {
   const actionOnCreate = WorkspaceConfig.getParameter("actionOnCreate");
 
   if (actionOnCreate !== "none") {
     const localPath = uri.fsPath;
     const remotePath = getCorrespondingPath(localPath);
 
-    const comparisonNode = FileNodeManager.findEntryByPath(
-      localPath,
-      treeDataProvider.rootElements,
-    );
-    if (!comparisonNode) {
-      window.showErrorMessage(
-        `File ${localPath} is not tracked in comparison JSON.`,
-      );
-      return;
-    }
-
-    if (!remotePath) {
-      window.showErrorMessage(
-        `No remote folder paired with local folder: ${localPath}`,
-      );
-      return;
-    }
-
-    if (actionOnCreate === "check&create" || actionOnCreate === "check") {
-      const isSame = await compareRemoteFileHash(comparisonNode);
-      if (actionOnCreate === "check") {
-        window.showInformationMessage(
-          `File ${path.basename(localPath)} ${isSame ? "can" : "cant"} be created.`,
-        );
-        return;
-      }
-      if (isSame) {
-        window.showInformationMessage(
-          `File ${localPath} already exists on remote ${remotePath}`,
-        );
-        return;
-      }
-    }
-
     await uploadFile(localPath, remotePath);
     window.showInformationMessage(
       `File ${localPath} created on remote ${remotePath}`,
     );
+    return true;
   }
+
+  return false;
 }

@@ -26,7 +26,7 @@ export async function listRemoteFilesRecursive(
 
   if (!(await pathExists(remoteDir, FileNodeSource.remote))) {
     logErrorMessage(
-      `Could not find remotely the specified file/folder at ${remoteDir}`,
+      `<listRemoteFilesRecursive> Could not find remotely the specified file/folder at ${remoteDir}`,
       LOG_FLAGS.CONSOLE_AND_LOG_MANAGER,
     );
     return undefined;
@@ -114,7 +114,7 @@ export async function listRemoteFilesRecursive(
 
       if (!rootEntry) {
         throw new Error(
-          `Could not find remotely the specified file/folder at ${remoteDir}`,
+          `<listRemoteFilesRecursive> Could not build the FileNode for the file/folder at ${remoteDir}`,
         );
       }
 

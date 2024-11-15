@@ -177,14 +177,8 @@
                         value: "",
                         visible: true,
                         options: [
-                            { label: "check", value: "check" },
-                            {
-                                label: "check&create",
-                                value: "check&create",
-                                default: true,
-                            },
-                            { label: "create", value: "create" },
-                            { label: "none", value: "none" },
+                            { label: "create", value: "create"},
+                            { label: "none", value: "none", default: true},
                         ],
                     },
                     {
@@ -195,14 +189,8 @@
                         value: "",
                         visible: true,
                         options: [
-                            { label: "check", value: "check" },
-                            {
-                                label: "check&delete",
-                                value: "check&delete",
-                                default: true,
-                            },
                             { label: "delete", value: "delete" },
-                            { label: "none", value: "none" },
+                            { label: "none", value: "none", default: true },
                         ],
                     },
                     {

@@ -4,6 +4,7 @@ import { FileNode, getFileNodeInfo } from "../utilities/FileNode";
 import { PairedFoldersTreeDataProvider } from "./PairedFoldersTreeDataProvider";
 
 import {
+  fileCreate,
   fileDelete,
   fileMove,
   fileSave,
@@ -14,6 +15,7 @@ import {
   ComparisonStatus,
 } from "../utilities/ComparisonFileNode";
 import FileNodeManager from "./FileNodeManager";
+import { Action } from "../utilities/enums";
 
 export class FileEventHandler {
   /**
@@ -74,28 +76,64 @@ export class FileEventHandler {
     event: vscode.FileCreateEvent,
     treeDataProvider: PairedFoldersTreeDataProvider,
   ) {
-    for (const fileUri of event.files) {
-      fileSave(fileUri, treeDataProvider)
-        .then(async () => {
-          const fileNode = await FileNode.getEntryFromLocalPath(fileUri.fsPath);
-          const comparisonFileNode = new ComparisonFileNode(
-            fileNode.name,
-            fileNode.pairedFolderName,
-            fileNode.type,
-            fileNode.size,
-            fileNode.modifiedTime,
-            fileNode.relativePath,
-            ComparisonStatus.added,
-          );
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) {
+      console.log(
+        `<handleFileCreate> Event creating files. List of workspace folders that are open in the editor is empty`,
+      );
+      return;
+    }
 
-          vscode.commands.executeCommand(
-            "livesync.fileEntryRefresh",
-            comparisonFileNode,
+    for (const fileUri of event.files) {
+      const filePath = fileUri.fsPath;
+
+      const isInWorkspace = workspaceFolders.some((folder) =>
+        filePath.startsWith(folder.uri.fsPath),
+      );
+
+      if (!isInWorkspace) {
+        console.log(
+          `<handleFileCreate> Event creating ${filePath} not in workspace, we do nothing`,
+        );
+        continue;
+      }
+
+      console.log(`<handleFileCreate> Event creating ${filePath}`);
+
+      try {
+        // Save the newly created file
+        const fileCreated = await fileCreate(fileUri);
+
+        const fileNode = await FileNode.getEntryFromLocalPath(filePath);
+        const comparisonNode = new ComparisonFileNode(
+          fileNode.name,
+          fileNode.pairedFolderName,
+          fileNode.type,
+          fileNode.size,
+          fileNode.modifiedTime,
+          fileNode.relativePath,
+          ComparisonStatus.added,
+        );
+
+        if (!comparisonNode) {
+          console.warn(
+            `[handleFileCreate] File node for ${filePath} could not be found in comparison JSON.`,
           );
-        })
-        .catch((err: any) => {
-          console.error("[handleFileCreate] Error : ", err);
-        });
+          continue;
+        }
+
+        if (fileCreated) {
+          comparisonNode.status = ComparisonStatus.unchanged;
+        }
+
+        const updatedNode = await treeDataProvider.updateRootElements(
+          Action.Add,
+          comparisonNode,
+        );
+        await treeDataProvider.refresh(updatedNode);
+      } catch (err: any) {
+        console.error("[handleFileCreate] Error: ", err);
+      }
     }
   }
 
@@ -110,8 +148,8 @@ export class FileEventHandler {
   ) {
     for (const fileUri of event.files) {
       fileDelete(fileUri, treeDataProvider)
-        .then(() => {
-          const entryToRemove = FileNodeManager.findEntryByPath(
+        .then(async () => {
+          const entryToRemove = await FileNodeManager.findEntryByPath(
             fileUri.fsPath,
             treeDataProvider.rootElements,
           );
@@ -139,11 +177,15 @@ export class FileEventHandler {
   ) {
     for (const { oldUri, newUri } of event.files) {
       fileMove(oldUri, newUri, treeDataProvider)
-        .then(() => {
-          const entryToRenameOrMove = FileNodeManager.findEntryByPath(
+        .then(async () => {
+          const entryToRenameOrMove = await FileNodeManager.findEntryByPath(
             oldUri.fsPath,
             treeDataProvider.rootElements,
           );
+
+          if (!entryToRenameOrMove) {
+            return;
+          }
 
           if (
             entryToRenameOrMove &&
@@ -162,17 +204,20 @@ export class FileEventHandler {
             // treeDataProvider.refresh(entryToRenameOrMove);
           } else if (entryToRenameOrMove) {
             // Moving the entry
-            const oldParentEntry = FileNodeManager.findEntryByPath(
+            const oldParentEntry = await FileNodeManager.findEntryByPath(
               path.dirname(oldUri.fsPath),
               treeDataProvider.rootElements,
             );
-            treeDataProvider.removeElement(entryToRenameOrMove, oldParentEntry);
+            if (!oldParentEntry) {
+              return;
+            }
+            // treeDataProvider.removeElement(entryToRenameOrMove, oldParentEntry);
 
-            const newParentEntry = FileNodeManager.findEntryByPath(
-              path.dirname(newUri.fsPath),
-              treeDataProvider.rootElements,
-            );
-            treeDataProvider.addElement(entryToRenameOrMove, newParentEntry);
+            // const newParentEntry = await FileNodeManager.findEntryByPath(
+            //   path.dirname(newUri.fsPath),
+            //   treeDataProvider.rootElements,
+            // );
+            // treeDataProvider.addElement(entryToRenameOrMove, newParentEntry);
           }
         })
         .catch((err: any) => {
@@ -192,7 +237,7 @@ export class FileEventHandler {
   ) {
     const changedFileUri = event.document.uri;
     // const changedEntry = FileNodeManager.findEntryByPath(changedFileUri.fsPath, treeDataProvider.rootElements);
-    FileNodeManager.findEntryByPath(
+    await FileNodeManager.findEntryByPath(
       changedFileUri.fsPath,
       treeDataProvider.rootElements,
     );
@@ -242,8 +287,8 @@ export class FileEventHandler {
       console.log(`<handleFileSave> Event saving ${filePath}`);
 
       await fileSave(document.uri, treeDataProvider)
-        .then(() => {
-          const entrySaved = FileNodeManager.findEntryByPath(
+        .then(async () => {
+          const entrySaved = await FileNodeManager.findEntryByPath(
             filePath,
             treeDataProvider.rootElements,
           );

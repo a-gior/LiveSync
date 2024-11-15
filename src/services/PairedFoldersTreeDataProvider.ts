@@ -30,9 +30,11 @@ import {
   ComparisonStatus,
 } from "../utilities/ComparisonFileNode";
 import { BaseNode, BaseNodeType } from "../utilities/BaseNode";
-import { LOG_FLAGS, logErrorMessage } from "./LogManager";
+import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
 import { StatusBarManager } from "./StatusBarManager";
 import { FileNode } from "../utilities/FileNode";
+import path from "path";
+import { Action } from "../utilities/enums";
 
 export class PairedFoldersTreeDataProvider
   implements vscode.TreeDataProvider<ComparisonFileNode>
@@ -72,66 +74,32 @@ export class PairedFoldersTreeDataProvider
 
   async refresh(element?: ComparisonFileNode): Promise<void> {
     if (!element) {
-      console.debug("################ Refresh all ################");
       this._onDidChangeTreeData.fire(undefined);
     } else {
-      // Let updateComparisonFileNode handle both finding and updating the element
-      const updatedElement = await FileNodeManager.updateComparisonFileNode(
-        element,
-        this.rootElements,
-      );
+      let parentNode;
 
-      if (updatedElement && updatedElement instanceof ComparisonFileNode) {
-        const updatedNode = ComparisonFileNode.updateParentDirectoriesStatus(
+      const pathParts = element.relativePath.split(path.sep);
+      if (element.isDirectory() && pathParts.length > 1) {
+        parentNode = element;
+      } else if (!element.isDirectory() && pathParts.length > 1) {
+        const parentPathParts = pathParts.slice(0, pathParts.length - 1);
+        parentNode = await FileNodeManager.findEntryByPath(
+          parentPathParts.join(path.sep),
           this.rootElements,
-          updatedElement,
+          element.pairedFolderName,
         );
-        this._onDidChangeTreeData.fire(updatedNode);
-        this.fileNodeManager.updateJsonFileNode(element, JsonType.COMPARE);
+      } else {
+        parentNode = this.rootElements.get(element.pairedFolderName);
       }
-    }
-  }
 
-  public async addElement(
-    newElement: ComparisonFileNode,
-    parentElement?: ComparisonFileNode,
-  ): Promise<void> {
-    if (parentElement) {
-      parentElement.addChild(newElement);
-      await this.fileNodeManager.updateJsonFileNode(
-        parentElement,
-        JsonType.COMPARE,
-      );
-      this.refresh(parentElement);
-    } else {
-      this.rootElements.set(newElement.name, newElement);
-      await this.fileNodeManager.updateFullJson(
-        JsonType.COMPARE,
-        this.rootElements,
-      );
-      this.refresh();
-    }
-  }
-
-  public async removeElement(
-    elementToRemove: ComparisonFileNode,
-    parentElement?: ComparisonFileNode,
-  ): Promise<void> {
-    if (parentElement) {
-      parentElement.removeChild(elementToRemove.name);
-      await this.fileNodeManager.updateJsonFileNode(
-        parentElement,
-        JsonType.COMPARE,
-      );
-      this.refresh(parentElement);
-    } else {
-      this.rootElements.delete(elementToRemove.name);
-
-      await this.fileNodeManager.updateFullJson(
-        JsonType.COMPARE,
-        this.rootElements,
-      );
-      this.refresh();
+      if (parentNode && parentNode instanceof ComparisonFileNode) {
+        logInfoMessage("Refreshing Tree: ", LOG_FLAGS.CONSOLE_ONLY, parentNode);
+        this._onDidChangeTreeData.fire(parentNode);
+        this.fileNodeManager.updateFullJson(
+          JsonType.COMPARE,
+          this.rootElements,
+        );
+      }
     }
   }
 
@@ -266,6 +234,37 @@ export class PairedFoldersTreeDataProvider
       console.log(
         `Comparing directories execution time: ${executionTime.toFixed(2)} ms`,
       ); // Log the execution time
+    }
+  }
+
+  async updateRootElements(
+    action: Action,
+    element: ComparisonFileNode,
+  ): Promise<ComparisonFileNode> {
+    switch (action) {
+      case Action.Add:
+        // Handle adding the element
+        return await FileNodeManager.addComparisonFileNode(
+          element,
+          this.rootElements,
+        );
+
+      case Action.Remove:
+        // Handle deleting the element
+        return await FileNodeManager.deleteComparisonFileNode(
+          element,
+          this.rootElements,
+        );
+
+      case Action.Update:
+        // Handle updating the element that exists
+        return await FileNodeManager.updateComparisonFileNode(
+          element,
+          this.rootElements,
+        );
+
+      default:
+        throw new Error(`Unknown action: ${action}`);
     }
   }
 }

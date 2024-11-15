@@ -95,7 +95,7 @@ export async function compareRemoteFileHash(
       window.showErrorMessage(`No remote JSON found`);
       return false;
     }
-    const remoteEntry = FileNodeManager.findEntryByPath(
+    const remoteEntry = await FileNodeManager.findEntryByPath(
       remotePath,
       remoteFileEntriesMap,
     );

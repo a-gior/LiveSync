@@ -8,6 +8,8 @@ import {
 } from "./fileUtils/filePathUtils";
 import { BaseNode, BaseNodeData, BaseNodeType } from "./BaseNode";
 import { WorkspaceConfig } from "../services/WorkspaceConfig";
+import { generateHash } from "./fileUtils/hashUtils";
+import { LOG_FLAGS, logErrorMessage } from "../services/LogManager";
 
 export enum FileNodeSource {
   remote = "remote",
@@ -90,17 +92,33 @@ export class FileNode extends BaseNode<FileNode> {
   static async getEntryFromLocalPath(localPath: string): Promise<FileNode> {
     try {
       const stats = fs.lstatSync(localPath);
+      const nodeType = await pathExists(localPath, FileNodeSource.local);
+      if (!nodeType) {
+        logErrorMessage(
+          `Could not find locally the specified file/folder at ${localPath}`,
+          LOG_FLAGS.CONSOLE_AND_LOG_MANAGER,
+        );
+        throw new Error();
+      }
 
-      return new FileNode({
+      const fileNode = new FileNode({
         name: path.basename(localPath),
         pairedFolderName: await getRootFolderName(localPath),
-        type: stats.isDirectory() ? BaseNodeType.directory : BaseNodeType.file,
+        type: nodeType,
         size: stats.size,
         modifiedTime: stats.mtime,
         source: FileNodeSource.local,
         relativePath: getFileNodeInfo(localPath)!.relativePath,
         fullPath: localPath,
       });
+
+      fileNode.hash = await generateHash(
+        fileNode.fullPath,
+        FileNodeSource.local,
+        nodeType,
+      );
+
+      return fileNode;
     } catch (error) {
       console.error(`Error getting FileNode for path ${localPath}:`, error);
       throw error;
