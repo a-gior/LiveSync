@@ -9,7 +9,10 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:yourSidebarViewId",
+    "workspaceContains:.vscode/settings.json"
+  ],
   "main": "./out/src/extension.js",
   "contributes": {
     "viewsContainers": {

@@ -174,10 +174,10 @@ export async function getRemoteFileMetadata(
 }
 
 export async function moveRemoteFile(
-  configuration: ConfigurationMessage["configuration"],
   oldRemotePath: string,
   newRemotePath: string,
 ): Promise<void> {
+  const configuration = WorkspaceConfig.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   if (shouldIgnore(oldRemotePath)) {

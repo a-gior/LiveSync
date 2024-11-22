@@ -172,6 +172,17 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     };
   }
 
+  clone(): ComparisonFileNode {
+    try {
+      // Convert the node to a JSON object, then parse it to create a new instance
+      const jsonString = JSON.stringify(this.toJSON());
+      const jsonData = JSON.parse(jsonString);
+      return new ComparisonFileNode(jsonData);
+    } catch (error: any) {
+      throw new Error(`Failed to clone ComparisonFileNode: ${error.message}`);
+    }
+  }
+
   setStatus(status: ComparisonStatus) {
     this.status = status;
   }

@@ -44,9 +44,9 @@ export class FileEventHandler {
       }),
 
       // Handle file change events
-      vscode.workspace.onDidChangeTextDocument(async (event) => {
-        await FileEventHandler.handleFileChange(event, treeDataProvider);
-      }),
+      // vscode.workspace.onDidChangeTextDocument(async (event) => {
+      //   await FileEventHandler.handleFileChange(event, treeDataProvider);
+      // }),
 
       // Handle file save events
       vscode.workspace.onDidSaveTextDocument(async (document) => {
@@ -68,6 +68,40 @@ export class FileEventHandler {
   }
 
   /**
+   * Checks if the given file path is within the workspace folders.
+   * @param filePath - The file path to check
+   * @returns True if the file is in the workspace, false otherwise
+   */
+  static isFileInWorkspace(filePath: string): boolean {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) {
+      return false;
+    }
+    return workspaceFolders.some((folder) =>
+      filePath.startsWith(folder.uri.fsPath),
+    );
+  }
+
+  /**
+   * Logs a message indicating that the file is not in the workspace.
+   * @param action - The action that was attempted (e.g., "creating", "deleting", "saving")
+   * @param filePath - The file path
+   */
+  static logFileNotInWorkspace(action: string, filePath: string): void {
+    console.log(
+      `<handleFile${action}> Event ${action} ${filePath} not in workspace, we do nothing`,
+    );
+
+    if (filePath.endsWith("settings.json")) {
+      WorkspaceConfig.reloadConfiguration();
+      console.log(
+        `<handleFile${action}> Event saving ${filePath}, reloaded WorkspaceConfig`,
+      );
+      return;
+    }
+  }
+
+  /**
    * Handle file create events.
    * @param event - The file create event
    * @param treeDataProvider - The tree data provider
@@ -76,25 +110,11 @@ export class FileEventHandler {
     event: vscode.FileCreateEvent,
     treeDataProvider: PairedFoldersTreeDataProvider,
   ) {
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) {
-      console.log(
-        `<handleFileCreate> Event creating files. List of workspace folders that are open in the editor is empty`,
-      );
-      return;
-    }
-
     for (const fileUri of event.files) {
       const filePath = fileUri.fsPath;
 
-      const isInWorkspace = workspaceFolders.some((folder) =>
-        filePath.startsWith(folder.uri.fsPath),
-      );
-
-      if (!isInWorkspace) {
-        console.log(
-          `<handleFileCreate> Event creating ${filePath} not in workspace, we do nothing`,
-        );
+      if (!FileEventHandler.isFileInWorkspace(filePath)) {
+        FileEventHandler.logFileNotInWorkspace("Create", filePath);
         continue;
       }
 
@@ -147,105 +167,44 @@ export class FileEventHandler {
     treeDataProvider: PairedFoldersTreeDataProvider,
   ) {
     for (const fileUri of event.files) {
-      fileDelete(fileUri, treeDataProvider)
-        .then(async () => {
-          const entryToRemove = await FileNodeManager.findEntryByPath(
-            fileUri.fsPath,
-            treeDataProvider.rootElements,
-          );
-          if (entryToRemove) {
-            vscode.commands.executeCommand(
-              "livesync.fileEntryRefresh",
-              entryToRemove,
-            );
-          }
-        })
-        .catch((err: any) => {
-          console.error("[handleFileDelete] Error : ", err);
-        });
+      const filePath = fileUri.fsPath;
+
+      if (!FileEventHandler.isFileInWorkspace(filePath)) {
+        FileEventHandler.logFileNotInWorkspace("Delete", filePath);
+        continue;
+      }
+
+      console.log(`<handleFileDelete> Event deleting ${filePath}`);
+
+      try {
+        const nodeToDelete = await FileNodeManager.findEntryByPath(
+          filePath,
+          treeDataProvider.rootElements,
+        );
+        if (!nodeToDelete) {
+          console.warn(`<handleFileDelete> Entry not found for ${filePath}`);
+          return;
+        }
+
+        let fileDeleted = false;
+        if (nodeToDelete.status !== ComparisonStatus.added) {
+          // If file exists on remote
+          fileDeleted = await fileDelete(fileUri);
+          nodeToDelete.status = fileDeleted
+            ? ComparisonStatus.removed
+            : nodeToDelete.status;
+        }
+        const action = fileDeleted ? Action.Remove : Action.Update;
+
+        const deletedNode = await treeDataProvider.updateRootElements(
+          action,
+          nodeToDelete,
+        );
+        await treeDataProvider.refresh(deletedNode);
+      } catch (err: any) {
+        console.error("<handleFileDelete> Error: ", err);
+      }
     }
-  }
-
-  /**
-   * Handle file rename events.
-   * @param event - The file rename event
-   * @param treeDataProvider - The tree data provider
-   */
-  static async handleFileRename(
-    event: vscode.FileRenameEvent,
-    treeDataProvider: PairedFoldersTreeDataProvider,
-  ) {
-    for (const { oldUri, newUri } of event.files) {
-      fileMove(oldUri, newUri, treeDataProvider)
-        .then(async () => {
-          const entryToRenameOrMove = await FileNodeManager.findEntryByPath(
-            oldUri.fsPath,
-            treeDataProvider.rootElements,
-          );
-
-          if (!entryToRenameOrMove) {
-            return;
-          }
-
-          if (
-            entryToRenameOrMove &&
-            path.dirname(oldUri.fsPath) === path.dirname(newUri.fsPath)
-          ) {
-            // Renaming the entry
-            entryToRenameOrMove.name = path.basename(newUri.fsPath);
-            entryToRenameOrMove.relativePath = getFileNodeInfo(
-              newUri.fsPath,
-            )!.relativePath;
-            vscode.commands.executeCommand(
-              "livesync.fileEntryRefresh",
-              entryToRenameOrMove,
-            );
-            // TODO - TEST WHICH IS BETTER TO REFRESH
-            // treeDataProvider.refresh(entryToRenameOrMove);
-          } else if (entryToRenameOrMove) {
-            // Moving the entry
-            const oldParentEntry = await FileNodeManager.findEntryByPath(
-              path.dirname(oldUri.fsPath),
-              treeDataProvider.rootElements,
-            );
-            if (!oldParentEntry) {
-              return;
-            }
-            // treeDataProvider.removeElement(entryToRenameOrMove, oldParentEntry);
-
-            // const newParentEntry = await FileNodeManager.findEntryByPath(
-            //   path.dirname(newUri.fsPath),
-            //   treeDataProvider.rootElements,
-            // );
-            // treeDataProvider.addElement(entryToRenameOrMove, newParentEntry);
-          }
-        })
-        .catch((err: any) => {
-          console.error("[handleFileRename] Error : ", err);
-        });
-    }
-  }
-
-  /**
-   * Handle file change events.
-   * @param event - The text document change event
-   * @param treeDataProvider - The tree data provider
-   */
-  static async handleFileChange(
-    event: vscode.TextDocumentChangeEvent,
-    treeDataProvider: PairedFoldersTreeDataProvider,
-  ) {
-    const changedFileUri = event.document.uri;
-    // const changedEntry = FileNodeManager.findEntryByPath(changedFileUri.fsPath, treeDataProvider.rootElements);
-    await FileNodeManager.findEntryByPath(
-      changedFileUri.fsPath,
-      treeDataProvider.rootElements,
-    );
-
-    // if (changedEntry) {
-    //   // Perform necessary updates to the changedEntry
-    //   // treeDataProvider.refresh(changedEntry);
-    // }
   }
 
   /**
@@ -259,47 +218,142 @@ export class FileEventHandler {
   ) {
     const filePath = document.uri.fsPath;
 
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) {
-      console.log(
-        `<handleFileSave> Event saving ${filePath} List of workspace folders that are open in the editor is empty`,
-      );
+    if (!FileEventHandler.isFileInWorkspace(filePath)) {
+      FileEventHandler.logFileNotInWorkspace("Save", filePath);
       return;
     }
 
-    const isInWorkspace = workspaceFolders.some((folder) =>
-      filePath.startsWith(folder.uri.fsPath),
-    );
-    const isSettingsJson = filePath.endsWith("settings.json");
+    console.log(`<handleFileSave> Event saving ${filePath}`);
 
-    if (!isInWorkspace) {
-      console.log(
-        `<handleFileSave> Event saving ${filePath} not in workspace, we do nothing`,
+    try {
+      const nodeToSave = await FileNodeManager.findEntryByPath(
+        filePath,
+        treeDataProvider.rootElements,
       );
-      return;
-    } else if (isSettingsJson) {
-      WorkspaceConfig.reloadConfiguration();
-      console.log(
-        `<handleFileSave> Event saving ${filePath}, reloaded WorkspaceConfig`,
-      );
-      return;
-    } else {
-      console.log(`<handleFileSave> Event saving ${filePath}`);
+      if (!nodeToSave) {
+        console.warn(`<handleFileRename> Entry not found for ${filePath}`);
+        return;
+      }
 
-      await fileSave(document.uri, treeDataProvider)
-        .then(async () => {
-          const entrySaved = await FileNodeManager.findEntryByPath(
-            filePath,
-            treeDataProvider.rootElements,
-          );
-          vscode.commands.executeCommand(
-            "livesync.fileEntryRefresh",
-            entrySaved,
-          );
-        })
-        .catch((err: any) => {
-          console.error("[handleFileSave] Error : ", err);
-        });
+      const fileSaved = await fileSave(document.uri, treeDataProvider);
+      if (fileSaved) {
+        nodeToSave.status = ComparisonStatus.unchanged;
+      }
+
+      const savedNode = await treeDataProvider.updateRootElements(
+        Action.Update,
+        nodeToSave,
+      );
+      await treeDataProvider.refresh(savedNode);
+    } catch (err: any) {
+      console.error("<handleFileSave> Error: ", err);
     }
   }
+
+  /**
+   * Handle file rename events.
+   * @param event - The file rename event
+   * @param treeDataProvider - The tree data provider
+   */
+  static async handleFileRename(
+    event: vscode.FileRenameEvent,
+    treeDataProvider: PairedFoldersTreeDataProvider,
+  ) {
+    for (const { oldUri, newUri } of event.files) {
+      const oldPath = oldUri.fsPath;
+      const newPath = newUri.fsPath;
+
+      if (
+        !FileEventHandler.isFileInWorkspace(oldPath) ||
+        !FileEventHandler.isFileInWorkspace(newPath)
+      ) {
+        FileEventHandler.logFileNotInWorkspace("Rename", oldPath);
+        continue;
+      }
+
+      console.log(
+        `<handleFileRename> Event renaming/moving from ${oldPath} to ${newPath}`,
+      );
+
+      try {
+        const nodeToRename = await FileNodeManager.findEntryByPath(
+          oldPath,
+          treeDataProvider.rootElements,
+        );
+        if (!nodeToRename) {
+          console.warn(`<handleFileRename> Entry not found for ${oldPath}`);
+          continue;
+        }
+
+        const oldFileNodeInfo = getFileNodeInfo(oldPath);
+        const newFileNodeInfo = getFileNodeInfo(newPath);
+        if (!oldFileNodeInfo || !newFileNodeInfo) {
+          console.warn(
+            `<handleFileRename> FileNodeInfo not found for ${oldPath} or ${newPath}`,
+          );
+          continue;
+        }
+
+        const fileRenamed = await fileMove(oldUri, newUri);
+
+        if (fileRenamed) {
+          nodeToRename.status = ComparisonStatus.unchanged;
+
+          nodeToRename.relativePath = oldFileNodeInfo.relativePath;
+          const deletedNode = await treeDataProvider.updateRootElements(
+            Action.Remove,
+            nodeToRename,
+          );
+          await treeDataProvider.refresh(deletedNode);
+
+          if (path.dirname(oldPath) === path.dirname(newPath)) {
+            // Renaming the entry
+            nodeToRename.name = path.basename(newPath);
+          }
+
+          nodeToRename.relativePath = newFileNodeInfo.relativePath;
+          const movedNode = await treeDataProvider.updateRootElements(
+            Action.Add,
+            nodeToRename,
+          );
+          await treeDataProvider.refresh(movedNode);
+        } else {
+          nodeToRename.status = ComparisonStatus.removed;
+          nodeToRename.relativePath = oldFileNodeInfo.relativePath;
+          const deletedNode = await treeDataProvider.updateRootElements(
+            Action.Update,
+            nodeToRename,
+          );
+          await treeDataProvider.refresh(deletedNode);
+
+          const nodeToAdd = nodeToRename.clone();
+          if (path.dirname(oldPath) === path.dirname(newPath)) {
+            // Renaming the entry
+            nodeToAdd.name = path.basename(newPath);
+          }
+          nodeToAdd.status = ComparisonStatus.added;
+          nodeToAdd.relativePath = newFileNodeInfo.relativePath;
+          const addedNode = await treeDataProvider.updateRootElements(
+            Action.Add,
+            nodeToAdd,
+          );
+          await treeDataProvider.refresh(addedNode);
+        }
+      } catch (err: any) {
+        console.error("<handleFileRename> Error: ", err);
+      }
+    }
+  }
+
+  /**
+   * Handle file change events.
+   * @param event - The text document change event
+   * @param treeDataProvider - The tree data provider
+   */
+  // static async handleFileChange(
+  //   event: vscode.TextDocumentChangeEvent,
+  //   treeDataProvider: PairedFoldersTreeDataProvider,
+  // ) {
+  //   // NOTHING TO DO WHEN CHANGES OCCURS IN DOCUMENTS
+  // }
 }

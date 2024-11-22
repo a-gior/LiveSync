@@ -279,8 +279,8 @@ export default class FileNodeManager {
         rootEntries,
         tempNode,
       );
-    } catch (error) {
-      logErrorMessage("Delete node failed", LOG_FLAGS.ALL, error);
+    } catch (error: any) {
+      logErrorMessage("Delete node failed", LOG_FLAGS.ALL, error.message);
       throw new Error("Deleting node to rootElements failed");
     }
   }
