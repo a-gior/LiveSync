@@ -152,6 +152,24 @@
                         ],
                     },
                     {
+                        name: "actionOnDownload",
+                        label: "ActionOnDownload",
+                        type: "select",
+                        required: true,
+                        value: "",
+                        visible: true,
+                        options: [
+                            { label: "check", value: "check" },
+                            {
+                                label: "check&download",
+                                value: "check&download",
+                                default: true,
+                            },
+                            { label: "download", value: "download" },
+                            { label: "none", value: "none" },
+                        ],
+                    },
+                    {
                         name: "actionOnSave",
                         label: "ActionOnSave",
                         type: "select",
@@ -177,6 +195,12 @@
                         value: "",
                         visible: true,
                         options: [
+                            { label: "check", value: "check" },
+                            {
+                                label: "check&create",
+                                value: "check&create",
+                                default: true,
+                            },
                             { label: "create", value: "create"},
                             { label: "none", value: "none", default: true},
                         ],
@@ -189,6 +213,12 @@
                         value: "",
                         visible: true,
                         options: [
+                            { label: "check", value: "check" },
+                            {
+                                label: "check&delete",
+                                value: "check&delete",
+                                default: true,
+                            },
                             { label: "delete", value: "delete" },
                             { label: "none", value: "none", default: true },
                         ],
@@ -291,6 +321,7 @@
         if (confState.fileEventActions) {
             const {
                 actionOnUpload,
+                actionOnDownload,
                 actionOnSave,
                 actionOnCreate,
                 actionOnDelete,
@@ -298,10 +329,11 @@
             } = confState.fileEventActions;
 
             fileEventActions.formGroups["file-event-actions-form-group-0"].fields[0].value = actionOnUpload;
-            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[1].value = actionOnSave;
-            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[2].value = actionOnCreate;
-            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[3].value = actionOnDelete;
-            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[4].value = actionOnMove;
+            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[1].value = actionOnDownload;
+            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[2].value = actionOnSave;
+            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[3].value = actionOnCreate;
+            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[4].value = actionOnDelete;
+            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[5].value = actionOnMove;
         }
 
         if (confState.ignoreList) {

@@ -62,13 +62,15 @@
         }))
 
         const currentActionOnUpload =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[0].value;
-        const currentActionOnSave =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[1].value;
-        const currentActionOnCreate =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[2].value;
-        const currentActionOnDelete =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[3].value;
-        const currentActionOnMove =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[4].value;
+        const currentActionOnDownload =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[1].value;
+        const currentActionOnSave =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[2].value;
+        const currentActionOnCreate =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[3].value;
+        const currentActionOnDelete =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[4].value;
+        const currentActionOnMove =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[5].value;
 
         const currentFileEventActions = {
             actionOnUpload: currentActionOnUpload,
+            actionOnDownload: currentActionOnDownload,
             actionOnSave: currentActionOnSave,
             actionOnCreate: currentActionOnCreate,
             actionOnDelete: currentActionOnDelete,

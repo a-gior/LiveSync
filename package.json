@@ -157,6 +157,17 @@
           ],
           "description": "Action to perform on file upload.\n\nOptions:\n- save: Automatically uploads the file to the remote server on upload.\n- check: Only checks if the file has been modified on the remote server without uploading.\n- check&save: Checks if the file has been modified on the remote server and uploads if it hasn't.\n- none: No action is performed on file upload."
         },
+        "LiveSync.actionOnDownload": {
+          "type": "string",
+          "default": "check&download",
+          "enum": [
+            "download",
+            "check",
+            "check&download",
+            "none"
+          ],
+          "description": "Action to perform on file download.\n\nOptions:\n- download: Automatically downloads the file from the remote server.\n- check: Only checks if the file has been modified on the local system without downloading.\n- check&download: Checks if the file has been modified on the local system and downloads if it hasn't.\n- none: No action is performed on file download."
+        },
         "LiveSync.actionOnSave": {
           "type": "string",
           "default": "check&save",
@@ -173,6 +184,8 @@
           "default": "none",
           "enum": [
             "delete",
+            "check",
+            "check&delete",
             "none"
           ],
           "description": "Action to perform on file delete.\n\nOptions:\n- delete: Automatically deletes the file on the remote server on delete.\n- check: Only checks if the file has been deleted on the remote server without deleting.\n- check&delete: Checks if the file has been deleted on the remote server and deletes if it hasn't.\n- none: No action is performed on file delete."
@@ -193,6 +206,8 @@
           "default": "create",
           "enum": [
             "create",
+            "check",
+            "check&create",
             "none"
           ],
           "description": "Action to perform on file create.\n\nOptions:\n- create: Automatically creates the file on the remote server on create.\n- check: Only checks if the file has been created on the remote server without creating.\n- check&create: Checks if the file has been created on the remote server and creates if it hasn't.\n- none: No action is performed on file create."

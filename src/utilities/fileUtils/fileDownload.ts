@@ -1,13 +1,10 @@
 import * as vscode from "vscode";
 import { getFullPaths } from "./filePathUtils";
 import { downloadRemoteFile } from "./sftpOperations";
-import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import { ComparisonFileNode } from "../ComparisonFileNode";
 import { LOG_FLAGS, logErrorMessage } from "../../services/LogManager";
 
 export async function handleFileDownload(fileEntry: ComparisonFileNode) {
-  const configuration = WorkspaceConfig.getRemoteServerConfigured();
-
   const { localPath, remotePath } = await getFullPaths(fileEntry);
 
   if (!remotePath || !localPath) {
@@ -20,7 +17,7 @@ export async function handleFileDownload(fileEntry: ComparisonFileNode) {
   }
 
   try {
-    await downloadRemoteFile(configuration, remotePath, localPath);
+    await downloadRemoteFile(remotePath, localPath);
     vscode.window.showInformationMessage(`File downloaded to ${localPath}`);
   } catch (error: any) {
     vscode.window.showErrorMessage(`Failed to download file: ${error.message}`);

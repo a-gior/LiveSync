@@ -1,7 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
 import { SFTPClient } from "../../services/SFTPClient";
-import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
 import { generateHash } from "./hashUtils";
 import { FileNodeSource } from "../FileNode";
 import { SSHClient } from "../../services/SSHClient";
@@ -20,10 +19,10 @@ import FileNodeManager, {
 } from "../../services/FileNodeManager";
 
 export async function downloadRemoteFile(
-  configuration: ConfigurationMessage["configuration"],
   remotePath: string,
   localTmpPath: string,
 ): Promise<void> {
+  const configuration = WorkspaceConfig.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   if (shouldIgnore(remotePath)) {
@@ -41,7 +40,7 @@ export async function downloadRemoteFile(
   }
 }
 
-export async function uploadFile(
+export async function uploadRemoteFile(
   localPath: string,
   remotePath: string,
   checkParentDirExists: boolean = true,

@@ -2,12 +2,9 @@ import * as path from "path";
 import { window, Uri, commands } from "vscode";
 import { downloadRemoteFile } from "./sftpOperations";
 import { getFullPaths } from "./filePathUtils";
-import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import { ComparisonFileNode } from "../ComparisonFileNode";
 
 export async function showDiff(fileNode: ComparisonFileNode) {
-  const configuration = WorkspaceConfig.getRemoteServerConfigured();
-
   const { localPath, remotePath } = await getFullPaths(fileNode);
 
   if (!localPath || !remotePath) {
@@ -21,7 +18,7 @@ export async function showDiff(fileNode: ComparisonFileNode) {
   const localTmpPath = path.join(tmpDir, path.basename(remotePath));
 
   try {
-    await downloadRemoteFile(configuration, remotePath, localTmpPath);
+    await downloadRemoteFile(remotePath, localTmpPath);
 
     const localUri = Uri.file(localPath);
     const remoteUri = Uri.file(localTmpPath);

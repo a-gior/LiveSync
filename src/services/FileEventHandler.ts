@@ -294,10 +294,19 @@ export class FileEventHandler {
           continue;
         }
 
-        const fileRenamed = await fileMove(oldUri, newUri);
+        let fileRenamed = false;
+        if (nodeToRename.status !== ComparisonStatus.added) {
+          fileRenamed = await fileMove(oldUri, newUri);
+        } else {
+          // Only exists locally
+          fileRenamed = true;
+        }
 
         if (fileRenamed) {
-          nodeToRename.status = ComparisonStatus.unchanged;
+          nodeToRename.status =
+            nodeToRename.status !== ComparisonStatus.added
+              ? ComparisonStatus.unchanged
+              : ComparisonStatus.added;
 
           nodeToRename.relativePath = oldFileNodeInfo.relativePath;
           const deletedNode = await treeDataProvider.updateRootElements(

@@ -53,7 +53,8 @@ suite("LiveSync Configuration Command Tests", () => {
       configuration: configurationTest,
       pairedFolders: [],
       fileEventActions: {
-        actionOnUpload: "check&save",
+        actionOnUpload: "check&upload",
+        actionOnDownload: "check&download",
         actionOnSave: "check&save",
         actionOnCreate: "create",
         actionOnDelete: "none",

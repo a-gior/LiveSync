@@ -26,6 +26,7 @@ export class WorkspaceConfig {
       config.get<Array<PairFoldersMessage["paths"]>>("pairedFolders");
 
     const actionOnUpload = config.get<string>("actionOnUpload");
+    const actionOnDownload = config.get<string>("actionOnDownload");
     const actionOnSave = config.get<string>("actionOnSave");
     const actionOnDelete = config.get<string>("actionOnDelete");
     const actionOnCreate = config.get<string>("actionOnCreate");
@@ -56,10 +57,12 @@ export class WorkspaceConfig {
       actionOnDelete &&
       actionOnMove &&
       actionOnSave &&
-      actionOnUpload
+      actionOnUpload &&
+      actionOnDownload
     ) {
       workspaceConfig.fileEventActions = {
         actionOnUpload: actionOnUpload,
+        actionOnDownload: actionOnDownload,
         actionOnSave: actionOnSave,
         actionOnCreate: actionOnCreate,
         actionOnDelete: actionOnDelete,

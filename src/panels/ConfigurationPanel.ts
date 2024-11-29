@@ -106,6 +106,10 @@ export class ConfigurationPanel extends Panel {
     console.log("saveActions", actions);
     if (actions) {
       await WorkspaceConfig.update("actionOnUpload", actions.actionOnUpload);
+      await WorkspaceConfig.update(
+        "actionOnDownload",
+        actions.actionOnDownload,
+      );
       await WorkspaceConfig.update("actionOnSave", actions.actionOnSave);
       await WorkspaceConfig.update("actionOnCreate", actions.actionOnCreate);
       await WorkspaceConfig.update("actionOnDelete", actions.actionOnDelete);
