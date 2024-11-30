@@ -119,8 +119,10 @@ export async function activate(context: vscode.ExtensionContext) {
     ),
     vscode.commands.registerCommand(
       "livesync.fileEntryShowDiff",
-      (fileEntry: ComparisonFileNode) => {
-        showDiff(fileEntry);
+      (
+        input: ComparisonFileNode | { localPath: string; remotePath: string },
+      ) => {
+        showDiff(input);
       },
     ),
     vscode.commands.registerCommand(

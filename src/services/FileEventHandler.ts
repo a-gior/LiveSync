@@ -16,6 +16,7 @@ import {
 } from "../utilities/ComparisonFileNode";
 import FileNodeManager from "./FileNodeManager";
 import { Action } from "../utilities/enums";
+import { logInfoMessage } from "./LogManager";
 
 export class FileEventHandler {
   /**
@@ -54,15 +55,9 @@ export class FileEventHandler {
       }),
 
       // Handle configuration changes
-      vscode.workspace.onDidChangeConfiguration((event) => {
-        if (event.affectsConfiguration("LiveSync.actionOnSave")) {
-          const config = vscode.workspace.getConfiguration("LiveSync");
-          const actionOnSave = config.get<string>("actionOnSave");
-          vscode.window.showInformationMessage(
-            `actionOnSave is now set to ${actionOnSave}`,
-          );
-        }
-        // treeDataProvider.refresh();
+      vscode.workspace.onDidChangeConfiguration(() => {
+        WorkspaceConfig.reloadConfiguration();
+        logInfoMessage("<onDidChangeConfiguration> Reloaded settings");
       }),
     );
   }
@@ -91,14 +86,30 @@ export class FileEventHandler {
     console.log(
       `<handleFile${action}> Event ${action} ${filePath} not in workspace, we do nothing`,
     );
+  }
 
-    if (filePath.endsWith("settings.json")) {
-      WorkspaceConfig.reloadConfiguration();
-      console.log(
-        `<handleFile${action}> Event saving ${filePath}, reloaded WorkspaceConfig`,
-      );
-      return;
+  static isSettingsFile(action: string, filePath: string): boolean {
+    // Get the workspace folder
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+
+    if (workspaceFolders) {
+      // Iterate over all workspace folders and check for the settings file path
+      for (const workspaceFolder of workspaceFolders) {
+        const settingsPath = path.join(
+          workspaceFolder.uri.fsPath,
+          ".vscode",
+          "settings.json",
+        );
+        if (filePath === settingsPath) {
+          console.log(
+            `<handleFile${action}> Detected configuration file at ${filePath}, skipping further processing of this event.`,
+          );
+          return true;
+        }
+      }
     }
+
+    return false;
   }
 
   /**
@@ -115,6 +126,10 @@ export class FileEventHandler {
 
       if (!FileEventHandler.isFileInWorkspace(filePath)) {
         FileEventHandler.logFileNotInWorkspace("Create", filePath);
+        continue;
+      }
+
+      if (FileEventHandler.isSettingsFile(Action.Add, filePath)) {
         continue;
       }
 
@@ -174,6 +189,10 @@ export class FileEventHandler {
         continue;
       }
 
+      if (FileEventHandler.isSettingsFile(Action.Remove, filePath)) {
+        continue;
+      }
+
       console.log(`<handleFileDelete> Event deleting ${filePath}`);
 
       try {
@@ -223,6 +242,10 @@ export class FileEventHandler {
       return;
     }
 
+    if (FileEventHandler.isSettingsFile(Action.Save, filePath)) {
+      return;
+    }
+
     console.log(`<handleFileSave> Event saving ${filePath}`);
 
     try {
@@ -269,6 +292,13 @@ export class FileEventHandler {
       ) {
         FileEventHandler.logFileNotInWorkspace("Rename", oldPath);
         continue;
+      }
+
+      if (
+        FileEventHandler.isSettingsFile(Action.Move, oldPath) ||
+        FileEventHandler.isSettingsFile(Action.Move, newPath)
+      ) {
+        return;
       }
 
       console.log(

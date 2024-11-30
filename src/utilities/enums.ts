@@ -3,4 +3,5 @@ export enum Action {
   Remove = "remove",
   Update = "update",
   Move = "Move",
+  Save = "Save",
 }

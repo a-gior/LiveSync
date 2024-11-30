@@ -14,14 +14,37 @@ import { PairedFoldersTreeDataProvider } from "../../services/PairedFoldersTreeD
 import { LOG_FLAGS, logErrorMessage } from "../../services/LogManager";
 import { FileNodeSource } from "../FileNode";
 
+enum Check {
+  remoteExists = "remoteExists",
+  remoteNotExists = "remoteNotExists",
+  remoteNotSame = "remoteNotSame",
+  localExists = "localExists",
+}
+
+function getCheckMessage(check: Check, path: string): string {
+  switch (check) {
+    case Check.remoteExists:
+      return `The remote file at ${path} already exists. Do you want to overwrite it with the local changes?`;
+    case Check.remoteNotExists:
+      return `The remote file at ${path} does not exist.`;
+    case Check.remoteNotSame:
+      return `The remote file at ${path} has been modified. Do you want to overwrite it with the local changes?`;
+    case Check.localExists:
+      return `The local file at ${path} already exists. Do you want to overwrite it with the remote file?`;
+    default:
+      return "";
+  }
+}
+
 // Prompts the user when a remote file already exists, offering options to overwrite, show differences, or cancel.
 async function showOverwritePrompt(
+  check: Check,
   remotePath: string,
   localPath: string,
   comparisonNode: any = null,
 ) {
   const userResponse = await window.showWarningMessage(
-    `The remote file at ${remotePath} already exists. Do you want to overwrite it with the local changes?`,
+    getCheckMessage(check, remotePath),
     { modal: true },
     "Yes",
     "Show Diff",
@@ -51,7 +74,7 @@ async function checkRemoteFileExistence(action: string, remotePath: string) {
   if (action === "actionOnDelete") {
     if (!exists) {
       window.showInformationMessage(
-        `The remote file at ${remotePath} does not exist.`,
+        getCheckMessage(Check.remoteNotExists, remotePath),
       );
       return false;
     }
@@ -69,7 +92,7 @@ async function checkLocalFileExistence(action: string, localPath: string) {
   // For download actions, the file must exist locally before prompting the user.
   if (action === "actionOnDownload" && exists) {
     const userResponse = await window.showWarningMessage(
-      `The local file at ${localPath} already exists. Do you want to overwrite it with the remote file?`,
+      getCheckMessage(Check.localExists, localPath),
       { modal: true },
       "Yes",
       "Cancel",
@@ -102,13 +125,22 @@ async function handleFileCheck(
         return false;
       }
       if (!isSame) {
-        return await showOverwritePrompt(remotePath, localPath, comparisonNode);
+        return await showOverwritePrompt(
+          Check.remoteNotSame,
+          remotePath,
+          localPath,
+          comparisonNode,
+        );
       }
     } else {
       // If no comparisonNode, check if the remote file exists.
       const exists = await checkRemoteFileExistence(action, remotePath);
-      if (exists) {
-        return await showOverwritePrompt(remotePath, localPath);
+      if (exists && action !== "actionOnDelete") {
+        return await showOverwritePrompt(
+          Check.remoteExists,
+          remotePath,
+          localPath,
+        );
       }
     }
   }

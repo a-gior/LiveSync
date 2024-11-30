@@ -4,12 +4,25 @@ import { downloadRemoteFile } from "./sftpOperations";
 import { getFullPaths } from "./filePathUtils";
 import { ComparisonFileNode } from "../ComparisonFileNode";
 
-export async function showDiff(fileNode: ComparisonFileNode) {
-  const { localPath, remotePath } = await getFullPaths(fileNode);
+export async function showDiff(
+  input: ComparisonFileNode | { localPath: string; remotePath: string },
+) {
+  let localPath: string;
+  let remotePath: string;
+
+  if (input instanceof ComparisonFileNode) {
+    // If input is a ComparisonFileNode, extract paths using getFullPaths
+    const fullPaths = await getFullPaths(input);
+    localPath = fullPaths.localPath!;
+    remotePath = fullPaths.remotePath!;
+  } else {
+    // If input is an object containing localPath and remotePath
+    ({ localPath, remotePath } = input);
+  }
 
   if (!localPath || !remotePath) {
     window.showErrorMessage(
-      `No local or remote path found for ${fileNode.relativePath}`,
+      `No local or remote path found for ${input instanceof ComparisonFileNode ? input.relativePath : "provided paths"}`,
     );
     return;
   }

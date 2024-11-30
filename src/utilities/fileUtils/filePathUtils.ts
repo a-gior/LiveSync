@@ -2,10 +2,10 @@ import * as path from "path";
 import * as fs from "fs";
 import { PairFoldersMessage } from "../../DTOs/messages/PairFoldersMessage";
 import { FileNodeSource } from "../FileNode";
-import { remotePathExists } from "./sftpOperations";
+import { compareRemoteFileHash, remotePathExists } from "./sftpOperations";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
-import { logInfoMessage } from "../../services/LogManager";
+import { LOG_FLAGS, logInfoMessage } from "../../services/LogManager";
 import { BaseNodeType } from "../BaseNode";
 
 export function normalizePath(p: string): string {
@@ -35,37 +35,53 @@ export async function getFullPaths(
 
   // Iterate over the paired folders and check paths based on the comparison status
   for (const folder of pairedFolders) {
-    const { localPath, remotePath } = {
+    let { localPath, remotePath } = {
       localPath: createFullPath(folder.localPath),
       remotePath: createFullPath(folder.remotePath),
     };
-    console.log(`<getFullPaths> AA`, { localPath, remotePath });
 
-    switch (comparisonNode.status) {
-      case ComparisonStatus.added:
-        if (await pathExists(localPath, FileNodeSource.local)) {
-          return { localPath, remotePath }; // Only check local path for "added"
-        }
-        break;
-      case ComparisonStatus.removed:
-        if (await pathExists(remotePath, FileNodeSource.remote)) {
-          return { localPath, remotePath }; // Only check remote path for "removed"
-        }
-        break;
-      case ComparisonStatus.modified:
-      case ComparisonStatus.unchanged: {
-        // Check local and remote paths in parallel
-        const [localExists, remoteExists] = await Promise.all([
-          pathExists(localPath, FileNodeSource.local),
-          pathExists(remotePath, FileNodeSource.remote),
-        ]);
+    const [localExists, remoteExists] = await Promise.all([
+      pathExists(localPath, FileNodeSource.local),
+      pathExists(remotePath, FileNodeSource.remote),
+    ]);
 
-        if (localExists && remoteExists) {
-          return { localPath, remotePath }; // Both must exist for "modified" or "unchanged"
-        }
-        break;
+    if (localExists && !remoteExists) {
+      if (comparisonNode.status !== ComparisonStatus.added) {
+        logInfoMessage(
+          `<getFullPaths> Updating status of node from ${comparisonNode.status} to ${ComparisonStatus.added}`,
+          LOG_FLAGS.CONSOLE_ONLY,
+          comparisonNode,
+        );
+        comparisonNode.setStatus(ComparisonStatus.added);
+      }
+      remotePath = getCorrespondingPath(localPath);
+    } else if (!localExists && remoteExists) {
+      if (comparisonNode.status !== ComparisonStatus.removed) {
+        logInfoMessage(
+          `<getFullPaths> Updating status of node from ${comparisonNode.status} to ${ComparisonStatus.removed}`,
+          LOG_FLAGS.CONSOLE_ONLY,
+          comparisonNode,
+        );
+        comparisonNode.setStatus(ComparisonStatus.removed);
+      }
+      localPath = getCorrespondingPath(remotePath);
+    } else {
+      // localExists && remoteExists are true
+      const isSame = await compareRemoteFileHash(comparisonNode);
+      const newStatus = isSame
+        ? ComparisonStatus.unchanged
+        : ComparisonStatus.modified;
+      if (newStatus !== comparisonNode.status) {
+        logInfoMessage(
+          `<getFullPaths> Updating status of node from ${comparisonNode.status} to ${newStatus}`,
+          LOG_FLAGS.CONSOLE_ONLY,
+          comparisonNode,
+        );
+        comparisonNode.setStatus(newStatus);
       }
     }
+
+    return { localPath, remotePath };
   }
 
   // Log and return null paths if not found

@@ -5,7 +5,7 @@ import {
   listLocalFilesRecursive,
   listRemoteFilesRecursive,
 } from "./fileListing";
-import { getCorrespondingPath, getFullPaths } from "./filePathUtils";
+import { getFullPaths } from "./filePathUtils";
 
 export async function compareCorrespondingEntry(
   fileEntry: ComparisonFileNode,
@@ -13,23 +13,21 @@ export async function compareCorrespondingEntry(
   try {
     let { localPath, remotePath } = await getFullPaths(fileEntry);
 
-    switch (fileEntry.status) {
-      case ComparisonStatus.added:
-        remotePath = getCorrespondingPath(localPath!);
-        break;
-      case ComparisonStatus.removed:
-        localPath = getCorrespondingPath(remotePath!);
-        break;
-    }
-
     if (!localPath || !remotePath) {
       throw new Error(
         `Couldnt find remotePath or localPath of ${fileEntry.name} at ${fileEntry.relativePath}`,
       );
     }
 
-    const localEntry = await listLocalFilesRecursive(localPath);
-    const remoteEntry = await listRemoteFilesRecursive(remotePath);
+    const localEntry =
+      fileEntry.status !== ComparisonStatus.removed
+        ? await listLocalFilesRecursive(localPath)
+        : undefined;
+    const remoteEntry =
+      fileEntry.status !== ComparisonStatus.added
+        ? await listRemoteFilesRecursive(remotePath)
+        : undefined;
+
     if (remoteEntry) {
       console.log(
         "<compareCorrespondingEntry> Saving JSON REMOTE: ",
