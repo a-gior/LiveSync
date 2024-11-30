@@ -11,8 +11,6 @@ import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import { shouldIgnore } from "../shouldIgnore";
 import { logErrorMessage, logInfoMessage } from "../../services/LogManager";
 import { BaseNodeType } from "../BaseNode";
-import { getFullPaths } from "./filePathUtils";
-import { ComparisonFileNode } from "../ComparisonFileNode";
 import FileNodeManager, {
   isFileNodeMap,
   JsonType,
@@ -74,17 +72,9 @@ export async function uploadRemoteFile(
 }
 
 export async function compareRemoteFileHash(
-  comparisonNode: ComparisonFileNode,
+  remotePath: string,
 ): Promise<boolean> {
   try {
-    const { localPath, remotePath } = await getFullPaths(comparisonNode);
-    if (!remotePath || !localPath) {
-      window.showErrorMessage(
-        `No local or remote folder paired: ${remotePath}`,
-      );
-      return false;
-    }
-
     // Get the remote JSON entries
     const fileNodemanager = FileNodeManager.getInstance();
     const remoteFileEntriesMap = await fileNodemanager.getFileEntriesMap(
@@ -149,6 +139,7 @@ export async function remotePathExists(remotePath: string) {
       async (sftpClient: SFTPClient) => {
         return await sftpClient.pathExists(remotePath);
       },
+      `Checking if ${remotePath} exists`,
     );
   } catch (error) {
     console.error(`Error while checking if path exists: ${remotePath}`, error);
@@ -166,6 +157,7 @@ export async function getRemoteFileMetadata(
       async (sftpClient: SFTPClient) => {
         return await sftpClient.getClient().stat(remotePath);
       },
+      `Get data from ${remotePath}`,
     );
   } catch (err: any) {
     console.error(`Couldn't fetch metadata for remote file ${remotePath}`);

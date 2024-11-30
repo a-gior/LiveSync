@@ -117,7 +117,7 @@ async function handleFileCheck(
   if (actionParameter.includes("check")) {
     if (comparisonNode) {
       // Perform a hash check if comparisonNode is provided.
-      const isSame = await compareRemoteFileHash(comparisonNode);
+      const isSame = await compareRemoteFileHash(remotePath);
       if (actionParameter === "check") {
         window.showInformationMessage(
           `File ${path.basename(localPath)} ${isSame ? "can" : "cannot"} be processed.`,

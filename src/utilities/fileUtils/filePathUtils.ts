@@ -35,6 +35,11 @@ export async function getFullPaths(
 
   // Iterate over the paired folders and check paths based on the comparison status
   for (const folder of pairedFolders) {
+    // Skip wrong paireFolders
+    if (path.basename(folder.localPath) !== comparisonNode.pairedFolderName) {
+      continue;
+    }
+
     let { localPath, remotePath } = {
       localPath: createFullPath(folder.localPath),
       remotePath: createFullPath(folder.remotePath),
@@ -67,7 +72,7 @@ export async function getFullPaths(
       localPath = getCorrespondingPath(remotePath);
     } else {
       // localExists && remoteExists are true
-      const isSame = await compareRemoteFileHash(comparisonNode);
+      const isSame = await compareRemoteFileHash(remotePath);
       const newStatus = isSame
         ? ComparisonStatus.unchanged
         : ComparisonStatus.modified;
