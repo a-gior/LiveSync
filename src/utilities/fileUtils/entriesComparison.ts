@@ -1,6 +1,5 @@
-import FileNodeManager, { JsonType } from "../../services/FileNodeManager";
+import FileNodeManager from "../../services/FileNodeManager";
 import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
-import { FileNode } from "../FileNode";
 import {
   listLocalFilesRecursive,
   listRemoteFilesRecursive,
@@ -30,15 +29,10 @@ export async function compareCorrespondingEntry(
 
     if (remoteEntry) {
       console.log(
-        "<compareCorrespondingEntry> Saving JSON REMOTE: ",
+        "<compareCorrespondingEntry> Updating JSON REMOTE: ",
         remoteEntry,
       );
-      const remoteFilesMap = new Map<string, FileNode>();
-      remoteFilesMap.set(remoteEntry.pairedFolderName, remoteEntry);
-      await FileNodeManager.getInstance().updateFullJson(
-        JsonType.REMOTE,
-        remoteFilesMap,
-      );
+      FileNodeManager.getInstance().updateRemoteFilesJson(remoteEntry);
     }
 
     return ComparisonFileNode.compareFileNodes(localEntry, remoteEntry);

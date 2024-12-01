@@ -11,8 +11,13 @@ import * as path from "path";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import FileNodeManager from "../../services/FileNodeManager";
 import { PairedFoldersTreeDataProvider } from "../../services/PairedFoldersTreeDataProvider";
-import { LOG_FLAGS, logErrorMessage } from "../../services/LogManager";
+import {
+  LOG_FLAGS,
+  logErrorMessage,
+  logInfoMessage,
+} from "../../services/LogManager";
 import { FileNodeSource } from "../FileNode";
+import { listRemoteFilesRecursive } from "./fileListing";
 
 enum Check {
   remoteExists = "remoteExists",
@@ -60,7 +65,7 @@ async function showOverwritePrompt(
     }
     return false;
   } else if (userResponse !== "Yes") {
-    window.showInformationMessage("Operation canceled.");
+    logInfoMessage("Operation canceled.");
     return false;
   }
   return true;
@@ -73,9 +78,7 @@ async function checkRemoteFileExistence(action: string, remotePath: string) {
   // For delete actions, the file must exist remotely.
   if (action === "actionOnDelete") {
     if (!exists) {
-      window.showInformationMessage(
-        getCheckMessage(Check.remoteNotExists, remotePath),
-      );
+      logInfoMessage(getCheckMessage(Check.remoteNotExists, remotePath));
       return false;
     }
     return true;
@@ -98,12 +101,33 @@ async function checkLocalFileExistence(action: string, localPath: string) {
       "Cancel",
     );
     if (userResponse !== "Yes") {
-      window.showInformationMessage("Download operation canceled.");
+      logInfoMessage("Download operation canceled.");
       return false;
     }
   }
 
   return true;
+}
+
+// Update the JSON of remote files
+async function updateRemoteFilesJsonForPaths(...filePaths: string[]) {
+  const fileNodeManager = FileNodeManager.getInstance();
+
+  for (const filePath of filePaths) {
+    if (filePath) {
+      // Get the parent directory of the provided file path
+      const parentDirPath = path.dirname(filePath);
+
+      // List the files recursively in the parent directory and update the JSON
+      const remoteFileNode = await listRemoteFilesRecursive(parentDirPath);
+      if (remoteFileNode) {
+        await fileNodeManager.updateRemoteFilesJson(remoteFileNode);
+        logInfoMessage(`Updated JSON Remote files for ${parentDirPath}`);
+      } else {
+        logErrorMessage(`Couldnt find remote file node at ${parentDirPath}`);
+      }
+    }
+  }
 }
 
 // Handles the checking process before performing an action, including hash comparison and existence checks.
@@ -119,7 +143,7 @@ async function handleFileCheck(
       // Perform a hash check if comparisonNode is provided.
       const isSame = await compareRemoteFileHash(remotePath);
       if (actionParameter === "check") {
-        window.showInformationMessage(
+        logInfoMessage(
           `File ${path.basename(localPath)} ${isSame ? "can" : "cannot"} be processed.`,
         );
         return false;
@@ -173,7 +197,10 @@ async function handleFileOperation(
       await handleFileCheck(action, actionParameter, localPathOld, remotePath)
     ) {
       await moveRemoteFile(remotePathOld, remotePath);
-      window.showInformationMessage(`File moved to remote at ${remotePath}`);
+      logInfoMessage(`File moved to remote at ${remotePath}`, LOG_FLAGS.ALL);
+
+      await updateRemoteFilesJsonForPaths(remotePathOld, remotePath);
+
       // After the file is moved, any references to the old file path should be updated, and any additional cleanup or re-indexing tasks should be performed as needed.
       return true;
     }
@@ -209,7 +236,9 @@ async function handleFileOperation(
       )
     ) {
       await uploadRemoteFile(localPath, remotePath);
-      window.showInformationMessage(`File uploaded to remote at ${remotePath}`);
+      logInfoMessage(`File uploaded to remote at ${remotePath}`, LOG_FLAGS.ALL);
+
+      await updateRemoteFilesJsonForPaths(remotePath);
       return true;
     }
     return false;
@@ -219,15 +248,20 @@ async function handleFileOperation(
   if (await handleFileCheck(action, actionParameter, localPath, remotePath)) {
     if (action === "actionOnDelete") {
       await deleteRemoteFile(remotePath);
-      window.showInformationMessage(`File deleted on remote at ${remotePath}`);
+      logInfoMessage(`File deleted on remote at ${remotePath}`, LOG_FLAGS.ALL);
+
+      await updateRemoteFilesJsonForPaths(remotePath);
     } else if (action === "actionOnDownload") {
       await downloadRemoteFile(remotePath, localPath);
-      window.showInformationMessage(
+      logInfoMessage(
         `File downloaded from remote at ${remotePath}`,
+        LOG_FLAGS.ALL,
       );
     } else {
       await uploadRemoteFile(localPath, remotePath);
-      window.showInformationMessage(`File uploaded to remote at ${remotePath}`);
+      logInfoMessage(`File uploaded to remote at ${remotePath}`, LOG_FLAGS.ALL);
+
+      await updateRemoteFilesJsonForPaths(remotePath);
     }
     return true;
   }

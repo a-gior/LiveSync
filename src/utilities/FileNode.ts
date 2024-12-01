@@ -149,7 +149,7 @@ export class FileNode extends BaseNode<FileNode> {
   }
 }
 
-export function getFileNodeInfo(fullPath: string): FileNodeInfo | null {
+export function getFileNodeInfo(fullPath: string): FileNodeInfo {
   const pairedFolders = WorkspaceConfig.getPairedFoldersConfigured();
   const normalizedTargetPath = normalizePath(fullPath);
 
@@ -169,5 +169,5 @@ export function getFileNodeInfo(fullPath: string): FileNodeInfo | null {
     }
   }
 
-  return null; // Return null if no match is found
+  throw new Error(`Couldn't find FileNodeInfo of ${fullPath}`);
 }

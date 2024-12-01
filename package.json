@@ -84,12 +84,12 @@
         },
         {
           "command": "livesync.fileEntryShowDiff",
-          "when": "viewItem == fileEntry-file",
+          "when": "viewItem =~ /^fileEntry-file/ && viewItem != fileEntry-file-added && viewItem != fileEntry-file-removed",
           "group": "inline@3"
         },
         {
           "command": "livesync.fileEntryRefresh",
-          "when": "viewItem == fileEntry-directory",
+          "when": "viewItem =~ /^fileEntry-directory/",
           "group": "inline@4"
         }
       ]

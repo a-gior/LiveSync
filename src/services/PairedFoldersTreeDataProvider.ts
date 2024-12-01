@@ -129,7 +129,7 @@ export class PairedFoldersTreeDataProvider
             ? getIconForFolder(element.name, DEFAULT_FOLDER_ICON)
             : getIconForFile(element.name, DEFAULT_FILE_ICON_PATH);
       }
-      treeItem.contextValue = `fileEntry-${element.type}`;
+      treeItem.contextValue = `fileEntry-${element.type}-${element.status}`;
       treeItem.description = ComparisonStatus[element.status];
       const query = `?status=${ComparisonStatus[element.status]}`;
       treeItem.resourceUri = vscode.Uri.file(element.relativePath).with({
@@ -191,6 +191,7 @@ export class PairedFoldersTreeDataProvider
     }
   }
 
+  // Get the whole ComparisonFileNode of the whole tree
   async getComparisonFileNode(
     localDir: string,
     remoteDir: string,

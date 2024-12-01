@@ -40,7 +40,7 @@ export async function showDiff(
       "vscode.diff",
       localUri,
       remoteUri,
-      "Local ↔ Remote",
+      `${path.basename(localPath)} : Local ↔ Remote`,
     );
   } catch (error: any) {
     window.showErrorMessage(`Error showing diff: ${error.message}`);

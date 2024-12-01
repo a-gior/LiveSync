@@ -125,6 +125,60 @@ export default class FileNodeManager {
     return entriesMap[jsonType] || null;
   }
 
+  public async updateRemoteFilesJson(fileNode: FileNode) {
+    // Get the existing remote FileNode from JSON data
+    const jsonType = JsonType.REMOTE;
+    const fileName = this.getJsonFileName(jsonType);
+    const fileNodeMap = await this.getFileEntriesMap(jsonType);
+
+    if (!fileNodeMap) {
+      logErrorMessage(
+        `Unable to load existing remote files JSON data for ${fileName}`,
+      );
+      return;
+    }
+
+    const fileNodeInfo = getFileNodeInfo(fileNode.fullPath);
+    const pathParts = fileNodeInfo.relativePath.split(path.sep);
+
+    if (pathParts.length === 1 && pathParts[0] === "") {
+      fileNodeMap.set(fileNodeInfo.pairedFolderName, fileNode);
+    } else {
+      if (fileNodeMap.has(fileNodeInfo.pairedFolderName)) {
+        let currentNode = fileNodeMap.get(fileNodeInfo.pairedFolderName);
+
+        for (const pathPart of pathParts) {
+          if (!currentNode) {
+            logErrorMessage(
+              "<updateRemoteFilesJson> Couldnt find current node in remote files JSON",
+            );
+            return;
+          }
+
+          if (currentNode.children.has(pathPart)) {
+            currentNode = currentNode.children.get(pathPart);
+          } else {
+            logErrorMessage(
+              `<updateRemoteFilesJson> Couldn't find sub node in remote files JSON at ${fileNode.fullPath} for the path parts:`,
+              LOG_FLAGS.CONSOLE_ONLY,
+              pathParts,
+            );
+            return;
+          }
+        }
+
+        if (currentNode) {
+          Object.assign(currentNode, fileNode);
+        }
+      } else {
+        fileNodeMap.set(fileNodeInfo.pairedFolderName, fileNode);
+      }
+    }
+
+    // Save the merged data back to the JSON file
+    await this.saveJson(fileName, fileNodeMap);
+  }
+
   public async updateFullJson(
     jsonType: JsonType,
     data: Map<string, FileNode | ComparisonFileNode>,
@@ -200,9 +254,6 @@ export default class FileNodeManager {
       }
 
       const fileNodeInfo = getFileNodeInfo(filePath);
-      if (!fileNodeInfo?.relativePath || !fileNodeInfo?.pairedFolderName) {
-        throw new Error(`Invalid path info: ${filePath}`);
-      }
 
       return this.findEntryByPath(
         fileNodeInfo.relativePath,

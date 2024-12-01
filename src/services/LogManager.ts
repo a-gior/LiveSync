@@ -63,7 +63,7 @@ function deepClone<T>(obj: T): T {
 
 export function logErrorMessage(
   error: string,
-  flags: LogFlags = LOG_FLAGS.ALL,
+  flags: LogFlags = LOG_FLAGS.CONSOLE_ONLY,
   details?: any,
 ) {
   if (flags.console) {

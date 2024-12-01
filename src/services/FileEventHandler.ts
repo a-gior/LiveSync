@@ -133,7 +133,7 @@ export class FileEventHandler {
         continue;
       }
 
-      console.log(`<handleFileCreate> Event creating ${filePath}`);
+      logInfoMessage(`<handleFileCreate> Event creating ${filePath}`);
 
       try {
         // Save the newly created file

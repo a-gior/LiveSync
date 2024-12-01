@@ -76,10 +76,8 @@ export async function compareRemoteFileHash(
 ): Promise<boolean> {
   try {
     // Get the remote JSON entries
-    const fileNodemanager = FileNodeManager.getInstance();
-    const remoteFileEntriesMap = await fileNodemanager.getFileEntriesMap(
-      JsonType.REMOTE,
-    );
+    const remoteFileEntriesMap =
+      await FileNodeManager.getInstance().getFileEntriesMap(JsonType.REMOTE);
     if (!remoteFileEntriesMap || !isFileNodeMap(remoteFileEntriesMap)) {
       window.showErrorMessage(`No remote JSON found`);
       return false;
