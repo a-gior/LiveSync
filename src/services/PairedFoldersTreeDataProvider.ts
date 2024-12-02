@@ -46,6 +46,9 @@ export class PairedFoldersTreeDataProvider
     ComparisonFileNode | undefined | void
   > = this._onDidChangeTreeData.event;
 
+  private _showUnchanged: boolean;
+  private _showAsTree: boolean;
+
   public rootElements: Map<string, ComparisonFileNode> = new Map<
     string,
     ComparisonFileNode
@@ -53,11 +56,19 @@ export class PairedFoldersTreeDataProvider
   private fileNodeManager: FileNodeManager;
 
   constructor() {
+    this._showAsTree = true;
+    this._showUnchanged = false;
+    this.loadParameters();
     this.fileNodeManager = FileNodeManager.getInstance();
 
     loadIconMappings(ICON_MAPPINGS_PATH);
     loadFolderIconMappings(FOLDER_ICON_MAPPINGS_PATH);
     loadLanguageIdMappings(LANGUAGEIDS_ICON_MAPPINGS_PATH);
+  }
+
+  loadParameters(): void {
+    this._showUnchanged =
+      WorkspaceConfig.getParameter<boolean>("showUnchanged") ?? false;
   }
 
   async loadRootElements(): Promise<void> {
@@ -105,8 +116,15 @@ export class PairedFoldersTreeDataProvider
 
   getTreeItem(element: ComparisonFileNode): vscode.TreeItem {
     const treeItem = new vscode.TreeItem(
-      element.name,
-      element.type === BaseNodeType.directory
+      // If relativePath is empty, use element.name
+      element.relativePath === ""
+        ? element.name
+        : this._showAsTree
+          ? element.name
+          : element.relativePath,
+      // Determine the collapsible state based on the type and relativePath
+      element.type === BaseNodeType.directory &&
+      (this._showAsTree || element.relativePath === "")
         ? vscode.TreeItemCollapsibleState.Collapsed
         : vscode.TreeItemCollapsibleState.None,
     );
@@ -166,13 +184,15 @@ export class PairedFoldersTreeDataProvider
             this.rootElements,
           );
 
-          return BaseNode.toArray(this.rootElements);
+          const rootNodes = BaseNode.toArray(this.rootElements);
+          return this.applyViewMode(rootNodes);
         } else if (
           comparisonEntries &&
           isComparisonFileNodeMap(comparisonEntries)
         ) {
           this.rootElements = comparisonEntries;
-          return BaseNode.toArray(this.rootElements);
+          const rootNodes = BaseNode.toArray(this.rootElements);
+          return this.applyViewMode(rootNodes);
         } else {
           throw Error(
             "Comparison JSON data not found. Please run the initial comparison.",
@@ -187,7 +207,8 @@ export class PairedFoldersTreeDataProvider
         return [];
       }
     } else {
-      return Array.from(element.children.values());
+      const childrenArray = Array.from(element.children.values());
+      return this.applyViewMode(childrenArray);
     }
   }
 
@@ -267,5 +288,63 @@ export class PairedFoldersTreeDataProvider
       default:
         throw new Error(`Unknown action: ${action}`);
     }
+  }
+
+  private filterUnchangedNodes(
+    nodes: ComparisonFileNode[],
+  ): ComparisonFileNode[] {
+    return nodes
+      .filter((node) => node.status !== "unchanged")
+      .map((node) => {
+        if (node.children && node.children.size > 0) {
+          // Recursively filter the children
+          const filteredChildren = this.filterUnchangedNodes(
+            Array.from(node.children.values()),
+          );
+          node.children = new Map(
+            filteredChildren.map((child) => [child.name, child]),
+          );
+        }
+        return node;
+      });
+  }
+
+  toggleViewMode(showAsTree: boolean): void {
+    this._showAsTree = showAsTree;
+    this.refresh();
+  }
+
+  private applyViewMode(nodes: ComparisonFileNode[]): ComparisonFileNode[] {
+    if (this._showAsTree) {
+      // Show as a tree structure, with optional filtering applied recursively
+      return this._showUnchanged ? nodes : this.filterUnchangedNodes(nodes);
+    } else {
+      // Show as a flat list, applying both flattening and filtering recursively
+      return this.flattenNodes(nodes, !this._showUnchanged);
+    }
+  }
+
+  private flattenNodes(
+    nodes: ComparisonFileNode[],
+    filterUnchanged: boolean,
+  ): ComparisonFileNode[] {
+    const result: ComparisonFileNode[] = [];
+
+    const recurse = (currentNodes: ComparisonFileNode[]) => {
+      for (const node of currentNodes) {
+        // Apply the filter directly during the traversal
+        if (filterUnchanged && node.status === "unchanged") {
+          continue; // Skip unchanged nodes if filterUnchanged is true
+        }
+
+        result.push(node);
+        if (node.children && node.children.size > 0) {
+          recurse(Array.from(node.children.values()));
+        }
+      }
+    };
+
+    recurse(nodes);
+    return result;
   }
 }

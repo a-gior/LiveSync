@@ -115,9 +115,9 @@ export class WorkspaceConfig {
     return this.getWorkspaceConfiguration();
   }
 
-  static getParameter(paramName: string) {
+  static getParameter<T>(paramName: string): T | undefined {
     const config = workspace.getConfiguration("LiveSync");
-    return config.get<string>(paramName);
+    return config.get<T>(paramName);
   }
 
   static async update(paramName: string, value: any) {

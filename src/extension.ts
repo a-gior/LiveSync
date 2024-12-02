@@ -43,6 +43,9 @@ export async function activate(context: vscode.ExtensionContext) {
     }),
   );
 
+  // Initialize the view mode context key
+  vscode.commands.executeCommand("setContext", "livesyncViewMode", "tree");
+
   // const rootPath =
   //   vscode.workspace.workspaceFolders &&
   //   vscode.workspace.workspaceFolders.length > 0
@@ -175,6 +178,14 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.executeCommand("livesync.fileEntryRefresh", fileEntry);
       },
     ),
+    vscode.commands.registerCommand("livesync.toggleToTreeView", () => {
+      pairedFoldersTreeDataProvider.toggleViewMode(true);
+      vscode.commands.executeCommand("setContext", "livesyncViewMode", "tree");
+    }),
+    vscode.commands.registerCommand("livesync.toggleToListView", () => {
+      pairedFoldersTreeDataProvider.toggleViewMode(false);
+      vscode.commands.executeCommand("setContext", "livesyncViewMode", "list");
+    }),
   );
 
   // Register event handlers for file changes

@@ -187,7 +187,7 @@ async function handleFileOperation(
 ): Promise<boolean> {
   const localPath = uri.fsPath;
   const remotePath = getCorrespondingPath(localPath);
-  let actionParameter = WorkspaceConfig.getParameter(action) ?? "none";
+  let actionParameter = WorkspaceConfig.getParameter<string>(action) ?? "none";
 
   // Handle move operation
   if (action === "actionOnMove" && oldUri) {
