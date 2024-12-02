@@ -1,10 +1,6 @@
 import { FileNode } from "../FileNode";
 import { loadFromFile } from "./fileOperations";
-import {
-  LOCAL_FILES_PATH,
-  REMOTE_FILES_PATH,
-  COMPARE_FILES_PATH,
-} from "../constants";
+import { REMOTE_FILES_PATH, COMPARE_FILES_PATH } from "../constants";
 
 async function loadFileNode(filePath: string): Promise<FileNode> {
   const data = await loadFromFile<any>(filePath);
@@ -21,11 +17,6 @@ async function loadCompareFiles(
   return new Map<string, FileNode>(entries);
 }
 
-// Export functions to load the specific files
-async function loadLocalFiles(): Promise<FileNode> {
-  return loadFileNode(LOCAL_FILES_PATH);
-}
-
 async function loadRemoteFiles(): Promise<FileNode> {
   return loadFileNode(REMOTE_FILES_PATH);
 }
@@ -34,4 +25,4 @@ async function loadCompareFilesData(): Promise<Map<string, FileNode>> {
   return loadCompareFiles(COMPARE_FILES_PATH);
 }
 
-export { loadLocalFiles, loadRemoteFiles, loadCompareFilesData };
+export { loadRemoteFiles, loadCompareFilesData };

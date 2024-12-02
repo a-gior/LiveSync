@@ -17,6 +17,7 @@ export interface ComparisonFileData extends BaseNodeData {
 
 export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
   status: ComparisonStatus;
+  showInTree: boolean;
 
   constructor(
     nameOrJson: string | ComparisonFileData,
@@ -62,6 +63,8 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
         );
       }
     }
+
+    this.showInTree = true;
   }
 
   /**

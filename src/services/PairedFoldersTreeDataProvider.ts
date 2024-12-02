@@ -55,10 +55,9 @@ export class PairedFoldersTreeDataProvider
   >();
   private fileNodeManager: FileNodeManager;
 
-  constructor() {
-    this._showAsTree = true;
-    this._showUnchanged = false;
-    this.loadParameters();
+  constructor(showAsTree: boolean = true, showUnchanged: boolean = true) {
+    this._showAsTree = showAsTree;
+    this._showUnchanged = showUnchanged;
     this.fileNodeManager = FileNodeManager.getInstance();
 
     loadIconMappings(ICON_MAPPINGS_PATH);
@@ -66,9 +65,14 @@ export class PairedFoldersTreeDataProvider
     loadLanguageIdMappings(LANGUAGEIDS_ICON_MAPPINGS_PATH);
   }
 
-  loadParameters(): void {
-    this._showUnchanged =
-      WorkspaceConfig.getParameter<boolean>("showUnchanged") ?? false;
+  toggleViewMode(showAsTree: boolean): void {
+    this._showAsTree = showAsTree;
+    this.refresh();
+  }
+
+  setShowUnchanged(showUnchanged: boolean): void {
+    this._showUnchanged = showUnchanged;
+    this.refresh();
   }
 
   async loadRootElements(): Promise<void> {
@@ -290,61 +294,87 @@ export class PairedFoldersTreeDataProvider
     }
   }
 
-  private filterUnchangedNodes(
-    nodes: ComparisonFileNode[],
-  ): ComparisonFileNode[] {
-    return nodes
-      .filter((node) => node.status !== "unchanged")
-      .map((node) => {
-        if (node.children && node.children.size > 0) {
-          // Recursively filter the children
-          const filteredChildren = this.filterUnchangedNodes(
-            Array.from(node.children.values()),
-          );
-          node.children = new Map(
-            filteredChildren.map((child) => [child.name, child]),
-          );
-        }
-        return node;
-      });
-  }
-
-  toggleViewMode(showAsTree: boolean): void {
-    this._showAsTree = showAsTree;
-    this.refresh();
-  }
-
   private applyViewMode(nodes: ComparisonFileNode[]): ComparisonFileNode[] {
-    if (this._showAsTree) {
-      // Show as a tree structure, with optional filtering applied recursively
-      return this._showUnchanged ? nodes : this.filterUnchangedNodes(nodes);
-    } else {
-      // Show as a flat list, applying both flattening and filtering recursively
-      return this.flattenNodes(nodes, !this._showUnchanged);
-    }
-  }
+    const viewNodes: ComparisonFileNode[] = [];
 
-  private flattenNodes(
-    nodes: ComparisonFileNode[],
-    filterUnchanged: boolean,
-  ): ComparisonFileNode[] {
-    const result: ComparisonFileNode[] = [];
-
-    const recurse = (currentNodes: ComparisonFileNode[]) => {
+    const recurse = (
+      currentNodes: ComparisonFileNode[],
+      parentNode?: ComparisonFileNode,
+    ) => {
       for (const node of currentNodes) {
-        // Apply the filter directly during the traversal
-        if (filterUnchanged && node.status === "unchanged") {
-          continue; // Skip unchanged nodes if filterUnchanged is true
+        // Handle root node specifically in flatten mode
+        if (!this._showAsTree && node.relativePath === "") {
+          // Create a new root node that will be shown in flatten mode
+          const rootNodeCopy = new ComparisonFileNode(
+            node.name,
+            node.pairedFolderName,
+            node.type,
+            node.size,
+            node.modifiedTime,
+            node.relativePath,
+            node.status,
+          );
+
+          // Add the root node itself to viewNodes
+          viewNodes.push(rootNodeCopy);
+
+          // Add its children in a flattened manner to the root node's children
+          if (node.children && node.children.size > 0) {
+            recurse(Array.from(node.children.values()), rootNodeCopy);
+          }
+          continue; // Skip the usual handling since we have handled the root node separately
         }
 
-        result.push(node);
-        if (node.children && node.children.size > 0) {
-          recurse(Array.from(node.children.values()));
+        // Set visibility of nodes based on _showUnchanged setting, always show the root folder
+        if (this._showUnchanged || node.status !== ComparisonStatus.unchanged) {
+          node.showInTree = true; // Show the node
+        } else {
+          node.showInTree = false; // Hide the node
+        }
+
+        // Only proceed with visible nodes
+        if (node.showInTree) {
+          if (this._showAsTree) {
+            // When in tree mode, maintain hierarchy
+            if (!parentNode) {
+              viewNodes.push(node);
+            } else {
+              parentNode.children.set(node.name, node);
+            }
+
+            // If the node has children, recurse with its children
+            if (node.children && node.children.size > 0) {
+              recurse(Array.from(node.children.values()), node);
+            }
+          } else {
+            // In flat mode, add the node directly
+            if (parentNode) {
+              // Add as a child of rootNodeCopy
+              parentNode.children.set(node.name, node);
+            } else {
+              // Add to viewNodes (only files or added/removed directories)
+              if (
+                (node.isDirectory() &&
+                  (node.status === ComparisonStatus.added ||
+                    node.status === ComparisonStatus.removed)) ||
+                !node.isDirectory()
+              ) {
+                viewNodes.push(node);
+              }
+            }
+
+            // If the node has children, recurse to flatten
+            if (node.children && node.children.size > 0) {
+              recurse(Array.from(node.children.values()), parentNode);
+            }
+          }
         }
       }
     };
 
+    // Start recursion
     recurse(nodes);
-    return result;
+
+    return viewNodes;
   }
 }

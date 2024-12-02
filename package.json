@@ -82,6 +82,16 @@
         "title": "Toggle View Mode",
         "category": "LiveSync",
         "icon": "$(list-selection)"
+      },
+      {
+        "command": "livesync.showUnchanged",
+        "title": "Show Unchanged",
+        "icon": "$(circle-filled)"
+      },
+      {
+        "command": "livesync.hideUnchanged",
+        "title": "Hide Unchanged",
+        "icon": "$(circle-slash)"
       }
     ],
     "menus": {
@@ -114,6 +124,16 @@
         {
           "command": "livesync.toggleToTreeView",
           "when": "view == nodeDependencies && livesyncViewMode == 'list'",
+          "group": "navigation"
+        },
+        {
+          "command": "livesync.showUnchanged",
+          "when": "view == nodeDependencies && livesyncShowUnchanged == false",
+          "group": "navigation"
+        },
+        {
+          "command": "livesync.hideUnchanged",
+          "when": "view == nodeDependencies && livesyncShowUnchanged == true",
           "group": "navigation"
         }
       ]
@@ -235,11 +255,6 @@
             "none"
           ],
           "description": "Action to perform on file create.\n\nOptions:\n- create: Automatically creates the file on the remote server on create.\n- check: Only checks if the file has been created on the remote server without creating.\n- check&create: Checks if the file has been created on the remote server and creates if it hasn't.\n- none: No action is performed on file create."
-        },
-        "LiveSync.showUnchanged": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show or hide unchanged files in the tree view."
         },
         "LiveSync.ignore": {
           "type": "array",

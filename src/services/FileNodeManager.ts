@@ -3,7 +3,6 @@ import * as fs from "fs";
 import { FileNode, getFileNodeInfo } from "../utilities/FileNode";
 import {
   COMPARE_FILES_JSON,
-  LOCAL_FILES_JSON,
   REMOTE_FILES_JSON,
   SAVE_DIR,
 } from "../utilities/constants";
@@ -14,14 +13,12 @@ import {
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
 
 export enum JsonType {
-  LOCAL = "local",
   REMOTE = "remote",
   COMPARE = "compare",
 }
 
 export default class FileNodeManager {
   private static instance: FileNodeManager;
-  private localFileEntries: Map<string, FileNode> | null = null;
   private remoteFileEntries: Map<string, FileNode> | null = null;
   private comparisonFileEntries: Map<string, ComparisonFileNode> | null = null;
   private jsonLoadedPromise: Promise<void>;
@@ -39,8 +36,7 @@ export default class FileNodeManager {
 
   private async initializeJsonData(): Promise<void> {
     try {
-      const [local, remote, comparison] = await Promise.all([
-        this.loadNodeFromJson<FileNode>(LOCAL_FILES_JSON, FileNode),
+      const [remote, comparison] = await Promise.all([
         this.loadNodeFromJson<FileNode>(REMOTE_FILES_JSON, FileNode),
         this.loadNodeFromJson<ComparisonFileNode>(
           COMPARE_FILES_JSON,
@@ -48,7 +44,6 @@ export default class FileNodeManager {
         ),
       ]);
 
-      this.localFileEntries = local;
       this.remoteFileEntries = remote;
       this.comparisonFileEntries = comparison;
     } catch (error) {
@@ -105,7 +100,6 @@ export default class FileNodeManager {
 
   private getJsonFileName(jsonType: JsonType): string {
     const fileNames = {
-      [JsonType.LOCAL]: LOCAL_FILES_JSON,
       [JsonType.REMOTE]: REMOTE_FILES_JSON,
       [JsonType.COMPARE]: COMPARE_FILES_JSON,
     };
@@ -118,7 +112,6 @@ export default class FileNodeManager {
     await this.waitForJsonLoad();
 
     const entriesMap = {
-      [JsonType.LOCAL]: this.localFileEntries,
       [JsonType.REMOTE]: this.remoteFileEntries,
       [JsonType.COMPARE]: this.comparisonFileEntries,
     };

@@ -32,7 +32,14 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions,
   );
 
-  const pairedFoldersTreeDataProvider = new PairedFoldersTreeDataProvider();
+  // Retrieve stored values from the previous session
+  const showAsTree = context.globalState.get<boolean>("showAsTree", true); // Default to true
+  const showUnchanged = context.globalState.get<boolean>("showUnchanged", true); // Default to true
+
+  const pairedFoldersTreeDataProvider = new PairedFoldersTreeDataProvider(
+    showAsTree,
+    showUnchanged,
+  );
   await pairedFoldersTreeDataProvider.loadRootElements();
 
   // Create the permanent status bar icon
@@ -44,7 +51,16 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   // Initialize the view mode context key
-  vscode.commands.executeCommand("setContext", "livesyncViewMode", "tree");
+  vscode.commands.executeCommand(
+    "setContext",
+    "livesyncViewMode",
+    showAsTree ? "tree" : "list",
+  );
+  vscode.commands.executeCommand(
+    "setContext",
+    "livesyncShowUnchanged",
+    showUnchanged,
+  );
 
   // const rootPath =
   //   vscode.workspace.workspaceFolders &&
@@ -178,13 +194,33 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.executeCommand("livesync.fileEntryRefresh", fileEntry);
       },
     ),
-    vscode.commands.registerCommand("livesync.toggleToTreeView", () => {
-      pairedFoldersTreeDataProvider.toggleViewMode(true);
-      vscode.commands.executeCommand("setContext", "livesyncViewMode", "tree");
-    }),
     vscode.commands.registerCommand("livesync.toggleToListView", () => {
       pairedFoldersTreeDataProvider.toggleViewMode(false);
+      context.globalState.update("showAsTree", false); // Save the new state
       vscode.commands.executeCommand("setContext", "livesyncViewMode", "list");
+    }),
+    vscode.commands.registerCommand("livesync.toggleToTreeView", () => {
+      pairedFoldersTreeDataProvider.toggleViewMode(true);
+      context.globalState.update("showAsTree", true); // Save the new state
+      vscode.commands.executeCommand("setContext", "livesyncViewMode", "tree");
+    }),
+    vscode.commands.registerCommand("livesync.showUnchanged", () => {
+      pairedFoldersTreeDataProvider.setShowUnchanged(true);
+      context.globalState.update("showUnchanged", true); // Save the new state
+      vscode.commands.executeCommand(
+        "setContext",
+        "livesyncShowUnchanged",
+        true,
+      );
+    }),
+    vscode.commands.registerCommand("livesync.hideUnchanged", () => {
+      pairedFoldersTreeDataProvider.setShowUnchanged(false);
+      context.globalState.update("showUnchanged", false); // Save the new state
+      vscode.commands.executeCommand(
+        "setContext",
+        "livesyncShowUnchanged",
+        false,
+      );
     }),
   );
 
