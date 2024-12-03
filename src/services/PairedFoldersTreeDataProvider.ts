@@ -21,10 +21,7 @@ import {
   SAVE_DIR,
 } from "../utilities/constants";
 import { WorkspaceConfig } from "./WorkspaceConfig";
-import FileNodeManager, {
-  isComparisonFileNodeMap,
-  JsonType,
-} from "./FileNodeManager";
+import JsonManager, { isComparisonFileNodeMap, JsonType } from "./JsonManager";
 import {
   ComparisonFileNode,
   ComparisonStatus,
@@ -53,12 +50,12 @@ export class PairedFoldersTreeDataProvider
     string,
     ComparisonFileNode
   >();
-  private fileNodeManager: FileNodeManager;
+  private jsonManager: JsonManager;
 
   constructor(showAsTree: boolean = true, showUnchanged: boolean = true) {
     this._showAsTree = showAsTree;
     this._showUnchanged = showUnchanged;
-    this.fileNodeManager = FileNodeManager.getInstance();
+    this.jsonManager = JsonManager.getInstance();
 
     loadIconMappings(ICON_MAPPINGS_PATH);
     loadFolderIconMappings(FOLDER_ICON_MAPPINGS_PATH);
@@ -77,7 +74,7 @@ export class PairedFoldersTreeDataProvider
 
   async loadRootElements(): Promise<void> {
     // Simulate async loading of root elements (e.g., from a JSON file)
-    const comparisonEntries = await this.fileNodeManager.getFileEntriesMap(
+    const comparisonEntries = await this.jsonManager.getFileEntriesMap(
       JsonType.COMPARE,
     );
 
@@ -98,7 +95,7 @@ export class PairedFoldersTreeDataProvider
         parentNode = element;
       } else if (!element.isDirectory() && pathParts.length > 1) {
         const parentPathParts = pathParts.slice(0, pathParts.length - 1);
-        parentNode = await FileNodeManager.findEntryByPath(
+        parentNode = await JsonManager.findEntryByPath(
           parentPathParts.join(path.sep),
           this.rootElements,
           element.pairedFolderName,
@@ -110,28 +107,36 @@ export class PairedFoldersTreeDataProvider
       if (parentNode && parentNode instanceof ComparisonFileNode) {
         logInfoMessage("Refreshing Tree: ", LOG_FLAGS.CONSOLE_ONLY, parentNode);
         this._onDidChangeTreeData.fire(parentNode);
-        this.fileNodeManager.updateFullJson(
-          JsonType.COMPARE,
-          this.rootElements,
-        );
+        this.jsonManager.updateFullJson(JsonType.COMPARE, this.rootElements);
       }
     }
   }
 
-  getTreeItem(element: ComparisonFileNode): vscode.TreeItem {
-    const treeItem = new vscode.TreeItem(
-      // If relativePath is empty, use element.name
-      element.relativePath === ""
-        ? element.name
-        : this._showAsTree
-          ? element.name
-          : element.relativePath,
-      // Determine the collapsible state based on the type and relativePath
+  async getTreeItem(element: ComparisonFileNode): Promise<vscode.TreeItem> {
+    const isOpened = (await this.jsonManager.getFoldersState()).has(
+      JsonManager.getMapKey(element),
+    );
+
+    let label: string;
+    if (element.relativePath === "" || this._showAsTree) {
+      label = element.name;
+    } else {
+      label = element.relativePath;
+    }
+
+    let collapsibleState: vscode.TreeItemCollapsibleState;
+    if (
       element.type === BaseNodeType.directory &&
       (this._showAsTree || element.relativePath === "")
-        ? vscode.TreeItemCollapsibleState.Collapsed
-        : vscode.TreeItemCollapsibleState.None,
-    );
+    ) {
+      collapsibleState = isOpened
+        ? vscode.TreeItemCollapsibleState.Expanded
+        : vscode.TreeItemCollapsibleState.Collapsed;
+    } else {
+      collapsibleState = vscode.TreeItemCollapsibleState.None;
+    }
+
+    const treeItem = new vscode.TreeItem(label, collapsibleState);
 
     if (element.status && element.type) {
       if (
@@ -167,7 +172,7 @@ export class PairedFoldersTreeDataProvider
   ): Promise<ComparisonFileNode[]> {
     if (!element) {
       try {
-        const comparisonEntries = await this.fileNodeManager.getFileEntriesMap(
+        const comparisonEntries = await this.jsonManager.getFileEntriesMap(
           JsonType.COMPARE,
         );
 
@@ -183,7 +188,7 @@ export class PairedFoldersTreeDataProvider
             this.rootElements.set(comparisonFileNode.name, comparisonFileNode);
           }
 
-          await this.fileNodeManager.updateFullJson(
+          await this.jsonManager.updateFullJson(
             JsonType.COMPARE,
             this.rootElements,
           );
@@ -216,6 +221,22 @@ export class PairedFoldersTreeDataProvider
     }
   }
 
+  getParent(
+    element: ComparisonFileNode,
+  ): vscode.ProviderResult<ComparisonFileNode> {
+    if (!element.relativePath || element.relativePath === "") {
+      // Root nodes do not have a parent
+      return null;
+    }
+
+    const parentPath = path.dirname(element.relativePath);
+    return JsonManager.findEntryByPath(
+      parentPath,
+      this.rootElements,
+      element.pairedFolderName,
+    );
+  }
+
   // Get the whole ComparisonFileNode of the whole tree
   async getComparisonFileNode(
     localDir: string,
@@ -237,10 +258,7 @@ export class PairedFoldersTreeDataProvider
         remoteFilesMap.set(remoteFiles.pairedFolderName, remoteFiles);
 
         console.log("Saving JSON REMOTE Map: ", remoteFilesMap);
-        await this.fileNodeManager.updateFullJson(
-          JsonType.REMOTE,
-          remoteFilesMap,
-        );
+        await this.jsonManager.updateFullJson(JsonType.REMOTE, remoteFilesMap);
       }
 
       return comparisonFileNode;
@@ -270,21 +288,21 @@ export class PairedFoldersTreeDataProvider
     switch (action) {
       case Action.Add:
         // Handle adding the element
-        return await FileNodeManager.addComparisonFileNode(
+        return await JsonManager.addComparisonFileNode(
           element,
           this.rootElements,
         );
 
       case Action.Remove:
         // Handle deleting the element
-        return await FileNodeManager.deleteComparisonFileNode(
+        return await JsonManager.deleteComparisonFileNode(
           element,
           this.rootElements,
         );
 
       case Action.Update:
         // Handle updating the element that exists
-        return await FileNodeManager.updateComparisonFileNode(
+        return await JsonManager.updateComparisonFileNode(
           element,
           this.rootElements,
         );

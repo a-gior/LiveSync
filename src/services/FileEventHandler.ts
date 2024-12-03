@@ -14,7 +14,7 @@ import {
   ComparisonFileNode,
   ComparisonStatus,
 } from "../utilities/ComparisonFileNode";
-import FileNodeManager from "./FileNodeManager";
+import JsonManager from "./JsonManager";
 import { Action } from "../utilities/enums";
 import { logInfoMessage } from "./LogManager";
 
@@ -196,7 +196,7 @@ export class FileEventHandler {
       console.log(`<handleFileDelete> Event deleting ${filePath}`);
 
       try {
-        const nodeToDelete = await FileNodeManager.findEntryByPath(
+        const nodeToDelete = await JsonManager.findEntryByPath(
           filePath,
           treeDataProvider.rootElements,
         );
@@ -249,7 +249,7 @@ export class FileEventHandler {
     console.log(`<handleFileSave> Event saving ${filePath}`);
 
     try {
-      const nodeToSave = await FileNodeManager.findEntryByPath(
+      const nodeToSave = await JsonManager.findEntryByPath(
         filePath,
         treeDataProvider.rootElements,
       );
@@ -306,7 +306,7 @@ export class FileEventHandler {
       );
 
       try {
-        const nodeToRename = await FileNodeManager.findEntryByPath(
+        const nodeToRename = await JsonManager.findEntryByPath(
           oldPath,
           treeDataProvider.rootElements,
         );

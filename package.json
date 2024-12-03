@@ -73,25 +73,30 @@
       },
       {
         "command": "livesync.toggleToTreeView",
-        "title": "Toggle View Mode",
+        "title": "Toggle Tree View Mode",
         "category": "LiveSync",
         "icon": "$(list-tree)"
       },
       {
         "command": "livesync.toggleToListView",
-        "title": "Toggle View Mode",
+        "title": "Toggle List View Mode",
         "category": "LiveSync",
         "icon": "$(list-selection)"
       },
       {
         "command": "livesync.showUnchanged",
-        "title": "Show Unchanged",
+        "title": "Show unchanged files/folders",
         "icon": "$(circle-filled)"
       },
       {
         "command": "livesync.hideUnchanged",
-        "title": "Hide Unchanged",
+        "title": "Hide unchanged files/folders",
         "icon": "$(circle-slash)"
+      },
+      {
+        "command": "livesync.collapseAll",
+        "title": "Collapse All Folders",
+        "icon": "$(collapse-all)"
       }
     ],
     "menus": {
@@ -134,6 +139,11 @@
         {
           "command": "livesync.hideUnchanged",
           "when": "view == nodeDependencies && livesyncShowUnchanged == true",
+          "group": "navigation"
+        },
+        {
+          "command": "livesync.collapseAll",
+          "when": "view == nodeDependencies",
           "group": "navigation"
         }
       ]

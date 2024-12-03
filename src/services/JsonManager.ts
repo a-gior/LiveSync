@@ -3,6 +3,7 @@ import * as fs from "fs";
 import { FileNode, getFileNodeInfo } from "../utilities/FileNode";
 import {
   COMPARE_FILES_JSON,
+  FOLDERS_STATE_JSON,
   REMOTE_FILES_JSON,
   SAVE_DIR,
 } from "../utilities/constants";
@@ -11,41 +12,99 @@ import {
   ComparisonStatus,
 } from "../utilities/ComparisonFileNode";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
+import { debounce } from "../utilities/debounce";
 
 export enum JsonType {
   REMOTE = "remote",
   COMPARE = "compare",
 }
 
-export default class FileNodeManager {
-  private static instance: FileNodeManager;
+export default class JsonManager {
+  private static instance: JsonManager;
   private remoteFileEntries: Map<string, FileNode> | null = null;
   private comparisonFileEntries: Map<string, ComparisonFileNode> | null = null;
+  private foldersState: Map<string, boolean> | null = null;
   private jsonLoadedPromise: Promise<void>;
 
   private constructor() {
     this.jsonLoadedPromise = this.initializeJsonData();
   }
 
-  public static getInstance(): FileNodeManager {
-    if (!FileNodeManager.instance) {
-      FileNodeManager.instance = new FileNodeManager();
+  public static getInstance(): JsonManager {
+    if (!JsonManager.instance) {
+      JsonManager.instance = new JsonManager();
     }
-    return FileNodeManager.instance;
+    return JsonManager.instance;
+  }
+
+  public async getFoldersState(): Promise<Map<string, boolean>> {
+    await this.waitForJsonLoad();
+
+    if (this.foldersState) {
+      return this.foldersState;
+    } else {
+      throw new Error("FoldersState wasn't loaded for some reasons");
+    }
+  }
+
+  public async reloadFoldersState(): Promise<Map<string, boolean>> {
+    this.foldersState = await this.loadMapFromJson<boolean>(FOLDERS_STATE_JSON);
+    return this.foldersState;
+  }
+
+  public static getMapKey(element: ComparisonFileNode) {
+    return `${element.pairedFolderName}$$${element.relativePath}`;
+  }
+
+  public async updateFolderState(
+    element: ComparisonFileNode,
+    isExpanded: boolean,
+  ) {
+    await this.waitForJsonLoad();
+    if (!this.foldersState) {
+      logErrorMessage("Couldn't update folders state");
+      return;
+    }
+
+    const mapKey = JsonManager.getMapKey(element);
+
+    if (isExpanded) {
+      this.foldersState.set(mapKey, isExpanded);
+    } else {
+      this.foldersState.delete(mapKey);
+    }
+    const saveMapToJsonDebounced = debounce(this.saveMapToJson, 500);
+    saveMapToJsonDebounced(FOLDERS_STATE_JSON, this.foldersState);
+  }
+
+  public async clearFoldersState(): Promise<void> {
+    await this.waitForJsonLoad();
+    if (!this.foldersState) {
+      logErrorMessage("Couldn't clear folders state");
+      return;
+    }
+
+    // Reset the in-memory map
+    this.foldersState.clear();
+
+    // Optionally save an empty state to the JSON file to clear the persisted state
+    await this.saveMapToJson(FOLDERS_STATE_JSON, this.foldersState);
   }
 
   private async initializeJsonData(): Promise<void> {
     try {
-      const [remote, comparison] = await Promise.all([
-        this.loadNodeFromJson<FileNode>(REMOTE_FILES_JSON, FileNode),
-        this.loadNodeFromJson<ComparisonFileNode>(
+      const [remote, comparison, foldersState] = await Promise.all([
+        this.loadMapFromJson<FileNode>(REMOTE_FILES_JSON, FileNode),
+        this.loadMapFromJson<ComparisonFileNode>(
           COMPARE_FILES_JSON,
           ComparisonFileNode,
         ),
+        this.loadMapFromJson<boolean>(FOLDERS_STATE_JSON),
       ]);
 
       this.remoteFileEntries = remote;
       this.comparisonFileEntries = comparison;
+      this.foldersState = foldersState;
     } catch (error) {
       logErrorMessage("Failed to initialize JSON data", LOG_FLAGS.ALL, error);
       throw error;
@@ -56,9 +115,9 @@ export default class FileNodeManager {
     return this.jsonLoadedPromise;
   }
 
-  private async loadNodeFromJson<T>(
+  private async loadMapFromJson<T>(
     fileName: string,
-    NodeConstructor: new (data: any) => T,
+    NodeConstructor?: new (data: any) => T,
   ): Promise<Map<string, T>> {
     const filePath = path.join(SAVE_DIR, fileName);
     const fileEntryMap = new Map<string, T>();
@@ -71,14 +130,43 @@ export default class FileNodeManager {
       const fileContent = await fs.promises.readFile(filePath, "utf-8");
       const json = JSON.parse(fileContent);
 
-      Object.entries(json).forEach(([entryName, entryData]) => {
-        fileEntryMap.set(entryName, new NodeConstructor(entryData));
-      });
+      if (NodeConstructor) {
+        Object.entries(json).forEach(([entryName, entryData]) => {
+          fileEntryMap.set(entryName, new NodeConstructor(entryData));
+        });
+      } else {
+        Object.entries(json).forEach(([name, data]) => {
+          fileEntryMap.set(name, data as T);
+        });
+      }
 
       return fileEntryMap;
     } catch (error: any) {
       throw new Error(
         `Failed to load node from JSON ${fileName}: ${error.message}`,
+      );
+    }
+  }
+
+  private async saveMapToJson<T>(
+    fileName: string,
+    dataMap: Map<string, T>,
+  ): Promise<void> {
+    const filePath = path.join(SAVE_DIR, fileName);
+
+    // Convert the Map to an Object to be saved as JSON
+    const jsonObject: { [key: string]: T } = {};
+    dataMap.forEach((value, key) => {
+      jsonObject[key] = value;
+    });
+
+    try {
+      // Write the JSON string to the specified file
+      const jsonString = JSON.stringify(jsonObject, null, 2); // Pretty print with 2-space indentation for readability
+      await fs.promises.writeFile(filePath, jsonString, "utf-8");
+    } catch (error: any) {
+      throw new Error(
+        `Failed to save map to JSON ${fileName}: ${error.message}`,
       );
     }
   }
@@ -103,7 +191,7 @@ export default class FileNodeManager {
       [JsonType.REMOTE]: REMOTE_FILES_JSON,
       [JsonType.COMPARE]: COMPARE_FILES_JSON,
     };
-    return fileNames[jsonType] || COMPARE_FILES_JSON;
+    return fileNames[jsonType];
   }
 
   public async getFileEntriesMap(
@@ -115,7 +203,7 @@ export default class FileNodeManager {
       [JsonType.REMOTE]: this.remoteFileEntries,
       [JsonType.COMPARE]: this.comparisonFileEntries,
     };
-    return entriesMap[jsonType] || null;
+    return entriesMap[jsonType];
   }
 
   public async updateRemoteFilesJson(fileNode: FileNode) {

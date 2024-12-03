@@ -1,4 +1,4 @@
-import FileNodeManager from "../../services/FileNodeManager";
+import JsonManager from "../../services/JsonManager";
 import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
 import {
   listLocalFilesRecursive,
@@ -32,7 +32,7 @@ export async function compareCorrespondingEntry(
         "<compareCorrespondingEntry> Updating JSON REMOTE: ",
         remoteEntry,
       );
-      FileNodeManager.getInstance().updateRemoteFilesJson(remoteEntry);
+      JsonManager.getInstance().updateRemoteFilesJson(remoteEntry);
     }
 
     return ComparisonFileNode.compareFileNodes(localEntry, remoteEntry);

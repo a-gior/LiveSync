@@ -9,7 +9,7 @@ import {
 } from "./sftpOperations";
 import * as path from "path";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
-import FileNodeManager from "../../services/FileNodeManager";
+import JsonManager from "../../services/JsonManager";
 import { PairedFoldersTreeDataProvider } from "../../services/PairedFoldersTreeDataProvider";
 import {
   LOG_FLAGS,
@@ -111,7 +111,7 @@ async function checkLocalFileExistence(action: string, localPath: string) {
 
 // Update the JSON of remote files
 async function updateRemoteFilesJsonForPaths(...filePaths: string[]) {
-  const fileNodeManager = FileNodeManager.getInstance();
+  const fileNodeManager = JsonManager.getInstance();
 
   for (const filePath of filePaths) {
     if (filePath) {
@@ -214,7 +214,7 @@ async function handleFileOperation(
   ) {
     // The comparisonNode is needed to determine if the file is tracked in the comparison JSON.
     // It helps to identify if the current file has an associated entry in the synced state, which is used to perform operations like hash comparison.
-    const comparisonNode = await FileNodeManager.findEntryByPath(
+    const comparisonNode = await JsonManager.findEntryByPath(
       localPath,
       treeDataProvider.rootElements,
     );

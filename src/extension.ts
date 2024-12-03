@@ -23,6 +23,7 @@ import {
 import { ComparisonFileNode } from "./utilities/ComparisonFileNode";
 import { getFullPaths } from "./utilities/fileUtils/filePathUtils";
 import { Action } from "./utilities/enums";
+import JsonManager from "./services/JsonManager";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -41,6 +42,26 @@ export async function activate(context: vscode.ExtensionContext) {
     showUnchanged,
   );
   await pairedFoldersTreeDataProvider.loadRootElements();
+
+  // Create and register the TreeView
+  const treeView = vscode.window.createTreeView("nodeDependencies", {
+    treeDataProvider: pairedFoldersTreeDataProvider,
+  });
+
+  // Listen for expand and collapse events
+  treeView.onDidExpandElement((event) => {
+    const expandedElement = event.element;
+    JsonManager.getInstance().updateFolderState(expandedElement, true);
+
+    console.log("onDidExpandElement UpdateFOlderState");
+  });
+
+  treeView.onDidCollapseElement((event) => {
+    const collapsedElement = event.element;
+    JsonManager.getInstance().updateFolderState(collapsedElement, false);
+
+    console.log("onDidCollapseElement UpdateFOlderState");
+  });
 
   // Create the permanent status bar icon
   StatusBarManager.createPermanentIcon();
@@ -62,16 +83,6 @@ export async function activate(context: vscode.ExtensionContext) {
     showUnchanged,
   );
 
-  // const rootPath =
-  //   vscode.workspace.workspaceFolders &&
-  //   vscode.workspace.workspaceFolders.length > 0
-  //     ? vscode.workspace.workspaceFolders[0].uri.fsPath
-  //     : undefined;
-
-  vscode.window.registerTreeDataProvider(
-    "nodeDependencies",
-    pairedFoldersTreeDataProvider,
-  );
   const fileStatusDecorationProvider = new FileStatusDecorationProvider();
   context.subscriptions.push(
     vscode.window.registerFileDecorationProvider(fileStatusDecorationProvider),
@@ -221,6 +232,15 @@ export async function activate(context: vscode.ExtensionContext) {
         "livesyncShowUnchanged",
         false,
       );
+    }),
+    vscode.commands.registerCommand("livesync.collapseAll", async () => {
+      // Clear the folder state from JsonManager to reset all expanded folders
+      const jsonManager = JsonManager.getInstance();
+      await jsonManager.clearFoldersState();
+
+      await vscode.commands.executeCommand("nodeDependencies.focus");
+      await vscode.commands.executeCommand("list.collapseAll");
+      logInfoMessage("All folders collapsed.");
     }),
   );
 

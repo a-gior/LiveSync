@@ -11,10 +11,10 @@ import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import { shouldIgnore } from "../shouldIgnore";
 import { logErrorMessage, logInfoMessage } from "../../services/LogManager";
 import { BaseNodeType } from "../BaseNode";
-import FileNodeManager, {
+import JsonManager, {
   isFileNodeMap,
   JsonType,
-} from "../../services/FileNodeManager";
+} from "../../services/JsonManager";
 
 export async function downloadRemoteFile(
   remotePath: string,
@@ -77,12 +77,12 @@ export async function compareRemoteFileHash(
   try {
     // Get the remote JSON entries
     const remoteFileEntriesMap =
-      await FileNodeManager.getInstance().getFileEntriesMap(JsonType.REMOTE);
+      await JsonManager.getInstance().getFileEntriesMap(JsonType.REMOTE);
     if (!remoteFileEntriesMap || !isFileNodeMap(remoteFileEntriesMap)) {
       window.showErrorMessage(`No remote JSON found`);
       return false;
     }
-    const remoteEntry = await FileNodeManager.findEntryByPath(
+    const remoteEntry = await JsonManager.findEntryByPath(
       remotePath,
       remoteFileEntriesMap,
     );
