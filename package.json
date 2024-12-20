@@ -266,6 +266,17 @@
           ],
           "description": "Action to perform on file create.\n\nOptions:\n- create: Automatically creates the file on the remote server on create.\n- check: Only checks if the file has been created on the remote server without creating.\n- check&create: Checks if the file has been created on the remote server and creates if it hasn't.\n- none: No action is performed on file create."
         },
+        "LiveSync.actionOnOpen": {
+          "type": "string",
+          "default": "check&download",
+          "enum": [
+            "download",
+            "check",
+            "check&download",
+            "none"
+          ],
+          "description": "Action to perform on opening a file.\n\nOptions:\n- download: Automatically downloads the file from the remote server.\n- check: Only checks if the file has been modified on the remote system without downloading.\n- check&download: Checks if the file has been modified on the remote system and downloads if it hasn't.\n- none: No action is performed on file download."
+        },
         "LiveSync.ignore": {
           "type": "array",
           "description": "List of patterns of files/folders to ignore",

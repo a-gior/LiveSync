@@ -67,6 +67,7 @@
         const currentActionOnCreate =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[3].value;
         const currentActionOnDelete =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[4].value;
         const currentActionOnMove =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[5].value;
+        const currentActionOpen =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[6].value;
 
         const currentFileEventActions = {
             actionOnUpload: currentActionOnUpload,
@@ -74,7 +75,8 @@
             actionOnSave: currentActionOnSave,
             actionOnCreate: currentActionOnCreate,
             actionOnDelete: currentActionOnDelete,
-            actionOnMove: currentActionOnMove
+            actionOnMove: currentActionOnMove,
+            actionOnOpen: currentActionOpen
         }
 
         const confState: ConfigurationState = { 

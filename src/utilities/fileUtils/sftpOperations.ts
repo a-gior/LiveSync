@@ -71,6 +71,7 @@ export async function uploadRemoteFile(
   }
 }
 
+// Compare remote file hash with stored remote hash
 export async function compareRemoteFileHash(
   remotePath: string,
 ): Promise<boolean> {
@@ -82,7 +83,7 @@ export async function compareRemoteFileHash(
       window.showErrorMessage(`No remote JSON found`);
       return false;
     }
-    const remoteEntry = await JsonManager.findEntryByPath(
+    const remoteEntry = await JsonManager.findNodeByPath(
       remotePath,
       remoteFileEntriesMap,
     );

@@ -52,15 +52,11 @@ export async function activate(context: vscode.ExtensionContext) {
   treeView.onDidExpandElement((event) => {
     const expandedElement = event.element;
     JsonManager.getInstance().updateFolderState(expandedElement, true);
-
-    console.log("onDidExpandElement UpdateFOlderState");
   });
 
   treeView.onDidCollapseElement((event) => {
     const collapsedElement = event.element;
     JsonManager.getInstance().updateFolderState(collapsedElement, false);
-
-    console.log("onDidCollapseElement UpdateFOlderState");
   });
 
   // Create the permanent status bar icon
@@ -157,31 +153,34 @@ export async function activate(context: vscode.ExtensionContext) {
     ),
     vscode.commands.registerCommand(
       "livesync.fileEntryUpload",
-      async (fileEntry: ComparisonFileNode) => {
-        console.log("FileNode Upload: ", fileEntry);
-        if (fileEntry.isDirectory()) {
-          await uploadDirectory(fileEntry);
+      async (comparisonNode: ComparisonFileNode) => {
+        console.log("FileNode Upload: ", comparisonNode);
+        if (comparisonNode.isDirectory()) {
+          await uploadDirectory(comparisonNode);
         } else {
           try {
-            const { localPath } = await getFullPaths(fileEntry);
+            const { localPath } = await getFullPaths(comparisonNode);
             console.log(`localPath: ${localPath}`);
             if (!localPath) {
               throw new Error(
-                `No local path found for ${fileEntry.relativePath}`,
+                `No local path found for ${comparisonNode.relativePath}`,
               );
             }
 
             const fileUri = vscode.Uri.file(localPath);
-            await fileUpload(fileUri, pairedFoldersTreeDataProvider);
+            await fileUpload(fileUri);
           } catch (error: any) {
             logErrorMessage(`Failed to read file: ${error.message}`);
           }
         }
         await pairedFoldersTreeDataProvider.updateRootElements(
           Action.Update,
-          fileEntry,
+          comparisonNode,
         );
-        vscode.commands.executeCommand("livesync.fileEntryRefresh", fileEntry);
+        vscode.commands.executeCommand(
+          "livesync.fileEntryRefresh",
+          comparisonNode,
+        );
       },
     ),
     vscode.commands.registerCommand(

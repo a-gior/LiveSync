@@ -10,7 +10,6 @@ import {
 import * as path from "path";
 import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import JsonManager from "../../services/JsonManager";
-import { PairedFoldersTreeDataProvider } from "../../services/PairedFoldersTreeDataProvider";
 import {
   LOG_FLAGS,
   logErrorMessage,
@@ -18,95 +17,95 @@ import {
 } from "../../services/LogManager";
 import { FileNodeSource } from "../FileNode";
 import { listRemoteFilesRecursive } from "./fileListing";
+import { ActionOn, ActionResult, Check } from "../enums";
 
-enum Check {
-  remoteExists = "remoteExists",
-  remoteNotExists = "remoteNotExists",
-  remoteNotSame = "remoteNotSame",
-  localExists = "localExists",
-}
-
-function getCheckMessage(check: Check, path: string): string {
+function getPromptMessage(
+  check: Check,
+  localPath: string,
+  remotePath: string,
+): string {
   switch (check) {
     case Check.remoteExists:
-      return `The remote file at ${path} already exists. Do you want to overwrite it with the local changes?`;
+      return `The remote file at ${remotePath} already exists. Do you want to overwrite it with the local changes?`;
     case Check.remoteNotExists:
-      return `The remote file at ${path} does not exist.`;
-    case Check.remoteNotSame:
-      return `The remote file at ${path} has been modified. Do you want to overwrite it with the local changes?`;
+      return `The remote file at ${remotePath} does not exist.`;
+    case Check.remoteNotSameOverwrite:
+      return `The remote file at ${remotePath} has been modified. Do you want to overwrite it with the local changes?`;
+    case Check.remoteNotSameDownload:
+      return `The remote file at ${remotePath} has been modified. Do you want to download the remote file?`;
     case Check.localExists:
-      return `The local file at ${path} already exists. Do you want to overwrite it with the remote file?`;
+      return `The local file at ${localPath} already exists. Do you want to overwrite it with the remote file?`;
     default:
       return "";
   }
 }
 
-// Prompts the user when a remote file already exists, offering options to overwrite, show differences, or cancel.
+function getCheckMessage(action: ActionOn, filePath: string): string {
+  const fileName = path.basename(filePath);
+  switch (action) {
+    case ActionOn.Upload:
+      return `??`;
+    case ActionOn.Download:
+      return `File ${fileName} already exists locally`;
+
+    case ActionOn.Save:
+    case ActionOn.Open:
+      return `File ${fileName} has been modified on the remote server`;
+    case ActionOn.Create:
+    case ActionOn.Move:
+      return `File ${fileName} already exists on the remote server`;
+    case ActionOn.Delete:
+      return `File ${fileName} doesn't exist on the remote server`;
+  }
+}
+
+// Prompts the user, offering options to overwrite, show differences, or cancel.
 async function showOverwritePrompt(
-  check: Check,
-  remotePath: string,
+  checkMessage: Check,
   localPath: string,
-  comparisonNode: any = null,
+  remotePath: string,
+  showDiff: boolean = false,
 ) {
+  // Set Options, add ShowDiff button depending on showDiff boolean
+  const options = ["Yes"];
+  if (showDiff) {
+    options.push("Show Diff");
+  }
+
+  // Prompt the user
   const userResponse = await window.showWarningMessage(
-    getCheckMessage(check, remotePath),
+    getPromptMessage(checkMessage, localPath, remotePath),
     { modal: true },
-    "Yes",
-    "Show Diff",
+    ...options,
   );
+
+  // Return action depending on user's choice
   if (userResponse === "Show Diff") {
-    if (comparisonNode) {
-      commands.executeCommand("livesync.fileEntryShowDiff", comparisonNode);
-    } else {
-      commands.executeCommand("livesync.fileEntryShowDiff", {
-        localPath,
-        remotePath,
-      });
-    }
-    return false;
+    commands.executeCommand("livesync.fileEntryShowDiff", {
+      localPath,
+      remotePath,
+    });
+    return ActionResult.IsNotSame;
   } else if (userResponse !== "Yes") {
     logInfoMessage("Operation canceled.");
-    return false;
+    return ActionResult.IsNotSame;
   }
-  return true;
+
+  return ActionResult.ActionPerformed;
 }
 
-// Checks if a remote file exists, with different behavior based on the action type.
-async function checkRemoteFileExistence(action: string, remotePath: string) {
+// Checks if a remote file exists
+async function checkRemoteFileExistence(remotePath: string) {
   const exists = await pathExists(remotePath, FileNodeSource.remote);
 
-  // For delete actions, the file must exist remotely.
-  if (action === "actionOnDelete") {
-    if (!exists) {
-      logInfoMessage(getCheckMessage(Check.remoteNotExists, remotePath));
-      return false;
-    }
-    return true;
-  }
-
-  // For other actions, return true if the file exists.
-  return exists;
+  return exists ? ActionResult.Exists : ActionResult.DontExist;
 }
 
-// Checks if a local file exists, with different behavior based on the action type.
-async function checkLocalFileExistence(action: string, localPath: string) {
+// Checks if a local file exists
+async function checkLocalFileExistence(localPath: string) {
   const exists = await pathExists(localPath, FileNodeSource.local);
 
-  // For download actions, the file must exist locally before prompting the user.
-  if (action === "actionOnDownload" && exists) {
-    const userResponse = await window.showWarningMessage(
-      getCheckMessage(Check.localExists, localPath),
-      { modal: true },
-      "Yes",
-      "Cancel",
-    );
-    if (userResponse !== "Yes") {
-      logInfoMessage("Download operation canceled.");
-      return false;
-    }
-  }
-
-  return true;
+  return exists ? ActionResult.Exists : ActionResult.DontExist;
 }
 
 // Update the JSON of remote files
@@ -131,172 +130,227 @@ async function updateRemoteFilesJsonForPaths(...filePaths: string[]) {
 }
 
 // Handles the checking process before performing an action, including hash comparison and existence checks.
-async function handleFileCheck(
-  action: string,
+export async function handleFileCheck(
+  action: ActionOn,
   actionParameter: string,
   localPath: string,
   remotePath: string,
-  comparisonNode: any = null,
 ) {
-  if (actionParameter.includes("check")) {
-    if (comparisonNode) {
-      // Perform a hash check if comparisonNode is provided.
-      const isSame = await compareRemoteFileHash(remotePath);
-      if (actionParameter === "check") {
-        logInfoMessage(
-          `File ${path.basename(localPath)} ${isSame ? "can" : "cannot"} be processed.`,
-        );
-        return false;
-      }
-      if (!isSame) {
-        return await showOverwritePrompt(
-          Check.remoteNotSame,
-          remotePath,
-          localPath,
-          comparisonNode,
-        );
-      }
-    } else {
-      // If no comparisonNode, check if the remote file exists.
-      const exists = await checkRemoteFileExistence(action, remotePath);
-      if (exists && action !== "actionOnDelete") {
-        return await showOverwritePrompt(
-          Check.remoteExists,
-          remotePath,
-          localPath,
-        );
-      }
-    }
+  // If no check are required, we proceed to do the action
+  if (!actionParameter.includes("check")) {
+    return ActionResult.ActionPerformed;
   }
 
   // For download actions, check if the local file exists before proceeding
-  if (action === "actionOnDownload" && actionParameter.includes("check")) {
-    return await checkLocalFileExistence(action, localPath);
+  if (action === ActionOn.Download) {
+    const actionResult = await checkLocalFileExistence(localPath);
+
+    if (actionResult === ActionResult.Exists) {
+      // Strict check
+      if (actionParameter === "check") {
+        logInfoMessage(getCheckMessage(action, remotePath));
+        return actionResult;
+      }
+
+      // Prompt user to perform action or not
+      return await showOverwritePrompt(
+        Check.localExists,
+        localPath,
+        remotePath,
+      );
+    }
+
+    return ActionResult.ActionPerformed;
   }
 
-  return true;
+  // Check if remote file exists remotely
+  const actionResult = await checkRemoteFileExistence(remotePath);
+
+  // Perform a hash check between remote file saved in JSON and remotely
+  const isSameRemoteHash = await compareRemoteFileHash(remotePath);
+
+  // Strict check
+  if (actionParameter === "check") {
+    switch (action) {
+      // TODO
+      case ActionOn.Upload:
+        logInfoMessage("??");
+
+      // Show check message if file exists remotely and has different hash
+      case ActionOn.Save:
+      case ActionOn.Open:
+        if (actionResult === ActionResult.Exists && !isSameRemoteHash) {
+          logInfoMessage(getCheckMessage(action, remotePath));
+        }
+      // Show check message if file already exists on the remote server
+      case ActionOn.Create:
+      case ActionOn.Move:
+        if (actionResult === ActionResult.Exists) {
+          logInfoMessage(getCheckMessage(action, remotePath));
+        }
+      // Show check message if file doesn't exists on the remote server
+      case ActionOn.Delete:
+        if (actionResult === ActionResult.DontExist) {
+          logInfoMessage(getCheckMessage(action, remotePath));
+        }
+    }
+  } else {
+    // Show prompt to take action or not
+    switch (action) {
+      case ActionOn.Upload:
+      case ActionOn.Save:
+        if (!isSameRemoteHash) {
+          return await showOverwritePrompt(
+            Check.remoteNotSameOverwrite,
+            localPath,
+            remotePath,
+          );
+        }
+
+      case ActionOn.Open:
+        if (!isSameRemoteHash) {
+          return await showOverwritePrompt(
+            Check.remoteNotSameDownload,
+            localPath,
+            remotePath,
+          );
+        }
+
+      case ActionOn.Create:
+      case ActionOn.Move:
+        if (actionResult === ActionResult.Exists) {
+          return await showOverwritePrompt(
+            Check.remoteExists,
+            localPath,
+            remotePath,
+          );
+        }
+
+      case ActionOn.Delete:
+        if (actionResult === ActionResult.DontExist) {
+          return await showOverwritePrompt(
+            Check.remoteNotExists,
+            localPath,
+            remotePath,
+          );
+        }
+    }
+  }
+
+  // No check message or no prompt
+  if (actionResult === ActionResult.DontExist) {
+    return actionResult;
+  }
+  return isSameRemoteHash ? ActionResult.Exists : ActionResult.IsNotSame;
 }
 
 // This function orchestrates the different file operations (e.g., move, save, delete).
 // It determines the correct action to perform based on the provided parameters and handles all necessary checks before proceeding.
 async function handleFileOperation(
-  action: string,
+  action: ActionOn,
   uri: Uri,
-  treeDataProvider: PairedFoldersTreeDataProvider | null = null,
   oldUri: Uri | null = null,
-): Promise<boolean> {
+): Promise<ActionResult> {
+  let actionParameter = WorkspaceConfig.getParameter<string>(action) ?? "none";
+  if (actionParameter === "none") {
+    return ActionResult.NoAction;
+  }
+
+  // Get local and remote path from Uri
   const localPath = uri.fsPath;
   const remotePath = getCorrespondingPath(localPath);
-  let actionParameter = WorkspaceConfig.getParameter<string>(action) ?? "none";
 
-  // Handle move operation
-  if (action === "actionOnMove" && oldUri) {
-    const localPathOld = oldUri.fsPath;
-    const remotePathOld = getCorrespondingPath(localPathOld);
-    if (
-      await handleFileCheck(action, actionParameter, localPathOld, remotePath)
-    ) {
-      await moveRemoteFile(remotePathOld, remotePath);
-      logInfoMessage(`File moved to remote at ${remotePath}`, LOG_FLAGS.ALL);
+  // Handle check based on action parameters
+  const actionResult = await handleFileCheck(
+    action,
+    actionParameter,
+    localPath,
+    remotePath,
+  );
 
-      await updateRemoteFilesJsonForPaths(remotePathOld, remotePath);
+  // Perform actions for each action
+  if (actionResult === ActionResult.ActionPerformed) {
+    switch (action) {
+      case ActionOn.Move:
+        if (oldUri) {
+          const localPathOld = oldUri.fsPath;
+          const remotePathOld = getCorrespondingPath(localPathOld);
+          await moveRemoteFile(remotePathOld, remotePath);
+          logInfoMessage(
+            `File moved to remote at ${remotePath}`,
+            LOG_FLAGS.ALL,
+          );
 
-      // After the file is moved, any references to the old file path should be updated, and any additional cleanup or re-indexing tasks should be performed as needed.
-      return true;
+          // Update JSON Remote Files
+          await updateRemoteFilesJsonForPaths(remotePath);
+        }
+        break;
+
+      case ActionOn.Upload:
+      case ActionOn.Save:
+      case ActionOn.Create:
+        await uploadRemoteFile(localPath, remotePath);
+        logInfoMessage(
+          `File uploaded to remote at ${remotePath}`,
+          LOG_FLAGS.ALL,
+        );
+
+        // Update JSON Remote Files
+        await updateRemoteFilesJsonForPaths(remotePath);
+        break;
+
+      case ActionOn.Download:
+      case ActionOn.Open:
+        await downloadRemoteFile(remotePath, localPath);
+        logInfoMessage(
+          `File downloaded from remote at ${remotePath}`,
+          LOG_FLAGS.ALL,
+        );
+        break;
+
+      case ActionOn.Delete:
+        await deleteRemoteFile(remotePath);
+        logInfoMessage(
+          `File deleted on remote at ${remotePath}`,
+          LOG_FLAGS.ALL,
+        );
+
+        // Update JSON Remote Files
+        await updateRemoteFilesJsonForPaths(remotePath);
+        break;
     }
-    return false;
   }
 
-  // Handle save and upload operations
-  if (
-    treeDataProvider &&
-    (action === "actionOnSave" || action === "actionOnUpload")
-  ) {
-    // The comparisonNode is needed to determine if the file is tracked in the comparison JSON.
-    // It helps to identify if the current file has an associated entry in the synced state, which is used to perform operations like hash comparison.
-    const comparisonNode = await JsonManager.findEntryByPath(
-      localPath,
-      treeDataProvider.rootElements,
-    );
-    if (!comparisonNode) {
-      logErrorMessage(
-        `File ${localPath} is not tracked in comparison JSON.`,
-        LOG_FLAGS.ALL,
-        treeDataProvider.rootElements,
-      );
-      return false;
-    }
-    if (
-      await handleFileCheck(
-        action,
-        actionParameter,
-        localPath,
-        remotePath,
-        comparisonNode,
-      )
-    ) {
-      await uploadRemoteFile(localPath, remotePath);
-      logInfoMessage(`File uploaded to remote at ${remotePath}`, LOG_FLAGS.ALL);
-
-      await updateRemoteFilesJsonForPaths(remotePath);
-      return true;
-    }
-    return false;
-  }
-
-  // Handle create, delete, and download operations
-  if (await handleFileCheck(action, actionParameter, localPath, remotePath)) {
-    if (action === "actionOnDelete") {
-      await deleteRemoteFile(remotePath);
-      logInfoMessage(`File deleted on remote at ${remotePath}`, LOG_FLAGS.ALL);
-
-      await updateRemoteFilesJsonForPaths(remotePath);
-    } else if (action === "actionOnDownload") {
-      await downloadRemoteFile(remotePath, localPath);
-      logInfoMessage(
-        `File downloaded from remote at ${remotePath}`,
-        LOG_FLAGS.ALL,
-      );
-    } else {
-      await uploadRemoteFile(localPath, remotePath);
-      logInfoMessage(`File uploaded to remote at ${remotePath}`, LOG_FLAGS.ALL);
-
-      await updateRemoteFilesJsonForPaths(remotePath);
-    }
-    return true;
-  }
-  return false;
+  return actionResult;
 }
 
-export async function fileSave(
-  uri: Uri,
-  treeDataProvider: PairedFoldersTreeDataProvider,
-): Promise<boolean> {
-  return await handleFileOperation("actionOnSave", uri, treeDataProvider);
+export async function fileSave(uri: Uri): Promise<ActionResult> {
+  return await handleFileOperation(ActionOn.Save, uri);
 }
 
-export async function fileCreate(uri: Uri): Promise<boolean> {
-  return await handleFileOperation("actionOnCreate", uri);
+export async function fileCreate(uri: Uri): Promise<ActionResult> {
+  return await handleFileOperation(ActionOn.Create, uri);
 }
 
-export async function fileDelete(uri: Uri): Promise<boolean> {
-  return await handleFileOperation("actionOnDelete", uri);
+export async function fileDelete(uri: Uri): Promise<ActionResult> {
+  return await handleFileOperation(ActionOn.Delete, uri);
 }
 
-export async function fileMove(oldUri: Uri, newUri: Uri): Promise<boolean> {
-  return await handleFileOperation("actionOnMove", newUri, null, oldUri);
+export async function fileMove(
+  oldUri: Uri,
+  newUri: Uri,
+): Promise<ActionResult> {
+  return await handleFileOperation(ActionOn.Move, newUri, oldUri);
 }
 
-export async function fileUpload(
-  uri: Uri,
-  treeDataProvider: PairedFoldersTreeDataProvider,
-): Promise<boolean> {
-  return await handleFileOperation("actionOnUpload", uri, treeDataProvider);
+export async function fileOpen(uri: Uri): Promise<ActionResult> {
+  return await handleFileOperation(ActionOn.Open, uri);
 }
 
-export async function fileDownload(
-  uri: Uri,
-  treeDataProvider: PairedFoldersTreeDataProvider,
-): Promise<boolean> {
-  return await handleFileOperation("actionOnDownload", uri, treeDataProvider);
+export async function fileUpload(uri: Uri): Promise<ActionResult> {
+  return await handleFileOperation(ActionOn.Upload, uri);
+}
+
+export async function fileDownload(uri: Uri): Promise<ActionResult> {
+  return await handleFileOperation(ActionOn.Download, uri);
 }

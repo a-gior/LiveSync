@@ -314,7 +314,7 @@ export default class JsonManager {
     return this.findNodeInHierarchy(targetPath, childNode, remainingParts);
   }
 
-  public static async findEntryByPath<T extends FileNode | ComparisonFileNode>(
+  public static async findNodeByPath<T extends FileNode | ComparisonFileNode>(
     filePath: string,
     rootEntries: Map<string, T>,
     pairedFolderName?: string,
@@ -336,7 +336,7 @@ export default class JsonManager {
 
       const fileNodeInfo = getFileNodeInfo(filePath);
 
-      return this.findEntryByPath(
+      return this.findNodeByPath(
         fileNodeInfo.relativePath,
         rootEntries,
         fileNodeInfo.pairedFolderName,
@@ -357,7 +357,7 @@ export default class JsonManager {
   ): Promise<ComparisonFileNode> {
     try {
       const parentPath = path.dirname(element.relativePath);
-      const parentNode = await this.findEntryByPath(
+      const parentNode = await this.findNodeByPath(
         parentPath,
         rootEntries,
         element.pairedFolderName,
@@ -385,7 +385,7 @@ export default class JsonManager {
   ): Promise<ComparisonFileNode> {
     try {
       const parentPath = path.dirname(element.relativePath);
-      const parentNode = await this.findEntryByPath(
+      const parentNode = await this.findNodeByPath(
         parentPath,
         rootEntries,
         element.pairedFolderName,
@@ -424,12 +424,12 @@ export default class JsonManager {
   ): Promise<ComparisonFileNode> {
     try {
       const [oldParentNode, newParentNode] = await Promise.all([
-        this.findEntryByPath(
+        this.findNodeByPath(
           path.dirname(element.relativePath),
           rootEntries,
           element.pairedFolderName,
         ),
-        this.findEntryByPath(
+        this.findNodeByPath(
           path.dirname(newPath),
           rootEntries,
           element.pairedFolderName,
@@ -465,7 +465,7 @@ export default class JsonManager {
     rootEntries: Map<string, ComparisonFileNode>,
   ): Promise<ComparisonFileNode> {
     try {
-      const foundElement = await this.findEntryByPath(
+      const foundElement = await this.findNodeByPath(
         element.relativePath,
         rootEntries,
         element.pairedFolderName,

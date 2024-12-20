@@ -114,6 +114,7 @@ export class ConfigurationPanel extends Panel {
       await WorkspaceConfig.update("actionOnCreate", actions.actionOnCreate);
       await WorkspaceConfig.update("actionOnDelete", actions.actionOnDelete);
       await WorkspaceConfig.update("actionOnMove", actions.actionOnMove);
+      await WorkspaceConfig.update("actionOnOpen", actions.actionOnOpen);
 
       console.log("File event actions saved successfully.");
       window.showInformationMessage("File event actions saved.");

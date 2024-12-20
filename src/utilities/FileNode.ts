@@ -89,7 +89,9 @@ export class FileNode extends BaseNode<FileNode> {
     return await pathExists(this.fullPath, this.source);
   }
 
-  static async getEntryFromLocalPath(localPath: string): Promise<FileNode> {
+  static async createFileNodeFromLocalPath(
+    localPath: string,
+  ): Promise<FileNode> {
     try {
       const stats = fs.lstatSync(localPath);
       const nodeType = await pathExists(localPath, FileNodeSource.local);
@@ -125,7 +127,9 @@ export class FileNode extends BaseNode<FileNode> {
     }
   }
 
-  static async getEntryFromRemotePath(remotePath: string): Promise<FileNode> {
+  static async createFileNodeFromRemotePath(
+    remotePath: string,
+  ): Promise<FileNode> {
     try {
       const stats = await getRemoteFileMetadata(remotePath);
       if (!stats) {

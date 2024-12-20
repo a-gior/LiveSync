@@ -95,7 +95,7 @@ export class PairedFoldersTreeDataProvider
         parentNode = element;
       } else if (!element.isDirectory() && pathParts.length > 1) {
         const parentPathParts = pathParts.slice(0, pathParts.length - 1);
-        parentNode = await JsonManager.findEntryByPath(
+        parentNode = await JsonManager.findNodeByPath(
           parentPathParts.join(path.sep),
           this.rootElements,
           element.pairedFolderName,
@@ -230,7 +230,7 @@ export class PairedFoldersTreeDataProvider
     }
 
     const parentPath = path.dirname(element.relativePath);
-    return JsonManager.findEntryByPath(
+    return JsonManager.findNodeByPath(
       parentPath,
       this.rootElements,
       element.pairedFolderName,

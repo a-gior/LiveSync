@@ -4,4 +4,31 @@ export enum Action {
   Update = "update",
   Move = "Move",
   Save = "Save",
+  Open = "Open",
+}
+
+export enum Check {
+  remoteExists = "remoteExists",
+  remoteNotExists = "remoteNotExists",
+  remoteNotSameOverwrite = "remoteNotSameOverwrite",
+  remoteNotSameDownload = "remoteNotSameDownload",
+  localExists = "localExists",
+}
+
+export enum ActionResult {
+  NoAction = "noAction", // No action was done
+  DontExist = "CheckFailed", // Check file existence was false
+  Exists = "CheckSuccessful", // Check file existence was done and isSame is true
+  IsNotSame = "CheckSuccessfulNoAction", // Check was done and isSame was false
+  ActionPerformed = "ActionPerformed", // Action has been done
+}
+
+export enum ActionOn {
+  Upload = "actionOnUpload",
+  Download = "actionOnDownload",
+  Save = "actionOnSave",
+  Create = "actionOnCreate",
+  Delete = "actionOnDelete",
+  Move = "actionOnMove",
+  Open = "actionOnOpen",
 }

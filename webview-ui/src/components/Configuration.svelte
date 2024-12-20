@@ -135,7 +135,7 @@
                 fields: [
                     {
                         name: "actionOnUpload",
-                        label: "ActionOnUpload",
+                        label: "Action on upload a file via the icon/command",
                         type: "select",
                         required: true,
                         value: "",
@@ -153,7 +153,7 @@
                     },
                     {
                         name: "actionOnDownload",
-                        label: "ActionOnDownload",
+                        label: "Action on downloading a file via the icon/command",
                         type: "select",
                         required: true,
                         value: "",
@@ -171,7 +171,7 @@
                     },
                     {
                         name: "actionOnSave",
-                        label: "ActionOnSave",
+                        label: "Action on saving a file",
                         type: "select",
                         required: true,
                         value: "",
@@ -189,7 +189,7 @@
                     },
                     {
                         name: "actionOnCreate",
-                        label: "ActionOnCreate",
+                        label: "Action on creating a file",
                         type: "select",
                         required: true,
                         value: "",
@@ -207,7 +207,7 @@
                     },
                     {
                         name: "actionOnDelete",
-                        label: "ActionOnDelete",
+                        label: "Action on deleting a file",
                         type: "select",
                         required: true,
                         value: "",
@@ -225,7 +225,7 @@
                     },
                     {
                         name: "actionOnMove",
-                        label: "ActionOnMove",
+                        label: "Action on renaming/moving a file",
                         type: "select",
                         required: true,
                         value: "",
@@ -241,6 +241,24 @@
                             { label: "none", value: "none" },
                         ],
                     },
+                    {
+                        name: "actionOnOpen",
+                        label: "Action on opening a file",
+                        type: "select",
+                        required: true,
+                        value: "",
+                        visible: true,
+                        options: [
+                            { label: "check", value: "check" },
+                            {
+                                label: "check&download",
+                                value: "check&download",
+                                default: true,
+                            },
+                            { label: "download", value: "download" },
+                            { label: "none", value: "none" },
+                        ],
+                    }
                 ],
             },
         },
@@ -326,6 +344,7 @@
                 actionOnCreate,
                 actionOnDelete,
                 actionOnMove,
+                actionOnOpen,
             } = confState.fileEventActions;
 
             fileEventActions.formGroups["file-event-actions-form-group-0"].fields[0].value = actionOnUpload;
@@ -334,6 +353,7 @@
             fileEventActions.formGroups["file-event-actions-form-group-0"].fields[3].value = actionOnCreate;
             fileEventActions.formGroups["file-event-actions-form-group-0"].fields[4].value = actionOnDelete;
             fileEventActions.formGroups["file-event-actions-form-group-0"].fields[5].value = actionOnMove;
+            fileEventActions.formGroups["file-event-actions-form-group-0"].fields[6].value = actionOnOpen;
         }
 
         if (confState.ignoreList) {

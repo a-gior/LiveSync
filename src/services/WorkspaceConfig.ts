@@ -31,6 +31,7 @@ export class WorkspaceConfig {
     const actionOnDelete = config.get<string>("actionOnDelete");
     const actionOnCreate = config.get<string>("actionOnCreate");
     const actionOnMove = config.get<string>("actionOnMove");
+    const actionOnOpen = config.get<string>("actionOnOpen");
 
     const ignoreList = config.get<string[]>("ignore");
 
@@ -58,7 +59,8 @@ export class WorkspaceConfig {
       actionOnMove &&
       actionOnSave &&
       actionOnUpload &&
-      actionOnDownload
+      actionOnDownload &&
+      actionOnOpen
     ) {
       workspaceConfig.fileEventActions = {
         actionOnUpload: actionOnUpload,
@@ -67,6 +69,7 @@ export class WorkspaceConfig {
         actionOnCreate: actionOnCreate,
         actionOnDelete: actionOnDelete,
         actionOnMove: actionOnMove,
+        actionOnOpen: actionOnOpen,
       };
     }
 

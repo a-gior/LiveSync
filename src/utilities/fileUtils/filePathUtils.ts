@@ -26,7 +26,7 @@ export function normalizePath(p: string): string {
  */
 export async function getFullPaths(
   comparisonNode: ComparisonFileNode,
-): Promise<{ localPath: string | null; remotePath: string | null }> {
+): Promise<{ localPath: string; remotePath: string }> {
   const relativePath = normalizePath(comparisonNode.relativePath);
   const pairedFolders = WorkspaceConfig.getPairedFoldersConfigured();
 
@@ -92,8 +92,11 @@ export async function getFullPaths(
   // Log and return null paths if not found
   logInfoMessage(
     `<getFullPaths> \n\trelativePath: ${relativePath}, \n\tlocalPath: null, \n\tremotePath: null`,
+    LOG_FLAGS.CONSOLE_ONLY,
   );
-  return { localPath: null, remotePath: null };
+  throw new Error(
+    `Couldn't find local or remote path for ${comparisonNode.relativePath}`,
+  );
 }
 
 export function getCorrespondingPath(inputPath: string): string {

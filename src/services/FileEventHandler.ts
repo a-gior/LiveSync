@@ -7,7 +7,9 @@ import {
   fileCreate,
   fileDelete,
   fileMove,
+  fileOpen,
   fileSave,
+  handleFileCheck,
 } from "../utilities/fileUtils/fileEventFunctions";
 import { WorkspaceConfig } from "./WorkspaceConfig";
 import {
@@ -15,8 +17,9 @@ import {
   ComparisonStatus,
 } from "../utilities/ComparisonFileNode";
 import JsonManager from "./JsonManager";
-import { Action } from "../utilities/enums";
+import { Action, ActionOn, ActionResult } from "../utilities/enums";
 import { logInfoMessage } from "./LogManager";
+import { getFullPaths } from "../utilities/fileUtils/filePathUtils";
 
 export class FileEventHandler {
   /**
@@ -42,6 +45,18 @@ export class FileEventHandler {
       // Handle file rename events
       vscode.workspace.onDidRenameFiles(async (event) => {
         await FileEventHandler.handleFileRename(event, treeDataProvider);
+      }),
+
+      vscode.window.onDidChangeActiveTextEditor(async (editor) => {
+        if (!editor) {
+          // If there's no active text editor, return early
+          return;
+        }
+
+        // Get the current document from the active text editor
+        const document = editor.document;
+
+        await FileEventHandler.handleFileOpen(document, treeDataProvider);
       }),
 
       // Handle file change events
@@ -136,10 +151,18 @@ export class FileEventHandler {
       logInfoMessage(`<handleFileCreate> Event creating ${filePath}`);
 
       try {
-        // Save the newly created file
-        const fileCreated = await fileCreate(fileUri);
+        // Save the newly created file depending on ActionOnSave parameter
+        const fileCreatedAction = await fileCreate(fileUri);
 
-        const fileNode = await FileNode.getEntryFromLocalPath(filePath);
+        const fileNode = await FileNode.createFileNodeFromLocalPath(filePath);
+        if (!fileNode) {
+          console.warn(
+            `<handleFileCreate> File node for ${filePath} could not be created`,
+          );
+          continue;
+        }
+
+        // Build comparison file node to add to rootElements
         const comparisonNode = new ComparisonFileNode(
           fileNode.name,
           fileNode.pairedFolderName,
@@ -147,27 +170,31 @@ export class FileEventHandler {
           fileNode.size,
           fileNode.modifiedTime,
           fileNode.relativePath,
-          ComparisonStatus.added,
         );
 
-        if (!comparisonNode) {
-          console.warn(
-            `[handleFileCreate] File node for ${filePath} could not be found in comparison JSON.`,
-          );
-          continue;
-        }
-
-        if (fileCreated) {
+        // Action done or files have similar hashes
+        if (
+          fileCreatedAction === ActionResult.ActionPerformed ||
+          fileCreatedAction === ActionResult.Exists
+        ) {
+          // File created on remote
           comparisonNode.status = ComparisonStatus.unchanged;
+        } else if (fileCreatedAction === ActionResult.IsNotSame) {
+          // File exists remotely and is different
+          comparisonNode.status = ComparisonStatus.modified;
+        } else {
+          // File only local or doesn't exist remotely
+          comparisonNode.status = ComparisonStatus.added;
         }
 
+        // Update rootElements and refresh the tree
         const updatedNode = await treeDataProvider.updateRootElements(
           Action.Add,
           comparisonNode,
         );
         await treeDataProvider.refresh(updatedNode);
       } catch (err: any) {
-        console.error("[handleFileCreate] Error: ", err);
+        console.error("<handleFileCreate> Error: ", err);
       }
     }
   }
@@ -196,25 +223,29 @@ export class FileEventHandler {
       console.log(`<handleFileDelete> Event deleting ${filePath}`);
 
       try {
-        const nodeToDelete = await JsonManager.findEntryByPath(
+        // Get node from rootElements
+        const nodeToDelete = await JsonManager.findNodeByPath(
           filePath,
           treeDataProvider.rootElements,
         );
         if (!nodeToDelete) {
-          console.warn(`<handleFileDelete> Entry not found for ${filePath}`);
+          console.warn(`<handleFileDelete> Node not found for ${filePath}`);
           return;
         }
 
-        let fileDeleted = false;
-        if (nodeToDelete.status !== ComparisonStatus.added) {
-          // If file exists on remote
-          fileDeleted = await fileDelete(fileUri);
-          nodeToDelete.status = fileDeleted
-            ? ComparisonStatus.removed
-            : nodeToDelete.status;
-        }
-        const action = fileDeleted ? Action.Remove : Action.Update;
+        // Delete file remotely depending on ActionOnDelete parameter
+        const fileDeletedAction = await fileDelete(fileUri);
 
+        // Status becomes removed if remote file isn't deleted
+        if (fileDeletedAction !== ActionResult.ActionPerformed) {
+          nodeToDelete.status = ComparisonStatus.removed;
+        }
+
+        // Remove node from rootElements if also removed remotely, update it otherwise and refresh the tree view
+        const action =
+          fileDeletedAction === ActionResult.ActionPerformed
+            ? Action.Remove
+            : Action.Update;
         const deletedNode = await treeDataProvider.updateRootElements(
           action,
           nodeToDelete,
@@ -249,20 +280,33 @@ export class FileEventHandler {
     console.log(`<handleFileSave> Event saving ${filePath}`);
 
     try {
-      const nodeToSave = await JsonManager.findEntryByPath(
+      // Get node from rootElements
+      const nodeToSave = await JsonManager.findNodeByPath(
         filePath,
         treeDataProvider.rootElements,
       );
       if (!nodeToSave) {
-        console.warn(`<handleFileRename> Entry not found for ${filePath}`);
+        console.warn(`<handleFileSave> Node not found for ${filePath}`);
         return;
       }
 
-      const fileSaved = await fileSave(document.uri, treeDataProvider);
-      if (fileSaved) {
-        nodeToSave.status = ComparisonStatus.unchanged;
+      // Save file remotely depending on ActionOnSave parameter
+      const fileSavedAction = await fileSave(document.uri);
+
+      if (fileSavedAction === ActionResult.ActionPerformed) {
+        nodeToSave.status = ComparisonStatus.unchanged; // File saved remotely
+      }
+      if (fileSavedAction === ActionResult.DontExist) {
+        nodeToSave.status = ComparisonStatus.added; // File doesn't exist remotely
+      }
+      if (fileSavedAction === ActionResult.Exists) {
+        nodeToSave.status = ComparisonStatus.unchanged; // File exists remotely and are the same
+      }
+      if (fileSavedAction === ActionResult.IsNotSame) {
+        nodeToSave.status = ComparisonStatus.modified; // File exists remotely and are not the same
       }
 
+      // Update node in rootElements and refresh the tree view
       const savedNode = await treeDataProvider.updateRootElements(
         Action.Update,
         nodeToSave,
@@ -306,15 +350,17 @@ export class FileEventHandler {
       );
 
       try {
-        const nodeToRename = await JsonManager.findEntryByPath(
+        // Get node from rootElements
+        const nodeToMove = await JsonManager.findNodeByPath(
           oldPath,
           treeDataProvider.rootElements,
         );
-        if (!nodeToRename) {
-          console.warn(`<handleFileRename> Entry not found for ${oldPath}`);
+        if (!nodeToMove) {
+          console.warn(`<handleFileRename> Node not found for ${oldPath}`);
           continue;
         }
 
+        // Get fileNodeInfos for old and new path
         const oldFileNodeInfo = getFileNodeInfo(oldPath);
         const newFileNodeInfo = getFileNodeInfo(newPath);
         if (!oldFileNodeInfo || !newFileNodeInfo) {
@@ -324,48 +370,106 @@ export class FileEventHandler {
           continue;
         }
 
-        let fileRenamed = false;
-        if (nodeToRename.status !== ComparisonStatus.added) {
-          fileRenamed = await fileMove(oldUri, newUri);
-        } else {
-          // Only exists locally
-          fileRenamed = true;
+        // Get old file path and status
+        const { localPath, remotePath } = await getFullPaths(nodeToMove);
+        const oldFileRenamedAction = await handleFileCheck(
+          ActionOn.Move,
+          "check",
+          localPath,
+          remotePath,
+        );
+        const oldAction =
+          oldFileRenamedAction === ActionResult.ActionPerformed
+            ? Action.Remove
+            : Action.Update;
+        // nodeToMove.relativePath = oldFileNodeInfo.relativePath;
+
+        // Handle
+        if (oldFileRenamedAction === ActionResult.ActionPerformed) {
+          nodeToMove.status = ComparisonStatus.unchanged; // File saved remotely
+        }
+        if (oldFileRenamedAction === ActionResult.DontExist) {
+          nodeToMove.status = ComparisonStatus.added; // File doesn't exist remotely
+        }
+        if (oldFileRenamedAction === ActionResult.Exists) {
+          nodeToMove.status = ComparisonStatus.unchanged; // File exists remotely and are the same
+        }
+        if (oldFileRenamedAction === ActionResult.IsNotSame) {
+          nodeToMove.status = ComparisonStatus.modified; // File exists remotely and are not the same
         }
 
-        if (fileRenamed) {
-          nodeToRename.status =
-            nodeToRename.status !== ComparisonStatus.added
+        const deletedNode = await treeDataProvider.updateRootElements(
+          oldAction,
+          nodeToMove,
+        );
+        await treeDataProvider.refresh(deletedNode);
+
+        // Rename/Move file remotely depending on ActionOnMove parameter
+        const fileRenamedAction = await fileMove(oldUri, newUri);
+        const action =
+          fileRenamedAction === ActionResult.ActionPerformed
+            ? Action.Add
+            : Action.Update;
+        const nodeToAdd = nodeToMove.clone();
+        if (path.dirname(oldPath) === path.dirname(newPath)) {
+          // Renaming the entry
+          nodeToAdd.name = path.basename(newPath);
+        }
+        nodeToAdd.relativePath = newFileNodeInfo.relativePath;
+
+        if (fileRenamedAction === ActionResult.ActionPerformed) {
+          nodeToAdd.status = ComparisonStatus.unchanged; // File saved remotely
+        }
+        if (fileRenamedAction === ActionResult.DontExist) {
+          nodeToAdd.status = ComparisonStatus.added; // File doesn't exist remotely
+        }
+        if (fileRenamedAction === ActionResult.Exists) {
+          nodeToAdd.status = ComparisonStatus.unchanged; // File exists remotely and are the same
+        }
+        if (fileRenamedAction === ActionResult.IsNotSame) {
+          nodeToAdd.status = ComparisonStatus.modified; // File exists remotely and are not the same
+        }
+
+        const addedNode = await treeDataProvider.updateRootElements(
+          action,
+          nodeToAdd,
+        );
+        await treeDataProvider.refresh(addedNode);
+
+        if (fileRenamedAction) {
+          nodeToMove.status =
+            nodeToMove.status !== ComparisonStatus.added
               ? ComparisonStatus.unchanged
               : ComparisonStatus.added;
 
-          nodeToRename.relativePath = oldFileNodeInfo.relativePath;
+          nodeToMove.relativePath = oldFileNodeInfo.relativePath;
           const deletedNode = await treeDataProvider.updateRootElements(
             Action.Remove,
-            nodeToRename,
+            nodeToMove,
           );
           await treeDataProvider.refresh(deletedNode);
 
           if (path.dirname(oldPath) === path.dirname(newPath)) {
             // Renaming the entry
-            nodeToRename.name = path.basename(newPath);
+            nodeToMove.name = path.basename(newPath);
           }
 
-          nodeToRename.relativePath = newFileNodeInfo.relativePath;
+          nodeToMove.relativePath = newFileNodeInfo.relativePath;
           const movedNode = await treeDataProvider.updateRootElements(
             Action.Add,
-            nodeToRename,
+            nodeToMove,
           );
           await treeDataProvider.refresh(movedNode);
         } else {
-          nodeToRename.status = ComparisonStatus.removed;
-          nodeToRename.relativePath = oldFileNodeInfo.relativePath;
+          nodeToMove.status = ComparisonStatus.removed;
+          nodeToMove.relativePath = oldFileNodeInfo.relativePath;
           const deletedNode = await treeDataProvider.updateRootElements(
             Action.Update,
-            nodeToRename,
+            nodeToMove,
           );
           await treeDataProvider.refresh(deletedNode);
 
-          const nodeToAdd = nodeToRename.clone();
+          const nodeToAdd = nodeToMove.clone();
           if (path.dirname(oldPath) === path.dirname(newPath)) {
             // Renaming the entry
             nodeToAdd.name = path.basename(newPath);
@@ -381,6 +485,48 @@ export class FileEventHandler {
       } catch (err: any) {
         console.error("<handleFileRename> Error: ", err);
       }
+    }
+  }
+
+  static async handleFileOpen(
+    document: vscode.TextDocument,
+    treeDataProvider: PairedFoldersTreeDataProvider,
+  ) {
+    const filePath = document.uri.fsPath;
+
+    if (!FileEventHandler.isFileInWorkspace(filePath)) {
+      FileEventHandler.logFileNotInWorkspace(Action.Open, filePath);
+      return;
+    }
+
+    if (FileEventHandler.isSettingsFile(Action.Open, filePath)) {
+      return;
+    }
+
+    console.log(`<handleFileOpen> Event opening ${filePath}`);
+
+    try {
+      const openedNode = await JsonManager.findNodeByPath(
+        filePath,
+        treeDataProvider.rootElements,
+      );
+      if (!openedNode) {
+        console.log(`<handleFileOpen> Node not found for ${filePath}`);
+        return;
+      }
+
+      const fileDownloaded = await fileOpen(document.uri);
+      if (fileDownloaded) {
+        openedNode.status = ComparisonStatus.unchanged;
+      }
+
+      const savedNode = await treeDataProvider.updateRootElements(
+        Action.Update,
+        openedNode,
+      );
+      await treeDataProvider.refresh(savedNode);
+    } catch (err: any) {
+      console.error("<handleFileOpen> Error: ", err);
     }
   }
 

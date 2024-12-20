@@ -59,6 +59,7 @@ suite("LiveSync Configuration Command Tests", () => {
         actionOnCreate: "create",
         actionOnDelete: "none",
         actionOnMove: "check&move",
+        actionOnOpen: "check&download",
       },
       ignoreList: [],
     };

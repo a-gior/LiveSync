@@ -234,6 +234,9 @@ class ConfigurationFormStore {
       actionOnMove:
         this.getFileEventActions().formGroups["file-event-actions-form-group-0"]
           .fields[5].value,
+      actionOnOpen:
+        this.getFileEventActions().formGroups["file-event-actions-form-group-0"]
+          .fields[6].value,
     };
     const fileEventActionsMessage: FullConfigurationMessage = {
       command: "updateConfiguration",

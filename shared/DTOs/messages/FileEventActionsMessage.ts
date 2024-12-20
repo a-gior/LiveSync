@@ -9,5 +9,6 @@ export interface FileEventActionsMessage extends Message {
     actionOnCreate: string;
     actionOnDelete: string;
     actionOnMove: string;
+    actionOnOpen: string;
   };
 }
