@@ -84,7 +84,7 @@ export function logErrorMessage(
 
 export function logInfoMessage(
   message: string,
-  flags: LogFlags = LOG_FLAGS.ALL,
+  flags: LogFlags = LOG_FLAGS.CONSOLE_ONLY,
   details?: any,
 ) {
   if (flags.console) {

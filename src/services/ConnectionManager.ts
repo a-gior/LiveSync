@@ -3,6 +3,8 @@ import { SFTPClient } from "./SFTPClient";
 import { SSHClient } from "./SSHClient";
 import { window } from "vscode";
 import { StatusBarManager } from "./StatusBarManager";
+import * as net from "net";
+import { LOG_FLAGS, logErrorMessage } from "./LogManager";
 
 export class ConnectionManager {
   private static instance: ConnectionManager;
@@ -16,9 +18,9 @@ export class ConnectionManager {
   private maxRetries = 3;
 
   private constructor(config: ConfigurationMessage["configuration"]) {
+    this.currentConfig = config;
     this.sshClient = SSHClient.getInstance();
     this.sftpClient = SFTPClient.getInstance();
-    this.currentConfig = config;
   }
 
   static getInstance(
@@ -91,19 +93,26 @@ export class ConnectionManager {
     try {
       return await operation();
     } catch (error: any) {
+      const retryableErrorCodes = [
+        "ECONNRESET",
+        "ERR_GENERIC_CLIENT",
+        "ETIMEDOUT",
+      ];
+      const retryableErrorMessages = ["Instance unusable"];
+
       if (
         retries > 0 &&
-        (error.code === "ECONNRESET" ||
-          error.message.includes("Instance unusable") ||
-          error.message.includes("timeout"))
+        (retryableErrorCodes.includes(error.code) ||
+          retryableErrorMessages.some((msg) => error.message.includes(msg)))
       ) {
         console.warn(
-          `Operation failed with ${error.message}. Retrying (${this.maxRetries - retries + 1}/${this.maxRetries})...`,
+          `Operation failed, Error: [${error.code}] ${error.message}. Retrying (${this.maxRetries - retries + 1}/${this.maxRetries})...`,
         );
-        await this.reconnect();
         return await this.retryOperation(operation, retries - 1);
       }
-      console.error(`Operation failed with ${error.message}.`);
+      console.error(
+        `Operation failed, Error: [${error.code}] ${error.message}.`,
+      );
       throw error;
     }
   }
@@ -132,8 +141,21 @@ export class ConnectionManager {
     );
 
     try {
-      await this.retryOperation(async () => await this.connectSSH());
-      const result = await operation(this.sshClient);
+      // Check if server is reachable in a quicker way
+      if (!(await this.isServerPingable())) {
+        logErrorMessage(
+          `Server ${this.currentConfig.hostname}:${this.currentConfig.port} is not reachable.`,
+          LOG_FLAGS.ALL,
+        );
+        throw new Error(
+          `Server ${this.currentConfig.hostname}:${this.currentConfig.port} is not reachable.`,
+        );
+      }
+
+      await this.retryOperation(async () => await this.connectSSH(), 1);
+      const result = await this.retryOperation(
+        async () => await operation(this.sshClient),
+      );
       StatusBarManager.showMessage(
         "SSH operation successful",
         "",
@@ -186,8 +208,21 @@ export class ConnectionManager {
     );
 
     try {
-      await this.retryOperation(async () => await this.connectSFTP());
-      const result = await operation(this.sftpClient);
+      // Check if server is reachable in a quicker way
+      if (!(await this.isServerPingable())) {
+        logErrorMessage(
+          `Server ${this.currentConfig.hostname}:${this.currentConfig.port} is not reachable.`,
+          LOG_FLAGS.ALL,
+        );
+        throw new Error(
+          `Server ${this.currentConfig.hostname}:${this.currentConfig.port} is not reachable.`,
+        );
+      }
+
+      await this.retryOperation(async () => await this.connectSFTP(), 1);
+      const result = await this.retryOperation(
+        async () => await operation(this.sftpClient),
+      );
       StatusBarManager.showMessage(
         "SFTP operation successful",
         "",
@@ -197,7 +232,6 @@ export class ConnectionManager {
       );
       return result;
     } catch (err: any) {
-      console.error("Error doSFTPOperation: ", err);
       StatusBarManager.showMessage(
         "SFTP operation failed",
         "",
@@ -212,6 +246,29 @@ export class ConnectionManager {
         this.scheduleSFTPDisconnect();
       }
     }
+  }
+
+  async isServerPingable(): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      const socket = new net.Socket();
+      const timeout = 2000; // 2 seconds timeout
+
+      socket.setTimeout(timeout);
+      socket.on("connect", () => {
+        socket.destroy();
+        resolve(true);
+      });
+      socket.on("timeout", () => {
+        socket.destroy();
+        resolve(false);
+      });
+      socket.on("error", () => {
+        socket.destroy();
+        resolve(false);
+      });
+
+      socket.connect(this.currentConfig.port, this.currentConfig.hostname);
+    });
   }
 
   getSFTPClient(): SFTPClient {

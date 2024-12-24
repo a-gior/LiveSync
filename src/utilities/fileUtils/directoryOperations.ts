@@ -31,13 +31,13 @@ async function createRemoteDirectories(
 
     if (node.listChildren().length === 0) {
       if (node.isDirectory()) {
-        await sftpClient.getClient().mkdir(remotePath, true);
+        await sftpClient.createDirectory(remotePath);
         LogManager.log(`SFTP Created Dir ${remotePath}`);
       } else {
         const parentDirPath = path.dirname(remotePath);
         if (lastParentDir !== parentDirPath) {
           lastParentDir = parentDirPath;
-          await sftpClient.getClient().mkdir(parentDirPath, true);
+          await sftpClient.createDirectory(parentDirPath);
           LogManager.log(`SFTP Created Dir ${remotePath}`);
         }
         filePaths.push({ localPath, remotePath });
@@ -59,17 +59,8 @@ async function uploadFilesWithLimit(
   sftpClient: SFTPClient,
   filePaths: { localPath: string; remotePath: string }[],
 ) {
-  const uploadFile = async (localPath: string, remotePath: string) => {
-    try {
-      await sftpClient.getClient().fastPut(localPath, remotePath);
-      LogManager.log(`SFTP Upload ${localPath} ➜ ${remotePath}`);
-    } catch (err) {
-      console.error(`Failed to upload ${localPath} to ${remotePath}`, err);
-    }
-  };
-
   const promises = filePaths.map((file) =>
-    limit(() => uploadFile(file.localPath, file.remotePath)),
+    limit(() => sftpClient.uploadFile(file.localPath, file.remotePath)),
   );
   await Promise.all(promises);
 }
@@ -110,7 +101,7 @@ async function createLocalDirectories(node: ComparisonFileNode) {
 
       const remoteEntries = await connectionManager.doSFTPOperation(
         async (sftpClient: SFTPClient) => {
-          return await sftpClient.getClient().list(remotePath);
+          return await sftpClient.listFiles(remotePath);
         },
       );
 
@@ -140,16 +131,8 @@ async function downloadFilesWithLimit(
   sftpClient: SFTPClient,
   filePaths: { remotePath: string; localPath: string }[],
 ) {
-  const downloadFile = async (remotePath: string, localPath: string) => {
-    try {
-      await sftpClient.getClient().fastGet(remotePath, localPath);
-    } catch (err) {
-      console.error(`Failed to download ${remotePath} to ${localPath}`, err);
-    }
-  };
-
   const promises = filePaths.map((file) =>
-    limit(() => downloadFile(file.remotePath, file.localPath)),
+    limit(() => sftpClient.downloadFile(file.remotePath, file.localPath)),
   );
   await Promise.all(promises);
 }
@@ -182,7 +165,7 @@ export async function deleteRemoteDirectory(
   try {
     await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
       const remoteDir = fileEntry.fullPath.replace(/\\/g, "/");
-      const children = await sftpClient.getClient().list(remoteDir);
+      const children = await sftpClient.listFiles(remoteDir);
       for (const child of children) {
         const childPath = path.join(remoteDir, child.name).replace(/\\/g, "/");
         if (child.type === "d") {
@@ -197,10 +180,10 @@ export async function deleteRemoteDirectory(
           );
           await deleteRemoteDirectory(subDirEntry);
         } else {
-          await sftpClient.getClient().delete(childPath);
+          await sftpClient.deleteFile(childPath);
         }
       }
-      await sftpClient.getClient().rmdir(remoteDir);
+      await sftpClient.deleteDirectory(remoteDir);
     }, `Delete Dir ${fileEntry.fullPath}`);
   } catch (error: any) {
     console.error(`Failed to delete remote directory: ${error.message}`);

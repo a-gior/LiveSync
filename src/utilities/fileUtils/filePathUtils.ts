@@ -161,7 +161,7 @@ export async function pathExists(path: string, source: FileNodeSource) {
     case FileNodeSource.remote:
       return await remotePathExists(path);
     default:
-      throw new Error("[FileNode - exists()] Wrong FileNode source.");
+      throw new Error("[FileNode - pathExists()] Wrong FileNode source.");
   }
 }
 

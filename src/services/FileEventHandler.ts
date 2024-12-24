@@ -18,8 +18,9 @@ import {
 } from "../utilities/ComparisonFileNode";
 import JsonManager from "./JsonManager";
 import { Action, ActionOn, ActionResult } from "../utilities/enums";
-import { logInfoMessage } from "./LogManager";
+import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
 import { getFullPaths } from "../utilities/fileUtils/filePathUtils";
+import { ConnectionManager } from "./ConnectionManager";
 
 export class FileEventHandler {
   /**
@@ -70,9 +71,18 @@ export class FileEventHandler {
       }),
 
       // Handle configuration changes
-      vscode.workspace.onDidChangeConfiguration(() => {
+      vscode.workspace.onDidChangeConfiguration(async () => {
         WorkspaceConfig.reloadConfiguration();
-        logInfoMessage("<onDidChangeConfiguration> Reloaded settings");
+        logInfoMessage("Reloaded settings");
+
+        const configuration = WorkspaceConfig.getRemoteServerConfigured();
+        const connectionManager = ConnectionManager.getInstance(configuration);
+        if (!(await connectionManager.isServerPingable())) {
+          logErrorMessage(
+            "Server is not reachable. Please check your configuration.",
+            LOG_FLAGS.ALL,
+          );
+        }
       }),
     );
   }
