@@ -143,7 +143,6 @@ export class SFTPClient extends BaseClient {
   }
 
   async pathExists(remotePath: string): Promise<BaseNodeType | false> {
-    console.log(`Path exists ${remotePath}`);
 
     try {
       const result = await this._client.exists(remotePath);

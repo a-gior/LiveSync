@@ -175,6 +175,7 @@ export async function handleFileCheck(
       // TODO
       case ActionOn.Upload:
         logInfoMessage("??");
+        break;
 
       // Show check message if file exists remotely and has different hash
       case ActionOn.Save:
@@ -182,24 +183,27 @@ export async function handleFileCheck(
         if (actionResult === ActionResult.Exists && !isSameRemoteHash) {
           logInfoMessage(getCheckMessage(action, remotePath));
         }
+        break;
       // Show check message if file already exists on the remote server
       case ActionOn.Create:
       case ActionOn.Move:
         if (actionResult === ActionResult.Exists) {
           logInfoMessage(getCheckMessage(action, remotePath));
         }
+        break;
       // Show check message if file doesn't exists on the remote server
       case ActionOn.Delete:
         if (actionResult === ActionResult.DontExist) {
           logInfoMessage(getCheckMessage(action, remotePath));
         }
+        break;
     }
   } else {
     // Show prompt to take action or not
     switch (action) {
       case ActionOn.Upload:
       case ActionOn.Save:
-        if (!isSameRemoteHash) {
+        if (actionResult === ActionResult.Exists && !isSameRemoteHash) {
           return await showOverwritePrompt(
             Check.remoteNotSameOverwrite,
             localPath,
@@ -207,14 +211,24 @@ export async function handleFileCheck(
           );
         }
 
+        if (actionResult === ActionResult.DontExist) {
+          return ActionResult.ActionPerformed; // File dont exist on remote so we can perform action safely
+        }
+        break;
+
       case ActionOn.Open:
-        if (!isSameRemoteHash) {
+        if (actionResult === ActionResult.Exists && !isSameRemoteHash) {
           return await showOverwritePrompt(
             Check.remoteNotSameDownload,
             localPath,
             remotePath,
           );
         }
+
+        if (actionResult === ActionResult.DontExist) {
+          return ActionResult.ActionPerformed; // File dont exist on remote so we can perform action safely
+        }
+        break;
 
       case ActionOn.Create:
       case ActionOn.Move:
@@ -226,6 +240,11 @@ export async function handleFileCheck(
           );
         }
 
+        if (actionResult === ActionResult.DontExist) {
+          return ActionResult.ActionPerformed; // File dont exist on remote so we can perform action safely
+        }
+        break;
+
       case ActionOn.Delete:
         if (actionResult === ActionResult.DontExist) {
           return await showOverwritePrompt(
@@ -234,13 +253,19 @@ export async function handleFileCheck(
             remotePath,
           );
         }
+
+        if (actionResult === ActionResult.Exists) {
+          return ActionResult.ActionPerformed; // File dont exist on remote so we can perform action safely
+        }
+        break;
     }
   }
 
-  // No check message or no prompt
+  // Remote file dont exist, so we can perform action without worries
   if (actionResult === ActionResult.DontExist) {
-    return actionResult;
+    return ActionResult.DontExist;
   }
+
   return isSameRemoteHash ? ActionResult.Exists : ActionResult.IsNotSame;
 }
 
@@ -269,10 +294,10 @@ async function handleFileOperation(
   );
 
   // Perform actions for each action
-  if (actionResult === ActionResult.ActionPerformed) {
+  if(actionResult === ActionResult.ActionPerformed ) {
     switch (action) {
       case ActionOn.Move:
-        if (oldUri) {
+        if(oldUri){
           const localPathOld = oldUri.fsPath;
           const remotePathOld = getCorrespondingPath(localPathOld);
           await moveRemoteFile(remotePathOld, remotePath);

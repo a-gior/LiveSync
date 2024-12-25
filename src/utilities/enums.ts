@@ -16,10 +16,10 @@ export enum Check {
 }
 
 export enum ActionResult {
-  NoAction = "noAction", // No action was done
-  DontExist = "CheckFailed", // Check file existence was false
-  Exists = "CheckSuccessful", // Check file existence was done and isSame is true
-  IsNotSame = "CheckSuccessfulNoAction", // Check was done and isSame was false
+  NoAction = "NoAction", // No action was done
+  DontExist = "DontExist", // Check file existence was false
+  Exists = "Exists", // Check file existence was done and isSame is true
+  IsNotSame = "IsNotSame", // Check was done and isSame was false
   ActionPerformed = "ActionPerformed", // Action has been done
 }
 

@@ -322,8 +322,9 @@ export class FileEventHandler {
         nodeToSave,
       );
       await treeDataProvider.refresh(savedNode);
+      
     } catch (err: any) {
-      console.error("<handleFileSave> Error: ", err);
+      logErrorMessage(`${err.message}`, LOG_FLAGS.ALL);
     }
   }
 

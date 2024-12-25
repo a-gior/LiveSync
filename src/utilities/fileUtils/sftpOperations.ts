@@ -81,7 +81,7 @@ export async function compareRemoteFileHash(
     const remoteFileEntriesMap =
       await JsonManager.getInstance().getFileEntriesMap(JsonType.REMOTE);
     if (!remoteFileEntriesMap || !isFileNodeMap(remoteFileEntriesMap)) {
-      window.showErrorMessage(`No remote JSON found`);
+      logErrorMessage(`No remote JSON found`);
       return false;
     }
     const remoteEntry = await JsonManager.findNodeByPath(
@@ -89,7 +89,7 @@ export async function compareRemoteFileHash(
       remoteFileEntriesMap,
     );
     if (!remoteEntry) {
-      window.showErrorMessage(`No remote FileNode found`);
+      logErrorMessage(`No remote FileNode found`);
       return false;
     }
 
