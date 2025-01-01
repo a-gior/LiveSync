@@ -1,7 +1,6 @@
 import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
 import { SFTPClient } from "./SFTPClient";
 import { SSHClient } from "./SSHClient";
-import { window } from "vscode";
 import { StatusBarManager } from "./StatusBarManager";
 import * as net from "net";
 import { LOG_FLAGS, logErrorMessage } from "./LogManager";
@@ -143,10 +142,6 @@ export class ConnectionManager {
     try {
       // Check if server is reachable in a quicker way
       if (!(await this.isServerPingable())) {
-        logErrorMessage(
-          `Server ${this.currentConfig.hostname}:${this.currentConfig.port} is not reachable.`,
-          LOG_FLAGS.ALL,
-        );
         throw new Error(
           `Server ${this.currentConfig.hostname}:${this.currentConfig.port} is not reachable.`,
         );
@@ -165,16 +160,7 @@ export class ConnectionManager {
       );
       return result;
     } catch (err: any) {
-      if (err.message.includes("Timed out")) {
-        window.showErrorMessage(
-          `Connection to ${this.currentConfig.hostname}:${this.currentConfig.port} timed out.`,
-        );
-      } else {
-        window.showErrorMessage(
-          `Couldn't do operation on ${this.currentConfig.hostname}:${this.currentConfig.port}`,
-        );
-      }
-      console.error("Error doSSHOperation: ", err);
+      logErrorMessage(`${err.message}`, LOG_FLAGS.ALL);
       StatusBarManager.showMessage(
         "SSH operation failed",
         "",
@@ -210,10 +196,6 @@ export class ConnectionManager {
     try {
       // Check if server is reachable in a quicker way
       if (!(await this.isServerPingable())) {
-        logErrorMessage(
-          `Server ${this.currentConfig.hostname}:${this.currentConfig.port} is not reachable.`,
-          LOG_FLAGS.ALL,
-        );
         throw new Error(
           `Server ${this.currentConfig.hostname}:${this.currentConfig.port} is not reachable.`,
         );
@@ -232,6 +214,7 @@ export class ConnectionManager {
       );
       return result;
     } catch (err: any) {
+      logErrorMessage(`${err.message}`, LOG_FLAGS.ALL);
       StatusBarManager.showMessage(
         "SFTP operation failed",
         "",

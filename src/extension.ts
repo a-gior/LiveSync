@@ -24,6 +24,9 @@ import { ComparisonFileNode } from "./utilities/ComparisonFileNode";
 import { getFullPaths } from "./utilities/fileUtils/filePathUtils";
 import { Action } from "./utilities/enums";
 import JsonManager from "./services/JsonManager";
+import { ConnectionManager } from "./services/ConnectionManager";
+import { WorkspaceConfig } from "./services/WorkspaceConfig";
+import { SSHClient } from "./services/SSHClient";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -240,6 +243,22 @@ export async function activate(context: vscode.ExtensionContext) {
       await vscode.commands.executeCommand("nodeDependencies.focus");
       await vscode.commands.executeCommand("list.collapseAll");
       logInfoMessage("All folders collapsed.");
+    }),
+    vscode.commands.registerCommand("livesync.testConnection", async () => {
+      const configuration = WorkspaceConfig.getRemoteServerConfigured();
+      // const pairedFolders = workspaceConfig.getPairedFoldersConfigured();
+
+      const connectionManager = ConnectionManager.getInstance(configuration);
+      try {
+        await connectionManager.doSSHOperation(async (sshClient: SSHClient) => {
+          await sshClient.waitForConnection();
+        }, "Test Connection");
+
+        logInfoMessage("Test connection successful.", LOG_FLAGS.ALL);
+        return true;
+      } catch (error: any) {
+        return false;
+      }
     }),
   );
 

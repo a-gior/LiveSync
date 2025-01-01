@@ -18,7 +18,12 @@ import {
 } from "../utilities/ComparisonFileNode";
 import JsonManager from "./JsonManager";
 import { Action, ActionOn, ActionResult } from "../utilities/enums";
-import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
+import {
+  LOG_FLAGS,
+  logErrorMessage,
+  logInfoMessage,
+  logServerUnreachableError,
+} from "./LogManager";
 import { getFullPaths } from "../utilities/fileUtils/filePathUtils";
 import { ConnectionManager } from "./ConnectionManager";
 
@@ -78,10 +83,7 @@ export class FileEventHandler {
         const configuration = WorkspaceConfig.getRemoteServerConfigured();
         const connectionManager = ConnectionManager.getInstance(configuration);
         if (!(await connectionManager.isServerPingable())) {
-          logErrorMessage(
-            "Server is not reachable. Please check your configuration.",
-            LOG_FLAGS.ALL,
-          );
+          logServerUnreachableError();
         }
       }),
     );
@@ -322,7 +324,6 @@ export class FileEventHandler {
         nodeToSave,
       );
       await treeDataProvider.refresh(savedNode);
-      
     } catch (err: any) {
       logErrorMessage(`${err.message}`, LOG_FLAGS.ALL);
     }

@@ -12,6 +12,9 @@ export const LOG_FLAGS = {
 };
 type LogFlags = (typeof LOG_FLAGS)[keyof typeof LOG_FLAGS];
 
+// Define the LogErrorAction type
+export type LogErrorAction = { title: string; command: string }[];
+
 function deepClone<T>(obj: T): T {
   // Handle null or undefined
   if (obj === null || typeof obj !== "object") {
@@ -65,7 +68,9 @@ export function logErrorMessage(
   error: string,
   flags: LogFlags = LOG_FLAGS.CONSOLE_ONLY,
   details?: any,
+  actions?: LogErrorAction,
 ) {
+  // Log to console
   if (flags.console) {
     if (details !== undefined) {
       const serializedDetails = deepClone(details); // Use custom serialization for complex objects
@@ -74,11 +79,30 @@ export function logErrorMessage(
       console.error(`[ERROR]: ${error}`);
     }
   }
+
+  // Log to LogManager
   if (flags.logManager) {
     LogManager.log(`[ERROR]: ${error}`);
   }
+
+  // Show error message in VS Code with optional actions
   if (flags.vscode) {
-    vscode.window.showErrorMessage(`Error: ${error}`);
+    const actionTitles = actions?.map((action) => action.title) || [];
+    vscode.window
+      .showErrorMessage(`Error: ${error}`, ...actionTitles)
+      .then((selectedAction) => {
+        if (!selectedAction) {
+          return;
+        }
+
+        // Execute the command associated with the selected action
+        const action = actions?.find(
+          (action) => action.title === selectedAction,
+        );
+        if (action && action.command) {
+          vscode.commands.executeCommand(action.command);
+        }
+      });
   }
 }
 
@@ -132,4 +156,16 @@ export class LogManager {
   static showLogs() {
     this.getOutputChannel().show();
   }
+}
+
+export function logServerUnreachableError(flags: LogFlags = LOG_FLAGS.ALL) {
+  const errorMessage = "The server is unreachable. Check your configuration.";
+
+  // Default actions for this error
+  const errorActions: LogErrorAction = [
+    { title: "Open Configuration", command: "livesync.configuration" },
+    { title: "Retry Connection", command: "livesync.testConnection" },
+  ];
+
+  logErrorMessage(errorMessage, flags, undefined, errorActions);
 }

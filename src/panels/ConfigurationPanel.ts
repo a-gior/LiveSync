@@ -1,7 +1,6 @@
-import { window, Uri } from "vscode";
+import { window, Uri, commands } from "vscode";
 import { Panel } from "./Panel";
 
-import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
 import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 import { SFTPClient } from "../services/SFTPClient";
 import { PairFoldersMessage } from "@shared/DTOs/messages/PairFoldersMessage";
@@ -31,7 +30,7 @@ export class ConfigurationPanel extends Panel {
         case "testConnection":
           console.log("TestConnection...");
           if (message.configuration) {
-            await this.testConnection(message.configuration);
+            await commands.executeCommand("livesync.testConnection");
           }
           break;
         case "savePairFolders":
@@ -198,22 +197,6 @@ export class ConfigurationPanel extends Panel {
     }
     if (configuration.ignoreList) {
       this.saveIgnoreList(configuration.ignoreList);
-    }
-  }
-
-  static async testConnection(
-    configuration: ConfigurationMessage["configuration"],
-  ): Promise<boolean> {
-    const connectionManager = ConnectionManager.getInstance(configuration);
-    try {
-      await connectionManager.doSSHOperation(async (sshClient: SSHClient) => {
-        await sshClient.waitForConnection();
-      }, "Test Connection");
-
-      window.showInformationMessage("Test connection successful.");
-      return true;
-    } catch (error: any) {
-      return false;
     }
   }
 }
