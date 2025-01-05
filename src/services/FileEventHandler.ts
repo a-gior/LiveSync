@@ -11,21 +11,21 @@ import {
   fileSave,
   handleFileCheck,
 } from "../utilities/fileUtils/fileEventFunctions";
-import { WorkspaceConfig } from "./WorkspaceConfig";
 import {
   ComparisonFileNode,
   ComparisonStatus,
 } from "../utilities/ComparisonFileNode";
-import JsonManager from "./JsonManager";
+import JsonManager from "../managers/JsonManager";
 import { Action, ActionOn, ActionResult } from "../utilities/enums";
 import {
   LOG_FLAGS,
   logErrorMessage,
   logInfoMessage,
   logServerUnreachableError,
-} from "./LogManager";
+} from "../managers/LogManager";
 import { getFullPaths } from "../utilities/fileUtils/filePathUtils";
-import { ConnectionManager } from "./ConnectionManager";
+import { ConnectionManager } from "../managers/ConnectionManager";
+import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 
 export class FileEventHandler {
   /**
@@ -77,10 +77,11 @@ export class FileEventHandler {
 
       // Handle configuration changes
       vscode.workspace.onDidChangeConfiguration(async () => {
-        WorkspaceConfig.reloadConfiguration();
+        WorkspaceConfigManager.reload();
         logInfoMessage("Reloaded settings");
 
-        const configuration = WorkspaceConfig.getRemoteServerConfigured();
+        const configuration =
+          WorkspaceConfigManager.getRemoteServerConfigured();
         const connectionManager = ConnectionManager.getInstance(configuration);
         if (!(await connectionManager.isServerPingable())) {
           logServerUnreachableError();

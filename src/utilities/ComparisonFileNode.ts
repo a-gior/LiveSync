@@ -1,5 +1,5 @@
 import path from "path";
-import { logErrorMessage } from "../services/LogManager";
+import { logErrorMessage } from "../managers/LogManager";
 import { BaseNode, BaseNodeData, BaseNodeType } from "./BaseNode";
 import { FileNode } from "./FileNode";
 

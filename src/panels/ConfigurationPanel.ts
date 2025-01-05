@@ -7,10 +7,10 @@ import { PairFoldersMessage } from "@shared/DTOs/messages/PairFoldersMessage";
 import * as fs from "fs";
 import { FullConfigurationMessage } from "@shared/DTOs/messages/FullConfigurationMessage";
 import { FileEventActionsMessage } from "@shared/DTOs/messages/FileEventActionsMessage";
-import { ConnectionManager } from "../services/ConnectionManager";
+import { ConnectionManager } from "../managers/ConnectionManager";
 import { SSHClient } from "../services/SSHClient";
-import { WorkspaceConfig } from "../services/WorkspaceConfig";
 import { IgnoreListMessage } from "../DTOs/messages/IgnoreListMessage";
+import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 
 export class ConfigurationPanel extends Panel {
   static render(extensionUri: Uri) {
@@ -57,7 +57,7 @@ export class ConfigurationPanel extends Panel {
 
     const allWorkspaceConfig: FullConfigurationMessage = {
       command: "setInitialConfiguration",
-      ...WorkspaceConfig.getAll(),
+      ...WorkspaceConfigManager.getWorkspaceConfiguration(),
     };
     this.currentPanel?.getPanel().webview.postMessage(allWorkspaceConfig);
   }
@@ -66,7 +66,7 @@ export class ConfigurationPanel extends Panel {
     pairedFoldersArr: PairFoldersMessage["paths"][],
   ) {
     console.log("pairedFoldersArr", pairedFoldersArr);
-    const configuration = WorkspaceConfig.getRemoteServerConfigured();
+    const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
     // const pairedFolders = workspaceConfig.getPairedFoldersConfigured();
 
     const connectionManager = ConnectionManager.getInstance(configuration);
@@ -93,7 +93,7 @@ export class ConfigurationPanel extends Panel {
       }, "Saving PairedFolders")
       .then(async () => {
         // All good so we update the pairedFolders config
-        await WorkspaceConfig.update("pairedFolders", pairedFoldersArr);
+        await WorkspaceConfigManager.update("pairedFolders", pairedFoldersArr);
         console.log("Paired Folders are saved");
         window.showInformationMessage("Paired Folders are valid and saved");
       });
@@ -104,16 +104,15 @@ export class ConfigurationPanel extends Panel {
   ) {
     console.log("saveActions", actions);
     if (actions) {
-      await WorkspaceConfig.update("actionOnUpload", actions.actionOnUpload);
-      await WorkspaceConfig.update(
-        "actionOnDownload",
-        actions.actionOnDownload,
-      );
-      await WorkspaceConfig.update("actionOnSave", actions.actionOnSave);
-      await WorkspaceConfig.update("actionOnCreate", actions.actionOnCreate);
-      await WorkspaceConfig.update("actionOnDelete", actions.actionOnDelete);
-      await WorkspaceConfig.update("actionOnMove", actions.actionOnMove);
-      await WorkspaceConfig.update("actionOnOpen", actions.actionOnOpen);
+      await WorkspaceConfigManager.batchUpdate({
+        actionOnUpload: actions.actionOnUpload,
+        actionOnDownload: actions.actionOnDownload,
+        actionOnSave: actions.actionOnSave,
+        actionOnCreate: actions.actionOnCreate,
+        actionOnDelete: actions.actionOnDelete,
+        actionOnMove: actions.actionOnMove,
+        actionOnOpen: actions.actionOnOpen,
+      });
 
       console.log("File event actions saved successfully.");
       window.showInformationMessage("File event actions saved.");
@@ -139,12 +138,14 @@ export class ConfigurationPanel extends Panel {
           const { hostname, port, username, authMethod, password, sshKey } =
             configuration;
 
-          await WorkspaceConfig.update("hostname", hostname);
-          await WorkspaceConfig.update("port", port);
-          await WorkspaceConfig.update("username", username);
-          await WorkspaceConfig.update("authMethod", authMethod);
-          await WorkspaceConfig.update("password", password);
-          await WorkspaceConfig.update("sshKey", sshKey);
+          await WorkspaceConfigManager.batchUpdate({
+            hostname,
+            port,
+            username,
+            authMethod,
+            password,
+            sshKey,
+          });
 
           console.log("Remote server configuration saved successfully.");
           window.showInformationMessage("Remote server configuration saved.");
@@ -169,7 +170,7 @@ export class ConfigurationPanel extends Panel {
 
     if (ignoreList) {
       try {
-        await WorkspaceConfig.update("ignore", ignoreList);
+        await WorkspaceConfigManager.update("ignore", ignoreList);
         console.log("Ignore list saved successfully.");
         window.showInformationMessage("Ignore list saved successfully.");
       } catch (error) {

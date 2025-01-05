@@ -20,18 +20,25 @@ import {
   DEFAULT_FOLDER_ICON,
   SAVE_DIR,
 } from "../utilities/constants";
-import { WorkspaceConfig } from "./WorkspaceConfig";
-import JsonManager, { isComparisonFileNodeMap, JsonType } from "./JsonManager";
+import JsonManager, {
+  isComparisonFileNodeMap,
+  JsonType,
+} from "../managers/JsonManager";
 import {
   ComparisonFileNode,
   ComparisonStatus,
 } from "../utilities/ComparisonFileNode";
 import { BaseNode, BaseNodeType } from "../utilities/BaseNode";
-import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
-import { StatusBarManager } from "./StatusBarManager";
+import {
+  LOG_FLAGS,
+  logErrorMessage,
+  logInfoMessage,
+} from "../managers/LogManager";
+import { StatusBarManager } from "../managers/StatusBarManager";
 import { FileNode } from "../utilities/FileNode";
 import path from "path";
 import { Action } from "../utilities/enums";
+import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 
 export class PairedFoldersTreeDataProvider
   implements vscode.TreeDataProvider<ComparisonFileNode>
@@ -140,10 +147,10 @@ export class PairedFoldersTreeDataProvider
 
     if (element.status && element.type) {
       if (
-        WorkspaceConfig.getPairedFoldersConfigured() &&
+        WorkspaceConfigManager.getPairedFoldersConfigured() &&
         isRootPath(
           element.relativePath,
-          WorkspaceConfig.getPairedFoldersConfigured(),
+          WorkspaceConfigManager.getPairedFoldersConfigured(),
         )
       ) {
         treeItem.iconPath = getIconForFolder(
@@ -178,7 +185,8 @@ export class PairedFoldersTreeDataProvider
 
         if (!comparisonEntries || comparisonEntries.size === 0) {
           ensureDirectoryExists(SAVE_DIR);
-          const pairedFolders = WorkspaceConfig.getPairedFoldersConfigured();
+          const pairedFolders =
+            WorkspaceConfigManager.getPairedFoldersConfigured();
 
           for (const { localPath, remotePath } of pairedFolders) {
             const comparisonFileNode = await this.getComparisonFileNode(

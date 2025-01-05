@@ -7,9 +7,9 @@ import {
   pathExists,
 } from "./fileUtils/filePathUtils";
 import { BaseNode, BaseNodeData, BaseNodeType } from "./BaseNode";
-import { WorkspaceConfig } from "../services/WorkspaceConfig";
 import { generateHash } from "./fileUtils/hashUtils";
-import { LOG_FLAGS, logErrorMessage } from "../services/LogManager";
+import { LOG_FLAGS, logErrorMessage } from "../managers/LogManager";
+import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 
 export enum FileNodeSource {
   remote = "remote",
@@ -154,7 +154,7 @@ export class FileNode extends BaseNode<FileNode> {
 }
 
 export function getFileNodeInfo(fullPath: string): FileNodeInfo {
-  const pairedFolders = WorkspaceConfig.getPairedFoldersConfigured();
+  const pairedFolders = WorkspaceConfigManager.getPairedFoldersConfigured();
   const normalizedTargetPath = normalizePath(fullPath);
 
   for (const folder of pairedFolders) {

@@ -5,22 +5,22 @@ import { generateHash } from "./hashUtils";
 import { FileNodeSource } from "../FileNode";
 import { SSHClient } from "../../services/SSHClient";
 import { window } from "vscode";
-import { ConnectionManager } from "../../services/ConnectionManager";
+import { ConnectionManager } from "../../managers/ConnectionManager";
 import sftp from "ssh2-sftp-client";
-import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import { shouldIgnore } from "../shouldIgnore";
-import { logErrorMessage, logInfoMessage } from "../../services/LogManager";
+import { logErrorMessage, logInfoMessage } from "../../managers/LogManager";
 import { BaseNodeType } from "../BaseNode";
 import JsonManager, {
   isFileNodeMap,
   JsonType,
-} from "../../services/JsonManager";
+} from "../../managers/JsonManager";
+import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 
 export async function downloadRemoteFile(
   remotePath: string,
   localPath: string,
 ): Promise<void> {
-  const configuration = WorkspaceConfig.getRemoteServerConfigured();
+  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   if (shouldIgnore(remotePath)) {
@@ -46,7 +46,7 @@ export async function uploadRemoteFile(
   remotePath: string,
   checkParentDirExists: boolean = true,
 ): Promise<void> {
-  const configuration = WorkspaceConfig.getRemoteServerConfigured();
+  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   if (shouldIgnore(localPath)) {
@@ -109,7 +109,7 @@ export async function compareRemoteFileHash(
 export async function getRemoteFileContentHash(
   remotePath: string,
 ): Promise<string | undefined> {
-  const configuration = WorkspaceConfig.getRemoteServerConfigured();
+  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   const command = `sha256sum "${remotePath}" | awk '{ print $1 }'`;
@@ -131,7 +131,7 @@ export async function getRemoteFileContentHash(
 }
 
 export async function remotePathExists(remotePath: string) {
-  const configuration = WorkspaceConfig.getRemoteServerConfigured();
+  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   return await connectionManager.doSFTPOperation(
@@ -145,7 +145,7 @@ export async function remotePathExists(remotePath: string) {
 export async function getRemoteFileMetadata(
   remotePath: string,
 ): Promise<sftp.FileStats | undefined> {
-  const configuration = WorkspaceConfig.getRemoteServerConfigured();
+  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   try {
@@ -164,7 +164,7 @@ export async function moveRemoteFile(
   oldRemotePath: string,
   newRemotePath: string,
 ): Promise<void> {
-  const configuration = WorkspaceConfig.getRemoteServerConfigured();
+  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   if (shouldIgnore(oldRemotePath)) {
@@ -182,7 +182,7 @@ export async function moveRemoteFile(
 }
 
 export async function deleteRemoteFile(remotePath: string): Promise<void> {
-  const configuration = WorkspaceConfig.getRemoteServerConfigured();
+  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   if (shouldIgnore(remotePath)) {

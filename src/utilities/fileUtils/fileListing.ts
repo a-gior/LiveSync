@@ -2,14 +2,14 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { FileNode, FileNodeSource } from "../FileNode";
 import pLimit = require("p-limit");
-import { ConnectionManager } from "../../services/ConnectionManager";
-import { WorkspaceConfig } from "../../services/WorkspaceConfig";
-import { LOG_FLAGS, logErrorMessage } from "../../services/LogManager";
+import { ConnectionManager } from "../../managers/ConnectionManager";
+import { LOG_FLAGS, logErrorMessage } from "../../managers/LogManager";
 import { shouldIgnore } from "../shouldIgnore";
 import { generateHash } from "./hashUtils";
-import { StatusBarManager } from "../../services/StatusBarManager";
+import { StatusBarManager } from "../../managers/StatusBarManager";
 import { BaseNodeType } from "../BaseNode";
 import { getRootFolderName, pathExists } from "./filePathUtils";
+import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 
 // Set a limit for the number of concurrent file operations, from 10 onwards triggers a warning for too much event listeners
 const limit = pLimit(9);
@@ -19,7 +19,7 @@ export async function listRemoteFilesRecursive(
 ): Promise<FileNode | undefined> {
   console.log(`Listing remote ${remoteDir} recursively...`);
 
-  const configuration = WorkspaceConfig.getRemoteServerConfigured();
+  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   let lastBufferedFile: FileNode | undefined; // Always buffer the last file entry for the hash

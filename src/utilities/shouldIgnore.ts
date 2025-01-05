@@ -1,10 +1,10 @@
 import path from "path";
-import { LOG_FLAGS, logInfoMessage } from "../services/LogManager";
-import { WorkspaceConfig } from "../services/WorkspaceConfig";
+import { LOG_FLAGS, logInfoMessage } from "../managers/LogManager";
 import { minimatch } from "minimatch";
+import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 
 export function shouldIgnore(filePath: string): boolean {
-  const ignoreList = WorkspaceConfig.getIgnoreList();
+  const ignoreList = WorkspaceConfigManager.getIgnoreList();
   const shouldIgnore = ignoreList.some(
     (pattern) =>
       minimatch(filePath, pattern) ||

@@ -10,6 +10,7 @@
     "Other"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onView:yourSidebarViewId",
     "workspaceContains:.vscode/settings.json"
   ],

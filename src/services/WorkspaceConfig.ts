@@ -4,12 +4,12 @@ import { PairFoldersMessage } from "@shared/DTOs/messages/PairFoldersMessage";
 import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
 import { IgnoreListMessage } from "../DTOs/messages/IgnoreListMessage";
 
-export class WorkspaceConfig {
+export class WorkspaceConfig2 {
   private static _workspaceConfig: ConfigurationState | undefined;
 
-  static getWorkspaceConfiguration(): ConfigurationState {
-    if (WorkspaceConfig._workspaceConfig) {
-      return WorkspaceConfig._workspaceConfig;
+  static getWorkspaceConfig2uration(): ConfigurationState {
+    if (WorkspaceConfig2._workspaceConfig) {
+      return WorkspaceConfig2._workspaceConfig;
     }
 
     const config = workspace.getConfiguration("LiveSync");
@@ -77,12 +77,12 @@ export class WorkspaceConfig {
       workspaceConfig.ignoreList = ignoreList;
     }
 
-    WorkspaceConfig._workspaceConfig = workspaceConfig;
+    WorkspaceConfig2._workspaceConfig = workspaceConfig;
     return workspaceConfig;
   }
 
   static getRemoteServerConfigured(): ConfigurationMessage["configuration"] {
-    const workspaceConfig = this.getWorkspaceConfiguration();
+    const workspaceConfig = this.getWorkspaceConfig2uration();
 
     if (!workspaceConfig["configuration"]) {
       window.showErrorMessage("Remote server not configured");
@@ -93,7 +93,7 @@ export class WorkspaceConfig {
   }
 
   static getPairedFoldersConfigured(): PairFoldersMessage["paths"][] {
-    const workspaceConfig = this.getWorkspaceConfiguration();
+    const workspaceConfig = this.getWorkspaceConfig2uration();
 
     if (!workspaceConfig["pairedFolders"]) {
       window.showErrorMessage("Paired Folders not configured");
@@ -104,7 +104,7 @@ export class WorkspaceConfig {
   }
 
   static getIgnoreList(): IgnoreListMessage["ignoreList"] {
-    const workspaceConfig = this.getWorkspaceConfiguration();
+    const workspaceConfig = this.getWorkspaceConfig2uration();
 
     if (!workspaceConfig["ignoreList"]) {
       window.showErrorMessage("Ignore List not configured");
@@ -115,7 +115,7 @@ export class WorkspaceConfig {
   }
 
   static getAll() {
-    return this.getWorkspaceConfiguration();
+    return this.getWorkspaceConfig2uration();
   }
 
   static getParameter<T>(paramName: string): T | undefined {
@@ -131,6 +131,6 @@ export class WorkspaceConfig {
 
   static reloadConfiguration() {
     this._workspaceConfig = undefined;
-    this.getWorkspaceConfiguration();
+    this.getWorkspaceConfig2uration();
   }
 }

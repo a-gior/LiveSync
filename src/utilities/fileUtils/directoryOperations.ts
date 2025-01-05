@@ -4,12 +4,12 @@ import * as path from "path";
 import { SFTPClient } from "../../services/SFTPClient";
 import { FileNode, FileNodeSource } from "../FileNode";
 import { getFullPaths, getRootFolderName } from "./filePathUtils";
-import { ConnectionManager } from "../../services/ConnectionManager";
-import { WorkspaceConfig } from "../../services/WorkspaceConfig";
+import { ConnectionManager } from "../../managers/ConnectionManager";
 import pLimit = require("p-limit");
-import { LogManager } from "../../services/LogManager";
+import { LogManager } from "../../managers/LogManager";
 import { BaseNodeType } from "../BaseNode";
 import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
+import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 
 // Set a limit for the number of concurrent file operations, from 10 onwards triggers a warning for too much event listeners
 const limit = pLimit(9);
@@ -66,7 +66,7 @@ async function uploadFilesWithLimit(
 }
 
 export async function uploadDirectory(rootEntry: ComparisonFileNode) {
-  const configuration = WorkspaceConfig.getRemoteServerConfigured();
+  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   try {
@@ -84,7 +84,7 @@ export async function uploadDirectory(rootEntry: ComparisonFileNode) {
 }
 
 async function createLocalDirectories(node: ComparisonFileNode) {
-  const configuration = WorkspaceConfig.getRemoteServerConfigured();
+  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
   const filePaths: { remotePath: string; localPath: string }[] = [];
 
@@ -138,7 +138,7 @@ async function downloadFilesWithLimit(
 }
 
 export async function downloadDirectory(remoteEntry: ComparisonFileNode) {
-  const configuration = WorkspaceConfig.getRemoteServerConfigured();
+  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   try {
@@ -159,7 +159,7 @@ export async function downloadDirectory(remoteEntry: ComparisonFileNode) {
 export async function deleteRemoteDirectory(
   fileEntry: FileNode,
 ): Promise<void> {
-  const configuration = WorkspaceConfig.getRemoteServerConfigured();
+  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   try {

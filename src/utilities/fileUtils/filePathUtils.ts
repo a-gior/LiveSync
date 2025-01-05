@@ -3,10 +3,10 @@ import * as fs from "fs";
 import { PairFoldersMessage } from "../../DTOs/messages/PairFoldersMessage";
 import { FileNodeSource } from "../FileNode";
 import { compareRemoteFileHash, remotePathExists } from "./sftpOperations";
-import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
-import { LOG_FLAGS, logInfoMessage } from "../../services/LogManager";
+import { LOG_FLAGS, logInfoMessage } from "../../managers/LogManager";
 import { BaseNodeType } from "../BaseNode";
+import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 
 export function normalizePath(p: string): string {
   let normalizedPath = path.normalize(p);
@@ -28,7 +28,7 @@ export async function getFullPaths(
   comparisonNode: ComparisonFileNode,
 ): Promise<{ localPath: string; remotePath: string }> {
   const relativePath = normalizePath(comparisonNode.relativePath);
-  const pairedFolders = WorkspaceConfig.getPairedFoldersConfigured();
+  const pairedFolders = WorkspaceConfigManager.getPairedFoldersConfigured();
 
   const createFullPath = (basePath: string) =>
     normalizePath(path.join(basePath, relativePath));
@@ -101,7 +101,7 @@ export async function getFullPaths(
 
 export function getCorrespondingPath(inputPath: string): string {
   const normalizedInputPath = normalizePath(inputPath);
-  const pairedFolders = WorkspaceConfig.getPairedFoldersConfigured();
+  const pairedFolders = WorkspaceConfigManager.getPairedFoldersConfigured();
 
   for (const folder of pairedFolders) {
     // Check if the inputPath is a local path
@@ -135,7 +135,7 @@ export function isRootPath(
 }
 
 export async function getRootFolderName(targetPath: string): Promise<string> {
-  const pairedFolders = WorkspaceConfig.getPairedFoldersConfigured();
+  const pairedFolders = WorkspaceConfigManager.getPairedFoldersConfigured();
   const normalizedTargetPath = normalizePath(targetPath);
 
   for (const folder of pairedFolders) {

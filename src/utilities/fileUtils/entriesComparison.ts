@@ -1,4 +1,4 @@
-import JsonManager from "../../services/JsonManager";
+import JsonManager from "../../managers/JsonManager";
 import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
 import {
   listLocalFilesRecursive,

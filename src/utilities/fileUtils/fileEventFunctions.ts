@@ -8,16 +8,16 @@ import {
   downloadRemoteFile,
 } from "./sftpOperations";
 import * as path from "path";
-import { WorkspaceConfig } from "../../services/WorkspaceConfig";
-import JsonManager from "../../services/JsonManager";
+import JsonManager from "../../managers/JsonManager";
 import {
   LOG_FLAGS,
   logErrorMessage,
   logInfoMessage,
-} from "../../services/LogManager";
+} from "../../managers/LogManager";
 import { FileNodeSource } from "../FileNode";
 import { listRemoteFilesRecursive } from "./fileListing";
 import { ActionOn, ActionResult, Check } from "../enums";
+import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 
 function getPromptMessage(
   check: Check,
@@ -276,7 +276,8 @@ async function handleFileOperation(
   uri: Uri,
   oldUri: Uri | null = null,
 ): Promise<ActionResult> {
-  let actionParameter = WorkspaceConfig.getParameter<string>(action) ?? "none";
+  let actionParameter =
+    WorkspaceConfigManager.getParameter<string>(action) ?? "none";
   if (actionParameter === "none") {
     return ActionResult.NoAction;
   }
@@ -294,10 +295,10 @@ async function handleFileOperation(
   );
 
   // Perform actions for each action
-  if(actionResult === ActionResult.ActionPerformed ) {
+  if (actionResult === ActionResult.ActionPerformed) {
     switch (action) {
       case ActionOn.Move:
-        if(oldUri){
+        if (oldUri) {
           const localPathOld = oldUri.fsPath;
           const remotePathOld = getCorrespondingPath(localPathOld);
           await moveRemoteFile(remotePathOld, remotePath);
