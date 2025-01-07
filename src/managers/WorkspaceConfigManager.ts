@@ -37,8 +37,8 @@ export class WorkspaceConfigManager {
           actionOnUpload: "check&upload",
           actionOnDownload: "check&download",
           actionOnSave: "check&save",
-          actionOnCreate: "check&create",
-          actionOnDelete: "check&delete",
+          actionOnCreate: "create",
+          actionOnDelete: "none",
           actionOnMove: "check&move",
           actionOnOpen: "check&download",
         },
@@ -189,19 +189,12 @@ export class WorkspaceConfigManager {
 
       // Reload the in-memory configuration
       this.reload();
-
-      logInfoMessage(
-        `Configuration updated: ${paramName}`,
-        LOG_FLAGS.CONSOLE_AND_LOG_MANAGER,
-        value,
-      );
-    } catch (error) {
+    } catch (error: any) {
       logErrorMessage(
         `Failed to update configuration: ${paramName}`,
         LOG_FLAGS.CONSOLE_AND_LOG_MANAGER,
-        error,
       );
-      throw new Error(`Failed to update configuration: ${paramName}`);
+      throw new Error(error.message);
     }
   }
 

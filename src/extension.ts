@@ -16,10 +16,10 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   // Initialize managers
+  EventManager.initialize(context);
   StatusBarManager.createPermanentIcon();
   const treeDataProvider = await TreeViewManager.initialize(context);
   CommandManager.registerCommands(context, treeDataProvider);
-  EventManager.initialize(context);
 
   console.log("LiveSync extension activated.");
 }

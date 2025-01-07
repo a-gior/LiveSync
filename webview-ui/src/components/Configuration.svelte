@@ -22,7 +22,7 @@
     // Form data definitions
     let remoteServerConfigFormData: Form = {
         title: "Remote Server Configuration",
-        hasSubmitButton: true,
+        hasSubmitButton: false,
         id: "remote-server-form-data",
         formGroups: {
             "remote-server-form-group-0": {
@@ -92,8 +92,8 @@
 
     let pairFolderFormData: Form = {
         title: "Paired Folders",
-        hasSubmitButton: true,
-        submitButtonName: "Validate",
+        hasSubmitButton: false,
+        // submitButtonName: "Validate",
         id: "pair-folder-form-data",
         formGroups: {},
         canAddFormGroups: true,
@@ -125,8 +125,8 @@
 
     let fileEventActions: Form = {
         title: "File Handling Actions",
-        hasSubmitButton: true,
-        submitButtonName: "Validate",
+        hasSubmitButton: false,
+        // submitButtonName: "Validate",
         id: "file-event-actions-form-data",
         formGroups: {
             "file-event-actions-form-group-0": {
@@ -318,7 +318,9 @@
             remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[0].value = hostname;
             remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[1].value = port.toString();
             remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[2].value = username;
+            remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[3].value = authMethod;
             remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[4].value = password;
+            remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[5].value = sshKey;
         }
 
         if (confState.pairedFolders) {

@@ -34,7 +34,6 @@
     $: if (inputType === 'select' && options && formField.value) {
         let selectElement = inputElement;
         if (selectElement) {
-            console.log("formField.value: ", formField.value);
             selectElement.value = formField.value;
         }
     }

@@ -33,7 +33,7 @@ export class WorkspaceConfig2 {
     const actionOnMove = config.get<string>("actionOnMove");
     const actionOnOpen = config.get<string>("actionOnOpen");
 
-    const ignoreList = config.get<string[]>("ignore");
+    const ignoreList = config.get<string[]>("ignoreList");
 
     const workspaceConfig: ConfigurationState = {};
 

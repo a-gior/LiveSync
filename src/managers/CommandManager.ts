@@ -16,6 +16,7 @@ import { getFullPaths } from "../utilities/fileUtils/filePathUtils";
 import { ConnectionManager } from "./ConnectionManager";
 import { SSHClient } from "../services/SSHClient";
 import { WorkspaceConfigManager } from "./WorkspaceConfigManager";
+import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
 
 export class CommandManager {
   static registerCommands(
@@ -151,25 +152,30 @@ export class CommandManager {
       }),
 
       // Test connection
-      vscode.commands.registerCommand("livesync.testConnection", async () => {
-        const configuration =
-          WorkspaceConfigManager.getRemoteServerConfigured();
+      vscode.commands.registerCommand(
+        "livesync.testConnection",
+        async (configuration?: ConfigurationMessage["configuration"]) => {
+          if (!configuration) {
+            configuration = WorkspaceConfigManager.getRemoteServerConfigured();
+          }
 
-        const connectionManager = ConnectionManager.getInstance(configuration);
-        try {
-          await connectionManager.doSSHOperation(
-            async (sshClient: SSHClient) => {
-              await sshClient.waitForConnection();
-            },
-            "Test Connection",
-          );
+          const connectionManager =
+            ConnectionManager.getInstance(configuration);
+          try {
+            await connectionManager.doSSHOperation(
+              async (sshClient: SSHClient) => {
+                await sshClient.waitForConnection();
+              },
+              "Test Connection",
+            );
 
-          logInfoMessage("Test connection successful.", LOG_FLAGS.ALL);
-          return true;
-        } catch (error: any) {
-          return false;
-        }
-      }),
+            logInfoMessage("Test connection successful.", LOG_FLAGS.ALL);
+            return true;
+          } catch (error: any) {
+            return false;
+          }
+        },
+      ),
     );
   }
 }

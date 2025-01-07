@@ -30,7 +30,10 @@ export class ConfigurationPanel extends Panel {
         case "testConnection":
           console.log("TestConnection...");
           if (message.configuration) {
-            await commands.executeCommand("livesync.testConnection");
+            await commands.executeCommand(
+              "livesync.testConnection",
+              message.configuration,
+            );
           }
           break;
         case "savePairFolders":
@@ -67,7 +70,6 @@ export class ConfigurationPanel extends Panel {
   ) {
     console.log("pairedFoldersArr", pairedFoldersArr);
     const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-    // const pairedFolders = workspaceConfig.getPairedFoldersConfigured();
 
     const connectionManager = ConnectionManager.getInstance(configuration);
     connectionManager
@@ -170,7 +172,7 @@ export class ConfigurationPanel extends Panel {
 
     if (ignoreList) {
       try {
-        await WorkspaceConfigManager.update("ignore", ignoreList);
+        await WorkspaceConfigManager.update("ignoreList", ignoreList);
         console.log("Ignore list saved successfully.");
         window.showInformationMessage("Ignore list saved successfully.");
       } catch (error) {

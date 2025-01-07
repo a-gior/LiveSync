@@ -159,7 +159,7 @@
         },
         "LiveSync.port": {
           "type": "number",
-          "default": 8080,
+          "default": 22,
           "description": "Port number for LiveSync configuration."
         },
         "LiveSync.username": {
@@ -169,7 +169,11 @@
         },
         "LiveSync.authMethod": {
           "type": "string",
-          "default": "password",
+          "default": "auth-password",
+          "enum": [
+            "auth-password",
+            "auth-sshKey"
+          ],
           "description": "authMethod for LiveSync configuration."
         },
         "LiveSync.password": {
@@ -198,7 +202,12 @@
               }
             }
           },
-          "default": [],
+          "default": [
+            {
+              "localPath": "/path/to/local/folder",
+              "remotePath": "/path/to/remote/folder"
+            }
+          ],
           "description": "Array of paired local and remote folders"
         },
         "LiveSync.actionOnUpload": {
@@ -278,7 +287,7 @@
           ],
           "description": "Action to perform on opening a file.\n\nOptions:\n- download: Automatically downloads the file from the remote server.\n- check: Only checks if the file has been modified on the remote system without downloading.\n- check&download: Checks if the file has been modified on the remote system and downloads if it hasn't.\n- none: No action is performed on file download."
         },
-        "LiveSync.ignore": {
+        "LiveSync.ignoreList": {
           "type": "array",
           "description": "List of patterns of files/folders to ignore",
           "items": {

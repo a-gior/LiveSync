@@ -59,6 +59,7 @@
 
   .tab-content {
     padding: 10px;
+    height: 100%;
     border-bottom: 1px solid var(--vscode-editorGroup-border);
     background-color: var(--vscode-editor-background);
     color: var(--vscode-editor-foreground);

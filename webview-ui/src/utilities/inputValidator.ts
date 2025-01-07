@@ -52,12 +52,16 @@ class InputValidator {
     const reader = new FileReader();
 
     reader.onerror = function () {
-      errorDisplayer.display(sshKeyInput, "top", "Error reading SSH key file");
+      errorDisplayer.display(
+        sshKeyInput,
+        "bottom",
+        "Error reading SSH key file",
+      );
     };
 
     reader.readAsText(sshKeyFile);
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       reader.onload = () =>
         function (event) {
           const sshKeyContent = String(event.target.result);
@@ -71,8 +75,22 @@ class InputValidator {
   };
 
   areValidInputs(form: Form): boolean {
-    for (const [id, formGroup] of Object.entries(form.formGroups)) {
+    let isValid = true;
+
+    for (const [, formGroup] of Object.entries(form.formGroups)) {
       for (const formField of formGroup.fields) {
+        console.log("Checking formField", formField);
+
+        // Clear any previous error message
+        if (formField.htmlElement) {
+          const existingError =
+            formField.htmlElement.querySelector(".error-message");
+          if (existingError) {
+            existingError.remove();
+          }
+        }
+
+        // Check required and visible fields
         if (
           formField.visible &&
           formField.required &&
@@ -80,24 +98,38 @@ class InputValidator {
           !formField.files
         ) {
           console.log(
-            `FormField ${formField.name} is required and visible but has value/files : ${formField.value}`,
+            `FormField ${formField.name} is required and visible but has no value/files: ${formField.value}`,
             formField.files,
           );
-          return false;
+
+          // Add error message
+          errorDisplayer.display(
+            formField.htmlElement,
+            "bottom",
+            `${formField.name} is required.`,
+          );
+          isValid = false;
+          continue;
         }
 
+        // Check custom validation callback
         if (formField.htmlElement && formField.validationCallback) {
-          let htmlInputElement =
-            formField.htmlElement.getElementsByTagName("input")[0];
+          const htmlInputElement = formField.htmlElement.querySelector("input");
           if (!formField.validationCallback(htmlInputElement)) {
-            console.log("Validation failed on ", htmlInputElement);
-            return false;
+            // Add error message
+            errorDisplayer.display(
+              formField.htmlElement,
+              "bottom",
+              `${formField.name} failed validation.`,
+            );
+            isValid = false;
+            continue;
           }
         }
       }
     }
 
-    return true;
+    return isValid;
   }
 }
 

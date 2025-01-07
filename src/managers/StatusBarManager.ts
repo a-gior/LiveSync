@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import { LogManager } from "./LogManager";
 
 export class StatusBarManager {
   private static statusBarItem: vscode.StatusBarItem;
@@ -48,7 +47,7 @@ export class StatusBarManager {
       statusBarItem.command = command || "livesync.showLogs";
       statusBarItem.show();
 
-      LogManager.log(message); // Log the message
+      // LogManager.log(message); // Log the message
       this.currentMessage = actualMessage;
       this.currentIcon = displayIcon;
     }
