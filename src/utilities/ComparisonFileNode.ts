@@ -1,7 +1,9 @@
-import path from "path";
 import { logErrorMessage } from "../managers/LogManager";
 import { BaseNode, BaseNodeData, BaseNodeType } from "./BaseNode";
 import { FileNode } from "./FileNode";
+import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
+import { splitParts } from "./fileUtils/filePathUtils";
+import { StatusBarManager } from "../managers/StatusBarManager";
 
 export enum ComparisonStatus {
   added = "added",
@@ -12,7 +14,6 @@ export enum ComparisonStatus {
 
 export interface ComparisonFileData extends BaseNodeData {
   status: ComparisonStatus;
-  pairedFolderName: string;
 }
 
 export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
@@ -21,7 +22,6 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
 
   constructor(
     nameOrJson: string | ComparisonFileData,
-    pairedFolderName?: string,
     type?: BaseNodeType,
     size?: number,
     modifiedTime?: Date,
@@ -30,21 +30,13 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
   ) {
     if (typeof nameOrJson === "string") {
       // Regular constructor logic
-      super(
-        nameOrJson,
-        pairedFolderName,
-        type,
-        size,
-        modifiedTime,
-        relativePath,
-      );
+      super(nameOrJson, type, size, modifiedTime, relativePath);
       this.status = status;
     } else {
       // Constructor from JSON
       const json = nameOrJson;
       super(
         json.name,
-        json.pairedFolderName,
         json.type,
         json.size,
         new Date(json.modifiedTime),
@@ -79,11 +71,10 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     localNode?: FileNode,
     remoteNode?: FileNode,
   ): ComparisonFileNode {
+    StatusBarManager.showMessage(`Comparing...`, "", "", 0, "sync~spin", true);
+
     // Determine the common properties for the ComparisonFileNode
     const name = localNode ? localNode.name : remoteNode!.name;
-    const pairedFolderName = localNode
-      ? localNode.pairedFolderName
-      : remoteNode!.pairedFolderName;
     const type = localNode ? localNode.type : remoteNode!.type;
     const size = localNode ? localNode.size : remoteNode!.size;
     const modifiedTime = localNode
@@ -116,7 +107,6 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     // Create the ComparisonFileNode
     const comparisonNode = new ComparisonFileNode(
       name,
-      pairedFolderName,
       type,
       size,
       modifiedTime,
@@ -158,6 +148,7 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
       comparisonNode.status = previousChildStatus;
     }
 
+    StatusBarManager.showMessage("Comparing done!", "", "", 3000, "check");
     return comparisonNode;
   }
 
@@ -171,7 +162,6 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
       ...baseJson,
       relativePath: this.relativePath,
       status: this.status,
-      pairedFolderName: this.pairedFolderName,
     };
   }
 
@@ -200,20 +190,20 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     rootEntries: Map<string, ComparisonFileNode>,
     element: ComparisonFileNode,
   ): ComparisonFileNode {
-    const pairedFolderName = element.pairedFolderName;
     const relativePath = element.relativePath;
     let topMostUpdatedEntry: ComparisonFileNode | null = null;
+    let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
 
-    // Find the initial root folder in rootEntries based on the pairedFolderName
-    let currentEntry = rootEntries.get(pairedFolderName);
+    // Find the initial root folder in rootEntries based on the rootFolderName
+    let currentEntry = rootEntries.get(rootFolderName);
     if (!currentEntry || !currentEntry.isDirectory()) {
       logErrorMessage(
-        `Paired folder "${pairedFolderName}" not found in root entries.`,
+        `Root folder "${rootFolderName}" not found in root entries.`,
       );
       return element;
     }
 
-    const pathParts = relativePath.split(path.sep);
+    const pathParts = splitParts(relativePath);
     for (let i = 0; i < pathParts.length - 1; i++) {
       const part = pathParts[i];
       currentEntry = currentEntry.children.get(part);

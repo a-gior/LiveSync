@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { SFTPClient } from "../../services/SFTPClient";
 import { FileNode, FileNodeSource } from "../FileNode";
-import { getFullPaths, getRootFolderName } from "./filePathUtils";
+import { getFullPaths, getRelativePath, normalizePath } from "./filePathUtils";
 import { ConnectionManager } from "../../managers/ConnectionManager";
 import pLimit = require("p-limit");
 import { LogManager } from "../../managers/LogManager";
@@ -23,22 +23,17 @@ async function createRemoteDirectories(
 
   const createDir = async (node: ComparisonFileNode) => {
     const { localPath, remotePath } = await getFullPaths(node);
-    if (!remotePath || !localPath) {
-      throw new Error(
-        `Couldnt find localPath or remotePath for ${node.relativePath}`,
-      );
-    }
 
     if (node.listChildren().length === 0) {
       if (node.isDirectory()) {
         await sftpClient.createDirectory(remotePath);
-        LogManager.log(`SFTP Created Dir ${remotePath}`);
+        LogManager.log(`SFTP Created dir ${remotePath}`);
       } else {
         const parentDirPath = path.dirname(remotePath);
         if (lastParentDir !== parentDirPath) {
           lastParentDir = parentDirPath;
           await sftpClient.createDirectory(parentDirPath);
-          LogManager.log(`SFTP Created Dir ${remotePath}`);
+          LogManager.log(`SFTP Created dir ${remotePath}`);
         }
         filePaths.push({ localPath, remotePath });
       }
@@ -90,11 +85,6 @@ async function createLocalDirectories(node: ComparisonFileNode) {
 
   const createDir = async (node: ComparisonFileNode) => {
     const { localPath, remotePath } = await getFullPaths(node);
-    if (!remotePath || !localPath) {
-      throw new Error(
-        `Couldnt find localPath or remotePath for ${node.relativePath}`,
-      );
-    }
 
     if (node.isDirectory()) {
       await fs.promises.mkdir(localPath, { recursive: true });
@@ -106,14 +96,15 @@ async function createLocalDirectories(node: ComparisonFileNode) {
       );
 
       for (const remoteEntry of remoteEntries) {
-        const remoteEntryPath = path.join(localPath, remoteEntry.name);
+        const fullLocalPath = normalizePath(
+          path.join(localPath, remoteEntry.name),
+        );
         const childEntry = new ComparisonFileNode(
           remoteEntry.name,
-          await getRootFolderName(remoteEntryPath),
           remoteEntry.type === "d" ? BaseNodeType.directory : BaseNodeType.file,
           remoteEntry.size,
           new Date(remoteEntry.modifyTime * 1000),
-          remoteEntryPath,
+          getRelativePath(fullLocalPath),
           ComparisonStatus.unchanged,
         );
         await createDir(childEntry);
@@ -171,7 +162,6 @@ export async function deleteRemoteDirectory(
         if (child.type === "d") {
           const subDirEntry = new FileNode(
             child.name,
-            await getRootFolderName(childPath),
             BaseNodeType.directory,
             0,
             new Date(child.modifyTime * 1000),

@@ -1,18 +1,9 @@
 import * as crypto from "crypto";
 import { stat, createReadStream } from "fs";
-import { FileNodeSource, getFileNodeInfo } from "../FileNode";
+import { FileNodeSource } from "../FileNode";
 import { getRemoteFileContentHash } from "./sftpOperations";
 import { BaseNodeType } from "../BaseNode";
-
-export function generateHashFile(
-  name: string,
-  size: number,
-  modifiedTime: Date,
-): string {
-  const hash = crypto.createHash("sha256");
-  hash.update(`${name}${size}${modifiedTime.toISOString()}`);
-  return hash.digest("hex");
-}
+import { getRelativePath } from "./filePathUtils";
 
 export async function generateHash(
   filePath: string,
@@ -20,19 +11,6 @@ export async function generateHash(
   fileType: BaseNodeType,
   fileContentHash: string = "",
 ) {
-  if (!filePath) {
-    console.log("Empty parameters passed to generateHash");
-    return "";
-  }
-
-  const relativePath = getFileNodeInfo(filePath)!.relativePath;
-
-  if (!relativePath && relativePath !== "") {
-    throw new Error(
-      `Could not find relative path for file ${filePath} (source: ${fileSource})`,
-    );
-  }
-
   if (fileType === BaseNodeType.file && fileContentHash === "") {
     if (fileSource === FileNodeSource.local) {
       fileContentHash = await new Promise<string>((resolve) => {
@@ -45,7 +23,7 @@ export async function generateHash(
         stream.on("error", (err) => {
           // reject(err);
           console.error("<generateHash> Error reading file: ", err.message);
-          resolve(""); // Return an empty string if there's an error (mainly unhashable files like .asar, for instance)
+          resolve(""); // Return an empty string if there's an error (unhashable files like .asar, for instance)
         });
       });
     } else {
@@ -53,20 +31,15 @@ export async function generateHash(
     }
   }
 
-  const hash = crypto.createHash("sha256");
-  // console.log(`Creating hash with fileContentHash: ${fileContentHash}`);
-  hash.update(`${relativePath}${fileType}${fileContentHash}`);
-  const filehash = hash.digest("hex");
-
-  return filehash;
+  return generateNodeHash(filePath, fileType, fileContentHash);
 }
 
-export function generateHash2(
+export function generateNodeHash(
   fullPath: string,
   fileType: BaseNodeType,
   fileContentHash: string,
 ) {
-  const relativePath = getFileNodeInfo(fullPath)!.relativePath;
+  const relativePath = getRelativePath(fullPath);
   const hash = crypto.createHash("sha256");
   // console.log(`Creating hash with fileContentHash: ${fileContentHash}`);
   hash.update(`${relativePath}${fileType}${fileContentHash}`);

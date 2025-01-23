@@ -1,6 +1,8 @@
 import * as path from "path";
 
-export const ROOT_FOLDER_NAME = "%%ROOT%%";
+export const RELATIVE_PATH_SEP = "/";
+export const LINUX_PATH_SEP = "/";
+export const WINDOWS_PATH_SEP = "\\";
 
 export const SAVE_DIR = path.join(__dirname, "..", "saved_data");
 

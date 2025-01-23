@@ -12,11 +12,9 @@ import IgnoreList from "../../components/configuration/IgnoreList.svelte";
 import { vscode } from "../vscode";
 import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 import { FullConfigurationMessage } from "@shared/DTOs/messages/FullConfigurationMessage";
-import { PairFoldersMessage } from "@shared/DTOs/messages/PairFoldersMessage";
 
 class ConfigurationFormStore {
   public remoteServerConfigFormStore: Writable<Form>;
-  public pairFolderFormStore: Writable<Form>;
   public fileEventActionsStore: Writable<Form>;
   public patternsStore: Writable<string[]>;
 
@@ -27,7 +25,6 @@ class ConfigurationFormStore {
 
   constructor() {
     this.remoteServerConfigFormStore = writable();
-    this.pairFolderFormStore = writable();
     this.fileEventActionsStore = writable();
     this.patternsStore = writable();
 
@@ -37,7 +34,6 @@ class ConfigurationFormStore {
     this.setTabsAsDerivedStore();
 
     // Bind the method to the instance
-    this.savePairFolders = this.savePairFolders.bind(this);
     this.saveRemoteServerConfiguration =
       this.saveRemoteServerConfiguration.bind(this);
     this.checkAuthMethod = this.checkAuthMethod.bind(this);
@@ -49,22 +45,11 @@ class ConfigurationFormStore {
     this.tabsStore = derived(
       [
         this.remoteServerConfigFormStore,
-        this.pairFolderFormStore,
         this.patternsStore,
         this.fileEventActionsStore,
       ],
-      ([
-        $remoteServerConfigFormData,
-        $pairFolderFormData,
-        $patterns,
-        $fileEventActions,
-      ]) => {
-        if (
-          $remoteServerConfigFormData &&
-          $pairFolderFormData &&
-          $fileEventActions &&
-          $patterns
-        ) {
+      ([$remoteServerConfigFormData, $patterns, $fileEventActions]) => {
+        if ($remoteServerConfigFormData && $fileEventActions && $patterns) {
           return [
             {
               id: $remoteServerConfigFormData.id,
@@ -74,15 +59,6 @@ class ConfigurationFormStore {
                 formDataStore: this.remoteServerConfigFormStore,
                 onChange: this.checkAuthMethod,
                 onSubmit: this.saveRemoteServerConfiguration,
-              },
-            },
-            {
-              id: $pairFolderFormData.id,
-              label: $pairFolderFormData.title,
-              component: GenericForm,
-              props: {
-                formDataStore: this.pairFolderFormStore,
-                onSubmit: this.savePairFolders,
               },
             },
             {
@@ -114,10 +90,6 @@ class ConfigurationFormStore {
     this.remoteServerConfigFormStore.set(data);
   }
 
-  setPairFolderFormData(data: Form) {
-    this.pairFolderFormStore.set(data);
-  }
-
   setFileEventActions(data: Form) {
     this.fileEventActionsStore.set(data);
   }
@@ -132,10 +104,6 @@ class ConfigurationFormStore {
 
   getRemoteServerConfigFormData() {
     return get(this.remoteServerConfigFormStore);
-  }
-
-  getPairFolderFormData() {
-    return get(this.pairFolderFormStore);
   }
 
   getFileEventActions() {
@@ -154,30 +122,12 @@ class ConfigurationFormStore {
     return get(this.activeTabStore);
   }
 
-  savePairFolders() {
-    const pairFoldersMessage: FullConfigurationMessage = {
-      command: "updateConfiguration",
-      pairedFolders: Object.entries(
-        this.getPairFolderFormData().formGroups,
-      ).map(([, form]): PairFoldersMessage["paths"] => ({
-        localPath: form.fields[0].value,
-        remotePath: form.fields[1].value,
-      })),
-    };
-
-    const currentState: ConfigurationState = vscode.getState();
-    vscode.setState({
-      ...currentState,
-      pairedFolders: pairFoldersMessage.pairedFolders,
-    });
-    vscode.postMessage(pairFoldersMessage);
-  }
-
   saveRemoteServerConfiguration() {
     const sshKeyInput =
       this.getRemoteServerConfigFormData().formGroups[
         "remote-server-form-group-0"
       ].fields[5];
+
     const configurationMessage: FullConfigurationMessage = {
       command: "updateConfiguration",
       configuration: {
@@ -204,6 +154,10 @@ class ConfigurationFormStore {
           ].fields[4].value,
         sshKey: sshKeyInput.files ? (sshKeyInput.files[0] as any).path : null,
       },
+      remotePath:
+        this.getRemoteServerConfigFormData().formGroups[
+          "remote-server-form-group-0"
+        ].fields[6].value,
     };
     const currentState: ConfigurationState = vscode.getState();
 

@@ -1,6 +1,6 @@
 import path from "path";
 import * as fs from "fs";
-import { FileNode, getFileNodeInfo } from "../utilities/FileNode";
+import { FileNode, FileNodeSource } from "../utilities/FileNode";
 import {
   COMPARE_FILES_JSON,
   FOLDERS_STATE_JSON,
@@ -13,6 +13,12 @@ import {
 } from "../utilities/ComparisonFileNode";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
 import { debounce } from "../utilities/debounce";
+import { WorkspaceConfigManager } from "./WorkspaceConfigManager";
+import {
+  getCorrespondingPath,
+  getRelativePath,
+  splitParts,
+} from "../utilities/fileUtils/filePathUtils";
 
 export enum JsonType {
   REMOTE = "remote",
@@ -53,7 +59,7 @@ export default class JsonManager {
   }
 
   public static getMapKey(element: ComparisonFileNode) {
-    return `${element.pairedFolderName}$$${element.relativePath}`;
+    return `${WorkspaceConfigManager.getWorkspaceBasename()}$$${element.relativePath}`;
   }
 
   public async updateFolderState(
@@ -119,7 +125,7 @@ export default class JsonManager {
     fileName: string,
     NodeConstructor?: new (data: any) => T,
   ): Promise<Map<string, T>> {
-    const filePath = path.join(SAVE_DIR, fileName);
+    const filePath = getJsonPath(fileName);
     const fileEntryMap = new Map<string, T>();
 
     if (!fs.existsSync(filePath)) {
@@ -152,7 +158,7 @@ export default class JsonManager {
     fileName: string,
     dataMap: Map<string, T>,
   ): Promise<void> {
-    const filePath = path.join(SAVE_DIR, fileName);
+    const filePath = getJsonPath(fileName);
 
     // Convert the Map to an Object to be saved as JSON
     const jsonObject: { [key: string]: T } = {};
@@ -175,7 +181,7 @@ export default class JsonManager {
     fileName: string,
     data: Map<string, FileNode | ComparisonFileNode>,
   ): Promise<void> {
-    const filePath = path.join(SAVE_DIR, fileName);
+    const filePath = getJsonPath(fileName);
     const jsonContent = JSON.stringify(Object.fromEntries(data), null, 2);
 
     try {
@@ -214,19 +220,20 @@ export default class JsonManager {
 
     if (!fileNodeMap) {
       logErrorMessage(
-        `Unable to load existing remote files JSON data for ${fileName}`,
+        `<updateRemoteFilesJson> Unable to load existing remote files JSON data for ${fileName}`,
       );
       return;
     }
 
-    const fileNodeInfo = getFileNodeInfo(fileNode.fullPath);
-    const pathParts = fileNodeInfo.relativePath.split(path.sep);
+    let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
+    const relativePath = getRelativePath(fileNode.fullPath);
+    const pathParts = splitParts(relativePath);
 
     if (pathParts.length === 1 && pathParts[0] === "") {
-      fileNodeMap.set(fileNodeInfo.pairedFolderName, fileNode);
+      fileNodeMap.set(rootFolderName, fileNode);
     } else {
-      if (fileNodeMap.has(fileNodeInfo.pairedFolderName)) {
-        let currentNode = fileNodeMap.get(fileNodeInfo.pairedFolderName);
+      if (fileNodeMap.has(rootFolderName)) {
+        let currentNode = fileNodeMap.get(rootFolderName) as FileNode;
 
         for (const pathPart of pathParts) {
           if (!currentNode) {
@@ -236,23 +243,31 @@ export default class JsonManager {
             return;
           }
 
-          if (currentNode.children.has(pathPart)) {
-            currentNode = currentNode.children.get(pathPart);
-          } else {
-            logErrorMessage(
-              `<updateRemoteFilesJson> Couldn't find sub node in remote files JSON at ${fileNode.fullPath} for the path parts:`,
-              LOG_FLAGS.CONSOLE_ONLY,
-              pathParts,
-            );
-            return;
+          if (!currentNode.children) {
+            currentNode.children = new Map();
           }
+
+          if (!currentNode.children.has(pathPart)) {
+            // Create a new child node if it doesn't exist
+            const fullRemotePath = path.join(currentNode.fullPath, pathPart);
+            const fullLocalPath = getCorrespondingPath(fullRemotePath);
+            const fileNode =
+              await FileNode.createFileNodeFromLocalPath(fullLocalPath);
+            fileNode.fullPath = fullRemotePath;
+            fileNode.source = FileNodeSource.remote;
+
+            currentNode.children.set(pathPart, fileNode);
+          }
+
+          // Move to the next child node
+          currentNode = currentNode.children.get(pathPart)!;
         }
 
         if (currentNode) {
           Object.assign(currentNode, fileNode);
         }
       } else {
-        fileNodeMap.set(fileNodeInfo.pairedFolderName, fileNode);
+        fileNodeMap.set(rootFolderName, fileNode);
       }
     }
 
@@ -327,24 +342,22 @@ export default class JsonManager {
       if (pairedFolderName) {
         const rootNode = rootEntries.get(pairedFolderName);
         if (!rootNode) {
+          console.log(`Root node not found: ${pairedFolderName}`, rootEntries);
           throw new Error(`Root node not found: ${pairedFolderName}`);
         }
 
-        const pathParts = filePath.split(path.sep).filter(Boolean);
+        const pathParts = splitParts(filePath);
         return this.findNodeInHierarchy(filePath, rootNode, pathParts);
       }
 
-      const fileNodeInfo = getFileNodeInfo(filePath);
+      let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
+      const relativePath = getRelativePath(filePath);
 
-      return this.findNodeByPath(
-        fileNodeInfo.relativePath,
-        rootEntries,
-        fileNodeInfo.pairedFolderName,
-      );
+      return this.findNodeByPath(relativePath, rootEntries, rootFolderName);
     } catch (error: any) {
       logErrorMessage(
         `Find entry failed: ${filePath}`,
-        LOG_FLAGS.ALL,
+        LOG_FLAGS.CONSOLE_AND_LOG_MANAGER,
         error.message,
       );
       return undefined;
@@ -356,11 +369,12 @@ export default class JsonManager {
     rootEntries: Map<string, ComparisonFileNode>,
   ): Promise<ComparisonFileNode> {
     try {
+      let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
       const parentPath = path.dirname(element.relativePath);
       const parentNode = await this.findNodeByPath(
         parentPath,
         rootEntries,
-        element.pairedFolderName,
+        rootFolderName,
       );
 
       if (!parentNode?.isDirectory()) {
@@ -384,11 +398,12 @@ export default class JsonManager {
     rootEntries: Map<string, ComparisonFileNode>,
   ): Promise<ComparisonFileNode> {
     try {
+      let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
       const parentPath = path.dirname(element.relativePath);
       const parentNode = await this.findNodeByPath(
         parentPath,
         rootEntries,
-        element.pairedFolderName,
+        rootFolderName,
       );
 
       if (!parentNode) {
@@ -399,7 +414,6 @@ export default class JsonManager {
 
       const tempNode = new ComparisonFileNode(
         element.name,
-        element.pairedFolderName,
         element.type,
         element.size,
         element.modifiedTime,
@@ -423,17 +437,14 @@ export default class JsonManager {
     rootEntries: Map<string, ComparisonFileNode>,
   ): Promise<ComparisonFileNode> {
     try {
+      let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
       const [oldParentNode, newParentNode] = await Promise.all([
         this.findNodeByPath(
           path.dirname(element.relativePath),
           rootEntries,
-          element.pairedFolderName,
+          rootFolderName,
         ),
-        this.findNodeByPath(
-          path.dirname(newPath),
-          rootEntries,
-          element.pairedFolderName,
-        ),
+        this.findNodeByPath(path.dirname(newPath), rootEntries, rootFolderName),
       ]);
 
       if (!oldParentNode || !newParentNode) {
@@ -446,7 +457,7 @@ export default class JsonManager {
       element.setStatus(ComparisonStatus.modified);
       newParentNode.addChild(element);
 
-      await ComparisonFileNode.updateParentDirectoriesStatus(
+      ComparisonFileNode.updateParentDirectoriesStatus(
         rootEntries,
         oldParentNode,
       );
@@ -465,10 +476,11 @@ export default class JsonManager {
     rootEntries: Map<string, ComparisonFileNode>,
   ): Promise<ComparisonFileNode> {
     try {
+      let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
       const foundElement = await this.findNodeByPath(
         element.relativePath,
         rootEntries,
-        element.pairedFolderName,
+        rootFolderName,
       );
 
       if (!foundElement) {
@@ -503,4 +515,12 @@ export function isComparisonFileNodeMap(
   }
   const firstValue = map.values().next().value;
   return firstValue instanceof ComparisonFileNode;
+}
+
+function getJsonPath(fileName: string): string {
+  return path.join(
+    SAVE_DIR,
+    WorkspaceConfigManager.getWorkspaceHash().identifier,
+    fileName,
+  );
 }

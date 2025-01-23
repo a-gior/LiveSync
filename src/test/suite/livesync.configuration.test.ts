@@ -51,7 +51,7 @@ suite("LiveSync Configuration Command Tests", () => {
     const currentConfig = WorkspaceConfigManager.getWorkspaceConfiguration();
     const baseConfig = {
       configuration: configurationTest,
-      pairedFolders: [],
+      remotePath: "",
       fileEventActions: {
         actionOnUpload: "check&upload",
         actionOnDownload: "check&download",

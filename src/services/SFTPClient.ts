@@ -2,6 +2,7 @@ import SftpClient from "ssh2-sftp-client";
 import { BaseClient } from "./BaseClient";
 import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
 import { BaseNodeType } from "../utilities/BaseNode";
+import { LogManager } from "../managers/LogManager";
 
 export class SFTPClient extends BaseClient {
   private static instance: SFTPClient;
@@ -50,7 +51,6 @@ export class SFTPClient extends BaseClient {
   }
 
   async disconnect(): Promise<void> {
-    console.log(`Disconnecting SFTP. isConnected: ${this.isConnected}`);
     if (this.isConnected) {
       await this._client.end();
       this.isConnected = false;
@@ -58,9 +58,9 @@ export class SFTPClient extends BaseClient {
   }
 
   async uploadFile(localFile: string, remoteFile: string): Promise<void> {
-    console.log(`Uploading ${localFile} to ${remoteFile}`);
     try {
       await this._client.fastPut(localFile, remoteFile);
+      LogManager.log(`Uploaded ${localFile} to ${remoteFile}`);
     } catch (err) {
       this._addError("Uploading failed", err);
       throw err;
@@ -68,9 +68,9 @@ export class SFTPClient extends BaseClient {
   }
 
   async downloadFile(remoteFile: string, localFile: string): Promise<void> {
-    console.log(`Downloading ${remoteFile} to ${localFile}`);
     try {
       await this._client.fastGet(remoteFile, localFile);
+      LogManager.log(`Downloaded ${remoteFile} to ${localFile}`);
     } catch (err) {
       this._addError("Downloading failed", err);
       throw err;
@@ -78,9 +78,9 @@ export class SFTPClient extends BaseClient {
   }
 
   async createDirectory(remoteDir: string) {
-    console.log(`Creating directory ${remoteDir}`);
     try {
       await this._client.mkdir(remoteDir, true);
+      LogManager.log(`Created directory ${remoteDir}`);
     } catch (err) {
       this._addError("Creating directory failed", err);
       throw err;
@@ -88,9 +88,9 @@ export class SFTPClient extends BaseClient {
   }
 
   async deleteDirectory(remoteDir: string) {
-    console.log(`Deleting directory ${remoteDir}`);
     try {
       await this._client.rmdir(remoteDir, true);
+      LogManager.log(`Deleted directory ${remoteDir}`);
     } catch (err) {
       this._addError("Deleting directory failed", err);
       throw err;
@@ -98,9 +98,9 @@ export class SFTPClient extends BaseClient {
   }
 
   async deleteFile(remoteFile: string) {
-    console.log(`Deleting ${remoteFile}`);
     try {
       await this._client.delete(remoteFile);
+      LogManager.log(`Deleted ${remoteFile}`);
     } catch (err) {
       this._addError("Deleting failed", err);
       throw err;
@@ -108,10 +108,10 @@ export class SFTPClient extends BaseClient {
   }
 
   async listFiles(remoteDir: string, fileGlob?: any) {
-    console.log(`Listing ${remoteDir}`);
-
     try {
-      return await this._client.list(remoteDir, fileGlob);
+      const ret = await this._client.list(remoteDir, fileGlob);
+      LogManager.log(`Listed ${remoteDir}`);
+      return ret;
     } catch (err) {
       this._addError("Listing failed", err);
       throw err;
@@ -119,10 +119,10 @@ export class SFTPClient extends BaseClient {
   }
 
   async getFileStats(remotePath: string) {
-    console.log(`Getting stats for ${remotePath}`);
-
     try {
-      return await this._client.stat(remotePath);
+      const ret = await this._client.stat(remotePath);
+      LogManager.log(`Fetch stats for ${remotePath}`);
+      return ret;
     } catch (err) {
       this._addError("Getting stats failed", err);
       throw err;
@@ -130,12 +130,11 @@ export class SFTPClient extends BaseClient {
   }
 
   async moveFile(oldRemotePath: string, newRemotePath: string) {
-    console.log(
-      `Moving/Renaming file from ${oldRemotePath} to ${newRemotePath}`,
-    );
-
     try {
       await this._client.rename(oldRemotePath, newRemotePath);
+      LogManager.log(
+        `Moved/Renamed file from ${oldRemotePath} to ${newRemotePath}`,
+      );
     } catch (err) {
       this._addError("Moving/Renaming file failed", err);
       throw err;
@@ -143,7 +142,6 @@ export class SFTPClient extends BaseClient {
   }
 
   async pathExists(remotePath: string): Promise<BaseNodeType | false> {
-
     try {
       const result = await this._client.exists(remotePath);
       if (result === false) {

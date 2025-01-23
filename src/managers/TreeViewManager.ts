@@ -1,18 +1,18 @@
 import * as vscode from "vscode";
-import { PairedFoldersTreeDataProvider } from "../services/PairedFoldersTreeDataProvider";
+import { SyncTreeDataProvider } from "../services/SyncTreeDataProvider";
 import JsonManager from "./JsonManager";
 
 export class TreeViewManager {
   static async initialize(
     context: vscode.ExtensionContext,
-  ): Promise<PairedFoldersTreeDataProvider> {
+  ): Promise<SyncTreeDataProvider> {
     const showAsTree = context.globalState.get<boolean>("showAsTree", true);
     const showUnchanged = context.globalState.get<boolean>(
       "showUnchanged",
       true,
     );
 
-    const treeDataProvider = new PairedFoldersTreeDataProvider(
+    const treeDataProvider = new SyncTreeDataProvider(
       showAsTree,
       showUnchanged,
     );

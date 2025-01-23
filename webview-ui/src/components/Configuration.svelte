@@ -85,42 +85,18 @@
                         visible: false,
                         validationCallback: inputValidator.isValidSSHKey,
                     },
+                    {
+                        name: "remotePath",
+                        label: "Remote Path",
+                        type: "text",
+                        required: true,
+                        value: "",
+                        visible: true,
+                        validationCallback: inputValidator.isValidPath,
+                    }
                 ],
             },
         },
-    };
-
-    let pairFolderFormData: Form = {
-        title: "Paired Folders",
-        hasSubmitButton: false,
-        // submitButtonName: "Validate",
-        id: "pair-folder-form-data",
-        formGroups: {},
-        canAddFormGroups: true,
-        newFormGroupTemplate: {
-            visible: true,
-            deletable: true,
-            fields: [
-                {
-                    name: "localFolder",
-                    label: "Select a local folder",
-                    type: "text",
-                    required: true,
-                    value: "",
-                    visible: true,
-                    validationCallback: inputValidator.isValidPath,
-                },
-                {
-                    name: "remoteFolder",
-                    label: "Select a remote folder",
-                    type: "text",
-                    required: true,
-                    value: "",
-                    visible: true,
-                    validationCallback: inputValidator.isValidPath,
-                },
-            ],
-        }
     };
 
     let fileEventActions: Form = {
@@ -268,46 +244,8 @@
     let tabs = [];
 
     $: configurationFormStore.setRemoteServerConfigFormData(remoteServerConfigFormData);
-    $: configurationFormStore.setPairFolderFormData(pairFolderFormData);
     $: {configurationFormStore.setFileEventActions(fileEventActions);console.log("Reactive statement fileEventActions :", fileEventActions);}
     $: configurationFormStore.setPatterns(patterns);
-
-    // Function to add new pair folders
-    function newPairFolders() {
-        const index = Object.keys(pairFolderFormData.formGroups).length;
-        console.log(`<newPairFolders> new PairFolders ${index}`);
-
-        pairFolderFormData = {
-            ...pairFolderFormData,
-            formGroups: {
-                ...pairFolderFormData.formGroups,
-                ["pair-folder-form-group-" + index]: {
-                    visible: true,
-                    deletable: true,
-                    fields: [
-                        {
-                            name: "localFolder",
-                            label: "Select a local folder",
-                            type: "text",
-                            required: true,
-                            value: "",
-                            visible: true,
-                            validationCallback: inputValidator.isValidPath,
-                        },
-                        {
-                            name: "remoteFolder",
-                            label: "Select a remote folder",
-                            type: "text",
-                            required: true,
-                            value: "",
-                            visible: true,
-                            validationCallback: inputValidator.isValidPath,
-                        },
-                    ],
-                },
-            },
-        };
-    }
 
     // Function to set initial configuration state
     function setInitialConfiguration(confState: ConfigurationState) {
@@ -323,19 +261,8 @@
             remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[5].value = sshKey;
         }
 
-        if (confState.pairedFolders) {
-            console.log(`<setInitialConfiguration> PairedFolders`, confState.pairedFolders);
-            let i = 0;
-            for (const pairedFolder of confState.pairedFolders) {
-                newPairFolders();
-                pairFolderFormData.formGroups[
-                    "pair-folder-form-group-" + i
-                ].fields[0].value = pairedFolder.localPath;
-                pairFolderFormData.formGroups[
-                    "pair-folder-form-group-" + i
-                ].fields[1].value = pairedFolder.remotePath;
-                i++;
-            }
+        if (confState.remotePath) {
+            remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[6].value = confState.remotePath;
         }
 
         if (confState.fileEventActions) {
@@ -370,7 +297,7 @@
             case "setInitialConfiguration":
                 const configState: ConfigurationState = {
                     configuration: data.configuration,
-                    pairedFolders: data.pairedFolders,
+                    remotePath: data.remotePath,
                     fileEventActions: data.fileEventActions,
                     ignoreList: data.ignoreList,
                 };
@@ -389,7 +316,6 @@
     onMount(() => {
         
         configurationFormStore.remoteServerConfigFormStore.subscribe(value => remoteServerConfigFormData = value);
-        configurationFormStore.pairFolderFormStore.subscribe(value => pairFolderFormData = value);
         configurationFormStore.fileEventActionsStore.subscribe(value => {fileEventActions = value;console.log("subcription fileEventActionsStore", fileEventActions);});
         configurationFormStore.patternsStore.subscribe(value => patterns = value);
 
@@ -404,7 +330,6 @@
     <Tabs {tabs}/>
     <Footer
         bind:remoteServerConfigFormData
-        bind:pairFolderFormData
         bind:fileEventActions
         bind:patterns
     />

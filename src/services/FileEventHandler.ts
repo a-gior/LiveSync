@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { FileNode, getFileNodeInfo } from "../utilities/FileNode";
-import { PairedFoldersTreeDataProvider } from "./PairedFoldersTreeDataProvider";
+import { FileNode } from "../utilities/FileNode";
+import { SyncTreeDataProvider } from "./SyncTreeDataProvider";
 
 import {
   fileCreate,
@@ -23,7 +23,10 @@ import {
   logInfoMessage,
   logServerUnreachableError,
 } from "../managers/LogManager";
-import { getFullPaths } from "../utilities/fileUtils/filePathUtils";
+import {
+  getFullPaths,
+  getRelativePath,
+} from "../utilities/fileUtils/filePathUtils";
 import { ConnectionManager } from "../managers/ConnectionManager";
 import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 
@@ -35,7 +38,7 @@ export class FileEventHandler {
    */
   static initialize(
     context: vscode.ExtensionContext,
-    treeDataProvider: PairedFoldersTreeDataProvider,
+    treeDataProvider: SyncTreeDataProvider,
   ) {
     context.subscriptions.push(
       // Handle file create events
@@ -147,7 +150,7 @@ export class FileEventHandler {
    */
   static async handleFileCreate(
     event: vscode.FileCreateEvent,
-    treeDataProvider: PairedFoldersTreeDataProvider,
+    treeDataProvider: SyncTreeDataProvider,
   ) {
     for (const fileUri of event.files) {
       const filePath = fileUri.fsPath;
@@ -178,7 +181,6 @@ export class FileEventHandler {
         // Build comparison file node to add to rootElements
         const comparisonNode = new ComparisonFileNode(
           fileNode.name,
-          fileNode.pairedFolderName,
           fileNode.type,
           fileNode.size,
           fileNode.modifiedTime,
@@ -219,7 +221,7 @@ export class FileEventHandler {
    */
   static async handleFileDelete(
     event: vscode.FileDeleteEvent,
-    treeDataProvider: PairedFoldersTreeDataProvider,
+    treeDataProvider: SyncTreeDataProvider,
   ) {
     for (const fileUri of event.files) {
       const filePath = fileUri.fsPath;
@@ -277,7 +279,7 @@ export class FileEventHandler {
    */
   static async handleFileSave(
     document: vscode.TextDocument,
-    treeDataProvider: PairedFoldersTreeDataProvider,
+    treeDataProvider: SyncTreeDataProvider,
   ) {
     const filePath = document.uri.fsPath;
 
@@ -337,7 +339,7 @@ export class FileEventHandler {
    */
   static async handleFileRename(
     event: vscode.FileRenameEvent,
-    treeDataProvider: PairedFoldersTreeDataProvider,
+    treeDataProvider: SyncTreeDataProvider,
   ) {
     for (const { oldUri, newUri } of event.files) {
       const oldPath = oldUri.fsPath;
@@ -374,14 +376,8 @@ export class FileEventHandler {
         }
 
         // Get fileNodeInfos for old and new path
-        const oldFileNodeInfo = getFileNodeInfo(oldPath);
-        const newFileNodeInfo = getFileNodeInfo(newPath);
-        if (!oldFileNodeInfo || !newFileNodeInfo) {
-          console.warn(
-            `<handleFileRename> FileNodeInfo not found for ${oldPath} or ${newPath}`,
-          );
-          continue;
-        }
+        const oldFileNodeRelativePath = getRelativePath(oldPath);
+        const newFileNodeRelativePath = getRelativePath(newPath);
 
         // Get old file path and status
         const { localPath, remotePath } = await getFullPaths(nodeToMove);
@@ -428,7 +424,7 @@ export class FileEventHandler {
           // Renaming the entry
           nodeToAdd.name = path.basename(newPath);
         }
-        nodeToAdd.relativePath = newFileNodeInfo.relativePath;
+        nodeToAdd.relativePath = newFileNodeRelativePath;
 
         if (fileRenamedAction === ActionResult.ActionPerformed) {
           nodeToAdd.status = ComparisonStatus.unchanged; // File saved remotely
@@ -455,7 +451,7 @@ export class FileEventHandler {
               ? ComparisonStatus.unchanged
               : ComparisonStatus.added;
 
-          nodeToMove.relativePath = oldFileNodeInfo.relativePath;
+          nodeToMove.relativePath = oldFileNodeRelativePath;
           const deletedNode = await treeDataProvider.updateRootElements(
             Action.Remove,
             nodeToMove,
@@ -467,7 +463,7 @@ export class FileEventHandler {
             nodeToMove.name = path.basename(newPath);
           }
 
-          nodeToMove.relativePath = newFileNodeInfo.relativePath;
+          nodeToMove.relativePath = newFileNodeRelativePath;
           const movedNode = await treeDataProvider.updateRootElements(
             Action.Add,
             nodeToMove,
@@ -475,7 +471,7 @@ export class FileEventHandler {
           await treeDataProvider.refresh(movedNode);
         } else {
           nodeToMove.status = ComparisonStatus.removed;
-          nodeToMove.relativePath = oldFileNodeInfo.relativePath;
+          nodeToMove.relativePath = oldFileNodeRelativePath;
           const deletedNode = await treeDataProvider.updateRootElements(
             Action.Update,
             nodeToMove,
@@ -488,7 +484,7 @@ export class FileEventHandler {
             nodeToAdd.name = path.basename(newPath);
           }
           nodeToAdd.status = ComparisonStatus.added;
-          nodeToAdd.relativePath = newFileNodeInfo.relativePath;
+          nodeToAdd.relativePath = newFileNodeRelativePath;
           const addedNode = await treeDataProvider.updateRootElements(
             Action.Add,
             nodeToAdd,
@@ -503,7 +499,7 @@ export class FileEventHandler {
 
   static async handleFileOpen(
     document: vscode.TextDocument,
-    treeDataProvider: PairedFoldersTreeDataProvider,
+    treeDataProvider: SyncTreeDataProvider,
   ) {
     const filePath = document.uri.fsPath;
 

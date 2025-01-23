@@ -1,24 +1,14 @@
 import * as fs from "fs";
 import * as path from "path";
 import { getRemoteFileMetadata } from "./fileUtils/sftpOperations";
-import {
-  getRootFolderName,
-  normalizePath,
-  pathExists,
-} from "./fileUtils/filePathUtils";
+import { getRelativePath, pathExists } from "./fileUtils/filePathUtils";
 import { BaseNode, BaseNodeData, BaseNodeType } from "./BaseNode";
 import { generateHash } from "./fileUtils/hashUtils";
 import { LOG_FLAGS, logErrorMessage } from "../managers/LogManager";
-import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 
 export enum FileNodeSource {
   remote = "remote",
   local = "local",
-}
-
-export interface FileNodeInfo {
-  pairedFolderName: string;
-  relativePath: string;
 }
 
 export interface FileNodeData extends BaseNodeData {
@@ -34,7 +24,6 @@ export class FileNode extends BaseNode<FileNode> {
 
   constructor(
     data: FileNodeData | string,
-    pairedFolderNmae?: string,
     type?: BaseNodeType,
     size?: number,
     modifiedTime?: Date,
@@ -44,7 +33,6 @@ export class FileNode extends BaseNode<FileNode> {
     if (typeof data === "string") {
       if (
         !data ||
-        !pairedFolderNmae ||
         !type ||
         size === undefined ||
         !modifiedTime ||
@@ -57,10 +45,10 @@ export class FileNode extends BaseNode<FileNode> {
       }
 
       // Traditional constructor parameters
-      super(data, pairedFolderNmae, type, size, modifiedTime, fullPath);
+      super(data, type, size, modifiedTime, fullPath);
       this.source = source;
       this.fullPath = fullPath;
-      this.relativePath = getFileNodeInfo(fullPath)!.relativePath;
+      this.relativePath = getRelativePath(fullPath);
     } else {
       // JSON-like object initialization
       super(data);
@@ -105,12 +93,11 @@ export class FileNode extends BaseNode<FileNode> {
 
       const fileNode = new FileNode({
         name: path.basename(localPath),
-        pairedFolderName: await getRootFolderName(localPath),
         type: nodeType,
         size: stats.size,
         modifiedTime: stats.mtime,
         source: FileNodeSource.local,
-        relativePath: getFileNodeInfo(localPath)!.relativePath,
+        relativePath: getRelativePath(localPath),
         fullPath: localPath,
       });
 
@@ -138,12 +125,11 @@ export class FileNode extends BaseNode<FileNode> {
 
       return new FileNode({
         name: path.basename(remotePath),
-        pairedFolderName: await getRootFolderName(remotePath),
         type: stats.isDirectory ? BaseNodeType.directory : BaseNodeType.file,
         size: stats.size,
         modifiedTime: new Date(stats.modifyTime * 1000),
         source: FileNodeSource.remote,
-        relativePath: getFileNodeInfo(remotePath)!.relativePath,
+        relativePath: getRelativePath(remotePath),
         fullPath: remotePath,
       });
     } catch (error) {
@@ -151,27 +137,4 @@ export class FileNode extends BaseNode<FileNode> {
       throw error;
     }
   }
-}
-
-export function getFileNodeInfo(fullPath: string): FileNodeInfo {
-  const pairedFolders = WorkspaceConfigManager.getPairedFoldersConfigured();
-  const normalizedTargetPath = normalizePath(fullPath);
-
-  for (const folder of pairedFolders) {
-    if (normalizedTargetPath.startsWith(normalizePath(folder.localPath))) {
-      return {
-        pairedFolderName: path.basename(folder.localPath), // Directory name of the local path
-        relativePath: path.relative(folder.localPath, fullPath),
-      };
-    }
-
-    if (normalizedTargetPath.startsWith(normalizePath(folder.remotePath))) {
-      return {
-        pairedFolderName: path.basename(folder.remotePath), // Directory name of the remote path
-        relativePath: path.relative(folder.remotePath, fullPath),
-      };
-    }
-  }
-
-  throw new Error(`Couldn't find FileNodeInfo of ${fullPath}`);
 }

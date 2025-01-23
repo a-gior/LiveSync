@@ -7,31 +7,21 @@ import {
 import { getFullPaths } from "./filePathUtils";
 
 export async function compareCorrespondingEntry(
-  fileEntry: ComparisonFileNode,
+  comparisonFileNode: ComparisonFileNode,
 ): Promise<ComparisonFileNode> {
   try {
-    let { localPath, remotePath } = await getFullPaths(fileEntry);
-
-    if (!localPath || !remotePath) {
-      throw new Error(
-        `Couldnt find remotePath or localPath of ${fileEntry.name} at ${fileEntry.relativePath}`,
-      );
-    }
+    let { localPath, remotePath } = await getFullPaths(comparisonFileNode);
 
     const localEntry =
-      fileEntry.status !== ComparisonStatus.removed
+      comparisonFileNode.status !== ComparisonStatus.removed
         ? await listLocalFilesRecursive(localPath)
         : undefined;
     const remoteEntry =
-      fileEntry.status !== ComparisonStatus.added
+      comparisonFileNode.status !== ComparisonStatus.added
         ? await listRemoteFilesRecursive(remotePath)
         : undefined;
 
     if (remoteEntry) {
-      console.log(
-        "<compareCorrespondingEntry> Updating JSON REMOTE: ",
-        remoteEntry,
-      );
       JsonManager.getInstance().updateRemoteFilesJson(remoteEntry);
     }
 

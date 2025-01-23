@@ -6,13 +6,11 @@
     
     import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
     import { FullConfigurationMessage } from "@shared/DTOs/messages/FullConfigurationMessage";
-    import { PairFoldersMessage } from "@shared/DTOs/messages/PairFoldersMessage";
     import IgnoreList from "./IgnoreList.svelte";
     
 
 	provideVSCodeDesignSystem().register(vsCodeButton());
     export let remoteServerConfigFormData: Form;
-    export let pairFolderFormData: Form;
     export let fileEventActions: Form;
     export let patterns: string[];
 
@@ -56,10 +54,7 @@
             sshKey: sshKeyInput.files ? (sshKeyInput.files[0] as any).path : null, 
         };
 
-        const currentPairedFolders = Object.entries(pairFolderFormData.formGroups).map(([key, form]): PairFoldersMessage["paths"] => ({
-            localPath: form.fields[0].value,
-            remotePath: form.fields[1].value
-        }))
+        const currentRemotePath = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[6].value;
 
         const currentActionOnUpload =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[0].value;
         const currentActionOnDownload =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[1].value;
@@ -81,7 +76,7 @@
 
         const confState: ConfigurationState = { 
             configuration: currentConfig,
-            pairedFolders: currentPairedFolders,
+            remotePath: currentRemotePath,
             fileEventActions: currentFileEventActions,
             ignoreList: patterns
         };
@@ -99,13 +94,17 @@
   
 
   <footer-container>
-    <vscode-button id="test-connection-button" on:click={testConnection}>Test Connection</vscode-button>
+    <vscode-button class="left-button" id="test-connection-button" on:click={testConnection}>Test Connection</vscode-button>
     <vscode-button class="save-button" on:click={saveForms}>Save</vscode-button>
   </footer-container>
   
   <style>
     vscode-button {
         margin: 0 5px;
+    }
+
+    footer-container .left-button {
+        float: left;
     }
 
     /* Styles for the footer container */

@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import { normalizePath } from "../../utilities/fileUtils/filePathUtils";
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -26,13 +27,13 @@ suite("LiveSync Custom Tests", () => {
   });
 
   test("Custom Test", async () => {
-    const path1 = path.normalize(
+    const path1 = normalizePath(
       "/home/centos/test-workspace/Workspace/DEV/SPC-GESTUSER-DATA-DEV_SAVE_CALLBOT.rar",
     );
-    const path2 = path.normalize(
+    const path2 = normalizePath(
       "Workspace\\DEV\\SPC-GESTUSER-DATA-DEV_SAVE_CALLBOT.rar",
     );
-    const relativePath = path.relative(path1, path2);
+    const relativePath = normalizePath(path.relative(path1, path2));
     console.log(
       `Relativepath from path1: ${path1} and path2: ${path2} => ${relativePath}`,
     );

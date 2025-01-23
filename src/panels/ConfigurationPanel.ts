@@ -3,14 +3,12 @@ import { Panel } from "./Panel";
 
 import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 import { SFTPClient } from "../services/SFTPClient";
-import { PairFoldersMessage } from "@shared/DTOs/messages/PairFoldersMessage";
-import * as fs from "fs";
 import { FullConfigurationMessage } from "@shared/DTOs/messages/FullConfigurationMessage";
 import { FileEventActionsMessage } from "@shared/DTOs/messages/FileEventActionsMessage";
 import { ConnectionManager } from "../managers/ConnectionManager";
-import { SSHClient } from "../services/SSHClient";
 import { IgnoreListMessage } from "../DTOs/messages/IgnoreListMessage";
 import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
+import { LOG_FLAGS, logErrorMessage } from "../managers/LogManager";
 
 export class ConfigurationPanel extends Panel {
   static render(extensionUri: Uri) {
@@ -36,10 +34,9 @@ export class ConfigurationPanel extends Panel {
             );
           }
           break;
-        case "savePairFolders":
-          break;
       }
     };
+
     const filepaths = [
       "resources/css/reset.css",
       "resources/css/vscode.css",
@@ -65,39 +62,24 @@ export class ConfigurationPanel extends Panel {
     this.currentPanel?.getPanel().webview.postMessage(allWorkspaceConfig);
   }
 
-  static async savePairFolders(
-    pairedFoldersArr: PairFoldersMessage["paths"][],
-  ) {
-    console.log("pairedFoldersArr", pairedFoldersArr);
+  static async saveRemotePath(remotePath: string) {
     const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
 
     const connectionManager = ConnectionManager.getInstance(configuration);
     connectionManager
       .doSFTPOperation(async (sftpClient: SFTPClient) => {
-        for (const pairedFolders of pairedFoldersArr) {
-          const { localPath, remotePath } = pairedFolders;
-          if (!(await sftpClient.pathExists(remotePath))) {
-            console.error(
-              `Remote folder not found. Local path: ${localPath} & remote path: ${remotePath}`,
-            );
-            window.showErrorMessage(`Remote folder ${remotePath} not found`);
-            return;
-          } else if (!fs.existsSync(localPath)) {
-            console.error(
-              `Local folder not found. Local path: ${localPath} & remote path: ${remotePath}`,
-            );
-            window.showErrorMessage(`Local folder ${localPath} not found`);
-            return;
-          } else {
-            console.log("Paired Folders are valid");
-          }
+        if (!(await sftpClient.pathExists(remotePath))) {
+          logErrorMessage(
+            `Remote path ${remotePath} does not exist`,
+            LOG_FLAGS.ALL,
+          );
+        } else {
+          console.log("Remote path is valid");
         }
-      }, "Saving PairedFolders")
+      }, "Saving Remote path")
       .then(async () => {
-        // All good so we update the pairedFolders config
-        await WorkspaceConfigManager.update("pairedFolders", pairedFoldersArr);
-        console.log("Paired Folders are saved");
-        window.showInformationMessage("Paired Folders are valid and saved");
+        // All good so we update the remote path config
+        await WorkspaceConfigManager.update("remotePath", remotePath);
       });
   }
 
@@ -115,9 +97,6 @@ export class ConfigurationPanel extends Panel {
         actionOnMove: actions.actionOnMove,
         actionOnOpen: actions.actionOnOpen,
       });
-
-      console.log("File event actions saved successfully.");
-      window.showInformationMessage("File event actions saved.");
     } else {
       window.showErrorMessage(
         "No configuration found or missing properties. Please configure LiveSync correctly.",
@@ -130,35 +109,34 @@ export class ConfigurationPanel extends Panel {
     configuration: ConfigurationState["configuration"],
   ): Promise<void> {
     if (configuration) {
-      const connectionManager = ConnectionManager.getInstance(configuration);
+      try {
+        const testResult = await commands.executeCommand(
+          "livesync.testConnection",
+          configuration,
+        );
 
-      connectionManager
-        .doSSHOperation(async (sshClient: SSHClient) => {
-          sshClient.waitForConnection();
-        }, "Test Connection")
-        .then(async () => {
-          const { hostname, port, username, authMethod, password, sshKey } =
-            configuration;
+        if (!testResult) {
+          throw new Error("Test connection failed.");
+        }
 
-          await WorkspaceConfigManager.batchUpdate({
-            hostname,
-            port,
-            username,
-            authMethod,
-            password,
-            sshKey,
-          });
+        const { hostname, port, username, authMethod, password, sshKey } =
+          configuration;
 
-          console.log("Remote server configuration saved successfully.");
-          window.showInformationMessage("Remote server configuration saved.");
-        })
-        .catch((err: any) => {
-          console.error("Remote server configuration couldnt be saved.", err);
-          window.showErrorMessage(
-            `Remote server configuration couldn't be saved. \n${err.message}`,
-          );
-          throw err;
+        await WorkspaceConfigManager.batchUpdate({
+          hostname,
+          port,
+          username,
+          authMethod,
+          password,
+          sshKey,
         });
+      } catch (error) {
+        logErrorMessage(
+          "Error saving remote server configuration: ",
+          LOG_FLAGS.ALL,
+          error,
+        );
+      }
     } else {
       window.showErrorMessage(
         "No configuration found or missing properties. Please configure LiveSync correctly.",
@@ -192,8 +170,8 @@ export class ConfigurationPanel extends Panel {
     if (configuration.configuration) {
       this.saveRemoteServerConfiguration(configuration.configuration);
     }
-    if (configuration.pairedFolders) {
-      this.savePairFolders(configuration.pairedFolders);
+    if (configuration.remotePath) {
+      this.saveRemotePath(configuration.remotePath);
     }
     if (configuration.fileEventActions) {
       this.saveFileEventActions(configuration.fileEventActions);

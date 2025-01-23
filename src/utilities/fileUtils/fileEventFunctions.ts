@@ -1,5 +1,9 @@
 import { window, commands, Uri } from "vscode";
-import { getCorrespondingPath, pathExists } from "./filePathUtils";
+import {
+  getCorrespondingPath,
+  normalizePath,
+  pathExists,
+} from "./filePathUtils";
 import {
   uploadRemoteFile,
   compareRemoteFileHash,
@@ -283,7 +287,7 @@ async function handleFileOperation(
   }
 
   // Get local and remote path from Uri
-  const localPath = uri.fsPath;
+  const localPath = normalizePath(uri.fsPath);
   const remotePath = getCorrespondingPath(localPath);
 
   // Handle check based on action parameters

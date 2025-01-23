@@ -89,7 +89,7 @@ export async function compareRemoteFileHash(
       remoteFileEntriesMap,
     );
     if (!remoteEntry) {
-      logErrorMessage(`No remote FileNode found`);
+      logErrorMessage(`No remote FileNode found for ${remotePath}`);
       return false;
     }
 

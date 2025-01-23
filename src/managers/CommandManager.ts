@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { ConfigurationPanel } from "../panels/ConfigurationPanel";
 import { LOG_FLAGS, logInfoMessage, LogManager } from "../managers/LogManager";
-import { PairedFoldersTreeDataProvider } from "../services/PairedFoldersTreeDataProvider";
+import { SyncTreeDataProvider } from "../services/SyncTreeDataProvider";
 import { ComparisonFileNode } from "../utilities/ComparisonFileNode";
 import { Action } from "../utilities/enums";
 import { showDiff } from "../utilities/fileUtils/fileDiff";
@@ -17,11 +17,12 @@ import { ConnectionManager } from "./ConnectionManager";
 import { SSHClient } from "../services/SSHClient";
 import { WorkspaceConfigManager } from "./WorkspaceConfigManager";
 import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
+import { compareCorrespondingEntry } from "../utilities/fileUtils/entriesComparison";
 
 export class CommandManager {
   static registerCommands(
     context: vscode.ExtensionContext,
-    treeDataProvider: PairedFoldersTreeDataProvider,
+    treeDataProvider: SyncTreeDataProvider,
   ): void {
     context.subscriptions.push(
       // Show logs
@@ -46,18 +47,49 @@ export class CommandManager {
         }, 500);
       }),
 
+      // Refresh all
+      vscode.commands.registerCommand("livesync.refreshAll", async () => {
+        const { localPath, remotePath } =
+          WorkspaceConfigManager.getWorkspaceFullPaths();
+        const comparisonFileNode = await treeDataProvider.getComparisonFileNode(
+          localPath,
+          remotePath,
+        );
+        treeDataProvider.rootElements.set(
+          comparisonFileNode.name,
+          comparisonFileNode,
+        );
+
+        await treeDataProvider.refresh();
+      }),
+
       // File entry refresh
       vscode.commands.registerCommand(
-        "livesync.fileEntryRefresh",
+        "livesync.refresh",
         async (element?: ComparisonFileNode) => {
+          console.log("element", element);
           if (!element) {
-            treeDataProvider.refresh();
+            const { localPath, remotePath } =
+              WorkspaceConfigManager.getWorkspaceFullPaths();
+            const comparisonFileNode =
+              await treeDataProvider.getComparisonFileNode(
+                localPath,
+                remotePath,
+              );
+            treeDataProvider.rootElements.set(
+              comparisonFileNode.name,
+              comparisonFileNode,
+            );
+
+            await treeDataProvider.refresh();
           } else {
+            const comparisonFileNode = await compareCorrespondingEntry(element);
             const updatedElement = await treeDataProvider.updateRootElements(
               Action.Update,
-              element,
+              comparisonFileNode,
             );
-            treeDataProvider.refresh(updatedElement);
+
+            await treeDataProvider.refresh(updatedElement);
           }
         },
       ),
@@ -81,7 +113,7 @@ export class CommandManager {
             const fileUri = vscode.Uri.file(localPath);
             await fileUpload(fileUri);
           }
-          treeDataProvider.refresh(comparisonNode);
+          await treeDataProvider.refresh(comparisonNode);
         },
       ),
 
@@ -94,7 +126,7 @@ export class CommandManager {
           } else {
             await handleFileDownload(fileEntry);
           }
-          treeDataProvider.refresh(fileEntry);
+          await treeDataProvider.refresh(fileEntry);
         },
       ),
 

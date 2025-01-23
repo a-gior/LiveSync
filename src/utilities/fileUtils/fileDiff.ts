@@ -13,8 +13,8 @@ export async function showDiff(
   if (input instanceof ComparisonFileNode) {
     // If input is a ComparisonFileNode, extract paths using getFullPaths
     const fullPaths = await getFullPaths(input);
-    localPath = fullPaths.localPath!;
-    remotePath = fullPaths.remotePath!;
+    localPath = fullPaths.localPath;
+    remotePath = fullPaths.remotePath;
   } else {
     // If input is an object containing localPath and remotePath
     ({ localPath, remotePath } = input);

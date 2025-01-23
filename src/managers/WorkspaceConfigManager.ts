@@ -1,10 +1,11 @@
 import { workspace, ConfigurationTarget, WorkspaceFolder } from "vscode";
+import * as crypto from "crypto";
 import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
-import { PairFoldersMessage } from "../DTOs/messages/PairFoldersMessage";
 import { FileEventActionsMessage } from "../DTOs/messages/FileEventActionsMessage";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
 import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
 import { IgnoreListMessage } from "../DTOs/messages/IgnoreListMessage";
+import path from "path";
 
 export class WorkspaceConfigManager {
   private static _workspaceConfig: ConfigurationState | undefined;
@@ -27,10 +28,7 @@ export class WorkspaceConfigManager {
         password: config.get<string>("password", ""),
         sshKey: config.get<string>("sshKey", ""),
       },
-      pairedFolders: config.get<PairFoldersMessage["paths"][]>(
-        "pairedFolders",
-        [],
-      ),
+      remotePath: config.get<string>("remotePath", ""),
       fileEventActions: config.get<FileEventActionsMessage["actions"]>(
         "fileEventActions",
         {
@@ -50,7 +48,13 @@ export class WorkspaceConfigManager {
   // Get the appropriate configuration object
   static getConfiguration(folderUri?: WorkspaceFolder) {
     if (this.isMultiRootWorkspace()) {
-      return workspace.getConfiguration("LiveSync");
+      logErrorMessage(
+        "LiveSync requires a single folder in the workspace to configure correctly. Please ensure only one folder is selected.",
+        LOG_FLAGS.ALL,
+      );
+      throw new Error(
+        "LiveSync requires a single folder in the workspace to configure correctly.",
+      );
     }
 
     const targetFolder = folderUri || workspace.workspaceFolders?.[0];
@@ -92,8 +96,8 @@ export class WorkspaceConfigManager {
       ConfigurationTarget.Workspace,
     );
     await config.update(
-      "pairedFolders",
-      state.pairedFolders,
+      "remotePath",
+      state.remotePath,
       ConfigurationTarget.Workspace,
     );
     await config.update(
@@ -147,19 +151,44 @@ export class WorkspaceConfigManager {
     return workspaceConfig.configuration;
   }
 
-  // Get paired folders
-  static getPairedFoldersConfigured(): PairFoldersMessage["paths"][] {
+  // Get current workspace path
+  static getWorkspaceLocalPath(): string {
+    // Get the workspace folders
+    const workspaceFolders = workspace.workspaceFolders;
+
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+      throw new Error("No workspace folders found");
+    }
+
+    // Get the first workspace folder & Return the URI's fsPath (local file system path)
+    return workspaceFolders[0].uri.fsPath;
+  }
+
+  // Get configured remote path
+  static getRemotePath(): string {
     const workspaceConfig = this.getWorkspaceConfiguration();
 
     if (
-      !workspaceConfig.pairedFolders ||
-      workspaceConfig.pairedFolders.length === 0
+      !workspaceConfig.remotePath ||
+      workspaceConfig.remotePath.length === 0
     ) {
-      logErrorMessage("Paired Folders not configured", LOG_FLAGS.ALL);
-      throw new Error("Paired Folders not configured");
+      logErrorMessage("Remote path not configured", LOG_FLAGS.ALL);
+      throw new Error("Remote path not configured");
     }
 
-    return workspaceConfig.pairedFolders;
+    return workspaceConfig.remotePath;
+  }
+
+  // Get full local and remote paths
+  static getWorkspaceFullPaths() {
+    return {
+      localPath: this.getWorkspaceLocalPath(),
+      remotePath: this.getRemotePath(),
+    };
+  }
+
+  static getWorkspaceBasename(): string {
+    return path.basename(this.getWorkspaceLocalPath());
   }
 
   // Get ignore list
@@ -206,11 +235,10 @@ export class WorkspaceConfigManager {
       for (const [key, value] of Object.entries(updates)) {
         await config.update(key, value, ConfigurationTarget.Workspace);
       }
+      console.log("Batch configuration updates applied:", updates);
 
       // Reload the configuration once after all updates
       this.reload();
-
-      console.log("Batch configuration updates applied:", updates);
     } catch (error) {
       console.error("Failed to perform batch updates", error);
       throw new Error("Batch updates failed");
@@ -221,5 +249,32 @@ export class WorkspaceConfigManager {
   static reload(): void {
     this._workspaceConfig = this.loadWorkspaceConfiguration();
     logInfoMessage("Workspace configuration reloaded.");
+  }
+
+  /**
+   * Get the workspace path and a unique identifier for the workspace.
+   * @returns An object containing the workspace path and identifier.
+   */
+  static getWorkspaceHash(): { path: string | undefined; identifier: string } {
+    let workspacePath: string | undefined;
+    const workspaceFolders = workspace.workspaceFolders;
+
+    if (workspace.workspaceFile) {
+      // Multi-root workspace: Use the path to the `.code-workspace` file
+      workspacePath = workspace.workspaceFile.fsPath;
+    } else if (workspaceFolders && workspaceFolders.length === 1) {
+      // Single-folder workspace: Use the folder path
+      workspacePath = workspaceFolders[0].uri.fsPath;
+    } else {
+      // No workspace open
+      workspacePath = undefined;
+    }
+
+    // Generate a unique identifier for the workspace
+    const identifier = workspacePath
+      ? crypto.createHash("md5").update(workspacePath).digest("hex")
+      : "global";
+
+    return { path: workspacePath, identifier };
   }
 }

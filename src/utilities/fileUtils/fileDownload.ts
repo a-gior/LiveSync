@@ -2,19 +2,9 @@ import * as vscode from "vscode";
 import { getFullPaths } from "./filePathUtils";
 import { downloadRemoteFile } from "./sftpOperations";
 import { ComparisonFileNode } from "../ComparisonFileNode";
-import { LOG_FLAGS, logErrorMessage } from "../../managers/LogManager";
 
 export async function handleFileDownload(fileEntry: ComparisonFileNode) {
   const { localPath, remotePath } = await getFullPaths(fileEntry);
-
-  if (!remotePath || !localPath) {
-    logErrorMessage(
-      `No local or remote path found, localPath: ${localPath} / remotePath: ${remotePath}`,
-      LOG_FLAGS.ALL,
-      fileEntry,
-    );
-    return;
-  }
 
   try {
     await downloadRemoteFile(remotePath, localPath);

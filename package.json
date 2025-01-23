@@ -29,7 +29,7 @@
       "package-explorer": [
         {
           "id": "nodeDependencies",
-          "name": "Paired Folders",
+          "name": "Current Workspace",
           "type": "tree",
           "icon": "resources/media/liveysync-logo.svg"
         }
@@ -53,8 +53,13 @@
         "title": "LiveSync: Show Hello World (Svelte)"
       },
       {
-        "command": "livesync.fileEntryRefresh",
-        "title": "Refresh local and remote file",
+        "command": "livesync.refreshAll",
+        "title": "Refresh all differences",
+        "icon": "resources/media/dark/debug-restart.svg"
+      },
+      {
+        "command": "livesync.refresh",
+        "title": "Refresh differences",
         "icon": "resources/media/dark/debug-restart.svg"
       },
       {
@@ -116,36 +121,41 @@
           "group": "inline@3"
         },
         {
-          "command": "livesync.fileEntryRefresh",
+          "command": "livesync.refresh",
           "when": "viewItem =~ /^fileEntry-directory/",
           "group": "inline@4"
         }
       ],
       "view/title": [
         {
-          "command": "livesync.toggleToListView",
-          "when": "view == nodeDependencies && livesyncViewMode == 'tree'",
-          "group": "navigation"
-        },
-        {
-          "command": "livesync.toggleToTreeView",
-          "when": "view == nodeDependencies && livesyncViewMode == 'list'",
-          "group": "navigation"
-        },
-        {
-          "command": "livesync.showUnchanged",
-          "when": "view == nodeDependencies && livesyncShowUnchanged == false",
-          "group": "navigation"
-        },
-        {
-          "command": "livesync.hideUnchanged",
-          "when": "view == nodeDependencies && livesyncShowUnchanged == true",
-          "group": "navigation"
+          "command": "livesync.refreshAll",
+          "when": "view == nodeDependencies",
+          "group": "navigation@1"
         },
         {
           "command": "livesync.collapseAll",
           "when": "view == nodeDependencies",
-          "group": "navigation"
+          "group": "navigation@2"
+        },
+        {
+          "command": "livesync.toggleToListView",
+          "when": "view == nodeDependencies && livesyncViewMode == 'tree'",
+          "group": "navigation@3"
+        },
+        {
+          "command": "livesync.toggleToTreeView",
+          "when": "view == nodeDependencies && livesyncViewMode == 'list'",
+          "group": "navigation@4"
+        },
+        {
+          "command": "livesync.showUnchanged",
+          "when": "view == nodeDependencies && livesyncShowUnchanged == false",
+          "group": "navigation@5"
+        },
+        {
+          "command": "livesync.hideUnchanged",
+          "when": "view == nodeDependencies && livesyncShowUnchanged == true",
+          "group": "navigation@6"
         }
       ]
     },
@@ -186,29 +196,10 @@
           "default": "",
           "description": "SSH key for LiveSync configuration."
         },
-        "LiveSync.pairedFolders": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "title": "Paired Folders",
-            "properties": {
-              "localPath": {
-                "type": "string",
-                "description": "Path to a local folder"
-              },
-              "remotePath": {
-                "type": "string",
-                "description": "Path to a remote folder"
-              }
-            }
-          },
-          "default": [
-            {
-              "localPath": "/path/to/local/folder",
-              "remotePath": "/path/to/remote/folder"
-            }
-          ],
-          "description": "Array of paired local and remote folders"
+        "LiveSync.remotePath": {
+          "type": "string",
+          "default": "",
+          "description": "Remote path to sync with current workspace"
         },
         "LiveSync.actionOnUpload": {
           "type": "string",

@@ -1,6 +1,10 @@
 import * as vscode from "vscode";
 import { ensureDirectoryExists } from "../utilities/fileUtils/fileOperations";
-import { isRootPath } from "../utilities/fileUtils/filePathUtils";
+import {
+  isRootPath,
+  joinParts,
+  splitParts,
+} from "../utilities/fileUtils/filePathUtils";
 import {
   listLocalFilesRecursive,
   listRemoteFilesRecursive,
@@ -33,6 +37,7 @@ import {
   LOG_FLAGS,
   logErrorMessage,
   logInfoMessage,
+  LogManager,
 } from "../managers/LogManager";
 import { StatusBarManager } from "../managers/StatusBarManager";
 import { FileNode } from "../utilities/FileNode";
@@ -40,7 +45,7 @@ import path from "path";
 import { Action } from "../utilities/enums";
 import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 
-export class PairedFoldersTreeDataProvider
+export class SyncTreeDataProvider
   implements vscode.TreeDataProvider<ComparisonFileNode>
 {
   private _onDidChangeTreeData: vscode.EventEmitter<
@@ -92,31 +97,34 @@ export class PairedFoldersTreeDataProvider
   }
 
   async refresh(element?: ComparisonFileNode): Promise<void> {
+    logInfoMessage("Refreshing Tree: ", LOG_FLAGS.CONSOLE_ONLY, element);
+
     if (!element) {
       this._onDidChangeTreeData.fire(undefined);
     } else {
       let parentNode;
+      let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
 
-      const pathParts = element.relativePath.split(path.sep);
+      const pathParts = splitParts(element.relativePath);
       if (element.isDirectory() && pathParts.length > 1) {
         parentNode = element;
       } else if (!element.isDirectory() && pathParts.length > 1) {
         const parentPathParts = pathParts.slice(0, pathParts.length - 1);
         parentNode = await JsonManager.findNodeByPath(
-          parentPathParts.join(path.sep),
+          joinParts(parentPathParts),
           this.rootElements,
-          element.pairedFolderName,
+          rootFolderName,
         );
       } else {
-        parentNode = this.rootElements.get(element.pairedFolderName);
+        parentNode = this.rootElements.get(rootFolderName);
       }
 
       if (parentNode && parentNode instanceof ComparisonFileNode) {
-        logInfoMessage("Refreshing Tree: ", LOG_FLAGS.CONSOLE_ONLY, parentNode);
         this._onDidChangeTreeData.fire(parentNode);
-        this.jsonManager.updateFullJson(JsonType.COMPARE, this.rootElements);
       }
     }
+
+    await this.jsonManager.updateFullJson(JsonType.COMPARE, this.rootElements);
   }
 
   async getTreeItem(element: ComparisonFileNode): Promise<vscode.TreeItem> {
@@ -146,13 +154,7 @@ export class PairedFoldersTreeDataProvider
     const treeItem = new vscode.TreeItem(label, collapsibleState);
 
     if (element.status && element.type) {
-      if (
-        WorkspaceConfigManager.getPairedFoldersConfigured() &&
-        isRootPath(
-          element.relativePath,
-          WorkspaceConfigManager.getPairedFoldersConfigured(),
-        )
-      ) {
+      if (isRootPath(element.relativePath)) {
         treeItem.iconPath = getIconForFolder(
           "root_folder",
           DEFAULT_FOLDER_ICON,
@@ -185,41 +187,41 @@ export class PairedFoldersTreeDataProvider
 
         if (!comparisonEntries || comparisonEntries.size === 0) {
           ensureDirectoryExists(SAVE_DIR);
-          const pairedFolders =
-            WorkspaceConfigManager.getPairedFoldersConfigured();
+          const { localPath, remotePath } =
+            WorkspaceConfigManager.getWorkspaceFullPaths();
 
-          for (const { localPath, remotePath } of pairedFolders) {
-            const comparisonFileNode = await this.getComparisonFileNode(
-              localPath,
-              remotePath,
-            );
-            this.rootElements.set(comparisonFileNode.name, comparisonFileNode);
-          }
+          const comparisonFileNode = await this.getComparisonFileNode(
+            localPath,
+            remotePath,
+          );
+          this.rootElements.set(comparisonFileNode.name, comparisonFileNode);
 
           await this.jsonManager.updateFullJson(
             JsonType.COMPARE,
             this.rootElements,
           );
 
-          const rootNodes = BaseNode.toArray(this.rootElements);
+          const rootTree = this.rootElements.get(comparisonFileNode.name);
+          const rootNodes = BaseNode.toArray(rootTree!.children);
           return this.applyViewMode(rootNodes);
         } else if (
           comparisonEntries &&
           isComparisonFileNodeMap(comparisonEntries)
         ) {
+          const rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
           this.rootElements = comparisonEntries;
-          const rootNodes = BaseNode.toArray(this.rootElements);
+          const rootTree = this.rootElements.get(rootFolderName);
+          const rootNodes = BaseNode.toArray(rootTree!.children);
           return this.applyViewMode(rootNodes);
         } else {
           throw Error(
             "Comparison JSON data not found. Please run the initial comparison.",
           );
         }
-      } catch (error) {
+      } catch (error: any) {
         logErrorMessage(
-          "Error fetching comparison data:",
-          LOG_FLAGS.ALL,
-          error,
+          `Error fetching comparison data: ${error.message}`,
+          LOG_FLAGS.CONSOLE_ONLY,
         );
         return [];
       }
@@ -238,10 +240,11 @@ export class PairedFoldersTreeDataProvider
     }
 
     const parentPath = path.dirname(element.relativePath);
+    let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
     return JsonManager.findNodeByPath(
       parentPath,
       this.rootElements,
-      element.pairedFolderName,
+      rootFolderName,
     );
   }
 
@@ -252,7 +255,6 @@ export class PairedFoldersTreeDataProvider
   ): Promise<ComparisonFileNode> {
     const startTime = performance.now(); // Start timing
     try {
-      console.log(`Comparing Directories...`);
       const localFiles = await listLocalFilesRecursive(localDir);
       const remoteFiles = await listRemoteFilesRecursive(remoteDir);
 
@@ -263,7 +265,8 @@ export class PairedFoldersTreeDataProvider
 
       if (remoteFiles) {
         const remoteFilesMap = new Map<string, FileNode>();
-        remoteFilesMap.set(remoteFiles.pairedFolderName, remoteFiles);
+        let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
+        remoteFilesMap.set(rootFolderName, remoteFiles);
 
         console.log("Saving JSON REMOTE Map: ", remoteFilesMap);
         await this.jsonManager.updateFullJson(JsonType.REMOTE, remoteFilesMap);
@@ -283,7 +286,7 @@ export class PairedFoldersTreeDataProvider
     } finally {
       const endTime = performance.now(); // End timing
       const executionTime = endTime - startTime; // Calculate the elapsed time in milliseconds
-      console.log(
+      logInfoMessage(
         `Comparing directories execution time: ${executionTime.toFixed(2)} ms`,
       ); // Log the execution time
     }
@@ -333,7 +336,6 @@ export class PairedFoldersTreeDataProvider
           // Create a new root node that will be shown in flatten mode
           const rootNodeCopy = new ComparisonFileNode(
             node.name,
-            node.pairedFolderName,
             node.type,
             node.size,
             node.modifiedTime,
