@@ -1,6 +1,7 @@
 import { Client, ConnectConfig } from "ssh2";
 import { BaseClient } from "./BaseClient";
 import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
+import { LogManager } from "../managers/LogManager";
 
 export class SSHClient extends BaseClient {
   private static instance: SSHClient;
@@ -107,5 +108,24 @@ export class SSHClient extends BaseClient {
           });
       });
     });
+  }
+
+  async createDirectoriesBatch(directories: string[]) {
+    if (directories.length === 0) {
+      return;
+    }
+
+    // Only create the deepest directories, relying on `mkdir -p` to handle parent directories
+    const mkdirCommand = `mkdir -p ${directories.map((dir) => `'${dir}'`).join(" ")}`;
+
+    try {
+      await this.executeCommand(mkdirCommand);
+      LogManager.log(
+        `SFTP Created directories: ${directories.map((dir) => `'${dir}'`).join(" ")}`,
+      );
+    } catch (error) {
+      LogManager.log("Error creating directories in batch");
+      throw error;
+    }
   }
 }

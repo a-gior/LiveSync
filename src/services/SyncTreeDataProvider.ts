@@ -37,7 +37,6 @@ import {
   LOG_FLAGS,
   logErrorMessage,
   logInfoMessage,
-  LogManager,
 } from "../managers/LogManager";
 import { StatusBarManager } from "../managers/StatusBarManager";
 import { FileNode } from "../utilities/FileNode";
@@ -102,29 +101,23 @@ export class SyncTreeDataProvider
     if (!element) {
       this._onDidChangeTreeData.fire(undefined);
     } else {
-      let parentNode;
       let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
 
       const pathParts = splitParts(element.relativePath);
       if (element.isDirectory() && pathParts.length > 1) {
-        parentNode = element;
+        this._onDidChangeTreeData.fire(element);
       } else if (!element.isDirectory() && pathParts.length > 1) {
         const parentPathParts = pathParts.slice(0, pathParts.length - 1);
-        parentNode = await JsonManager.findNodeByPath(
+        const parentNode = await JsonManager.findNodeByPath(
           joinParts(parentPathParts),
           this.rootElements,
           rootFolderName,
         );
-      } else {
-        parentNode = this.rootElements.get(rootFolderName);
-      }
-
-      if (parentNode && parentNode instanceof ComparisonFileNode) {
         this._onDidChangeTreeData.fire(parentNode);
+      } else {
+        this._onDidChangeTreeData.fire(element);
       }
     }
-
-    await this.jsonManager.updateFullJson(JsonType.COMPARE, this.rootElements);
   }
 
   async getTreeItem(element: ComparisonFileNode): Promise<vscode.TreeItem> {
@@ -194,7 +187,16 @@ export class SyncTreeDataProvider
             localPath,
             remotePath,
           );
-          this.rootElements.set(comparisonFileNode.name, comparisonFileNode);
+
+          if (this.rootElements.has(comparisonFileNode.name)) {
+            // Update the root elements
+            const rootNode = this.rootElements.get(comparisonFileNode.name);
+            if (rootNode) {
+              Object.assign(rootNode, comparisonFileNode); // Update properties while keeping the same reference
+            }
+          } else {
+            this.rootElements.set(comparisonFileNode.name, comparisonFileNode);
+          }
 
           await this.jsonManager.updateFullJson(
             JsonType.COMPARE,

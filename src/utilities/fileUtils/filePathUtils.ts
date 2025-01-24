@@ -96,11 +96,12 @@ export function getCorrespondingPath(inputPath: string): string {
 }
 
 export function getRelativePath(fullPath: string) {
+  const normalizedFullPath = normalizePath(fullPath);
   const { localPath, remotePath } =
     WorkspaceConfigManager.getWorkspaceFullPaths();
-  if (fullPath.startsWith(localPath)) {
+  if (normalizedFullPath.startsWith(localPath)) {
     return normalizePath(path.relative(localPath, fullPath));
-  } else if (fullPath.startsWith(remotePath)) {
+  } else if (normalizedFullPath.startsWith(remotePath)) {
     return normalizePath(path.relative(remotePath, fullPath));
   }
   throw new Error(`Couldnt find relative path of ${fullPath}`);

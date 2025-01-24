@@ -6,9 +6,11 @@ import { SyncTreeDataProvider } from "./SyncTreeDataProvider";
 import {
   fileCreate,
   fileDelete,
+  fileDownload,
   fileMove,
   fileOpen,
   fileSave,
+  fileUpload,
   handleFileCheck,
 } from "../utilities/fileUtils/fileEventFunctions";
 import {
@@ -536,6 +538,90 @@ export class FileEventHandler {
       await treeDataProvider.refresh(savedNode);
     } catch (err: any) {
       console.error("<handleFileOpen> Error: ", err);
+    }
+  }
+
+  /**
+   * Handle file download.
+   * @param fileNode - The file node to download
+   * @param treeDataProvider - The tree data provider
+   */
+  static async handleFileDownload(
+    fileNode: ComparisonFileNode,
+    treeDataProvider: SyncTreeDataProvider,
+  ) {
+    const { localPath, remotePath } = await getFullPaths(fileNode);
+
+    if (!FileEventHandler.isFileInWorkspace(localPath)) {
+      FileEventHandler.logFileNotInWorkspace("Download", localPath);
+      return;
+    }
+
+    console.log(
+      `<handleFileDownload> Downloading file from ${remotePath} to ${localPath}`,
+    );
+
+    try {
+      const uri = vscode.Uri.file(localPath);
+      const downloadResult = await fileDownload(uri);
+
+      if (downloadResult === ActionResult.ActionPerformed) {
+        fileNode.status = ComparisonStatus.unchanged; // File downloaded successfully
+      } else if (downloadResult === ActionResult.Exists) {
+        fileNode.status = ComparisonStatus.unchanged; // File already exists and is the same
+      } else if (downloadResult === ActionResult.IsNotSame) {
+        fileNode.status = ComparisonStatus.modified; // File exists locally but is different
+      }
+
+      const updatedNode = await treeDataProvider.updateRootElements(
+        Action.Update,
+        fileNode,
+      );
+      await treeDataProvider.refresh(updatedNode);
+    } catch (err: any) {
+      logErrorMessage(`${err.message}`, LOG_FLAGS.ALL);
+    }
+  }
+
+  /**
+   * Handle file upload.
+   * @param fileNode - The file node to upload
+   * @param treeDataProvider - The tree data provider
+   */
+  static async handleFileUpload(
+    fileNode: ComparisonFileNode,
+    treeDataProvider: SyncTreeDataProvider,
+  ) {
+    const { localPath, remotePath } = await getFullPaths(fileNode);
+
+    if (!FileEventHandler.isFileInWorkspace(localPath)) {
+      FileEventHandler.logFileNotInWorkspace("Upload", localPath);
+      return;
+    }
+
+    console.log(
+      `<handleFileUpload> Uploading file from ${localPath} to ${remotePath}`,
+    );
+
+    try {
+      const uri = vscode.Uri.file(localPath);
+      const uploadResult = await fileUpload(uri);
+
+      if (uploadResult === ActionResult.ActionPerformed) {
+        fileNode.status = ComparisonStatus.unchanged; // File uploaded successfully
+      } else if (uploadResult === ActionResult.Exists) {
+        fileNode.status = ComparisonStatus.unchanged; // File already exists and is the same
+      } else if (uploadResult === ActionResult.IsNotSame) {
+        fileNode.status = ComparisonStatus.modified; // File exists remotely but is different
+      }
+
+      const updatedNode = await treeDataProvider.updateRootElements(
+        Action.Update,
+        fileNode,
+      );
+      await treeDataProvider.refresh(updatedNode);
+    } catch (err: any) {
+      logErrorMessage(`${err.message}`, LOG_FLAGS.ALL);
     }
   }
 

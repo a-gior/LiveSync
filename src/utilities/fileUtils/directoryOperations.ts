@@ -6,48 +6,43 @@ import { FileNode, FileNodeSource } from "../FileNode";
 import { getFullPaths, getRelativePath, normalizePath } from "./filePathUtils";
 import { ConnectionManager } from "../../managers/ConnectionManager";
 import pLimit = require("p-limit");
-import { LogManager } from "../../managers/LogManager";
 import { BaseNodeType } from "../BaseNode";
 import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
+import { SSHClient } from "../../services/SSHClient";
 
 // Set a limit for the number of concurrent file operations, from 10 onwards triggers a warning for too much event listeners
 const limit = pLimit(9);
 
-async function createRemoteDirectories(
-  sftpClient: SFTPClient,
-  fileEntry: ComparisonFileNode,
-) {
-  let lastParentDir = "";
+async function createRemoteDirectories(fileEntry: ComparisonFileNode) {
+  const directoriesToCreate: Set<string> = new Set();
   const filePaths: { localPath: string; remotePath: string }[] = [];
 
-  const createDir = async (node: ComparisonFileNode) => {
+  const traverseNode = async (node: ComparisonFileNode) => {
     const { localPath, remotePath } = await getFullPaths(node);
 
-    if (node.listChildren().length === 0) {
-      if (node.isDirectory()) {
-        await sftpClient.createDirectory(remotePath);
-        LogManager.log(`SFTP Created dir ${remotePath}`);
-      } else {
-        const parentDirPath = path.dirname(remotePath);
-        if (lastParentDir !== parentDirPath) {
-          lastParentDir = parentDirPath;
-          await sftpClient.createDirectory(parentDirPath);
-          LogManager.log(`SFTP Created dir ${remotePath}`);
+    if (node.isDirectory()) {
+      let hasChildDirectories = false;
+
+      for (const child of node.listChildren()) {
+        if (child.isDirectory()) {
+          hasChildDirectories = true;
         }
-        filePaths.push({ localPath, remotePath });
+        await traverseNode(child); // Recursively process children
+      }
+
+      // Add to the list if it's a directory with no children or no children that are directories
+      if (!hasChildDirectories) {
+        directoriesToCreate.add(remotePath);
       }
     } else {
-      if (node.isDirectory()) {
-        for (const child of node.listChildren()) {
-          await createDir(child);
-        }
-      }
+      filePaths.push({ localPath, remotePath }); // Add file to the list
     }
   };
 
-  await createDir(fileEntry);
-  return filePaths;
+  await traverseNode(fileEntry);
+
+  return { directoriesToCreate: Array.from(directoriesToCreate), filePaths };
 }
 
 async function uploadFilesWithLimit(
@@ -66,10 +61,16 @@ export async function uploadDirectory(rootEntry: ComparisonFileNode) {
 
   try {
     await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
-      // Step 1: Create remote directories and collect file paths
-      const filePaths = await createRemoteDirectories(sftpClient, rootEntry);
+      // Step 1: Collect remote directories and  file paths
+      const { directoriesToCreate, filePaths } =
+        await createRemoteDirectories(rootEntry);
 
-      // Step 2: Upload files with concurrency limits
+      // Step 2: Create directories via SSH command
+      await connectionManager.doSSHOperation(async (sshClient: SSHClient) => {
+        await sshClient.createDirectoriesBatch(directoriesToCreate);
+      });
+
+      // Step 3: Upload files with concurrency limits
       await uploadFilesWithLimit(sftpClient, filePaths);
     }, `Upload Dir ${rootEntry.relativePath}`);
   } catch (error: any) {

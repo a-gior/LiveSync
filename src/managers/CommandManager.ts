@@ -2,41 +2,72 @@ import * as vscode from "vscode";
 import { ConfigurationPanel } from "../panels/ConfigurationPanel";
 import { LOG_FLAGS, logInfoMessage, LogManager } from "../managers/LogManager";
 import { SyncTreeDataProvider } from "../services/SyncTreeDataProvider";
-import { ComparisonFileNode } from "../utilities/ComparisonFileNode";
+import {
+  ComparisonFileNode,
+  ComparisonStatus,
+} from "../utilities/ComparisonFileNode";
 import { Action } from "../utilities/enums";
 import { showDiff } from "../utilities/fileUtils/fileDiff";
-import { fileUpload } from "../utilities/fileUtils/fileEventFunctions";
-import { handleFileDownload } from "../utilities/fileUtils/fileDownload";
 import {
   downloadDirectory,
   uploadDirectory,
 } from "../utilities/fileUtils/directoryOperations";
-import JsonManager from "../managers/JsonManager";
-import { getFullPaths } from "../utilities/fileUtils/filePathUtils";
+import JsonManager, { JsonType } from "../managers/JsonManager";
 import { ConnectionManager } from "./ConnectionManager";
 import { SSHClient } from "../services/SSHClient";
 import { WorkspaceConfigManager } from "./WorkspaceConfigManager";
 import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
 import { compareCorrespondingEntry } from "../utilities/fileUtils/entriesComparison";
+import { FileEventHandler } from "../services/FileEventHandler";
 
 export class CommandManager {
+  private static runningCommands: Set<string> = new Set();
+
+  /**
+   * Ensures a command is executed only once at a time.
+   */
+  private static async singleExecution(
+    commandKey: string,
+    command: (...args: any[]) => Promise<boolean> | Promise<void> | void,
+    args: any[],
+  ) {
+    if (this.runningCommands.has(commandKey)) {
+      logInfoMessage(`Command "${commandKey}" is already running.`);
+      return;
+    }
+
+    this.runningCommands.add(commandKey);
+    try {
+      await command(...args);
+    } catch (error: any) {
+      logInfoMessage(
+        `Error executing command "${commandKey}": ${error.message || error}`,
+      );
+      throw error;
+    } finally {
+      this.runningCommands.delete(commandKey);
+    }
+  }
+
   static registerCommands(
     context: vscode.ExtensionContext,
     treeDataProvider: SyncTreeDataProvider,
   ): void {
-    context.subscriptions.push(
-      // Show logs
-      vscode.commands.registerCommand("livesync.showLogs", () => {
+    // Define all command callbacks
+    const commands: {
+      [key: string]: (
+        ...args: any[]
+      ) => Promise<boolean> | Promise<void> | void;
+    } = {
+      "livesync.showLogs": () => {
         LogManager.showLogs();
-      }),
+      },
 
-      // Configuration panel
-      vscode.commands.registerCommand("livesync.configuration", () => {
+      "livesync.configuration": () => {
         ConfigurationPanel.render(context.extensionUri);
-      }),
+      },
 
-      // Refresh configuration
-      vscode.commands.registerCommand("livesync.refreshConfig", () => {
+      "livesync.refreshConfig": () => {
         ConfigurationPanel.kill();
         ConfigurationPanel.render(context.extensionUri);
 
@@ -45,93 +76,123 @@ export class CommandManager {
             "workbench.action.webview.openDeveloperTools",
           );
         }, 500);
-      }),
+      },
 
-      // Refresh all
-      vscode.commands.registerCommand("livesync.refreshAll", async () => {
+      "livesync.refreshAll": async () => {
         const { localPath, remotePath } =
           WorkspaceConfigManager.getWorkspaceFullPaths();
         const comparisonFileNode = await treeDataProvider.getComparisonFileNode(
           localPath,
           remotePath,
         );
-        treeDataProvider.rootElements.set(
+        const existingNode = treeDataProvider.rootElements.get(
           comparisonFileNode.name,
-          comparisonFileNode,
         );
+        if (existingNode) {
+          Object.assign(existingNode, comparisonFileNode); // Update properties while keeping the same reference
+        }
 
+        await JsonManager.getInstance().updateFullJson(
+          JsonType.COMPARE,
+          treeDataProvider.rootElements,
+        );
         await treeDataProvider.refresh();
-      }),
+      },
 
-      // File entry refresh
-      vscode.commands.registerCommand(
-        "livesync.refresh",
-        async (element?: ComparisonFileNode) => {
-          console.log("element", element);
-          if (!element) {
-            const { localPath, remotePath } =
-              WorkspaceConfigManager.getWorkspaceFullPaths();
-            const comparisonFileNode =
-              await treeDataProvider.getComparisonFileNode(
-                localPath,
-                remotePath,
-              );
-            treeDataProvider.rootElements.set(
-              comparisonFileNode.name,
-              comparisonFileNode,
-            );
+      "livesync.refresh": async (element?: ComparisonFileNode) => {
+        if (!element) {
+          const { localPath, remotePath } =
+            WorkspaceConfigManager.getWorkspaceFullPaths();
+          const comparisonFileNode =
+            await treeDataProvider.getComparisonFileNode(localPath, remotePath);
 
-            await treeDataProvider.refresh();
-          } else {
-            const comparisonFileNode = await compareCorrespondingEntry(element);
-            const updatedElement = await treeDataProvider.updateRootElements(
-              Action.Update,
-              comparisonFileNode,
-            );
-
-            await treeDataProvider.refresh(updatedElement);
+          // Update the root elements
+          const rootNode = treeDataProvider.rootElements.get(
+            comparisonFileNode.name,
+          );
+          if (rootNode) {
+            Object.assign(rootNode, comparisonFileNode); // Update properties while keeping the same reference
           }
-        },
-      ),
 
-      // Show file diff
-      vscode.commands.registerCommand(
-        "livesync.fileEntryShowDiff",
-        (input: ComparisonFileNode) => {
-          showDiff(input);
-        },
-      ),
+          await JsonManager.getInstance().updateFullJson(
+            JsonType.COMPARE,
+            treeDataProvider.rootElements,
+          );
+          await treeDataProvider.refresh();
+        } else {
+          const comparisonFileNode = await compareCorrespondingEntry(element);
+          const updatedElement = await treeDataProvider.updateRootElements(
+            Action.Update,
+            comparisonFileNode,
+          );
 
-      // File upload
-      vscode.commands.registerCommand(
-        "livesync.fileEntryUpload",
-        async (comparisonNode: ComparisonFileNode) => {
-          if (comparisonNode.isDirectory()) {
-            await uploadDirectory(comparisonNode);
-          } else {
-            const { localPath } = await getFullPaths(comparisonNode);
-            const fileUri = vscode.Uri.file(localPath);
-            await fileUpload(fileUri);
-          }
-          await treeDataProvider.refresh(comparisonNode);
-        },
-      ),
+          await JsonManager.getInstance().updateFullJson(
+            JsonType.COMPARE,
+            treeDataProvider.rootElements,
+          );
+          await treeDataProvider.refresh(updatedElement);
+        }
+      },
 
-      // File download
-      vscode.commands.registerCommand(
-        "livesync.fileEntryDownload",
-        async (fileEntry: ComparisonFileNode) => {
-          if (fileEntry.isDirectory()) {
-            await downloadDirectory(fileEntry);
-          } else {
-            await handleFileDownload(fileEntry);
-          }
-          await treeDataProvider.refresh(fileEntry);
-        },
-      ),
+      "livesync.fileEntryShowDiff": (input: ComparisonFileNode) => {
+        showDiff(input);
+      },
 
-      // Toggle to list view
-      vscode.commands.registerCommand("livesync.toggleToListView", () => {
+      "livesync.fileEntryUpload": async (
+        comparisonNode: ComparisonFileNode,
+      ) => {
+        if (comparisonNode.isDirectory()) {
+          await uploadDirectory(comparisonNode);
+
+          ComparisonFileNode.setComparisonStatus(
+            comparisonNode,
+            ComparisonStatus.unchanged,
+          );
+          const updatedNode = await treeDataProvider.updateRootElements(
+            Action.Update,
+            comparisonNode,
+          );
+          await JsonManager.getInstance().updateFullJson(
+            JsonType.COMPARE,
+            treeDataProvider.rootElements,
+          );
+          await treeDataProvider.refresh(updatedNode);
+        } else {
+          await FileEventHandler.handleFileUpload(
+            comparisonNode,
+            treeDataProvider,
+          );
+        }
+      },
+
+      "livesync.fileEntryDownload": async (
+        comparisonNode: ComparisonFileNode,
+      ) => {
+        if (comparisonNode.isDirectory()) {
+          await downloadDirectory(comparisonNode);
+
+          ComparisonFileNode.setComparisonStatus(
+            comparisonNode,
+            ComparisonStatus.unchanged,
+          );
+          const updatedNode = await treeDataProvider.updateRootElements(
+            Action.Update,
+            comparisonNode,
+          );
+          await JsonManager.getInstance().updateFullJson(
+            JsonType.COMPARE,
+            treeDataProvider.rootElements,
+          );
+          await treeDataProvider.refresh(updatedNode);
+        } else {
+          await FileEventHandler.handleFileDownload(
+            comparisonNode,
+            treeDataProvider,
+          );
+        }
+      },
+
+      "livesync.toggleToListView": () => {
         treeDataProvider.toggleViewMode(false);
         context.globalState.update("showAsTree", false);
         vscode.commands.executeCommand(
@@ -139,10 +200,9 @@ export class CommandManager {
           "livesyncViewMode",
           "list",
         );
-      }),
+      },
 
-      // Toggle to tree view
-      vscode.commands.registerCommand("livesync.toggleToTreeView", () => {
+      "livesync.toggleToTreeView": () => {
         treeDataProvider.toggleViewMode(true);
         context.globalState.update("showAsTree", true);
         vscode.commands.executeCommand(
@@ -150,10 +210,9 @@ export class CommandManager {
           "livesyncViewMode",
           "tree",
         );
-      }),
+      },
 
-      // Show unchanged files
-      vscode.commands.registerCommand("livesync.showUnchanged", () => {
+      "livesync.showUnchanged": () => {
         treeDataProvider.setShowUnchanged(true);
         context.globalState.update("showUnchanged", true);
         vscode.commands.executeCommand(
@@ -161,10 +220,9 @@ export class CommandManager {
           "livesyncShowUnchanged",
           true,
         );
-      }),
+      },
 
-      // Hide unchanged files
-      vscode.commands.registerCommand("livesync.hideUnchanged", () => {
+      "livesync.hideUnchanged": () => {
         treeDataProvider.setShowUnchanged(false);
         context.globalState.update("showUnchanged", false);
         vscode.commands.executeCommand(
@@ -172,42 +230,47 @@ export class CommandManager {
           "livesyncShowUnchanged",
           false,
         );
-      }),
+      },
 
-      // Collapse all folders
-      vscode.commands.registerCommand("livesync.collapseAll", async () => {
+      "livesync.collapseAll": async () => {
         const jsonManager = JsonManager.getInstance();
         await jsonManager.clearFoldersState();
         await vscode.commands.executeCommand("nodeDependencies.focus");
         await vscode.commands.executeCommand("list.collapseAll");
         logInfoMessage("All folders collapsed.");
-      }),
+      },
 
-      // Test connection
-      vscode.commands.registerCommand(
-        "livesync.testConnection",
-        async (configuration?: ConfigurationMessage["configuration"]) => {
-          if (!configuration) {
-            configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-          }
+      "livesync.testConnection": async (
+        configuration?: ConfigurationMessage["configuration"],
+      ) => {
+        if (!configuration) {
+          configuration = WorkspaceConfigManager.getRemoteServerConfigured();
+        }
 
-          const connectionManager =
-            ConnectionManager.getInstance(configuration);
-          try {
-            await connectionManager.doSSHOperation(
-              async (sshClient: SSHClient) => {
-                await sshClient.waitForConnection();
-              },
-              "Test Connection",
-            );
+        const connectionManager = ConnectionManager.getInstance(configuration);
+        try {
+          await connectionManager.doSSHOperation(
+            async (sshClient: SSHClient) => {
+              await sshClient.waitForConnection();
+            },
+            "Test Connection",
+          );
 
-            logInfoMessage("Test connection successful.", LOG_FLAGS.ALL);
-            return true;
-          } catch (error: any) {
-            return false;
-          }
-        },
-      ),
-    );
+          logInfoMessage("Test connection successful.", LOG_FLAGS.ALL);
+          return true;
+        } catch (error: any) {
+          return false;
+        }
+      },
+    };
+
+    // Register all commands with single execution logic
+    for (const [commandId, callback] of Object.entries(commands)) {
+      context.subscriptions.push(
+        vscode.commands.registerCommand(commandId, (...args) =>
+          this.singleExecution(commandId, callback, args),
+        ),
+      );
+    }
   }
 }

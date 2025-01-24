@@ -152,6 +152,26 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     return comparisonNode;
   }
 
+  /**
+   * Recursively sets the status of a ComparisonFileNode and all its children to the specified ComparisonStatus.
+   * @param node - The root ComparisonFileNode to update.
+   * @param status - The ComparisonStatus to set for the node and its children.
+   */
+  static setComparisonStatus(
+    node: ComparisonFileNode,
+    status: ComparisonStatus,
+  ): void {
+    // Set the status for the current node
+    node.status = status;
+
+    // Iterate through the children if the node has any
+    if (node.listChildren().length > 0) {
+      for (const child of node.listChildren()) {
+        this.setComparisonStatus(child, status); // Recursively set status for children
+      }
+    }
+  }
+
   fromJSON(json: any): ComparisonFileNode {
     return new ComparisonFileNode(json);
   }
