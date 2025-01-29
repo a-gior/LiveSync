@@ -29,49 +29,11 @@ class InputValidator {
   };
 
   isValidPath = (pathInput: HTMLInputElement): boolean => {
-    // Regular expression to match a path Windows/Linux
+    // Regular expression to match Windows, Linux, relative, and home directory (~) paths
     const pathRegex =
-      /^(?:[a-zA-Z]:\\(?:[^\\/:*?"<>|\r\n]+\\)*[^\\/:*?"<>|\r\n]*|(?:\/(?:[^/]+\/)*[^/]+)?)$/;
+      /^(?:[a-zA-Z]:\\(?:[^\\/:*?"<>|\r\n]+\\?)*|~\/(?:[^/]+\/?)*|\/(?:[^/]+\/?)*|[^/\\:*?"<>|\r\n]+(?:\/[^/\\:*?"<>|\r\n]*)*)$/;
+
     return pathRegex.test(pathInput.value);
-  };
-
-  isValidSSHKey = (
-    sshKeyInput: HTMLInputElement,
-    isPublic = false,
-  ): Promise<boolean> => {
-    // Check if SSH key has the expected format
-    let sshKeyRegex: RegExp;
-    if (isPublic) {
-      sshKeyRegex = /^(ssh-(rsa|dsa|ed25519)\s+[A-Za-z0-9+/]+[=]{0,2}\s+\S+)$/;
-    } else {
-      sshKeyRegex =
-        /^-----BEGIN\s(?:RSA|DSA|EC|OPENSSH)\sPRIVATE\sKEY-----(?:[\s\S]*?)-----END\s(?:RSA|DSA|EC|OPENSSH)\sPRIVATE\sKEY-----$/m;
-    }
-
-    const sshKeyFile = sshKeyInput.files[0];
-    const reader = new FileReader();
-
-    reader.onerror = function () {
-      errorDisplayer.display(
-        sshKeyInput,
-        "bottom",
-        "Error reading SSH key file",
-      );
-    };
-
-    reader.readAsText(sshKeyFile);
-
-    return new Promise((resolve) => {
-      reader.onload = () =>
-        function (event) {
-          const sshKeyContent = String(event.target.result);
-          if (typeof sshKeyContent === "string") {
-            return resolve(sshKeyRegex.test(sshKeyContent));
-          }
-
-          resolve(false);
-        };
-    });
   };
 
   areValidInputs(form: Form): boolean {
@@ -105,7 +67,6 @@ class InputValidator {
           // Add error message
           errorDisplayer.display(
             formField.htmlElement,
-            "bottom",
             `${formField.name} is required.`,
           );
           isValid = false;
@@ -119,7 +80,6 @@ class InputValidator {
             // Add error message
             errorDisplayer.display(
               formField.htmlElement,
-              "bottom",
               `${formField.name} failed validation.`,
             );
             isValid = false;

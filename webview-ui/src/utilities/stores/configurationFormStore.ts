@@ -123,11 +123,6 @@ class ConfigurationFormStore {
   }
 
   saveRemoteServerConfiguration() {
-    const sshKeyInput =
-      this.getRemoteServerConfigFormData().formGroups[
-        "remote-server-form-group-0"
-      ].fields[5];
-
     const configurationMessage: FullConfigurationMessage = {
       command: "updateConfiguration",
       configuration: {
@@ -152,12 +147,19 @@ class ConfigurationFormStore {
           this.getRemoteServerConfigFormData().formGroups[
             "remote-server-form-group-0"
           ].fields[4].value,
-        sshKey: sshKeyInput.files ? (sshKeyInput.files[0] as any).path : null,
+        privateKeyPath:
+          this.getRemoteServerConfigFormData().formGroups[
+            "remote-server-form-group-0"
+          ].fields[5].value,
+        passphrase:
+          this.getRemoteServerConfigFormData().formGroups[
+            "remote-server-form-group-0"
+          ].fields[6].value,
       },
       remotePath:
         this.getRemoteServerConfigFormData().formGroups[
           "remote-server-form-group-0"
-        ].fields[6].value,
+        ].fields[7].value,
     };
     const currentState: ConfigurationState = vscode.getState();
 
@@ -230,6 +232,9 @@ class ConfigurationFormStore {
       remoteServerConfigFormData.formGroups[
         "remote-server-form-group-0"
       ].fields[5].visible = event.target.value === "auth-sshKey";
+      remoteServerConfigFormData.formGroups[
+        "remote-server-form-group-0"
+      ].fields[6].visible = event.target.value === "auth-sshKey";
       return remoteServerConfigFormData;
     });
   }

@@ -26,7 +26,8 @@ export class WorkspaceConfigManager {
         username: config.get<string>("username", ""),
         authMethod: config.get<string>("authMethod", ""),
         password: config.get<string>("password", ""),
-        sshKey: config.get<string>("sshKey", ""),
+        privateKeyPath: config.get<string>("privateKeyPath", ""),
+        passphrase: config.get<string>("passphrase", ""),
       },
       remotePath: config.get<string>("remotePath", ""),
       fileEventActions: config.get<FileEventActionsMessage["actions"]>(
@@ -63,53 +64,18 @@ export class WorkspaceConfigManager {
 
   // Save the workspace configuration
   static async saveConfiguration(state: ConfigurationState): Promise<void> {
-    const config = this.getConfiguration();
-
-    await config.update(
-      "hostname",
-      state.configuration?.hostname,
-      ConfigurationTarget.Workspace,
-    );
-    await config.update(
-      "port",
-      state.configuration?.port,
-      ConfigurationTarget.Workspace,
-    );
-    await config.update(
-      "username",
-      state.configuration?.username,
-      ConfigurationTarget.Workspace,
-    );
-    await config.update(
-      "authMethod",
-      state.configuration?.authMethod,
-      ConfigurationTarget.Workspace,
-    );
-    await config.update(
-      "password",
-      state.configuration?.password,
-      ConfigurationTarget.Workspace,
-    );
-    await config.update(
-      "sshKey",
-      state.configuration?.sshKey,
-      ConfigurationTarget.Workspace,
-    );
-    await config.update(
-      "remotePath",
-      state.remotePath,
-      ConfigurationTarget.Workspace,
-    );
-    await config.update(
-      "fileEventActions",
-      state.fileEventActions,
-      ConfigurationTarget.Workspace,
-    );
-    await config.update(
-      "ignoreList",
-      state.ignoreList,
-      ConfigurationTarget.Workspace,
-    );
+    await WorkspaceConfigManager.batchUpdate({
+      hostname: state.configuration?.hostname,
+      port: state.configuration?.port,
+      username: state.configuration?.username,
+      authMethod: state.configuration?.authMethod,
+      password: state.configuration?.password,
+      privateKeyPath: state.configuration?.privateKeyPath,
+      passphrase: state.configuration?.passphrase,
+      remotePath: state.remotePath,
+      fileEventActions: state.fileEventActions,
+      ignoreList: state.ignoreList,
+    });
   }
 
   // Initialize event listeners for workspace changes
@@ -153,14 +119,12 @@ export class WorkspaceConfigManager {
 
   // Get current workspace path
   static getWorkspaceLocalPath(): string {
-    // Get the workspace folders
     const workspaceFolders = workspace.workspaceFolders;
 
     if (!workspaceFolders || workspaceFolders.length === 0) {
       throw new Error("No workspace folders found");
     }
 
-    // Get the first workspace folder & Return the URI's fsPath (local file system path)
     return workspaceFolders[0].uri.fsPath;
   }
 
@@ -216,6 +180,7 @@ export class WorkspaceConfigManager {
       const config = this.getConfiguration();
       await config.update(paramName, value, ConfigurationTarget.Workspace);
 
+      console.log(`${paramName} updated`);
       // Reload the in-memory configuration
       this.reload();
     } catch (error: any) {

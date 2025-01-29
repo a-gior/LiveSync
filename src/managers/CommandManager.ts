@@ -36,9 +36,11 @@ export class CommandManager {
       return;
     }
 
+    let returnResult;
     this.runningCommands.add(commandKey);
+
     try {
-      await command(...args);
+      returnResult = await command(...args);
     } catch (error: any) {
       logInfoMessage(
         `Error executing command "${commandKey}": ${error.message || error}`,
@@ -46,6 +48,7 @@ export class CommandManager {
       throw error;
     } finally {
       this.runningCommands.delete(commandKey);
+      return returnResult;
     }
   }
 

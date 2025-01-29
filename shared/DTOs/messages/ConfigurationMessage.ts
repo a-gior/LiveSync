@@ -6,8 +6,9 @@ export interface ConfigurationMessage extends Message {
     hostname: string;
     port: number;
     username: string;
-    authMethod?: string;
+    authMethod: string;
     password?: string;
-    sshKey?: string; // Optional SSH key
+    privateKeyPath?: string;
+    passphrase?: string;
   };
 }

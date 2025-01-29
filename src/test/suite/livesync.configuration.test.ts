@@ -39,7 +39,8 @@ suite("LiveSync Configuration Command Tests", () => {
       authMethod: "auth-password",
       username: "centos",
       password: "centos",
-      sshKey: "",
+      privateKeyPath: "",
+      passphrase: "",
     };
 
     // Test Connection

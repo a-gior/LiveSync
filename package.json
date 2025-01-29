@@ -191,10 +191,15 @@
           "default": "",
           "description": "Password for LiveSync configuration."
         },
-        "LiveSync.sshKey": {
+        "LiveSync.privateKeyPath": {
           "type": "string",
           "default": "",
-          "description": "SSH key for LiveSync configuration."
+          "description": "Private key for LiveSync configuration."
+        },
+        "LiveSync.passphrase": {
+          "type": "string",
+          "default": "",
+          "description": "Passphrase for LiveSync configuration."
         },
         "LiveSync.remotePath": {
           "type": "string",

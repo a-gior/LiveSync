@@ -77,13 +77,21 @@
                         validationCallback: inputValidator.isValidPassword,
                     },
                     {
-                        name: "sshKey",
-                        label: "SSH Key",
-                        type: "file",
+                        name: "privateKeyPath",
+                        label: "Private key",
+                        type: "text",
                         required: true,
                         value: "",
                         visible: false,
-                        validationCallback: inputValidator.isValidSSHKey,
+                        validationCallback: inputValidator.isValidPath,
+                    },
+                    {
+                        name: "passphrase",
+                        label: "Passphrase",
+                        type: "text",
+                        required: false,
+                        value: "",
+                        visible: false,
                     },
                     {
                         name: "remotePath",
@@ -244,7 +252,7 @@
     let tabs = [];
 
     $: configurationFormStore.setRemoteServerConfigFormData(remoteServerConfigFormData);
-    $: {configurationFormStore.setFileEventActions(fileEventActions);console.log("Reactive statement fileEventActions :", fileEventActions);}
+    $: configurationFormStore.setFileEventActions(fileEventActions);
     $: configurationFormStore.setPatterns(patterns);
 
     // Function to set initial configuration state
@@ -252,17 +260,22 @@
         vscode.setState(confState);
 
         if (confState.configuration) {
-            const { hostname, port, username, authMethod, password, sshKey } =  confState.configuration;
+            const { hostname, port, username, authMethod, password, privateKeyPath, passphrase } =  confState.configuration;
             remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[0].value = hostname;
             remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[1].value = port.toString();
             remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[2].value = username;
             remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[3].value = authMethod;
             remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[4].value = password;
-            remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[5].value = sshKey;
+            remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[5].value = privateKeyPath;
+            remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[6].value = passphrase;
+
+            remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[4].visible = authMethod === "auth-password";
+            remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[5].visible = authMethod === "auth-sshKey";
+            remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[6].visible = authMethod === "auth-sshKey";
         }
 
         if (confState.remotePath) {
-            remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[6].value = confState.remotePath;
+            remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[7].value = confState.remotePath;
         }
 
         if (confState.fileEventActions) {

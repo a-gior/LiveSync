@@ -68,7 +68,7 @@
                         {/if}
                         {#if formGroup.fields}
                             {#each formGroup.fields as formField}
-                                {#if formField.visible && formField.name && formField.type && formField.required}
+                                {#if formField.visible && formField.name && formField.type}
                                     <FormRow
                                         bind:formField
                                         inputType={formField.type}

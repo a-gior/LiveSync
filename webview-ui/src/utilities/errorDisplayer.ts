@@ -1,7 +1,7 @@
 class ErrorDisplayer {
   private readonly displayDuration: number = 5000; // milliseconds
 
-  display(element: HTMLElement, position: "bottom", errorMessage: string) {
+  display(element: HTMLElement, errorMessage: string) {
     // Remove existing error messages to avoid duplicates
     // const existingError = element.querySelector(".error-message");
     // if (existingError) {

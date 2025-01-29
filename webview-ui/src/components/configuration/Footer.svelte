@@ -7,6 +7,7 @@
     import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
     import { FullConfigurationMessage } from "@shared/DTOs/messages/FullConfigurationMessage";
     import IgnoreList from "./IgnoreList.svelte";
+    import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
     
 
 	provideVSCodeDesignSystem().register(vsCodeButton());
@@ -35,34 +36,33 @@
         }
     }
     
-    function sendConfiguration(cmd: string) {
-        
+    async function sendConfiguration(cmd: string) {
         const currentHostname = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[0].value;
         const currentPort = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[1].value;
         const currentUsername = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[2].value;
         const currentAuthMethod = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[3].value;
         const currentPassword = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[4].value;
-        const sshKeyInput = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[5];
+        const currentPrivateKeyPath = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[5].value;
+        const currentPassphrase = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[6].value;
+        const currentRemotePath =  remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[7].value;
 
-        const currentConfig = {
+        const currentConfig: ConfigurationMessage["configuration"] = {
             hostname: currentHostname,
             port: Number(currentPort),
             username: currentUsername,
             authMethod: currentAuthMethod,
             password: currentPassword,
-            // sshKey: form.formGroups[0].fields[5].value, //htmlElement.querySelector("input[type='file']").files[0].path, // sshKeyInput?.files[0].path
-            sshKey: sshKeyInput.files ? (sshKeyInput.files[0] as any).path : null, 
+            privateKeyPath: currentPrivateKeyPath,
+            passphrase: currentPassphrase,
         };
 
-        const currentRemotePath = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[6].value;
-
-        const currentActionOnUpload =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[0].value;
-        const currentActionOnDownload =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[1].value;
-        const currentActionOnSave =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[2].value;
-        const currentActionOnCreate =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[3].value;
-        const currentActionOnDelete =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[4].value;
-        const currentActionOnMove =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[5].value;
-        const currentActionOpen =  fileEventActions.formGroups["file-event-actions-form-group-0"].fields[6].value;
+        const currentActionOnUpload = fileEventActions.formGroups["file-event-actions-form-group-0"].fields[0].value;
+        const currentActionOnDownload = fileEventActions.formGroups["file-event-actions-form-group-0"].fields[1].value;
+        const currentActionOnSave = fileEventActions.formGroups["file-event-actions-form-group-0"].fields[2].value;
+        const currentActionOnCreate = fileEventActions.formGroups["file-event-actions-form-group-0"].fields[3].value;
+        const currentActionOnDelete = fileEventActions.formGroups["file-event-actions-form-group-0"].fields[4].value;
+        const currentActionOnMove = fileEventActions.formGroups["file-event-actions-form-group-0"].fields[5].value;
+        const currentActionOpen = fileEventActions.formGroups["file-event-actions-form-group-0"].fields[6].value;
 
         const currentFileEventActions = {
             actionOnUpload: currentActionOnUpload,
@@ -71,25 +71,25 @@
             actionOnCreate: currentActionOnCreate,
             actionOnDelete: currentActionOnDelete,
             actionOnMove: currentActionOnMove,
-            actionOnOpen: currentActionOpen
-        }
+            actionOnOpen: currentActionOpen,
+        };
 
-        const confState: ConfigurationState = { 
+        const confState: ConfigurationState = {
             configuration: currentConfig,
             remotePath: currentRemotePath,
             fileEventActions: currentFileEventActions,
-            ignoreList: patterns
+            ignoreList: patterns,
         };
 
         const configurationMessage: FullConfigurationMessage = {
             command: cmd,
-            ...confState
+            ...confState,
         };
-        
-        vscode.setState(confState);
 
+        vscode.setState(confState);
         vscode.postMessage(configurationMessage);
     }
+
   </script>
   
 

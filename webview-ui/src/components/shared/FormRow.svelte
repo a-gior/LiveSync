@@ -27,7 +27,7 @@
 
     function isValid(event, validationCallback: CallableFunction) {
         if (validationCallback && !validationCallback(event.target)) {
-            errorDisplayer.display(event.target, "top", "Invalid format");
+            errorDisplayer.display(event.target, "Invalid format");
         }
     }
 

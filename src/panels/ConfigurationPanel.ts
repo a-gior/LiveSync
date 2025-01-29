@@ -86,7 +86,6 @@ export class ConfigurationPanel extends Panel {
   static async saveFileEventActions(
     actions: FileEventActionsMessage["actions"],
   ) {
-    console.log("saveActions", actions);
     if (actions) {
       await WorkspaceConfigManager.batchUpdate({
         actionOnUpload: actions.actionOnUpload,
@@ -119,8 +118,15 @@ export class ConfigurationPanel extends Panel {
           throw new Error("Test connection failed.");
         }
 
-        const { hostname, port, username, authMethod, password, sshKey } =
-          configuration;
+        const {
+          hostname,
+          port,
+          username,
+          authMethod,
+          password,
+          privateKeyPath,
+          passphrase,
+        } = configuration;
 
         await WorkspaceConfigManager.batchUpdate({
           hostname,
@@ -128,7 +134,8 @@ export class ConfigurationPanel extends Panel {
           username,
           authMethod,
           password,
-          sshKey,
+          privateKeyPath,
+          passphrase,
         });
       } catch (error) {
         logErrorMessage(
@@ -151,8 +158,6 @@ export class ConfigurationPanel extends Panel {
     if (ignoreList) {
       try {
         await WorkspaceConfigManager.update("ignoreList", ignoreList);
-        console.log("Ignore list saved successfully.");
-        window.showInformationMessage("Ignore list saved successfully.");
       } catch (error) {
         console.error("Error saving ignore list: ", error);
         window.showErrorMessage(
