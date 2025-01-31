@@ -78,7 +78,7 @@ export class CommandManager {
         await treeDataProvider.refresh();
       },
 
-      "livesync.refresh": async (element?: ComparisonFileNode) => {
+      "livesync.refresh": async (element?: ComparisonFileNode | vscode.Uri) => {
         if (!element) {
           const { localPath, remotePath } = WorkspaceConfigManager.getWorkspaceFullPaths();
           const comparisonFileNode = await treeDataProvider.getComparisonFileNode(localPath, remotePath);
@@ -92,6 +92,11 @@ export class CommandManager {
           await JsonManager.getInstance().updateFullJson(JsonType.COMPARE, treeDataProvider.rootElements);
           await treeDataProvider.refresh();
         } else {
+          if (element instanceof vscode.Uri) {
+            const comparisonNode = await JsonManager.findComparisonNodeFromUri(element, treeDataProvider);
+            element = comparisonNode;
+          }
+
           const comparisonFileNode = await compareCorrespondingEntry(element);
           const updatedElement = await treeDataProvider.updateRootElements(Action.Update, comparisonFileNode);
 
@@ -100,33 +105,48 @@ export class CommandManager {
         }
       },
 
-      "livesync.fileEntryShowDiff": (input: ComparisonFileNode) => {
+      "livesync.fileEntryShowDiff": async (input: ComparisonFileNode | vscode.Uri) => {
+        if (input instanceof vscode.Uri) {
+          const comparisonNode = await JsonManager.findComparisonNodeFromUri(input, treeDataProvider);
+          input = comparisonNode;
+        }
+
         showDiff(input);
       },
 
-      "livesync.fileEntryUpload": async (comparisonNode: ComparisonFileNode) => {
-        if (comparisonNode.isDirectory()) {
-          await uploadDirectory(comparisonNode);
+      "livesync.fileEntryUpload": async (element: ComparisonFileNode | vscode.Uri) => {
+        if (element instanceof vscode.Uri) {
+          const comparisonNode = await JsonManager.findComparisonNodeFromUri(element, treeDataProvider);
+          element = comparisonNode;
+        }
 
-          ComparisonFileNode.setComparisonStatus(comparisonNode, ComparisonStatus.unchanged);
-          const updatedNode = await treeDataProvider.updateRootElements(Action.Update, comparisonNode);
+        if (element.isDirectory()) {
+          await uploadDirectory(element);
+
+          ComparisonFileNode.setComparisonStatus(element, ComparisonStatus.unchanged);
+          const updatedNode = await treeDataProvider.updateRootElements(Action.Update, element);
           await JsonManager.getInstance().updateFullJson(JsonType.COMPARE, treeDataProvider.rootElements);
           await treeDataProvider.refresh(updatedNode);
         } else {
-          await FileEventHandler.handleFileUpload(comparisonNode, treeDataProvider);
+          await FileEventHandler.handleFileUpload(element, treeDataProvider);
         }
       },
 
-      "livesync.fileEntryDownload": async (comparisonNode: ComparisonFileNode) => {
-        if (comparisonNode.isDirectory()) {
-          await downloadDirectory(comparisonNode);
+      "livesync.fileEntryDownload": async (element: ComparisonFileNode | vscode.Uri) => {
+        if (element instanceof vscode.Uri) {
+          const comparisonNode = await JsonManager.findComparisonNodeFromUri(element, treeDataProvider);
+          element = comparisonNode;
+        }
 
-          ComparisonFileNode.setComparisonStatus(comparisonNode, ComparisonStatus.unchanged);
-          const updatedNode = await treeDataProvider.updateRootElements(Action.Update, comparisonNode);
+        if (element.isDirectory()) {
+          await downloadDirectory(element);
+
+          ComparisonFileNode.setComparisonStatus(element, ComparisonStatus.unchanged);
+          const updatedNode = await treeDataProvider.updateRootElements(Action.Update, element);
           await JsonManager.getInstance().updateFullJson(JsonType.COMPARE, treeDataProvider.rootElements);
           await treeDataProvider.refresh(updatedNode);
         } else {
-          await FileEventHandler.handleFileDownload(comparisonNode, treeDataProvider);
+          await FileEventHandler.handleFileDownload(element, treeDataProvider);
         }
       },
 

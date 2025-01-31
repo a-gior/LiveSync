@@ -7,6 +7,8 @@ import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
 import { debounce } from "../utilities/debounce";
 import { WorkspaceConfigManager } from "./WorkspaceConfigManager";
 import { getCorrespondingPath, getRelativePath, splitParts } from "../utilities/fileUtils/filePathUtils";
+import { Uri } from "vscode";
+import { SyncTreeDataProvider } from "../services/SyncTreeDataProvider";
 
 export enum JsonType {
   REMOTE = "remote",
@@ -311,9 +313,21 @@ export default class JsonManager {
 
       return this.findNodeByPath(relativePath, rootEntries, rootFolderName);
     } catch (error: any) {
-      logErrorMessage(`Find entry failed: ${filePath}`, LOG_FLAGS.CONSOLE_AND_LOG_MANAGER, error.message);
-      return undefined;
+      throw new Error(`Find entry failed: ${filePath}`);
     }
+  }
+
+  public static async findComparisonNodeFromUri(uri: Uri, treeDataProvider: SyncTreeDataProvider): Promise<ComparisonFileNode> {
+    const relativePath = getRelativePath(uri.fsPath);
+    const rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
+
+    const comparisonNode = await JsonManager.findNodeByPath(relativePath, treeDataProvider.rootElements, rootFolderName);
+
+    if (!comparisonNode) {
+      throw new Error(`Could not find file ${relativePath} in the comparison tree.`);
+    }
+
+    return comparisonNode;
   }
 
   public static async addComparisonFileNode(

@@ -1,7 +1,7 @@
 import { Client, ConnectConfig } from "ssh2";
 import { BaseClient } from "./BaseClient";
 import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
-import { LogManager } from "../managers/LogManager";
+import { logInfoMessage, LogManager } from "../managers/LogManager";
 
 export class SSHClient extends BaseClient {
   private static instance: SSHClient;
@@ -26,7 +26,7 @@ export class SSHClient extends BaseClient {
       return;
     }
 
-    console.log(`Connecting using SSH to ${config.hostname}:${config.port}`);
+    logInfoMessage(`Connecting using SSH to ${config.hostname}:${config.port}`);
     this.isConnecting = true;
 
     const connectionOptions: ConnectConfig = this.getConnectionOptions(config);
@@ -36,21 +36,21 @@ export class SSHClient extends BaseClient {
         .on("ready", () => {
           this.isConnecting = false;
           this.isConnected = true;
-          console.log("SSH connection is ready");
+          logInfoMessage("SSH connection is ready");
           resolve();
         })
         .on("connect", () => {
-          console.log("SSH connection is connected");
+          logInfoMessage("SSH connection is connected");
         })
         .on("close", () => {
           this.isConnecting = false;
           this.isConnected = false;
-          console.log("SSH connection is closed");
+          logInfoMessage("SSH connection is closed");
         })
         .on("timeout", () => {
           this.isConnecting = false;
           this.isConnected = false;
-          console.log("SSH connection timed out");
+          logInfoMessage("SSH connection timed out");
           reject(new Error("Connection timeout"));
         })
         .on("error", (err) => {
@@ -64,7 +64,7 @@ export class SSHClient extends BaseClient {
   }
 
   async disconnect(): Promise<void> {
-    console.log(`Disconnecting SSH. isConnected: ${this.isConnected}`);
+    logInfoMessage(`Disconnecting SSH. isConnected: ${this.isConnected}`);
     if (this.isConnected) {
       this._client.end();
       this.isConnected = false;

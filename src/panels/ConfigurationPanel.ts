@@ -74,7 +74,7 @@ export class ConfigurationPanel extends Panel {
   }
 
   static async saveFileEventActions(actions: FileEventActionsMessage["actions"]) {
-    if (actions) {
+    try {
       await WorkspaceConfigManager.batchUpdate({
         actionOnUpload: actions.actionOnUpload,
         actionOnDownload: actions.actionOnDownload,
@@ -84,9 +84,8 @@ export class ConfigurationPanel extends Panel {
         actionOnMove: actions.actionOnMove,
         actionOnOpen: actions.actionOnOpen
       });
-    } else {
-      window.showErrorMessage("No configuration found or missing properties. Please configure LiveSync correctly.");
-      return;
+    } catch (error) {
+      logErrorMessage("Error saving file event actions", LOG_FLAGS.ALL, error);
     }
   }
 
@@ -94,9 +93,8 @@ export class ConfigurationPanel extends Panel {
     if (configuration) {
       try {
         const testResult = await commands.executeCommand("livesync.testConnection", configuration);
-
         if (!testResult) {
-          throw new Error("Test connection failed.");
+          throw new Error("Connection test failed. Please check the configuration.");
         }
 
         const { hostname, port, username, authMethod, password, privateKeyPath, passphrase } = configuration;
@@ -114,36 +112,30 @@ export class ConfigurationPanel extends Panel {
         logErrorMessage("Error saving remote server configuration: ", LOG_FLAGS.ALL, error);
       }
     } else {
-      window.showErrorMessage("No configuration found or missing properties. Please configure LiveSync correctly.");
-      return Promise.reject(new Error("Invalid configuration"));
+      throw new Error("Invalid configuration");
     }
   }
 
   static async saveIgnoreList(ignoreList: IgnoreListMessage["ignoreList"]) {
-    if (ignoreList) {
-      try {
-        await WorkspaceConfigManager.update("ignoreList", ignoreList);
-      } catch (error) {
-        console.error("Error saving ignore list: ", error);
-        window.showErrorMessage("Failed to save ignore list. See console for details.");
-      }
-    } else {
-      window.showErrorMessage("No configuration found or missing properties. Please configure LiveSync correctly.");
+    try {
+      await WorkspaceConfigManager.update("ignoreList", ignoreList);
+    } catch (error) {
+      logErrorMessage("Error saving ignore list", LOG_FLAGS.ALL, error);
     }
   }
 
   static async updateConfiguration(configuration: FullConfigurationMessage) {
     if (configuration.configuration) {
-      this.saveRemoteServerConfiguration(configuration.configuration);
+      await this.saveRemoteServerConfiguration(configuration.configuration);
     }
     if (configuration.remotePath) {
-      this.saveRemotePath(configuration.remotePath);
+      await this.saveRemotePath(configuration.remotePath);
     }
     if (configuration.fileEventActions) {
-      this.saveFileEventActions(configuration.fileEventActions);
+      await this.saveFileEventActions(configuration.fileEventActions);
     }
     if (configuration.ignoreList) {
-      this.saveIgnoreList(configuration.ignoreList);
+      await this.saveIgnoreList(configuration.ignoreList);
     }
   }
 }

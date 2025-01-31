@@ -27,8 +27,6 @@ export async function downloadRemoteFile(remotePath: string, localPath: string):
       await fs.promises.mkdir(dir, { recursive: true });
       await sftpClient.downloadFile(remotePath, localPath);
     }, `Download ${remotePath}`);
-
-    logInfoMessage(`File ${localPath} download to ${remotePath}`);
   } catch (error: any) {
     logErrorMessage(`Failed to download file: ${error.message}`);
     throw error;
@@ -54,8 +52,6 @@ export async function uploadRemoteFile(localPath: string, remotePath: string, ch
       }
       await sftpClient.uploadFile(localPath, remotePath);
     }, `Upload to ${remotePath}`);
-
-    logInfoMessage(`File ${localPath} uploaded to ${remotePath}`);
   } catch (error: any) {
     logErrorMessage(`Failed to upload file: ${error.message}`);
     throw error;
@@ -81,7 +77,7 @@ export async function compareRemoteFileHash(remotePath: string): Promise<boolean
 
     return remoteEntry.hash === remoteFileHash;
   } catch (error) {
-    console.error("Error comparing remote file hash:", error);
+    logErrorMessage("Error comparing remote file hash:", error);
     return false;
   }
 }
@@ -97,10 +93,9 @@ export async function getRemoteFileContentHash(remotePath: string): Promise<stri
     await connectionManager.doSSHOperation(async (sshClient: SSHClient) => {
       const hash = await sshClient.executeCommand(command);
       fileHash = hash.trim(); // Ensure any extra whitespace is removed
-    }, `Get remote hash of ${remotePath}`);
+    }, `Getting hash of ${remotePath}`);
   } catch (err) {
-    window.showErrorMessage("Error getting remote file hash");
-    console.error(`Error getting remote file hash on \n\t${remotePath} \nwith command \n\t${command}`);
+    logErrorMessage(`Error getting remote file hash on \n\t${remotePath}`);
   }
 
   return fileHash;
@@ -124,7 +119,7 @@ export async function getRemoteFileMetadata(remotePath: string): Promise<sftp.Fi
       return await sftpClient.getFileStats(remotePath);
     }, `Get data from ${remotePath}`);
   } catch (err: any) {
-    console.error(`Couldn't fetch metadata for remote file ${remotePath}`);
+    logErrorMessage(`Couldn't fetch metadata for remote file ${remotePath}`);
   }
 }
 
@@ -141,7 +136,7 @@ export async function moveRemoteFile(oldRemotePath: string, newRemotePath: strin
       await sftpClient.moveFile(oldRemotePath, newRemotePath);
     }, `Move file from ${oldRemotePath} to ${newRemotePath}`);
   } catch (error: any) {
-    console.error(`Failed to move remote file: ${error.message}`);
+    logErrorMessage(`Failed to move remote file: ${error.message}`);
     window.showErrorMessage(`Failed to move remote file: ${error.message}`);
   }
 }
@@ -159,7 +154,7 @@ export async function deleteRemoteFile(remotePath: string): Promise<void> {
       await sftpClient.deleteFile(remotePath);
     }, `Delete ${remotePath}`);
   } catch (error: any) {
-    console.error(`Failed to delete remote file: ${error.message}`);
+    logErrorMessage(`Failed to delete remote file: ${error.message}`);
     window.showErrorMessage(`Failed to delete remote file: ${error.message}`);
   }
 }

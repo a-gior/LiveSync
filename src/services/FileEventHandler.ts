@@ -16,12 +16,19 @@ import {
 import { ComparisonFileNode, ComparisonStatus } from "../utilities/ComparisonFileNode";
 import JsonManager from "../managers/JsonManager";
 import { Action, ActionOn, ActionResult } from "../utilities/enums";
-import { LOG_FLAGS, logErrorMessage, logInfoMessage, logServerUnreachableError } from "../managers/LogManager";
+import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../managers/LogManager";
 import { getFullPaths, getRelativePath } from "../utilities/fileUtils/filePathUtils";
-import { ConnectionManager } from "../managers/ConnectionManager";
 import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 
 export class FileEventHandler {
+  static enableFileCreate = true;
+  static enableFileDelete = true;
+  static enableFileRename = true;
+  static enableFileSave = true;
+  static enableFileOpen = true;
+  static enableFileUpload = true;
+  static enableFileDownload = true;
+
   /**
    * Initialize file event handlers and register them in the extension context.
    * @param context - The extension context
@@ -29,52 +36,33 @@ export class FileEventHandler {
    */
   static initialize(context: vscode.ExtensionContext, treeDataProvider: SyncTreeDataProvider) {
     context.subscriptions.push(
-      // Handle file create events
       vscode.workspace.onDidCreateFiles(async (event) => {
-        await FileEventHandler.handleFileCreate(event, treeDataProvider);
+        if (FileEventHandler.enableFileCreate) {
+          await FileEventHandler.handleFileCreate(event, treeDataProvider);
+        }
       }),
 
-      // Handle file delete events
       vscode.workspace.onDidDeleteFiles(async (event) => {
-        await FileEventHandler.handleFileDelete(event, treeDataProvider);
+        if (FileEventHandler.enableFileDelete) {
+          await FileEventHandler.handleFileDelete(event, treeDataProvider);
+        }
       }),
 
-      // Handle file rename events
       vscode.workspace.onDidRenameFiles(async (event) => {
-        await FileEventHandler.handleFileRename(event, treeDataProvider);
+        if (FileEventHandler.enableFileRename) {
+          await FileEventHandler.handleFileRename(event, treeDataProvider);
+        }
       }),
 
       vscode.window.onDidChangeActiveTextEditor(async (editor) => {
-        if (!editor) {
-          // If there's no active text editor, return early
-          return;
+        if (editor && FileEventHandler.enableFileOpen) {
+          await FileEventHandler.handleFileOpen(editor.document, treeDataProvider);
         }
-
-        // Get the current document from the active text editor
-        const document = editor.document;
-
-        await FileEventHandler.handleFileOpen(document, treeDataProvider);
       }),
 
-      // Handle file change events
-      // vscode.workspace.onDidChangeTextDocument(async (event) => {
-      //   await FileEventHandler.handleFileChange(event, treeDataProvider);
-      // }),
-
-      // Handle file save events
       vscode.workspace.onDidSaveTextDocument(async (document) => {
-        await FileEventHandler.handleFileSave(document, treeDataProvider);
-      }),
-
-      // Handle configuration changes
-      vscode.workspace.onDidChangeConfiguration(async () => {
-        WorkspaceConfigManager.reload();
-        logInfoMessage("Reloaded settings");
-
-        const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-        const connectionManager = ConnectionManager.getInstance(configuration);
-        if (!(await connectionManager.isServerPingable())) {
-          logServerUnreachableError();
+        if (FileEventHandler.enableFileSave) {
+          await FileEventHandler.handleFileSave(document, treeDataProvider);
         }
       })
     );
@@ -111,7 +99,12 @@ export class FileEventHandler {
       for (const workspaceFolder of workspaceFolders) {
         const settingsPath = path.join(workspaceFolder.uri.fsPath, ".vscode", "settings.json");
         if (filePath === settingsPath) {
-          console.log(`<handleFile${action}> Detected configuration file at ${filePath}, skipping further processing of this event.`);
+          if (action === Action.Save) {
+            WorkspaceConfigManager.reload();
+            logInfoMessage(`<handleFile${action}> Detected configuration file at ${filePath}, reloading workspace configuration.`);
+          } else {
+            logInfoMessage(`<handleFile${action}> Detected configuration file at ${filePath}, skipping further processing of this event.`);
+          }
           return true;
         }
       }
@@ -198,7 +191,7 @@ export class FileEventHandler {
         continue;
       }
 
-      console.log(`<handleFileDelete> Event deleting ${filePath}`);
+      logInfoMessage(`<handleFileDelete> Event deleting ${filePath}`);
 
       try {
         // Get node from rootElements
@@ -243,7 +236,7 @@ export class FileEventHandler {
       return;
     }
 
-    console.log(`<handleFileSave> Event saving ${filePath}`);
+    logInfoMessage(`<handleFileSave> Event saving ${filePath}`);
 
     try {
       // Get node from rootElements
@@ -296,7 +289,7 @@ export class FileEventHandler {
         return;
       }
 
-      console.log(`<handleFileRename> Event renaming/moving from ${oldPath} to ${newPath}`);
+      logInfoMessage(`<handleFileRename> Event renaming/moving from ${oldPath} to ${newPath}`);
 
       try {
         // Get node from rootElements
@@ -408,12 +401,12 @@ export class FileEventHandler {
       return;
     }
 
-    console.log(`<handleFileOpen> Event opening ${filePath}`);
+    logInfoMessage(`<handleFileOpen> Event opening ${filePath}`);
 
     try {
       const openedNode = await JsonManager.findNodeByPath(filePath, treeDataProvider.rootElements);
       if (!openedNode) {
-        console.log(`<handleFileOpen> Node not found for ${filePath}`);
+        logInfoMessage(`<handleFileOpen> Node not found for ${filePath}`);
         return;
       }
 
@@ -442,7 +435,7 @@ export class FileEventHandler {
       return;
     }
 
-    console.log(`<handleFileDownload> Downloading file from ${remotePath} to ${localPath}`);
+    logInfoMessage(`<handleFileDownload> Downloading file from ${remotePath} to ${localPath}`);
 
     try {
       const uri = vscode.Uri.file(localPath);
@@ -476,7 +469,7 @@ export class FileEventHandler {
       return;
     }
 
-    console.log(`<handleFileUpload> Uploading file from ${localPath} to ${remotePath}`);
+    logInfoMessage(`<handleFileUpload> Uploading file from ${localPath} to ${remotePath}`);
 
     try {
       const uri = vscode.Uri.file(localPath);

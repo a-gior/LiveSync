@@ -3,6 +3,7 @@
   "displayName": "LiveSync",
   "description": "",
   "version": "0.0.1",
+  "publisher": "agior",
   "engines": {
     "vscode": "^1.88.1"
   },
@@ -162,19 +163,19 @@
         {
           "command": "livesync.fileEntryShowDiff",
           "when": "!explorerResourceIsFolder",
-          "group": "LiveSync"
+          "group": "LiveSync@1"
         },
         {
           "command": "livesync.fileEntryUpload",
-          "group": "LiveSync"
+          "group": "LiveSync@2"
         },
         {
           "command": "livesync.fileEntryDownload",
-          "group": "LiveSync"
+          "group": "LiveSync@3"
         },
         {
           "command": "livesync.refresh",
-          "group": "LiveSync"
+          "group": "LiveSync@4"
         }
       ]
     },
@@ -184,17 +185,20 @@
         "LiveSync.hostname": {
           "type": "string",
           "default": "",
-          "description": "Hostname for LiveSync configuration."
+          "description": "Hostname for LiveSync configuration.",
+          "order": 1
         },
         "LiveSync.port": {
           "type": "number",
           "default": 22,
-          "description": "Port number for LiveSync configuration."
+          "description": "Port number for LiveSync configuration.",
+          "order": 2
         },
         "LiveSync.username": {
           "type": "string",
           "default": "",
-          "description": "Username for LiveSync configuration."
+          "description": "Username for LiveSync configuration.",
+          "order": 3
         },
         "LiveSync.authMethod": {
           "type": "string",
@@ -203,27 +207,32 @@
             "auth-password",
             "auth-sshKey"
           ],
-          "description": "authMethod for LiveSync configuration."
+          "description": "authMethod for LiveSync configuration.",
+          "order": 4
         },
         "LiveSync.password": {
           "type": "string",
           "default": "",
-          "description": "Password for LiveSync configuration."
+          "description": "Password for LiveSync configuration.",
+          "order": 5
         },
         "LiveSync.privateKeyPath": {
           "type": "string",
           "default": "",
-          "description": "Private key for LiveSync configuration."
+          "description": "Private key for LiveSync configuration.",
+          "order": 6
         },
         "LiveSync.passphrase": {
           "type": "string",
           "default": "",
-          "description": "Passphrase for LiveSync configuration."
+          "description": "Passphrase for LiveSync configuration.",
+          "order": 7
         },
         "LiveSync.remotePath": {
           "type": "string",
           "default": "",
-          "description": "Remote path to sync with current workspace"
+          "description": "Remote path to sync with current workspace",
+          "order": 8
         },
         "LiveSync.actionOnUpload": {
           "type": "string",
@@ -234,7 +243,8 @@
             "check&upload",
             "none"
           ],
-          "description": "Action to perform on file upload.\n\nOptions:\n- save: Automatically uploads the file to the remote server on upload.\n- check: Only checks if the file has been modified on the remote server without uploading.\n- check&save: Checks if the file has been modified on the remote server and uploads if it hasn't.\n- none: No action is performed on file upload."
+          "description": "Action to perform on file upload.\n\nOptions:\n- save: Automatically uploads the file to the remote server on upload.\n- check: Only checks if the file has been modified on the remote server without uploading.\n- check&save: Checks if the file has been modified on the remote server and uploads if it hasn't.\n- none: No action is performed on file upload.",
+          "order": 9
         },
         "LiveSync.actionOnDownload": {
           "type": "string",
@@ -245,7 +255,8 @@
             "check&download",
             "none"
           ],
-          "description": "Action to perform on file download.\n\nOptions:\n- download: Automatically downloads the file from the remote server.\n- check: Only checks if the file has been modified on the local system without downloading.\n- check&download: Checks if the file has been modified on the local system and downloads if it hasn't.\n- none: No action is performed on file download."
+          "description": "Action to perform on file download.\n\nOptions:\n- download: Automatically downloads the file from the remote server.\n- check: Only checks if the file has been modified on the local system without downloading.\n- check&download: Checks if the file has been modified on the local system and downloads if it hasn't.\n- none: No action is performed on file download.",
+          "order": 10
         },
         "LiveSync.actionOnSave": {
           "type": "string",
@@ -256,7 +267,8 @@
             "check&save",
             "none"
           ],
-          "description": "Action to perform on file save.\n\nOptions:\n- save: Automatically uploads the file to the remote server on save.\n- check: Only checks if the file has been modified on the remote server without uploading.\n- check&save: Checks if the file has been modified on the remote server and uploads if it hasn't.\n- none: No action is performed on file save."
+          "description": "Action to perform on file save.\n\nOptions:\n- save: Automatically uploads the file to the remote server on save.\n- check: Only checks if the file has been modified on the remote server without uploading.\n- check&save: Checks if the file has been modified on the remote server and uploads if it hasn't.\n- none: No action is performed on file save.",
+          "order": 11
         },
         "LiveSync.actionOnDelete": {
           "type": "string",
@@ -267,7 +279,8 @@
             "check&delete",
             "none"
           ],
-          "description": "Action to perform on file delete.\n\nOptions:\n- delete: Automatically deletes the file on the remote server on delete.\n- check: Only checks if the file has been deleted on the remote server without deleting.\n- check&delete: Checks if the file has been deleted on the remote server and deletes if it hasn't.\n- none: No action is performed on file delete."
+          "description": "Action to perform on file delete.\n\nOptions:\n- delete: Automatically deletes the file on the remote server on delete.\n- check: Only checks if the file has been deleted on the remote server without deleting.\n- check&delete: Checks if the file has been deleted on the remote server and deletes if it hasn't.\n- none: No action is performed on file delete.",
+          "order": 12
         },
         "LiveSync.actionOnMove": {
           "type": "string",
@@ -278,7 +291,8 @@
             "check&move",
             "none"
           ],
-          "description": "Action to perform on file move/rename.\n\nOptions:\n- move: Automatically moves/renames the file on the remote server on move/rename.\n- check: Only checks if the file has been moved/renamed on the remote server without moving/renaming.\n- check&move: Checks if the file has been moved/renamed on the remote server and moves/renames if it hasn't.\n- none: No action is performed on file move/rename."
+          "description": "Action to perform on file move/rename.\n\nOptions:\n- move: Automatically moves/renames the file on the remote server on move/rename.\n- check: Only checks if the file has been moved/renamed on the remote server without moving/renaming.\n- check&move: Checks if the file has been moved/renamed on the remote server and moves/renames if it hasn't.\n- none: No action is performed on file move/rename.",
+          "order": 13
         },
         "LiveSync.actionOnCreate": {
           "type": "string",
@@ -289,7 +303,8 @@
             "check&create",
             "none"
           ],
-          "description": "Action to perform on file create.\n\nOptions:\n- create: Automatically creates the file on the remote server on create.\n- check: Only checks if the file has been created on the remote server without creating.\n- check&create: Checks if the file has been created on the remote server and creates if it hasn't.\n- none: No action is performed on file create."
+          "description": "Action to perform on file create.\n\nOptions:\n- create: Automatically creates the file on the remote server on create.\n- check: Only checks if the file has been created on the remote server without creating.\n- check&create: Checks if the file has been created on the remote server and creates if it hasn't.\n- none: No action is performed on file create.",
+          "order": 14
         },
         "LiveSync.actionOnOpen": {
           "type": "string",
@@ -300,7 +315,8 @@
             "check&download",
             "none"
           ],
-          "description": "Action to perform on opening a file.\n\nOptions:\n- download: Automatically downloads the file from the remote server.\n- check: Only checks if the file has been modified on the remote system without downloading.\n- check&download: Checks if the file has been modified on the remote system and downloads if it hasn't.\n- none: No action is performed on file download."
+          "description": "Action to perform on opening a file.\n\nOptions:\n- download: Automatically downloads the file from the remote server.\n- check: Only checks if the file has been modified on the remote system without downloading.\n- check&download: Checks if the file has been modified on the remote system and downloads if it hasn't.\n- none: No action is performed on file download.",
+          "order": 15
         },
         "LiveSync.ignoreList": {
           "type": "array",
@@ -308,7 +324,8 @@
           "items": {
             "type": "string"
           },
-          "default": []
+          "default": [],
+          "order": 16
         }
       }
     }

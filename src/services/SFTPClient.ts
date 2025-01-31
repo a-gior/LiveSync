@@ -2,7 +2,7 @@ import SftpClient from "ssh2-sftp-client";
 import { BaseClient } from "./BaseClient";
 import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
 import { BaseNodeType } from "../utilities/BaseNode";
-import { LogManager } from "../managers/LogManager";
+import { logInfoMessage, LogManager } from "../managers/LogManager";
 
 export class SFTPClient extends BaseClient {
   private static instance: SFTPClient;
@@ -27,7 +27,7 @@ export class SFTPClient extends BaseClient {
       return;
     }
 
-    console.log(`Connecting using SFTP to ${config.hostname}:${config.port}`);
+    logInfoMessage(`Connecting using SFTP to ${config.hostname}:${config.port}`);
     this.isConnecting = true;
 
     const connectionOptions: SftpClient.ConnectOptions = {
@@ -40,7 +40,7 @@ export class SFTPClient extends BaseClient {
       .then(() => {
         this.isConnected = true;
         this.isConnecting = false;
-        console.log("SFTP connection is ready");
+        logInfoMessage("SFTP connection is ready");
       })
       .catch((err) => {
         this.isConnecting = false;

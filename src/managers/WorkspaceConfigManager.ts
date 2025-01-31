@@ -6,6 +6,7 @@ import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
 import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
 import { IgnoreListMessage } from "../DTOs/messages/IgnoreListMessage";
 import path from "path";
+import { FileEventHandler } from "../services/FileEventHandler";
 
 export class WorkspaceConfigManager {
   private static _workspaceConfig: ConfigurationState | undefined;
@@ -16,10 +17,10 @@ export class WorkspaceConfigManager {
   }
 
   // Load the configuration for the workspace
-  static loadWorkspaceConfiguration(): ConfigurationState {
+  static loadWorkspaceConfiguration() {
     const config = this.getConfiguration();
 
-    return {
+    this._workspaceConfig = {
       configuration: {
         hostname: config.get<string>("hostname", ""),
         port: config.get<number>("port", 22),
@@ -87,15 +88,16 @@ export class WorkspaceConfigManager {
       LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
     );
 
-    this._workspaceConfig = this.loadWorkspaceConfiguration();
+    this.loadWorkspaceConfiguration();
   }
 
   // Get the loaded configuration
   static getWorkspaceConfiguration(): ConfigurationState {
     if (!this._workspaceConfig) {
-      this._workspaceConfig = this.loadWorkspaceConfiguration();
+      this.loadWorkspaceConfiguration();
     }
-    return this._workspaceConfig;
+
+    return this._workspaceConfig!;
   }
 
   // Get the remote server configuration
@@ -166,6 +168,8 @@ export class WorkspaceConfigManager {
   // Update a specific parameter
   static async update(paramName: string, value: any): Promise<void> {
     try {
+      FileEventHandler.enableFileSave = false;
+
       // Update the persistent settings in VS Code
       const config = this.getConfiguration();
       await config.update(paramName, value, ConfigurationTarget.Workspace);
@@ -173,7 +177,10 @@ export class WorkspaceConfigManager {
       logInfoMessage(`${paramName} updated`);
       // Reload the in-memory configuration
       this.reload();
+
+      FileEventHandler.enableFileSave = true;
     } catch (error: any) {
+      FileEventHandler.enableFileSave = true;
       logErrorMessage(`Failed to update configuration: ${paramName}`, LOG_FLAGS.CONSOLE_AND_LOG_MANAGER);
       throw new Error(error.message);
     }
@@ -181,6 +188,7 @@ export class WorkspaceConfigManager {
 
   static async batchUpdate(updates: Record<string, any>): Promise<void> {
     try {
+      FileEventHandler.enableFileSave = false;
       const config = this.getConfiguration();
 
       // Perform all updates without reloading
@@ -191,16 +199,17 @@ export class WorkspaceConfigManager {
 
       // Reload the configuration once after all updates
       this.reload();
+
+      FileEventHandler.enableFileSave = true;
     } catch (error) {
-      console.error("Failed to perform batch updates", error);
+      FileEventHandler.enableFileSave = true;
       throw new Error("Batch updates failed");
     }
   }
 
   // Reload the in-memory workspace configuration
   static reload(): void {
-    this._workspaceConfig = this.loadWorkspaceConfiguration();
-    logInfoMessage("Workspace configuration reloaded.");
+    this.loadWorkspaceConfiguration();
   }
 
   /**
