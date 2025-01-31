@@ -24,7 +24,7 @@ async function main() {
     await runTests({
       extensionDevelopmentPath,
       extensionTestsPath: extensionTestsPath,
-      launchArgs: [tempdir],
+      launchArgs: [tempdir]
     });
 
     cleanup();

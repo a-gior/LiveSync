@@ -16,14 +16,12 @@
     provideVSCodeDesignSystem().register(vsCodeButton(), vsCodeCheckbox());
 
     function handleSubmit(event) {
-        console.log("Form submitted, source: ", event.srcElement);
         if (onSubmit) {
             onSubmit(event);
         }
     }
 
     function handleChange(event) {
-        console.log("Input Changed, source", event.srcElement);
         if (onChange) {
             onChange(event);
         }

@@ -12,22 +12,17 @@ function delay(ms: number) {
 suite("LiveSync Configuration Command Tests", () => {
   // let extensionContext: vscode.ExtensionContext;
 
-  vscode.window.showInformationMessage(
-    "Start LiveSync configuration command tests.",
-  );
+  vscode.window.showInformationMessage("Start LiveSync configuration command tests.");
 
   suiteSetup(async function () {
     console.log("Suite Test Setup");
 
-    const testWorkspace = path.resolve(
-      __dirname,
-      "../../out/src/test/workspace-test",
-    );
+    const testWorkspace = path.resolve(__dirname, "../../out/src/test/workspace-test");
 
     console.log("workspacePath: ", testWorkspace);
     // Ensure workspace is opened
     vscode.workspace.updateWorkspaceFolders(0, null, {
-      uri: vscode.Uri.file(testWorkspace),
+      uri: vscode.Uri.file(testWorkspace)
     });
   });
 
@@ -40,7 +35,7 @@ suite("LiveSync Configuration Command Tests", () => {
       username: "centos",
       password: "centos",
       privateKeyPath: "",
-      passphrase: "",
+      passphrase: ""
     };
 
     // Test Connection
@@ -60,24 +55,16 @@ suite("LiveSync Configuration Command Tests", () => {
         actionOnCreate: "create",
         actionOnDelete: "none",
         actionOnMove: "check&move",
-        actionOnOpen: "check&download",
+        actionOnOpen: "check&download"
       },
-      ignoreList: [],
+      ignoreList: []
     };
 
-    assert.deepEqual(
-      currentConfig,
-      baseConfig,
-      "Initial Config isnt equal to the base config",
-    );
+    assert.deepEqual(currentConfig, baseConfig, "Initial Config isnt equal to the base config");
     await ConfigurationPanel.saveRemoteServerConfiguration(configurationTest);
 
     const updatedConfig = WorkspaceConfigManager.getWorkspaceConfiguration();
-    assert.deepEqual(
-      updatedConfig?.configuration,
-      configurationTest,
-      "Config is not updated",
-    );
+    assert.deepEqual(updatedConfig?.configuration, configurationTest, "Config is not updated");
 
     await delay(5000); // 5 seconds delay
   });

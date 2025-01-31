@@ -8,7 +8,7 @@ import { LOG_FLAGS, logErrorMessage } from "../managers/LogManager";
 
 export enum FileNodeSource {
   remote = "remote",
-  local = "local",
+  local = "local"
 }
 
 export interface FileNodeData extends BaseNodeData {
@@ -28,19 +28,12 @@ export class FileNode extends BaseNode<FileNode> {
     size?: number,
     modifiedTime?: Date,
     fullPath?: string,
-    source?: FileNodeSource,
+    source?: FileNodeSource
   ) {
     if (typeof data === "string") {
-      if (
-        !data ||
-        !type ||
-        size === undefined ||
-        !modifiedTime ||
-        !fullPath ||
-        !source
-      ) {
+      if (!data || !type || size === undefined || !modifiedTime || !fullPath || !source) {
         throw new Error(
-          `Missing parameters to instantiate FileNode. Required : data: ${data}, type: ${type}, size:  ${size}, modifiedTime:  ${modifiedTime}, fullPath:  ${fullPath}, source:  ${source} `,
+          `Missing parameters to instantiate FileNode. Required : data: ${data}, type: ${type}, size:  ${size}, modifiedTime:  ${modifiedTime}, fullPath:  ${fullPath}, source:  ${source} `
         );
       }
 
@@ -69,7 +62,7 @@ export class FileNode extends BaseNode<FileNode> {
       ...baseJson,
       source: this.source,
       fullPath: this.fullPath,
-      hash: this.hash,
+      hash: this.hash
     };
   }
 
@@ -77,17 +70,12 @@ export class FileNode extends BaseNode<FileNode> {
     return await pathExists(this.fullPath, this.source);
   }
 
-  static async createFileNodeFromLocalPath(
-    localPath: string,
-  ): Promise<FileNode> {
+  static async createFileNodeFromLocalPath(localPath: string): Promise<FileNode> {
     try {
       const stats = fs.lstatSync(localPath);
       const nodeType = await pathExists(localPath, FileNodeSource.local);
       if (!nodeType) {
-        logErrorMessage(
-          `Could not find locally the specified file/folder at ${localPath}`,
-          LOG_FLAGS.CONSOLE_AND_LOG_MANAGER,
-        );
+        logErrorMessage(`Could not find locally the specified file/folder at ${localPath}`, LOG_FLAGS.CONSOLE_AND_LOG_MANAGER);
         throw new Error();
       }
 
@@ -98,14 +86,10 @@ export class FileNode extends BaseNode<FileNode> {
         modifiedTime: stats.mtime,
         source: FileNodeSource.local,
         relativePath: getRelativePath(localPath),
-        fullPath: localPath,
+        fullPath: localPath
       });
 
-      fileNode.hash = await generateHash(
-        fileNode.fullPath,
-        FileNodeSource.local,
-        nodeType,
-      );
+      fileNode.hash = await generateHash(fileNode.fullPath, FileNodeSource.local, nodeType);
 
       return fileNode;
     } catch (error) {
@@ -114,9 +98,7 @@ export class FileNode extends BaseNode<FileNode> {
     }
   }
 
-  static async createFileNodeFromRemotePath(
-    remotePath: string,
-  ): Promise<FileNode> {
+  static async createFileNodeFromRemotePath(remotePath: string): Promise<FileNode> {
     try {
       const stats = await getRemoteFileMetadata(remotePath);
       if (!stats) {
@@ -130,7 +112,7 @@ export class FileNode extends BaseNode<FileNode> {
         modifiedTime: new Date(stats.modifyTime * 1000),
         source: FileNodeSource.remote,
         relativePath: getRelativePath(remotePath),
-        fullPath: remotePath,
+        fullPath: remotePath
       });
     } catch (error) {
       console.error(`Error getting FileNode for path ${remotePath}:`, error);

@@ -120,14 +120,7 @@
     "languageIds": []
   },
   "cli": {
-    "extensions": [
-      "console",
-      "cli",
-      "commands",
-      "commandline",
-      "cmd",
-      "command"
-    ],
+    "extensions": ["console", "cli", "commands", "commandline", "cmd", "command"],
     "filenames": [],
     "languageIds": []
   },
@@ -142,28 +135,8 @@
     "languageIds": []
   },
   "config": {
-    "extensions": [
-      "config",
-      "configs",
-      "ini",
-      "setting",
-      "initializers",
-      "configuration",
-      "settings",
-      "configurations",
-      "conf"
-    ],
-    "filenames": [
-      ".configuration",
-      ".setting",
-      ".settings",
-      ".configurations",
-      ".config",
-      ".conf",
-      ".initializers",
-      ".configs",
-      ".ini"
-    ],
+    "extensions": ["config", "configs", "ini", "setting", "initializers", "configuration", "settings", "configurations", "conf"],
+    "filenames": [".configuration", ".setting", ".settings", ".configurations", ".config", ".conf", ".initializers", ".configs", ".ini"],
     "languageIds": []
   },
   "coverage": {
@@ -192,15 +165,7 @@
     "languageIds": []
   },
   "db": {
-    "extensions": [
-      "repo",
-      "db",
-      "repository",
-      "data",
-      "repositories",
-      "sql",
-      "database"
-    ],
+    "extensions": ["repo", "db", "repository", "data", "repositories", "sql", "database"],
     "filenames": [],
     "languageIds": []
   },
@@ -220,20 +185,7 @@
     "languageIds": []
   },
   "dist": {
-    "extensions": [
-      "target",
-      "outs",
-      "out",
-      "dist",
-      "builds",
-      "targets",
-      "build",
-      "releases",
-      "dists",
-      "export",
-      "exports",
-      "release"
-    ],
+    "extensions": ["target", "outs", "out", "dist", "builds", "targets", "build", "releases", "dists", "export", "exports", "release"],
     "filenames": [".build", ".dist"],
     "languageIds": []
   },
@@ -319,14 +271,7 @@
   },
   "gulp": {
     "extensions": ["gulp"],
-    "filenames": [
-      "gulpfile.babel.js",
-      "gulpfile.coffee",
-      "gulpfile.babel.ts",
-      "gulpfile.ts",
-      "gulpfile.js",
-      "gulpfile.babel.coffee"
-    ],
+    "filenames": ["gulpfile.babel.js", "gulpfile.coffee", "gulpfile.babel.ts", "gulpfile.ts", "gulpfile.js", "gulpfile.babel.coffee"],
     "languageIds": []
   },
   "haxelib": {
@@ -355,32 +300,12 @@
     "languageIds": []
   },
   "images": {
-    "extensions": [
-      "svg",
-      "imgs",
-      "image",
-      "icons",
-      "icon",
-      "images",
-      "img",
-      "ico",
-      "screenshot",
-      "screenshots"
-    ],
+    "extensions": ["svg", "imgs", "image", "icons", "icon", "images", "img", "ico", "screenshot", "screenshots"],
     "filenames": [],
     "languageIds": []
   },
   "include": {
-    "extensions": [
-      "include",
-      "_include",
-      "incl",
-      "inc",
-      "includes",
-      "_incl",
-      "_inc",
-      "_includes"
-    ],
+    "extensions": ["include", "_include", "incl", "inc", "includes", "_incl", "_inc", "_includes"],
     "filenames": [".inc", ".include", ".incl", ".includes"],
     "languageIds": []
   },
@@ -664,15 +589,7 @@
     "languageIds": []
   },
   "test": {
-    "extensions": [
-      "spec",
-      "__test__",
-      "tests",
-      "test",
-      "__tests__",
-      "specs",
-      "integration"
-    ],
+    "extensions": ["spec", "__test__", "tests", "test", "__tests__", "specs", "integration"],
     "filenames": [".specs", ".tests", ".spec", ".test"],
     "languageIds": []
   },

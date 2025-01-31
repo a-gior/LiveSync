@@ -1,10 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import AdmZip from "adm-zip";
-import {
-  FILE_ICONS_ZIP_PATH,
-  FOLDER_ICONS_ZIP_PATH,
-} from "../utilities/constants";
+import { FILE_ICONS_ZIP_PATH, FOLDER_ICONS_ZIP_PATH } from "../utilities/constants";
 import { BaseNodeType } from "../utilities/BaseNode";
 
 interface IconMappings {
@@ -26,11 +23,11 @@ let languageIdMappings: { [key: string]: string } | null = null;
 
 const fileIconsZip: ZipWithMetadata = {
   zip: new AdmZip(FILE_ICONS_ZIP_PATH),
-  path: FILE_ICONS_ZIP_PATH,
+  path: FILE_ICONS_ZIP_PATH
 };
 const folderIconsZip: ZipWithMetadata = {
   zip: new AdmZip(FOLDER_ICONS_ZIP_PATH),
-  path: FOLDER_ICONS_ZIP_PATH,
+  path: FOLDER_ICONS_ZIP_PATH
 };
 
 // Cache for language IDs
@@ -57,9 +54,7 @@ function getLanguageIdFromMapping(extension: string): string {
   }
 
   if (!languageIdMappings) {
-    throw new Error(
-      "LanguageIDs mappings have not been loaded. Call loadLanguageIdMappings first.",
-    );
+    throw new Error("LanguageIDs mappings have not been loaded. Call loadLanguageIdMappings first.");
   }
 
   if (languageIdMappings && languageIdMappings[extension]) {
@@ -77,7 +72,7 @@ function getIcon(
   type: BaseNodeType,
   iconMappings: IconMappings,
   fileIconsZip: ZipWithMetadata,
-  folderIconsZip: ZipWithMetadata,
+  folderIconsZip: ZipWithMetadata
 ): { light: string; dark: string } {
   const zip = type === BaseNodeType.file ? fileIconsZip : folderIconsZip;
 
@@ -88,40 +83,32 @@ function getIcon(
   const entries = Object.entries(iconMappings).slice(1); // Skip the first element containing the default value (always true)
 
   for (const [iconName, mappings] of entries) {
-    if (
-      mappings.filenames.includes(basename) ||
-      mappings.extensions.includes(fileExtension)
-    ) {
+    if (mappings.filenames.includes(basename) || mappings.extensions.includes(fileExtension)) {
       const lightIconPath = `icons_light/${iconName}${type === BaseNodeType.directory ? "_opened" : ""}.svg`;
       const darkIconPath = `icons_dark/${iconName}${type === BaseNodeType.directory ? "_opened" : ""}.svg`;
 
       return {
         light: extractIconFromZip(zip, lightIconPath, darkIconPath),
-        dark: extractIconFromZip(zip, darkIconPath),
+        dark: extractIconFromZip(zip, darkIconPath)
       };
     }
   }
 
   return {
     light: defaultIconPath,
-    dark: defaultIconPath,
+    dark: defaultIconPath
   };
   const defaultLightIconPath = `icons_light/${defaultIconPath}`;
   const defaultDarkIconPath = `icons_dark/${defaultIconPath}`;
   return {
     light: extractIconFromZip(zip, defaultLightIconPath, defaultDarkIconPath),
-    dark: extractIconFromZip(zip, defaultDarkIconPath),
+    dark: extractIconFromZip(zip, defaultDarkIconPath)
   };
 }
 
-export function getIconForFile(
-  filename: string,
-  defaultIconPath: string,
-): { light: string; dark: string } {
+export function getIconForFile(filename: string, defaultIconPath: string): { light: string; dark: string } {
   if (!iconMappings) {
-    throw new Error(
-      "Icon mappings have not been loaded. Call loadIconMappings first.",
-    );
+    throw new Error("Icon mappings have not been loaded. Call loadIconMappings first.");
   }
 
   const fileExtension = path.extname(filename);
@@ -134,46 +121,23 @@ export function getIconForFile(
 
         return {
           light: extractIconFromZip(fileIconsZip, lightIconPath, darkIconPath),
-          dark: extractIconFromZip(fileIconsZip, darkIconPath),
+          dark: extractIconFromZip(fileIconsZip, darkIconPath)
         };
       }
     }
   }
 
-  return getIcon(
-    filename,
-    defaultIconPath,
-    BaseNodeType.file,
-    iconMappings,
-    fileIconsZip,
-    folderIconsZip,
-  );
+  return getIcon(filename, defaultIconPath, BaseNodeType.file, iconMappings, fileIconsZip, folderIconsZip);
 }
 
-export function getIconForFolder(
-  foldername: string,
-  defaultIconPath: string,
-): { light: string; dark: string } {
+export function getIconForFolder(foldername: string, defaultIconPath: string): { light: string; dark: string } {
   if (!folderIconMappings) {
-    throw new Error(
-      "Icon mappings have not been loaded. Call loadIconMappings first.",
-    );
+    throw new Error("Icon mappings have not been loaded. Call loadIconMappings first.");
   }
-  return getIcon(
-    foldername,
-    defaultIconPath,
-    BaseNodeType.directory,
-    folderIconMappings,
-    fileIconsZip,
-    folderIconsZip,
-  );
+  return getIcon(foldername, defaultIconPath, BaseNodeType.directory, folderIconMappings, fileIconsZip, folderIconsZip);
 }
 
-function extractIconFromZip(
-  zipWithMetadata: ZipWithMetadata,
-  iconPath: string,
-  fallbackIconPath?: string,
-): string {
+function extractIconFromZip(zipWithMetadata: ZipWithMetadata, iconPath: string, fallbackIconPath?: string): string {
   const { zip, path: zipFilePath } = zipWithMetadata;
   const tempDir = path.join(__dirname, "..", "temp_icons");
 
@@ -187,15 +151,11 @@ function extractIconFromZip(
     return tempIconPath;
   }
 
-  const entry =
-    zip.getEntry(iconPath) ||
-    (fallbackIconPath && zip.getEntry(fallbackIconPath));
+  const entry = zip.getEntry(iconPath) || (fallbackIconPath && zip.getEntry(fallbackIconPath));
   if (entry) {
     zip.extractEntryTo(entry, tempDir, false, true);
     return tempIconPath;
   }
 
-  throw new Error(
-    `Icon not found in ${zipFilePath}: ${iconPath} - ${fallbackIconPath}`,
-  );
+  throw new Error(`Icon not found in ${zipFilePath}: ${iconPath} - ${fallbackIconPath}`);
 }

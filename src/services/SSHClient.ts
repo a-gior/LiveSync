@@ -51,14 +51,12 @@ export class SSHClient extends BaseClient {
           this.isConnecting = false;
           this.isConnected = false;
           console.log("SSH connection timed out");
-          this._addError("Connection timeout", new Error("Connection timeout"));
           reject(new Error("Connection timeout"));
         })
         .on("error", (err) => {
           this.isConnecting = false;
           this.isConnected = false;
           console.error("SSH connection error:", err);
-          this._addError("Connection failed", err);
           reject(err);
         })
         .connect(connectionOptions);
@@ -73,10 +71,7 @@ export class SSHClient extends BaseClient {
     }
   }
 
-  async executeCommand(
-    command: string,
-    dataCallback?: (data: string) => void,
-  ): Promise<string> {
+  async executeCommand(command: string, dataCallback?: (data: string) => void): Promise<string> {
     return new Promise<string>((resolve, reject) => {
       this._client.exec(command, (err, stream) => {
         if (err) {
@@ -88,11 +83,7 @@ export class SSHClient extends BaseClient {
         stream
           .on("close", (code: number, signal: string) => {
             if (code !== 0) {
-              return reject(
-                new Error(
-                  `Command exited with code ${code} and signal ${signal}`,
-                ),
-              );
+              return reject(new Error(`Command exited with code ${code} and signal ${signal}`));
             }
             resolve(output);
           })
@@ -120,9 +111,7 @@ export class SSHClient extends BaseClient {
 
     try {
       await this.executeCommand(mkdirCommand);
-      LogManager.log(
-        `SFTP Created directories: ${directories.map((dir) => `'${dir}'`).join(" ")}`,
-      );
+      LogManager.log(`SFTP Created directories: ${directories.map((dir) => `'${dir}'`).join(" ")}`);
     } catch (error) {
       LogManager.log("Error creating directories in batch");
       throw error;

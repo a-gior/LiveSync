@@ -11,24 +11,13 @@ import {
   fileOpen,
   fileSave,
   fileUpload,
-  handleFileCheck,
+  handleFileCheck
 } from "../utilities/fileUtils/fileEventFunctions";
-import {
-  ComparisonFileNode,
-  ComparisonStatus,
-} from "../utilities/ComparisonFileNode";
+import { ComparisonFileNode, ComparisonStatus } from "../utilities/ComparisonFileNode";
 import JsonManager from "../managers/JsonManager";
 import { Action, ActionOn, ActionResult } from "../utilities/enums";
-import {
-  LOG_FLAGS,
-  logErrorMessage,
-  logInfoMessage,
-  logServerUnreachableError,
-} from "../managers/LogManager";
-import {
-  getFullPaths,
-  getRelativePath,
-} from "../utilities/fileUtils/filePathUtils";
+import { LOG_FLAGS, logErrorMessage, logInfoMessage, logServerUnreachableError } from "../managers/LogManager";
+import { getFullPaths, getRelativePath } from "../utilities/fileUtils/filePathUtils";
 import { ConnectionManager } from "../managers/ConnectionManager";
 import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 
@@ -38,10 +27,7 @@ export class FileEventHandler {
    * @param context - The extension context
    * @param treeDataProvider - The tree data provider
    */
-  static initialize(
-    context: vscode.ExtensionContext,
-    treeDataProvider: SyncTreeDataProvider,
-  ) {
+  static initialize(context: vscode.ExtensionContext, treeDataProvider: SyncTreeDataProvider) {
     context.subscriptions.push(
       // Handle file create events
       vscode.workspace.onDidCreateFiles(async (event) => {
@@ -85,13 +71,12 @@ export class FileEventHandler {
         WorkspaceConfigManager.reload();
         logInfoMessage("Reloaded settings");
 
-        const configuration =
-          WorkspaceConfigManager.getRemoteServerConfigured();
+        const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
         const connectionManager = ConnectionManager.getInstance(configuration);
         if (!(await connectionManager.isServerPingable())) {
           logServerUnreachableError();
         }
-      }),
+      })
     );
   }
 
@@ -105,9 +90,7 @@ export class FileEventHandler {
     if (!workspaceFolders) {
       return false;
     }
-    return workspaceFolders.some((folder) =>
-      filePath.startsWith(folder.uri.fsPath),
-    );
+    return workspaceFolders.some((folder) => filePath.startsWith(folder.uri.fsPath));
   }
 
   /**
@@ -116,9 +99,7 @@ export class FileEventHandler {
    * @param filePath - The file path
    */
   static logFileNotInWorkspace(action: string, filePath: string): void {
-    console.log(
-      `<handleFile${action}> Event ${action} ${filePath} not in workspace, we do nothing`,
-    );
+    logInfoMessage(`<handleFile${action}> Event ${action} ${filePath} not in workspace, we do nothing`);
   }
 
   static isSettingsFile(action: string, filePath: string): boolean {
@@ -128,15 +109,9 @@ export class FileEventHandler {
     if (workspaceFolders) {
       // Iterate over all workspace folders and check for the settings file path
       for (const workspaceFolder of workspaceFolders) {
-        const settingsPath = path.join(
-          workspaceFolder.uri.fsPath,
-          ".vscode",
-          "settings.json",
-        );
+        const settingsPath = path.join(workspaceFolder.uri.fsPath, ".vscode", "settings.json");
         if (filePath === settingsPath) {
-          console.log(
-            `<handleFile${action}> Detected configuration file at ${filePath}, skipping further processing of this event.`,
-          );
+          console.log(`<handleFile${action}> Detected configuration file at ${filePath}, skipping further processing of this event.`);
           return true;
         }
       }
@@ -150,10 +125,7 @@ export class FileEventHandler {
    * @param event - The file create event
    * @param treeDataProvider - The tree data provider
    */
-  static async handleFileCreate(
-    event: vscode.FileCreateEvent,
-    treeDataProvider: SyncTreeDataProvider,
-  ) {
+  static async handleFileCreate(event: vscode.FileCreateEvent, treeDataProvider: SyncTreeDataProvider) {
     for (const fileUri of event.files) {
       const filePath = fileUri.fsPath;
 
@@ -174,9 +146,7 @@ export class FileEventHandler {
 
         const fileNode = await FileNode.createFileNodeFromLocalPath(filePath);
         if (!fileNode) {
-          console.warn(
-            `<handleFileCreate> File node for ${filePath} could not be created`,
-          );
+          console.warn(`<handleFileCreate> File node for ${filePath} could not be created`);
           continue;
         }
 
@@ -186,14 +156,11 @@ export class FileEventHandler {
           fileNode.type,
           fileNode.size,
           fileNode.modifiedTime,
-          fileNode.relativePath,
+          fileNode.relativePath
         );
 
         // Action done or files have similar hashes
-        if (
-          fileCreatedAction === ActionResult.ActionPerformed ||
-          fileCreatedAction === ActionResult.Exists
-        ) {
+        if (fileCreatedAction === ActionResult.ActionPerformed || fileCreatedAction === ActionResult.Exists) {
           // File created on remote
           comparisonNode.status = ComparisonStatus.unchanged;
         } else if (fileCreatedAction === ActionResult.IsNotSame) {
@@ -205,10 +172,7 @@ export class FileEventHandler {
         }
 
         // Update rootElements and refresh the tree
-        const updatedNode = await treeDataProvider.updateRootElements(
-          Action.Add,
-          comparisonNode,
-        );
+        const updatedNode = await treeDataProvider.updateRootElements(Action.Add, comparisonNode);
         await treeDataProvider.refresh(updatedNode);
       } catch (err: any) {
         console.error("<handleFileCreate> Error: ", err);
@@ -221,10 +185,7 @@ export class FileEventHandler {
    * @param event - The file delete event
    * @param treeDataProvider - The tree data provider
    */
-  static async handleFileDelete(
-    event: vscode.FileDeleteEvent,
-    treeDataProvider: SyncTreeDataProvider,
-  ) {
+  static async handleFileDelete(event: vscode.FileDeleteEvent, treeDataProvider: SyncTreeDataProvider) {
     for (const fileUri of event.files) {
       const filePath = fileUri.fsPath;
 
@@ -241,10 +202,7 @@ export class FileEventHandler {
 
       try {
         // Get node from rootElements
-        const nodeToDelete = await JsonManager.findNodeByPath(
-          filePath,
-          treeDataProvider.rootElements,
-        );
+        const nodeToDelete = await JsonManager.findNodeByPath(filePath, treeDataProvider.rootElements);
         if (!nodeToDelete) {
           console.warn(`<handleFileDelete> Node not found for ${filePath}`);
           return;
@@ -259,14 +217,8 @@ export class FileEventHandler {
         }
 
         // Remove node from rootElements if also removed remotely, update it otherwise and refresh the tree view
-        const action =
-          fileDeletedAction === ActionResult.ActionPerformed
-            ? Action.Remove
-            : Action.Update;
-        const deletedNode = await treeDataProvider.updateRootElements(
-          action,
-          nodeToDelete,
-        );
+        const action = fileDeletedAction === ActionResult.ActionPerformed ? Action.Remove : Action.Update;
+        const deletedNode = await treeDataProvider.updateRootElements(action, nodeToDelete);
         await treeDataProvider.refresh(deletedNode);
       } catch (err: any) {
         console.error("<handleFileDelete> Error: ", err);
@@ -279,10 +231,7 @@ export class FileEventHandler {
    * @param document - The text document
    * @param treeDataProvider - The tree data provider
    */
-  static async handleFileSave(
-    document: vscode.TextDocument,
-    treeDataProvider: SyncTreeDataProvider,
-  ) {
+  static async handleFileSave(document: vscode.TextDocument, treeDataProvider: SyncTreeDataProvider) {
     const filePath = document.uri.fsPath;
 
     if (!FileEventHandler.isFileInWorkspace(filePath)) {
@@ -298,10 +247,7 @@ export class FileEventHandler {
 
     try {
       // Get node from rootElements
-      const nodeToSave = await JsonManager.findNodeByPath(
-        filePath,
-        treeDataProvider.rootElements,
-      );
+      const nodeToSave = await JsonManager.findNodeByPath(filePath, treeDataProvider.rootElements);
       if (!nodeToSave) {
         console.warn(`<handleFileSave> Node not found for ${filePath}`);
         return;
@@ -324,10 +270,7 @@ export class FileEventHandler {
       }
 
       // Update node in rootElements and refresh the tree view
-      const savedNode = await treeDataProvider.updateRootElements(
-        Action.Update,
-        nodeToSave,
-      );
+      const savedNode = await treeDataProvider.updateRootElements(Action.Update, nodeToSave);
       await treeDataProvider.refresh(savedNode);
     } catch (err: any) {
       logErrorMessage(`${err.message}`, LOG_FLAGS.ALL);
@@ -339,39 +282,25 @@ export class FileEventHandler {
    * @param event - The file rename event
    * @param treeDataProvider - The tree data provider
    */
-  static async handleFileRename(
-    event: vscode.FileRenameEvent,
-    treeDataProvider: SyncTreeDataProvider,
-  ) {
+  static async handleFileRename(event: vscode.FileRenameEvent, treeDataProvider: SyncTreeDataProvider) {
     for (const { oldUri, newUri } of event.files) {
       const oldPath = oldUri.fsPath;
       const newPath = newUri.fsPath;
 
-      if (
-        !FileEventHandler.isFileInWorkspace(oldPath) ||
-        !FileEventHandler.isFileInWorkspace(newPath)
-      ) {
+      if (!FileEventHandler.isFileInWorkspace(oldPath) || !FileEventHandler.isFileInWorkspace(newPath)) {
         FileEventHandler.logFileNotInWorkspace("Rename", oldPath);
         continue;
       }
 
-      if (
-        FileEventHandler.isSettingsFile(Action.Move, oldPath) ||
-        FileEventHandler.isSettingsFile(Action.Move, newPath)
-      ) {
+      if (FileEventHandler.isSettingsFile(Action.Move, oldPath) || FileEventHandler.isSettingsFile(Action.Move, newPath)) {
         return;
       }
 
-      console.log(
-        `<handleFileRename> Event renaming/moving from ${oldPath} to ${newPath}`,
-      );
+      console.log(`<handleFileRename> Event renaming/moving from ${oldPath} to ${newPath}`);
 
       try {
         // Get node from rootElements
-        const nodeToMove = await JsonManager.findNodeByPath(
-          oldPath,
-          treeDataProvider.rootElements,
-        );
+        const nodeToMove = await JsonManager.findNodeByPath(oldPath, treeDataProvider.rootElements);
         if (!nodeToMove) {
           console.warn(`<handleFileRename> Node not found for ${oldPath}`);
           continue;
@@ -383,16 +312,8 @@ export class FileEventHandler {
 
         // Get old file path and status
         const { localPath, remotePath } = await getFullPaths(nodeToMove);
-        const oldFileRenamedAction = await handleFileCheck(
-          ActionOn.Move,
-          "check",
-          localPath,
-          remotePath,
-        );
-        const oldAction =
-          oldFileRenamedAction === ActionResult.ActionPerformed
-            ? Action.Remove
-            : Action.Update;
+        const oldFileRenamedAction = await handleFileCheck(ActionOn.Move, "check", localPath, remotePath);
+        const oldAction = oldFileRenamedAction === ActionResult.ActionPerformed ? Action.Remove : Action.Update;
         // nodeToMove.relativePath = oldFileNodeInfo.relativePath;
 
         // Handle
@@ -409,18 +330,12 @@ export class FileEventHandler {
           nodeToMove.status = ComparisonStatus.modified; // File exists remotely and are not the same
         }
 
-        const deletedNode = await treeDataProvider.updateRootElements(
-          oldAction,
-          nodeToMove,
-        );
+        const deletedNode = await treeDataProvider.updateRootElements(oldAction, nodeToMove);
         await treeDataProvider.refresh(deletedNode);
 
         // Rename/Move file remotely depending on ActionOnMove parameter
         const fileRenamedAction = await fileMove(oldUri, newUri);
-        const action =
-          fileRenamedAction === ActionResult.ActionPerformed
-            ? Action.Add
-            : Action.Update;
+        const action = fileRenamedAction === ActionResult.ActionPerformed ? Action.Add : Action.Update;
         const nodeToAdd = nodeToMove.clone();
         if (path.dirname(oldPath) === path.dirname(newPath)) {
           // Renaming the entry
@@ -441,23 +356,14 @@ export class FileEventHandler {
           nodeToAdd.status = ComparisonStatus.modified; // File exists remotely and are not the same
         }
 
-        const addedNode = await treeDataProvider.updateRootElements(
-          action,
-          nodeToAdd,
-        );
+        const addedNode = await treeDataProvider.updateRootElements(action, nodeToAdd);
         await treeDataProvider.refresh(addedNode);
 
         if (fileRenamedAction) {
-          nodeToMove.status =
-            nodeToMove.status !== ComparisonStatus.added
-              ? ComparisonStatus.unchanged
-              : ComparisonStatus.added;
+          nodeToMove.status = nodeToMove.status !== ComparisonStatus.added ? ComparisonStatus.unchanged : ComparisonStatus.added;
 
           nodeToMove.relativePath = oldFileNodeRelativePath;
-          const deletedNode = await treeDataProvider.updateRootElements(
-            Action.Remove,
-            nodeToMove,
-          );
+          const deletedNode = await treeDataProvider.updateRootElements(Action.Remove, nodeToMove);
           await treeDataProvider.refresh(deletedNode);
 
           if (path.dirname(oldPath) === path.dirname(newPath)) {
@@ -466,18 +372,12 @@ export class FileEventHandler {
           }
 
           nodeToMove.relativePath = newFileNodeRelativePath;
-          const movedNode = await treeDataProvider.updateRootElements(
-            Action.Add,
-            nodeToMove,
-          );
+          const movedNode = await treeDataProvider.updateRootElements(Action.Add, nodeToMove);
           await treeDataProvider.refresh(movedNode);
         } else {
           nodeToMove.status = ComparisonStatus.removed;
           nodeToMove.relativePath = oldFileNodeRelativePath;
-          const deletedNode = await treeDataProvider.updateRootElements(
-            Action.Update,
-            nodeToMove,
-          );
+          const deletedNode = await treeDataProvider.updateRootElements(Action.Update, nodeToMove);
           await treeDataProvider.refresh(deletedNode);
 
           const nodeToAdd = nodeToMove.clone();
@@ -487,10 +387,7 @@ export class FileEventHandler {
           }
           nodeToAdd.status = ComparisonStatus.added;
           nodeToAdd.relativePath = newFileNodeRelativePath;
-          const addedNode = await treeDataProvider.updateRootElements(
-            Action.Add,
-            nodeToAdd,
-          );
+          const addedNode = await treeDataProvider.updateRootElements(Action.Add, nodeToAdd);
           await treeDataProvider.refresh(addedNode);
         }
       } catch (err: any) {
@@ -499,10 +396,7 @@ export class FileEventHandler {
     }
   }
 
-  static async handleFileOpen(
-    document: vscode.TextDocument,
-    treeDataProvider: SyncTreeDataProvider,
-  ) {
+  static async handleFileOpen(document: vscode.TextDocument, treeDataProvider: SyncTreeDataProvider) {
     const filePath = document.uri.fsPath;
 
     if (!FileEventHandler.isFileInWorkspace(filePath)) {
@@ -517,10 +411,7 @@ export class FileEventHandler {
     console.log(`<handleFileOpen> Event opening ${filePath}`);
 
     try {
-      const openedNode = await JsonManager.findNodeByPath(
-        filePath,
-        treeDataProvider.rootElements,
-      );
+      const openedNode = await JsonManager.findNodeByPath(filePath, treeDataProvider.rootElements);
       if (!openedNode) {
         console.log(`<handleFileOpen> Node not found for ${filePath}`);
         return;
@@ -531,10 +422,7 @@ export class FileEventHandler {
         openedNode.status = ComparisonStatus.unchanged;
       }
 
-      const savedNode = await treeDataProvider.updateRootElements(
-        Action.Update,
-        openedNode,
-      );
+      const savedNode = await treeDataProvider.updateRootElements(Action.Update, openedNode);
       await treeDataProvider.refresh(savedNode);
     } catch (err: any) {
       console.error("<handleFileOpen> Error: ", err);
@@ -546,10 +434,7 @@ export class FileEventHandler {
    * @param fileNode - The file node to download
    * @param treeDataProvider - The tree data provider
    */
-  static async handleFileDownload(
-    fileNode: ComparisonFileNode,
-    treeDataProvider: SyncTreeDataProvider,
-  ) {
+  static async handleFileDownload(fileNode: ComparisonFileNode, treeDataProvider: SyncTreeDataProvider) {
     const { localPath, remotePath } = await getFullPaths(fileNode);
 
     if (!FileEventHandler.isFileInWorkspace(localPath)) {
@@ -557,9 +442,7 @@ export class FileEventHandler {
       return;
     }
 
-    console.log(
-      `<handleFileDownload> Downloading file from ${remotePath} to ${localPath}`,
-    );
+    console.log(`<handleFileDownload> Downloading file from ${remotePath} to ${localPath}`);
 
     try {
       const uri = vscode.Uri.file(localPath);
@@ -573,10 +456,7 @@ export class FileEventHandler {
         fileNode.status = ComparisonStatus.modified; // File exists locally but is different
       }
 
-      const updatedNode = await treeDataProvider.updateRootElements(
-        Action.Update,
-        fileNode,
-      );
+      const updatedNode = await treeDataProvider.updateRootElements(Action.Update, fileNode);
       await treeDataProvider.refresh(updatedNode);
     } catch (err: any) {
       logErrorMessage(`${err.message}`, LOG_FLAGS.ALL);
@@ -588,10 +468,7 @@ export class FileEventHandler {
    * @param fileNode - The file node to upload
    * @param treeDataProvider - The tree data provider
    */
-  static async handleFileUpload(
-    fileNode: ComparisonFileNode,
-    treeDataProvider: SyncTreeDataProvider,
-  ) {
+  static async handleFileUpload(fileNode: ComparisonFileNode, treeDataProvider: SyncTreeDataProvider) {
     const { localPath, remotePath } = await getFullPaths(fileNode);
 
     if (!FileEventHandler.isFileInWorkspace(localPath)) {
@@ -599,9 +476,7 @@ export class FileEventHandler {
       return;
     }
 
-    console.log(
-      `<handleFileUpload> Uploading file from ${localPath} to ${remotePath}`,
-    );
+    console.log(`<handleFileUpload> Uploading file from ${localPath} to ${remotePath}`);
 
     try {
       const uri = vscode.Uri.file(localPath);
@@ -615,10 +490,7 @@ export class FileEventHandler {
         fileNode.status = ComparisonStatus.modified; // File exists remotely but is different
       }
 
-      const updatedNode = await treeDataProvider.updateRootElements(
-        Action.Update,
-        fileNode,
-      );
+      const updatedNode = await treeDataProvider.updateRootElements(Action.Update, fileNode);
       await treeDataProvider.refresh(updatedNode);
     } catch (err: any) {
       logErrorMessage(`${err.message}`, LOG_FLAGS.ALL);

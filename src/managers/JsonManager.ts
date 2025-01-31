@@ -1,28 +1,16 @@
 import path from "path";
 import * as fs from "fs";
 import { FileNode, FileNodeSource } from "../utilities/FileNode";
-import {
-  COMPARE_FILES_JSON,
-  FOLDERS_STATE_JSON,
-  REMOTE_FILES_JSON,
-  SAVE_DIR,
-} from "../utilities/constants";
-import {
-  ComparisonFileNode,
-  ComparisonStatus,
-} from "../utilities/ComparisonFileNode";
+import { COMPARE_FILES_JSON, FOLDERS_STATE_JSON, REMOTE_FILES_JSON, SAVE_DIR } from "../utilities/constants";
+import { ComparisonFileNode, ComparisonStatus } from "../utilities/ComparisonFileNode";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
 import { debounce } from "../utilities/debounce";
 import { WorkspaceConfigManager } from "./WorkspaceConfigManager";
-import {
-  getCorrespondingPath,
-  getRelativePath,
-  splitParts,
-} from "../utilities/fileUtils/filePathUtils";
+import { getCorrespondingPath, getRelativePath, splitParts } from "../utilities/fileUtils/filePathUtils";
 
 export enum JsonType {
   REMOTE = "remote",
-  COMPARE = "compare",
+  COMPARE = "compare"
 }
 
 export default class JsonManager {
@@ -48,9 +36,9 @@ export default class JsonManager {
 
     if (this.foldersState) {
       return this.foldersState;
-    } else {
-      throw new Error("FoldersState wasn't loaded for some reasons");
     }
+
+    throw new Error("FoldersState wasn't loaded for some reasons");
   }
 
   public async reloadFoldersState(): Promise<Map<string, boolean>> {
@@ -62,10 +50,7 @@ export default class JsonManager {
     return `${WorkspaceConfigManager.getWorkspaceBasename()}$$${element.relativePath}`;
   }
 
-  public async updateFolderState(
-    element: ComparisonFileNode,
-    isExpanded: boolean,
-  ) {
+  public async updateFolderState(element: ComparisonFileNode, isExpanded: boolean) {
     await this.waitForJsonLoad();
     if (!this.foldersState) {
       logErrorMessage("Couldn't update folders state");
@@ -101,18 +86,15 @@ export default class JsonManager {
     try {
       const [remote, comparison, foldersState] = await Promise.all([
         this.loadMapFromJson<FileNode>(REMOTE_FILES_JSON, FileNode),
-        this.loadMapFromJson<ComparisonFileNode>(
-          COMPARE_FILES_JSON,
-          ComparisonFileNode,
-        ),
-        this.loadMapFromJson<boolean>(FOLDERS_STATE_JSON),
+        this.loadMapFromJson<ComparisonFileNode>(COMPARE_FILES_JSON, ComparisonFileNode),
+        this.loadMapFromJson<boolean>(FOLDERS_STATE_JSON)
       ]);
 
       this.remoteFileEntries = remote;
       this.comparisonFileEntries = comparison;
       this.foldersState = foldersState;
     } catch (error) {
-      logErrorMessage("Failed to initialize JSON data", LOG_FLAGS.ALL, error);
+      logErrorMessage("Failed to initialize JSON data", LOG_FLAGS.CONSOLE_ONLY, error);
       throw error;
     }
   }
@@ -121,10 +103,7 @@ export default class JsonManager {
     return this.jsonLoadedPromise;
   }
 
-  private async loadMapFromJson<T>(
-    fileName: string,
-    NodeConstructor?: new (data: any) => T,
-  ): Promise<Map<string, T>> {
+  private async loadMapFromJson<T>(fileName: string, NodeConstructor?: new (data: any) => T): Promise<Map<string, T>> {
     const filePath = getJsonPath(fileName);
     const fileEntryMap = new Map<string, T>();
 
@@ -148,16 +127,11 @@ export default class JsonManager {
 
       return fileEntryMap;
     } catch (error: any) {
-      throw new Error(
-        `Failed to load node from JSON ${fileName}: ${error.message}`,
-      );
+      throw new Error(`Failed to load node from JSON ${fileName}: ${error.message}`);
     }
   }
 
-  private async saveMapToJson<T>(
-    fileName: string,
-    dataMap: Map<string, T>,
-  ): Promise<void> {
+  private async saveMapToJson<T>(fileName: string, dataMap: Map<string, T>): Promise<void> {
     const filePath = getJsonPath(fileName);
 
     // Convert the Map to an Object to be saved as JSON
@@ -171,16 +145,11 @@ export default class JsonManager {
       const jsonString = JSON.stringify(jsonObject, null, 2); // Pretty print with 2-space indentation for readability
       await fs.promises.writeFile(filePath, jsonString, "utf-8");
     } catch (error: any) {
-      throw new Error(
-        `Failed to save map to JSON ${fileName}: ${error.message}`,
-      );
+      throw new Error(`Failed to save map to JSON ${fileName}: ${error.message}`);
     }
   }
 
-  private async saveJson(
-    fileName: string,
-    data: Map<string, FileNode | ComparisonFileNode>,
-  ): Promise<void> {
+  private async saveJson(fileName: string, data: Map<string, FileNode | ComparisonFileNode>): Promise<void> {
     const filePath = getJsonPath(fileName);
     const jsonContent = JSON.stringify(Object.fromEntries(data), null, 2);
 
@@ -195,19 +164,17 @@ export default class JsonManager {
   private getJsonFileName(jsonType: JsonType): string {
     const fileNames = {
       [JsonType.REMOTE]: REMOTE_FILES_JSON,
-      [JsonType.COMPARE]: COMPARE_FILES_JSON,
+      [JsonType.COMPARE]: COMPARE_FILES_JSON
     };
     return fileNames[jsonType];
   }
 
-  public async getFileEntriesMap(
-    jsonType: JsonType,
-  ): Promise<Map<string, FileNode | ComparisonFileNode> | null> {
+  public async getFileEntriesMap(jsonType: JsonType): Promise<Map<string, FileNode | ComparisonFileNode> | null> {
     await this.waitForJsonLoad();
 
     const entriesMap = {
       [JsonType.REMOTE]: this.remoteFileEntries,
-      [JsonType.COMPARE]: this.comparisonFileEntries,
+      [JsonType.COMPARE]: this.comparisonFileEntries
     };
     return entriesMap[jsonType];
   }
@@ -219,9 +186,7 @@ export default class JsonManager {
     const fileNodeMap = await this.getFileEntriesMap(jsonType);
 
     if (!fileNodeMap) {
-      logErrorMessage(
-        `<updateRemoteFilesJson> Unable to load existing remote files JSON data for ${fileName}`,
-      );
+      logErrorMessage(`<updateRemoteFilesJson> Unable to load existing remote files JSON data for ${fileName}`);
       return;
     }
 
@@ -237,9 +202,7 @@ export default class JsonManager {
 
         for (const pathPart of pathParts) {
           if (!currentNode) {
-            logErrorMessage(
-              "<updateRemoteFilesJson> Couldnt find current node in remote files JSON",
-            );
+            logErrorMessage("<updateRemoteFilesJson> Couldnt find current node in remote files JSON");
             return;
           }
 
@@ -251,8 +214,7 @@ export default class JsonManager {
             // Create a new child node if it doesn't exist
             const fullRemotePath = path.join(currentNode.fullPath, pathPart);
             const fullLocalPath = getCorrespondingPath(fullRemotePath);
-            const fileNode =
-              await FileNode.createFileNodeFromLocalPath(fullLocalPath);
+            const fileNode = await FileNode.createFileNodeFromLocalPath(fullLocalPath);
             fileNode.fullPath = fullRemotePath;
             fileNode.source = FileNodeSource.remote;
 
@@ -275,10 +237,7 @@ export default class JsonManager {
     await this.saveJson(fileName, fileNodeMap);
   }
 
-  public async updateFullJson(
-    jsonType: JsonType,
-    data: Map<string, FileNode | ComparisonFileNode>,
-  ): Promise<void> {
+  public async updateFullJson(jsonType: JsonType, data: Map<string, FileNode | ComparisonFileNode>): Promise<void> {
     try {
       // Get the existing JSON data
       const fileName = this.getJsonFileName(jsonType);
@@ -304,12 +263,10 @@ export default class JsonManager {
     }
   }
 
-  private static async findNodeInHierarchy<
-    T extends FileNode | ComparisonFileNode,
-  >(
+  private static async findNodeInHierarchy<T extends FileNode | ComparisonFileNode>(
     targetPath: string,
     currentNode: T,
-    pathParts: string[],
+    pathParts: string[]
   ): Promise<T | undefined> {
     if (pathParts.length === 0) {
       return currentNode;
@@ -332,7 +289,7 @@ export default class JsonManager {
   public static async findNodeByPath<T extends FileNode | ComparisonFileNode>(
     filePath: string,
     rootEntries: Map<string, T>,
-    pairedFolderName?: string,
+    pairedFolderName?: string
   ): Promise<T | undefined> {
     if (!filePath || filePath === "." || filePath === "") {
       return pairedFolderName ? rootEntries.get(pairedFolderName) : undefined;
@@ -342,7 +299,6 @@ export default class JsonManager {
       if (pairedFolderName) {
         const rootNode = rootEntries.get(pairedFolderName);
         if (!rootNode) {
-          console.log(`Root node not found: ${pairedFolderName}`, rootEntries);
           throw new Error(`Root node not found: ${pairedFolderName}`);
         }
 
@@ -355,27 +311,19 @@ export default class JsonManager {
 
       return this.findNodeByPath(relativePath, rootEntries, rootFolderName);
     } catch (error: any) {
-      logErrorMessage(
-        `Find entry failed: ${filePath}`,
-        LOG_FLAGS.CONSOLE_AND_LOG_MANAGER,
-        error.message,
-      );
+      logErrorMessage(`Find entry failed: ${filePath}`, LOG_FLAGS.CONSOLE_AND_LOG_MANAGER, error.message);
       return undefined;
     }
   }
 
   public static async addComparisonFileNode(
     element: ComparisonFileNode,
-    rootEntries: Map<string, ComparisonFileNode>,
+    rootEntries: Map<string, ComparisonFileNode>
   ): Promise<ComparisonFileNode> {
     try {
       let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
       const parentPath = path.dirname(element.relativePath);
-      const parentNode = await this.findNodeByPath(
-        parentPath,
-        rootEntries,
-        rootFolderName,
-      );
+      const parentNode = await this.findNodeByPath(parentPath, rootEntries, rootFolderName);
 
       if (!parentNode?.isDirectory()) {
         throw new Error(`Invalid parent: ${parentPath}`);
@@ -383,10 +331,7 @@ export default class JsonManager {
 
       parentNode.addChild(element);
 
-      return ComparisonFileNode.updateParentDirectoriesStatus(
-        rootEntries,
-        element,
-      );
+      return ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, element);
     } catch (error) {
       logErrorMessage("Add node failed", LOG_FLAGS.ALL, error);
       throw new Error("Adding node to rootElements failed");
@@ -395,16 +340,12 @@ export default class JsonManager {
 
   public static async deleteComparisonFileNode(
     element: ComparisonFileNode,
-    rootEntries: Map<string, ComparisonFileNode>,
+    rootEntries: Map<string, ComparisonFileNode>
   ): Promise<ComparisonFileNode> {
     try {
       let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
       const parentPath = path.dirname(element.relativePath);
-      const parentNode = await this.findNodeByPath(
-        parentPath,
-        rootEntries,
-        rootFolderName,
-      );
+      const parentNode = await this.findNodeByPath(parentPath, rootEntries, rootFolderName);
 
       if (!parentNode) {
         throw new Error(`Parent not found: ${parentPath}`);
@@ -418,13 +359,10 @@ export default class JsonManager {
         element.size,
         element.modifiedTime,
         element.relativePath,
-        ComparisonStatus.removed,
+        ComparisonStatus.removed
       );
 
-      return ComparisonFileNode.updateParentDirectoriesStatus(
-        rootEntries,
-        tempNode,
-      );
+      return ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, tempNode);
     } catch (error: any) {
       logErrorMessage("Delete node failed", LOG_FLAGS.ALL, error.message);
       throw new Error("Deleting node to rootElements failed");
@@ -434,17 +372,13 @@ export default class JsonManager {
   public static async moveComparisonFileNode(
     element: ComparisonFileNode,
     newPath: string,
-    rootEntries: Map<string, ComparisonFileNode>,
+    rootEntries: Map<string, ComparisonFileNode>
   ): Promise<ComparisonFileNode> {
     try {
       let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
       const [oldParentNode, newParentNode] = await Promise.all([
-        this.findNodeByPath(
-          path.dirname(element.relativePath),
-          rootEntries,
-          rootFolderName,
-        ),
-        this.findNodeByPath(path.dirname(newPath), rootEntries, rootFolderName),
+        this.findNodeByPath(path.dirname(element.relativePath), rootEntries, rootFolderName),
+        this.findNodeByPath(path.dirname(newPath), rootEntries, rootFolderName)
       ]);
 
       if (!oldParentNode || !newParentNode) {
@@ -457,14 +391,8 @@ export default class JsonManager {
       element.setStatus(ComparisonStatus.modified);
       newParentNode.addChild(element);
 
-      ComparisonFileNode.updateParentDirectoriesStatus(
-        rootEntries,
-        oldParentNode,
-      );
-      return ComparisonFileNode.updateParentDirectoriesStatus(
-        rootEntries,
-        element,
-      );
+      ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, oldParentNode);
+      return ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, element);
     } catch (error) {
       logErrorMessage("Move node failed", LOG_FLAGS.ALL, error);
       throw new Error("Moving node to rootElements failed");
@@ -473,25 +401,18 @@ export default class JsonManager {
 
   public static async updateComparisonFileNode(
     element: ComparisonFileNode,
-    rootEntries: Map<string, ComparisonFileNode>,
+    rootEntries: Map<string, ComparisonFileNode>
   ): Promise<ComparisonFileNode> {
     try {
       let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
-      const foundElement = await this.findNodeByPath(
-        element.relativePath,
-        rootEntries,
-        rootFolderName,
-      );
+      const foundElement = await this.findNodeByPath(element.relativePath, rootEntries, rootFolderName);
 
       if (!foundElement) {
         throw new Error("Element not found");
       }
 
       Object.assign(foundElement, element);
-      return ComparisonFileNode.updateParentDirectoriesStatus(
-        rootEntries,
-        foundElement,
-      );
+      return ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, foundElement);
     } catch (error: any) {
       logErrorMessage("Update node failed", LOG_FLAGS.ALL, error.message);
       throw new Error("Updating node to rootElements failed");
@@ -507,9 +428,7 @@ export function isFileNodeMap(map: any): map is Map<string, FileNode> {
   return firstValue instanceof FileNode;
 }
 
-export function isComparisonFileNodeMap(
-  map: any,
-): map is Map<string, ComparisonFileNode> {
+export function isComparisonFileNodeMap(map: any): map is Map<string, ComparisonFileNode> {
   if (!(map instanceof Map)) {
     return false;
   }
@@ -518,9 +437,5 @@ export function isComparisonFileNodeMap(
 }
 
 function getJsonPath(fileName: string): string {
-  return path.join(
-    SAVE_DIR,
-    WorkspaceConfigManager.getWorkspaceHash().identifier,
-    fileName,
-  );
+  return path.join(SAVE_DIR, WorkspaceConfigManager.getWorkspaceHash().identifier, fileName);
 }

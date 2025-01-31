@@ -5,12 +5,7 @@ import { getRemoteFileContentHash } from "./sftpOperations";
 import { BaseNodeType } from "../BaseNode";
 import { getRelativePath } from "./filePathUtils";
 
-export async function generateHash(
-  filePath: string,
-  fileSource: FileNodeSource,
-  fileType: BaseNodeType,
-  fileContentHash: string = "",
-) {
+export async function generateHash(filePath: string, fileSource: FileNodeSource, fileType: BaseNodeType, fileContentHash: string = "") {
   if (fileType === BaseNodeType.file && fileContentHash === "") {
     if (fileSource === FileNodeSource.local) {
       fileContentHash = await new Promise<string>((resolve) => {
@@ -34,14 +29,10 @@ export async function generateHash(
   return generateNodeHash(filePath, fileType, fileContentHash);
 }
 
-export function generateNodeHash(
-  fullPath: string,
-  fileType: BaseNodeType,
-  fileContentHash: string,
-) {
+export function generateNodeHash(fullPath: string, fileType: BaseNodeType, fileContentHash: string) {
   const relativePath = getRelativePath(fullPath);
   const hash = crypto.createHash("sha256");
-  // console.log(`Creating hash with fileContentHash: ${fileContentHash}`);
+
   hash.update(`${relativePath}${fileType}${fileContentHash}`);
   const filehash = hash.digest("hex");
 

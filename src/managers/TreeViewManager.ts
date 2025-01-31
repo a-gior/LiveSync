@@ -3,35 +3,19 @@ import { SyncTreeDataProvider } from "../services/SyncTreeDataProvider";
 import JsonManager from "./JsonManager";
 
 export class TreeViewManager {
-  static async initialize(
-    context: vscode.ExtensionContext,
-  ): Promise<SyncTreeDataProvider> {
+  static async initialize(context: vscode.ExtensionContext): Promise<SyncTreeDataProvider> {
     const showAsTree = context.globalState.get<boolean>("showAsTree", true);
-    const showUnchanged = context.globalState.get<boolean>(
-      "showUnchanged",
-      true,
-    );
+    const showUnchanged = context.globalState.get<boolean>("showUnchanged", true);
 
-    const treeDataProvider = new SyncTreeDataProvider(
-      showAsTree,
-      showUnchanged,
-    );
+    const treeDataProvider = new SyncTreeDataProvider(showAsTree, showUnchanged);
     await treeDataProvider.loadRootElements();
 
     const treeView = vscode.window.createTreeView("nodeDependencies", {
-      treeDataProvider: treeDataProvider,
+      treeDataProvider: treeDataProvider
     });
 
-    vscode.commands.executeCommand(
-      "setContext",
-      "livesyncViewMode",
-      showAsTree ? "tree" : "list",
-    );
-    vscode.commands.executeCommand(
-      "setContext",
-      "livesyncShowUnchanged",
-      showUnchanged,
-    );
+    vscode.commands.executeCommand("setContext", "livesyncViewMode", showAsTree ? "tree" : "list");
+    vscode.commands.executeCommand("setContext", "livesyncShowUnchanged", showUnchanged);
 
     treeView.onDidExpandElement((event) => {
       JsonManager.getInstance().updateFolderState(event.element, true);

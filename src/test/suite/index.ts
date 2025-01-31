@@ -6,7 +6,7 @@ export async function run(): Promise<void> {
   // Create the mocha test
   const mocha = new Mocha({
     ui: "tdd",
-    color: true,
+    color: true
   });
 
   const testsRoot = path.resolve(__dirname, "..");
@@ -14,7 +14,7 @@ export async function run(): Promise<void> {
   return new Promise(async (c, e) => {
     const glob = new Glob("**/**.test.js", {
       cwd: testsRoot,
-      withFileTypes: true,
+      withFileTypes: true
     });
     for (const file of glob) {
       mocha.addFile(file.fullpath());

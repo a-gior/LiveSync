@@ -4,7 +4,7 @@ export enum Action {
   Update = "update",
   Move = "Move",
   Save = "Save",
-  Open = "Open",
+  Open = "Open"
 }
 
 export enum Check {
@@ -12,7 +12,7 @@ export enum Check {
   remoteNotExists = "remoteNotExists",
   remoteNotSameOverwrite = "remoteNotSameOverwrite",
   remoteNotSameDownload = "remoteNotSameDownload",
-  localExists = "localExists",
+  localExists = "localExists"
 }
 
 export enum ActionResult {
@@ -20,7 +20,7 @@ export enum ActionResult {
   DontExist = "DontExist", // Check file existence was false
   Exists = "Exists", // Check file existence was done and isSame is true
   IsNotSame = "IsNotSame", // Check was done and isSame was false
-  ActionPerformed = "ActionPerformed", // Action has been done
+  ActionPerformed = "ActionPerformed" // Action has been done
 }
 
 export enum ActionOn {
@@ -30,5 +30,5 @@ export enum ActionOn {
   Create = "actionOnCreate",
   Delete = "actionOnDelete",
   Move = "actionOnMove",
-  Open = "actionOnOpen",
+  Open = "actionOnOpen"
 }

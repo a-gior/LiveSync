@@ -9,10 +9,7 @@
       "name": "Run Extension",
       "type": "extensionHost",
       "request": "launch",
-      "args": [
-        "--trace-warnings",
-        "--extensionDevelopmentPath=${workspaceFolder}"
-      ],
+      "args": ["--trace-warnings", "--extensionDevelopmentPath=${workspaceFolder}"],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
       "preLaunchTask": "${defaultBuildTask}"
     }

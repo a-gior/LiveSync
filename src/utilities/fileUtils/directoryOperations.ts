@@ -45,13 +45,8 @@ async function createRemoteDirectories(fileEntry: ComparisonFileNode) {
   return { directoriesToCreate: Array.from(directoriesToCreate), filePaths };
 }
 
-async function uploadFilesWithLimit(
-  sftpClient: SFTPClient,
-  filePaths: { localPath: string; remotePath: string }[],
-) {
-  const promises = filePaths.map((file) =>
-    limit(() => sftpClient.uploadFile(file.localPath, file.remotePath)),
-  );
+async function uploadFilesWithLimit(sftpClient: SFTPClient, filePaths: { localPath: string; remotePath: string }[]) {
+  const promises = filePaths.map((file) => limit(() => sftpClient.uploadFile(file.localPath, file.remotePath)));
   await Promise.all(promises);
 }
 
@@ -62,8 +57,7 @@ export async function uploadDirectory(rootEntry: ComparisonFileNode) {
   try {
     await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
       // Step 1: Collect remote directories and  file paths
-      const { directoriesToCreate, filePaths } =
-        await createRemoteDirectories(rootEntry);
+      const { directoriesToCreate, filePaths } = await createRemoteDirectories(rootEntry);
 
       // Step 2: Create directories via SSH command
       await connectionManager.doSSHOperation(async (sshClient: SSHClient) => {
@@ -90,23 +84,19 @@ async function createLocalDirectories(node: ComparisonFileNode) {
     if (node.isDirectory()) {
       await fs.promises.mkdir(localPath, { recursive: true });
 
-      const remoteEntries = await connectionManager.doSFTPOperation(
-        async (sftpClient: SFTPClient) => {
-          return await sftpClient.listFiles(remotePath);
-        },
-      );
+      const remoteEntries = await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+        return await sftpClient.listFiles(remotePath);
+      });
 
       for (const remoteEntry of remoteEntries) {
-        const fullLocalPath = normalizePath(
-          path.join(localPath, remoteEntry.name),
-        );
+        const fullLocalPath = normalizePath(path.join(localPath, remoteEntry.name));
         const childEntry = new ComparisonFileNode(
           remoteEntry.name,
           remoteEntry.type === "d" ? BaseNodeType.directory : BaseNodeType.file,
           remoteEntry.size,
           new Date(remoteEntry.modifyTime * 1000),
           getRelativePath(fullLocalPath),
-          ComparisonStatus.unchanged,
+          ComparisonStatus.unchanged
         );
         await createDir(childEntry);
       }
@@ -119,13 +109,8 @@ async function createLocalDirectories(node: ComparisonFileNode) {
   return filePaths;
 }
 
-async function downloadFilesWithLimit(
-  sftpClient: SFTPClient,
-  filePaths: { remotePath: string; localPath: string }[],
-) {
-  const promises = filePaths.map((file) =>
-    limit(() => sftpClient.downloadFile(file.remotePath, file.localPath)),
-  );
+async function downloadFilesWithLimit(sftpClient: SFTPClient, filePaths: { remotePath: string; localPath: string }[]) {
+  const promises = filePaths.map((file) => limit(() => sftpClient.downloadFile(file.remotePath, file.localPath)));
   await Promise.all(promises);
 }
 
@@ -137,7 +122,6 @@ export async function downloadDirectory(remoteEntry: ComparisonFileNode) {
     await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
       // Step 1: Create local directories and collect file paths
       const filePaths = await createLocalDirectories(remoteEntry);
-      console.log(`FilePaths: `, filePaths);
 
       // Step 2: Download files with concurrency limits
       await downloadFilesWithLimit(sftpClient, filePaths);
@@ -148,9 +132,7 @@ export async function downloadDirectory(remoteEntry: ComparisonFileNode) {
   }
 }
 
-export async function deleteRemoteDirectory(
-  fileEntry: FileNode,
-): Promise<void> {
+export async function deleteRemoteDirectory(fileEntry: FileNode): Promise<void> {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
@@ -167,7 +149,7 @@ export async function deleteRemoteDirectory(
             0,
             new Date(child.modifyTime * 1000),
             childPath,
-            FileNodeSource.remote,
+            FileNodeSource.remote
           );
           await deleteRemoteDirectory(subDirEntry);
         } else {
@@ -178,8 +160,6 @@ export async function deleteRemoteDirectory(
     }, `Delete Dir ${fileEntry.fullPath}`);
   } catch (error: any) {
     console.error(`Failed to delete remote directory: ${error.message}`);
-    window.showErrorMessage(
-      `Failed to delete remote directory: ${error.message}`,
-    );
+    window.showErrorMessage(`Failed to delete remote directory: ${error.message}`);
   }
 }

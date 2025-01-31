@@ -19,10 +19,7 @@
         if (inputValidator.areValidInputs(remoteServerConfigFormData)) {
             // Proceed with form submission or other actions
             sendConfiguration("updateConfiguration");
-            console.log("Form submitted successfully");
-        } else {
-            console.log("Form not submitted, validation failed");
-        }
+        } 
     }
 
     function testConnection() {
@@ -30,9 +27,6 @@
         if (inputValidator.areValidInputs(remoteServerConfigFormData)) {
             // Proceed with form submission or other actions
             sendConfiguration("testConnection");
-            console.log("Valid inputs, we send the test connection");
-        } else {
-            console.log("Inputs not valid");
         }
     }
     

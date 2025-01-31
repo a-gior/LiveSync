@@ -4,10 +4,7 @@ import { SyncTreeDataProvider } from "../services/SyncTreeDataProvider";
 import { WorkspaceConfigManager } from "./WorkspaceConfigManager";
 
 export class EventManager {
-  static initialize(
-    context: vscode.ExtensionContext,
-    treeDataProvider: SyncTreeDataProvider,
-  ): void {
+  static initialize(context: vscode.ExtensionContext, treeDataProvider: SyncTreeDataProvider): void {
     WorkspaceConfigManager.initialize();
     FileEventHandler.initialize(context, treeDataProvider);
   }

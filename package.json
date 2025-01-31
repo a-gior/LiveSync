@@ -38,70 +38,70 @@
     "commands": [
       {
         "command": "livesync.helloWorld",
-        "title": "Hello World"
+        "title": "LiveSync: Hello World (Test Command)"
       },
       {
         "command": "livesync.configuration",
-        "title": "LiveSync: Configuration"
+        "title": "LiveSync: Open Configuration Panel"
       },
       {
         "command": "livesync.refreshConfig",
-        "title": "LiveSync: Refresh Configuration"
+        "title": "LiveSync: Reload Configuration Settings"
       },
       {
         "command": "livesync.showHelloWorld",
-        "title": "LiveSync: Show Hello World (Svelte)"
+        "title": "LiveSync: Display Hello World (Svelte UI)"
       },
       {
         "command": "livesync.refreshAll",
-        "title": "Refresh all differences",
+        "title": "LiveSync: Refresh Workspace Differences",
         "icon": "resources/media/dark/debug-restart.svg"
       },
       {
         "command": "livesync.refresh",
-        "title": "Refresh differences",
+        "title": "LiveSync: Refresh Differences",
         "icon": "resources/media/dark/debug-restart.svg"
       },
       {
         "command": "livesync.fileEntryShowDiff",
-        "title": "Compare local and remote file",
+        "title": "LiveSync: Show Diff",
         "icon": "resources/media/dark/arrow-both.svg"
       },
       {
         "command": "livesync.fileEntryUpload",
-        "title": "Upload local file to remote",
+        "title": "LiveSync: Upload File",
         "icon": "resources/media/dark/arrow-small-up.svg"
       },
       {
         "command": "livesync.fileEntryDownload",
-        "title": "Download remote file",
+        "title": "LiveSync: Download File",
         "icon": "resources/media/dark/arrow-small-down.svg"
       },
       {
         "command": "livesync.toggleToTreeView",
-        "title": "Toggle Tree View Mode",
+        "title": "LiveSync: Switch to Tree View Mode",
         "category": "LiveSync",
         "icon": "$(list-tree)"
       },
       {
         "command": "livesync.toggleToListView",
-        "title": "Toggle List View Mode",
+        "title": "LiveSync: Switch to List View Mode",
         "category": "LiveSync",
         "icon": "$(list-selection)"
       },
       {
         "command": "livesync.showUnchanged",
-        "title": "Show unchanged files/folders",
+        "title": "LiveSync: Show Unchanged Files & Folders",
         "icon": "$(circle-filled)"
       },
       {
         "command": "livesync.hideUnchanged",
-        "title": "Hide unchanged files/folders",
+        "title": "LiveSync: Hide Unchanged Files & Folders",
         "icon": "$(circle-slash)"
       },
       {
         "command": "livesync.collapseAll",
-        "title": "Collapse All Folders",
+        "title": "LiveSync: Collapse All Folders in View",
         "icon": "$(collapse-all)"
       }
     ],
@@ -156,6 +156,25 @@
           "command": "livesync.hideUnchanged",
           "when": "view == nodeDependencies && livesyncShowUnchanged == true",
           "group": "navigation@6"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "livesync.fileEntryShowDiff",
+          "when": "!explorerResourceIsFolder",
+          "group": "LiveSync"
+        },
+        {
+          "command": "livesync.fileEntryUpload",
+          "group": "LiveSync"
+        },
+        {
+          "command": "livesync.fileEntryDownload",
+          "group": "LiveSync"
+        },
+        {
+          "command": "livesync.refresh",
+          "group": "LiveSync"
         }
       ]
     },

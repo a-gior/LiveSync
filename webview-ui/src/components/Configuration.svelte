@@ -329,7 +329,7 @@
     onMount(() => {
         
         configurationFormStore.remoteServerConfigFormStore.subscribe(value => remoteServerConfigFormData = value);
-        configurationFormStore.fileEventActionsStore.subscribe(value => {fileEventActions = value;console.log("subcription fileEventActionsStore", fileEventActions);});
+        configurationFormStore.fileEventActionsStore.subscribe(value => fileEventActions = value);
         configurationFormStore.patternsStore.subscribe(value => patterns = value);
 
         const previousState: ConfigurationState = vscode.getState();

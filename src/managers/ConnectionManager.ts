@@ -3,7 +3,7 @@ import { SFTPClient } from "../services/SFTPClient";
 import { SSHClient } from "../services/SSHClient";
 import { StatusBarManager } from "./StatusBarManager";
 import * as net from "net";
-import { LOG_FLAGS, logErrorMessage } from "./LogManager";
+import { logErrorMessage, logInfoMessage } from "./LogManager";
 
 export class ConnectionManager {
   private static instance: ConnectionManager | null = null;
@@ -22,14 +22,8 @@ export class ConnectionManager {
     this.sftpClient = SFTPClient.getInstance();
   }
 
-  static getInstance(
-    config: ConfigurationMessage["configuration"],
-  ): ConnectionManager {
-    if (
-      !ConnectionManager.instance ||
-      JSON.stringify(config) !==
-        JSON.stringify(ConnectionManager.instance.configuration)
-    ) {
+  static getInstance(config: ConfigurationMessage["configuration"]): ConnectionManager {
+    if (!ConnectionManager.instance || JSON.stringify(config) !== JSON.stringify(ConnectionManager.instance.configuration)) {
       ConnectionManager.instance = new ConnectionManager(config);
     }
     return ConnectionManager.instance;
@@ -85,89 +79,41 @@ export class ConnectionManager {
     }, 5000); // 5 seconds timeout
   }
 
-  private async retryOperation<T>(
-    operation: () => Promise<T>,
-    retries: number = this.maxRetries,
-  ): Promise<T> {
+  private async retryOperation<T>(operation: () => Promise<T>, retries: number = this.maxRetries): Promise<T> {
     try {
       return await operation();
     } catch (error: any) {
-      const retryableErrorCodes = [
-        "ECONNRESET",
-        "ERR_GENERIC_CLIENT",
-        "ETIMEDOUT",
-      ];
+      const retryableErrorCodes = ["ECONNRESET", "ERR_GENERIC_CLIENT", "ETIMEDOUT"];
       const retryableErrorMessages = ["Instance unusable"];
 
-      if (
-        retries > 0 &&
-        (retryableErrorCodes.includes(error.code) ||
-          retryableErrorMessages.some((msg) => error.message.includes(msg)))
-      ) {
-        console.warn(
-          `Operation failed, Error: [${error.code}] ${error.message}. Retrying (${this.maxRetries - retries + 1}/${this.maxRetries})...`,
+      if (retries > 0 && (retryableErrorCodes.includes(error.code) || retryableErrorMessages.some((msg) => error.message.includes(msg)))) {
+        logInfoMessage(
+          `Operation failed, Error: [${error.code}] ${error.message}. Retrying (${this.maxRetries - retries + 1}/${this.maxRetries})...`
         );
         return await this.retryOperation(operation, retries - 1);
       }
-      console.error(
-        `Operation failed, Error: [${error.code}] ${error.message}.`,
-      );
+      logErrorMessage(`Operation failed, Error: [${error.code}] ${error.message}.`);
       throw error;
     }
   }
 
-  private async reconnect() {
-    console.warn("Reconnecting SSH and SFTP clients...");
-    await this.sshClient.disconnect();
-    await this.sftpClient.disconnect();
-    await this.connectSSH();
-    await this.connectSFTP();
-  }
-
-  async doSSHOperation<T>(
-    operation: (sshClient: SSHClient) => Promise<T>,
-    operationName?: string,
-  ): Promise<T> {
+  async doSSHOperation<T>(operation: (sshClient: SSHClient) => Promise<T>, operationName?: string): Promise<T> {
     this.sshActiveOperations++;
     const displayOperationName = operationName ? ` ${operationName}` : "";
-    StatusBarManager.showMessage(
-      `SSH${displayOperationName}`,
-      "",
-      "",
-      0,
-      "sync~spin",
-      true,
-    );
+    StatusBarManager.showMessage(`SSH${displayOperationName}`, "", "", 0, "sync~spin", true);
 
     try {
       // Check if server is reachable in a quicker way
       if (!(await this.isServerPingable())) {
-        throw new Error(
-          `Server ${this.configuration.hostname}:${this.configuration.port} is not reachable.`,
-        );
+        throw new Error(`Server ${this.configuration.hostname}:${this.configuration.port} is not reachable.`);
       }
 
       await this.retryOperation(async () => await this.connectSSH(), 1);
-      const result = await this.retryOperation(
-        async () => await operation(this.sshClient),
-      );
-      StatusBarManager.showMessage(
-        "SSH operation successful",
-        "",
-        "",
-        3000,
-        "check",
-      );
+      const result = await this.retryOperation(async () => await operation(this.sshClient));
+      StatusBarManager.showMessage("SSH operation successful", "", "", 3000, "check");
       return result;
     } catch (err: any) {
-      logErrorMessage(`${err.message}`, LOG_FLAGS.ALL);
-      StatusBarManager.showMessage(
-        "SSH operation failed",
-        "",
-        "",
-        3000,
-        "error",
-      );
+      StatusBarManager.showMessage("SSH operation failed", "", "", 3000, "error");
       throw err;
     } finally {
       this.sshActiveOperations--;
@@ -178,50 +124,23 @@ export class ConnectionManager {
     }
   }
 
-  async doSFTPOperation<T>(
-    operation: (sftpClient: SFTPClient) => Promise<T>,
-    operationName?: string,
-  ): Promise<T> {
+  async doSFTPOperation<T>(operation: (sftpClient: SFTPClient) => Promise<T>, operationName?: string): Promise<T> {
     this.sftpActiveOperations++;
     const displayOperationName = operationName ? ` ${operationName}` : "";
-    StatusBarManager.showMessage(
-      `SFTP${displayOperationName}`,
-      "",
-      "",
-      0,
-      "sync~spin",
-      true,
-    );
+    StatusBarManager.showMessage(`SFTP${displayOperationName}`, "", "", 0, "sync~spin", true);
 
     try {
       // Check if server is reachable in a quicker way
       if (!(await this.isServerPingable())) {
-        throw new Error(
-          `Server ${this.configuration.hostname}:${this.configuration.port} is not reachable.`,
-        );
+        throw new Error(`Server ${this.configuration.hostname}:${this.configuration.port} is not reachable.`);
       }
 
       await this.retryOperation(async () => await this.connectSFTP(), 1);
-      const result = await this.retryOperation(
-        async () => await operation(this.sftpClient),
-      );
-      StatusBarManager.showMessage(
-        "SFTP operation successful",
-        "",
-        "",
-        3000,
-        "check",
-      );
+      const result = await this.retryOperation(async () => await operation(this.sftpClient));
+      StatusBarManager.showMessage("SFTP operation successful", "", "", 3000, "check");
       return result;
     } catch (err: any) {
-      logErrorMessage(`${err.message}`, LOG_FLAGS.ALL);
-      StatusBarManager.showMessage(
-        "SFTP operation failed",
-        "",
-        "",
-        3000,
-        "error",
-      );
+      StatusBarManager.showMessage("SFTP operation failed", "", "", 3000, "error");
       throw err;
     } finally {
       this.sftpActiveOperations--;

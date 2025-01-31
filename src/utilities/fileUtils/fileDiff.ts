@@ -4,9 +4,7 @@ import { downloadRemoteFile } from "./sftpOperations";
 import { getFullPaths } from "./filePathUtils";
 import { ComparisonFileNode } from "../ComparisonFileNode";
 
-export async function showDiff(
-  input: ComparisonFileNode | { localPath: string; remotePath: string },
-) {
+export async function showDiff(input: ComparisonFileNode | { localPath: string; remotePath: string }) {
   let localPath: string;
   let remotePath: string;
 
@@ -22,7 +20,7 @@ export async function showDiff(
 
   if (!localPath || !remotePath) {
     window.showErrorMessage(
-      `No local or remote path found for ${input instanceof ComparisonFileNode ? input.relativePath : "provided paths"}`,
+      `No local or remote path found for ${input instanceof ComparisonFileNode ? input.relativePath : "provided paths"}`
     );
     return;
   }
@@ -36,12 +34,7 @@ export async function showDiff(
     const localUri = Uri.file(localPath);
     const remoteUri = Uri.file(localTmpPath);
 
-    await commands.executeCommand(
-      "vscode.diff",
-      localUri,
-      remoteUri,
-      `${path.basename(localPath)} : Local ↔ Remote`,
-    );
+    await commands.executeCommand("vscode.diff", localUri, remoteUri, `${path.basename(localPath)} : Local ↔ Remote`);
   } catch (error: any) {
     window.showErrorMessage(`Error showing diff: ${error.message}`);
   }

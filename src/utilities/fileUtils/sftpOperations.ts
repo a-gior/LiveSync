@@ -10,16 +10,10 @@ import sftp from "ssh2-sftp-client";
 import { shouldIgnore } from "../shouldIgnore";
 import { logErrorMessage, logInfoMessage } from "../../managers/LogManager";
 import { BaseNodeType } from "../BaseNode";
-import JsonManager, {
-  isFileNodeMap,
-  JsonType,
-} from "../../managers/JsonManager";
+import JsonManager, { isFileNodeMap, JsonType } from "../../managers/JsonManager";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 
-export async function downloadRemoteFile(
-  remotePath: string,
-  localPath: string,
-): Promise<void> {
+export async function downloadRemoteFile(remotePath: string, localPath: string): Promise<void> {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
@@ -41,11 +35,7 @@ export async function downloadRemoteFile(
   }
 }
 
-export async function uploadRemoteFile(
-  localPath: string,
-  remotePath: string,
-  checkParentDirExists: boolean = true,
-): Promise<void> {
+export async function uploadRemoteFile(localPath: string, remotePath: string, checkParentDirExists: boolean = true): Promise<void> {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
@@ -73,31 +63,21 @@ export async function uploadRemoteFile(
 }
 
 // Compare remote file hash with stored remote hash
-export async function compareRemoteFileHash(
-  remotePath: string,
-): Promise<boolean> {
+export async function compareRemoteFileHash(remotePath: string): Promise<boolean> {
   try {
     // Get the remote JSON entries
-    const remoteFileEntriesMap =
-      await JsonManager.getInstance().getFileEntriesMap(JsonType.REMOTE);
+    const remoteFileEntriesMap = await JsonManager.getInstance().getFileEntriesMap(JsonType.REMOTE);
     if (!remoteFileEntriesMap || !isFileNodeMap(remoteFileEntriesMap)) {
       logErrorMessage(`No remote JSON found`);
       return false;
     }
-    const remoteEntry = await JsonManager.findNodeByPath(
-      remotePath,
-      remoteFileEntriesMap,
-    );
+    const remoteEntry = await JsonManager.findNodeByPath(remotePath, remoteFileEntriesMap);
     if (!remoteEntry) {
       logErrorMessage(`No remote FileNode found for ${remotePath}`);
       return false;
     }
 
-    const remoteFileHash = await generateHash(
-      remotePath,
-      FileNodeSource.remote,
-      BaseNodeType.file,
-    );
+    const remoteFileHash = await generateHash(remotePath, FileNodeSource.remote, BaseNodeType.file);
 
     return remoteEntry.hash === remoteFileHash;
   } catch (error) {
@@ -106,9 +86,7 @@ export async function compareRemoteFileHash(
   }
 }
 
-export async function getRemoteFileContentHash(
-  remotePath: string,
-): Promise<string | undefined> {
+export async function getRemoteFileContentHash(remotePath: string): Promise<string | undefined> {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
@@ -122,9 +100,7 @@ export async function getRemoteFileContentHash(
     }, `Get remote hash of ${remotePath}`);
   } catch (err) {
     window.showErrorMessage("Error getting remote file hash");
-    console.error(
-      `Error getting remote file hash on \n\t${remotePath} \nwith command \n\t${command}`,
-    );
+    console.error(`Error getting remote file hash on \n\t${remotePath} \nwith command \n\t${command}`);
   }
 
   return fileHash;
@@ -134,36 +110,25 @@ export async function remotePathExists(remotePath: string) {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
-  return await connectionManager.doSFTPOperation(
-    async (sftpClient: SFTPClient) => {
-      return await sftpClient.pathExists(remotePath);
-    },
-    `Checking if ${remotePath} exists`,
-  );
+  return await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+    return await sftpClient.pathExists(remotePath);
+  }, `Checking if ${remotePath} exists`);
 }
 
-export async function getRemoteFileMetadata(
-  remotePath: string,
-): Promise<sftp.FileStats | undefined> {
+export async function getRemoteFileMetadata(remotePath: string): Promise<sftp.FileStats | undefined> {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   try {
-    return await connectionManager.doSFTPOperation(
-      async (sftpClient: SFTPClient) => {
-        return await sftpClient.getFileStats(remotePath);
-      },
-      `Get data from ${remotePath}`,
-    );
+    return await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+      return await sftpClient.getFileStats(remotePath);
+    }, `Get data from ${remotePath}`);
   } catch (err: any) {
     console.error(`Couldn't fetch metadata for remote file ${remotePath}`);
   }
 }
 
-export async function moveRemoteFile(
-  oldRemotePath: string,
-  newRemotePath: string,
-): Promise<void> {
+export async function moveRemoteFile(oldRemotePath: string, newRemotePath: string): Promise<void> {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = ConnectionManager.getInstance(configuration);
 

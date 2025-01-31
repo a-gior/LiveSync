@@ -1,12 +1,4 @@
-import {
-  Disposable,
-  Webview,
-  WebviewPanel,
-  window,
-  Uri,
-  ViewColumn,
-  WebviewOptions,
-} from "vscode";
+import { Disposable, Webview, WebviewPanel, window, Uri, ViewColumn, WebviewOptions } from "vscode";
 import { getUri } from "../utilities/getUri";
 import { getNonce } from "../utilities/getNonce";
 import * as path from "path";
@@ -28,12 +20,7 @@ export class Panel {
   public static currentPanel: Panel | undefined;
   protected readonly _panel: WebviewPanel;
 
-  protected constructor(
-    panel: WebviewPanel,
-    extensionUri: Uri,
-    filepaths: string[],
-    callback: WebviewMessageCallback,
-  ) {
+  protected constructor(panel: WebviewPanel, extensionUri: Uri, filepaths: string[], callback: WebviewMessageCallback) {
     this._panel = panel;
 
     // Set an event listener to listen for when the panel is disposed (i.e. when the user closes
@@ -41,11 +28,7 @@ export class Panel {
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
 
     // Set the HTML content for the webview panel
-    this._panel.webview.html = this._getWebviewContent(
-      this._panel.webview,
-      extensionUri,
-      filepaths,
-    );
+    this._panel.webview.html = this._getWebviewContent(this._panel.webview, extensionUri, filepaths);
 
     // Set an event listener to listen for messages passed from the webview context
     this._setWebviewMessageListener(this._panel.webview, callback);
@@ -62,11 +45,7 @@ export class Panel {
    * @returns A template string literal containing the HTML that should be
    * rendered within the webview panel
    */
-  private _getWebviewContent(
-    webview: Webview,
-    extensionUri: Uri,
-    filepaths: string[],
-  ) {
+  private _getWebviewContent(webview: Webview, extensionUri: Uri, filepaths: string[]) {
     const nonce = getNonce();
     const title = "Panel test";
 
@@ -110,10 +89,7 @@ export class Panel {
    * @param webview A reference to the extension webview
    * @param context A reference to the extension context
    */
-  private _setWebviewMessageListener(
-    webview: Webview,
-    callback: WebviewMessageCallback,
-  ) {
+  private _setWebviewMessageListener(webview: Webview, callback: WebviewMessageCallback) {
     webview.onDidReceiveMessage(callback, undefined, this._disposables);
   }
 
@@ -131,12 +107,9 @@ export class Panel {
     filepaths: string[],
     callback: WebviewMessageCallback,
     editorColumn?: ViewColumn,
-    options?: WebviewOptions,
+    options?: WebviewOptions
   ) {
-    if (
-      Panel.currentPanel &&
-      Panel.currentPanel.getPanel().viewType === viewType
-    ) {
+    if (Panel.currentPanel && Panel.currentPanel.getPanel().viewType === viewType) {
       // If the webview panel already exists reveal it
       Panel.currentPanel.getPanel().reveal(ViewColumn.One);
     } else {
@@ -149,7 +122,7 @@ export class Panel {
         enableScripts: true,
         // Restrict the webview to only load resources from specified local resource roots
         localResourceRoots: localResourceRoots,
-        ...options, // Include additional options if provided
+        ...options // Include additional options if provided
       });
 
       Panel.currentPanel = new Panel(panel, extensionUri, filepaths, callback);

@@ -5,11 +5,7 @@ import { remotePathExists } from "./sftpOperations";
 import { ComparisonFileNode } from "../ComparisonFileNode";
 import { BaseNodeType } from "../BaseNode";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
-import {
-  LINUX_PATH_SEP,
-  RELATIVE_PATH_SEP,
-  WINDOWS_PATH_SEP,
-} from "../constants";
+import { LINUX_PATH_SEP, RELATIVE_PATH_SEP, WINDOWS_PATH_SEP } from "../constants";
 
 /**
  * Normalizes a given path and converts it to a specified format (Windows or Linux).
@@ -28,8 +24,7 @@ export function normalizePath(p: string): string {
 
   if (isFullWindowsPath) {
     // Ensure drive letter is lowercase
-    normalizedPath =
-      normalizedPath.charAt(0).toLowerCase() + normalizedPath.slice(1);
+    normalizedPath = normalizedPath.charAt(0).toLowerCase() + normalizedPath.slice(1);
     normalizedPath = normalizedPath.replace(/\//g, WINDOWS_PATH_SEP);
   }
 
@@ -58,16 +53,13 @@ export function joinParts(parts: string[]): string {
  * @returns An object containing both the local and remote paths of the file.
  * @throws Error if the paths cannot be found.
  */
-export async function getFullPaths(
-  comparisonNode: ComparisonFileNode,
-): Promise<{ localPath: string; remotePath: string }> {
+export async function getFullPaths(comparisonNode: ComparisonFileNode): Promise<{ localPath: string; remotePath: string }> {
   const relativePath = normalizePath(comparisonNode.relativePath);
-  const { localPath, remotePath } =
-    WorkspaceConfigManager.getWorkspaceFullPaths();
+  const { localPath, remotePath } = WorkspaceConfigManager.getWorkspaceFullPaths();
 
   let { normalizedLocalPath, normalizedRemotePath } = {
     normalizedLocalPath: normalizePath(path.join(localPath, relativePath)),
-    normalizedRemotePath: normalizePath(path.join(remotePath, relativePath)),
+    normalizedRemotePath: normalizePath(path.join(remotePath, relativePath))
   };
 
   return { localPath: normalizedLocalPath, remotePath: normalizedRemotePath };
@@ -75,21 +67,16 @@ export async function getFullPaths(
 
 export function getCorrespondingPath(inputPath: string): string {
   const normalizedInputPath = normalizePath(inputPath);
-  const { localPath, remotePath } =
-    WorkspaceConfigManager.getWorkspaceFullPaths();
+  const { localPath, remotePath } = WorkspaceConfigManager.getWorkspaceFullPaths();
 
   // Check if the inputPath is a local path
   if (normalizedInputPath.startsWith(normalizePath(localPath))) {
-    return path
-      .join(remotePath, path.relative(localPath, inputPath))
-      .replace(/\\/g, "/");
+    return path.join(remotePath, path.relative(localPath, inputPath)).replace(/\\/g, "/");
   }
 
   // Check if the inputPath is a remote path
   if (normalizedInputPath.startsWith(normalizePath(remotePath))) {
-    return path
-      .join(localPath, path.relative(remotePath, inputPath))
-      .replace(/\\/g, "/");
+    return path.join(localPath, path.relative(remotePath, inputPath)).replace(/\\/g, "/");
   }
 
   throw new Error(`Couldnt find corresponding path of ${inputPath}`);
@@ -97,8 +84,7 @@ export function getCorrespondingPath(inputPath: string): string {
 
 export function getRelativePath(fullPath: string) {
   const normalizedFullPath = normalizePath(fullPath);
-  const { localPath, remotePath } =
-    WorkspaceConfigManager.getWorkspaceFullPaths();
+  const { localPath, remotePath } = WorkspaceConfigManager.getWorkspaceFullPaths();
   if (normalizedFullPath.startsWith(localPath)) {
     return normalizePath(path.relative(localPath, fullPath));
   } else if (normalizedFullPath.startsWith(remotePath)) {
@@ -109,13 +95,9 @@ export function getRelativePath(fullPath: string) {
 
 export function isRootPath(targetPath: string): boolean {
   const normalizedTargetPath = normalizePath(targetPath);
-  const { localPath, remotePath } =
-    WorkspaceConfigManager.getWorkspaceFullPaths();
+  const { localPath, remotePath } = WorkspaceConfigManager.getWorkspaceFullPaths();
 
-  return (
-    normalizedTargetPath === normalizePath(localPath) ||
-    normalizedTargetPath === normalizePath(remotePath)
-  );
+  return normalizedTargetPath === normalizePath(localPath) || normalizedTargetPath === normalizePath(remotePath);
 }
 
 export async function pathExists(path: string, source: FileNodeSource) {

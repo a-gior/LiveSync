@@ -5,11 +5,7 @@ import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 
 export function shouldIgnore(filePath: string): boolean {
   const ignoreList = WorkspaceConfigManager.getIgnoreList();
-  const shouldIgnore = ignoreList.some(
-    (pattern) =>
-      minimatch(filePath, pattern) ||
-      minimatch(path.basename(filePath), pattern),
-  );
+  const shouldIgnore = ignoreList.some((pattern) => minimatch(filePath, pattern) || minimatch(path.basename(filePath), pattern));
 
   if (shouldIgnore) {
     logInfoMessage(`Ignored: ${filePath}`, LOG_FLAGS.CONSOLE_AND_LOG_MANAGER);

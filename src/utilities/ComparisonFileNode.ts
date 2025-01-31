@@ -9,7 +9,7 @@ export enum ComparisonStatus {
   added = "added",
   removed = "removed",
   modified = "modified",
-  unchanged = "unchanged",
+  unchanged = "unchanged"
 }
 
 export interface ComparisonFileData extends BaseNodeData {
@@ -26,7 +26,7 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     size?: number,
     modifiedTime?: Date,
     relativePath?: string,
-    status: ComparisonStatus = ComparisonStatus.unchanged,
+    status: ComparisonStatus = ComparisonStatus.unchanged
   ) {
     if (typeof nameOrJson === "string") {
       // Regular constructor logic
@@ -35,24 +35,11 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     } else {
       // Constructor from JSON
       const json = nameOrJson;
-      super(
-        json.name,
-        json.type,
-        json.size,
-        new Date(json.modifiedTime),
-        json.relativePath,
-      );
+      super(json.name, json.type, json.size, new Date(json.modifiedTime), json.relativePath);
       this.status = json.status;
 
       if (json.children) {
-        this.setChildren(
-          new Map(
-            Object.entries(json.children).map(([key, value]) => [
-              key,
-              this.fromJSON(value),
-            ]),
-          ),
-        );
+        this.setChildren(new Map(Object.entries(json.children).map(([key, value]) => [key, this.fromJSON(value)])));
       }
     }
 
@@ -67,22 +54,15 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
    * @param remoteNode - The FileNode object representing the remote file structure.
    * @returns ComparisonFileNode object representing the comparison result.
    */
-  static compareFileNodes(
-    localNode?: FileNode,
-    remoteNode?: FileNode,
-  ): ComparisonFileNode {
+  static compareFileNodes(localNode?: FileNode, remoteNode?: FileNode): ComparisonFileNode {
     StatusBarManager.showMessage(`Comparing...`, "", "", 0, "sync~spin", true);
 
     // Determine the common properties for the ComparisonFileNode
     const name = localNode ? localNode.name : remoteNode!.name;
     const type = localNode ? localNode.type : remoteNode!.type;
     const size = localNode ? localNode.size : remoteNode!.size;
-    const modifiedTime = localNode
-      ? localNode.modifiedTime
-      : remoteNode!.modifiedTime;
-    const relativePath = localNode
-      ? localNode.relativePath
-      : remoteNode!.relativePath;
+    const modifiedTime = localNode ? localNode.modifiedTime : remoteNode!.modifiedTime;
+    const relativePath = localNode ? localNode.relativePath : remoteNode!.relativePath;
 
     let status: ComparisonStatus = ComparisonStatus.unchanged;
 
@@ -94,10 +74,7 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     } else if (localNode && remoteNode) {
       if (localNode.type !== remoteNode.type) {
         status = ComparisonStatus.modified;
-      } else if (
-        localNode.type === BaseNodeType.file &&
-        remoteNode.type === BaseNodeType.file
-      ) {
+      } else if (localNode.type === BaseNodeType.file && remoteNode.type === BaseNodeType.file) {
         if (localNode.hash !== remoteNode.hash) {
           status = ComparisonStatus.modified;
         }
@@ -105,30 +82,17 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     }
 
     // Create the ComparisonFileNode
-    const comparisonNode = new ComparisonFileNode(
-      name,
-      type,
-      size,
-      modifiedTime,
-      relativePath,
-      status,
-    );
+    const comparisonNode = new ComparisonFileNode(name, type, size, modifiedTime, relativePath, status);
 
     // Recursively compare children and add them to the ComparisonFileNode
-    const allChildrenNames = new Set([
-      ...(localNode?.children.keys() || []),
-      ...(remoteNode?.children.keys() || []),
-    ]);
+    const allChildrenNames = new Set([...(localNode?.children.keys() || []), ...(remoteNode?.children.keys() || [])]);
 
     let previousChildStatus: ComparisonStatus | undefined = undefined;
 
     for (const childName of allChildrenNames) {
       const localChild = localNode?.getChild(childName);
       const remoteChild = remoteNode?.getChild(childName);
-      const childComparisonNode = this.compareFileNodes(
-        localChild,
-        remoteChild,
-      );
+      const childComparisonNode = this.compareFileNodes(localChild, remoteChild);
       comparisonNode.addChild(childComparisonNode);
 
       if (!previousChildStatus) {
@@ -141,10 +105,7 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
       }
     }
 
-    if (
-      comparisonNode.status !== ComparisonStatus.modified &&
-      previousChildStatus
-    ) {
+    if (comparisonNode.status !== ComparisonStatus.modified && previousChildStatus) {
       comparisonNode.status = previousChildStatus;
     }
 
@@ -157,10 +118,7 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
    * @param node - The root ComparisonFileNode to update.
    * @param status - The ComparisonStatus to set for the node and its children.
    */
-  static setComparisonStatus(
-    node: ComparisonFileNode,
-    status: ComparisonStatus,
-  ): void {
+  static setComparisonStatus(node: ComparisonFileNode, status: ComparisonStatus): void {
     // Set the status for the current node
     node.status = status;
 
@@ -181,7 +139,7 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     return {
       ...baseJson,
       relativePath: this.relativePath,
-      status: this.status,
+      status: this.status
     };
   }
 
@@ -206,10 +164,7 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
    * @param rootEntries The root elements map (from TreeDataProvider).
    * @param relativePath The relative path of the modified node.
    */
-  static updateParentDirectoriesStatus(
-    rootEntries: Map<string, ComparisonFileNode>,
-    element: ComparisonFileNode,
-  ): ComparisonFileNode {
+  static updateParentDirectoriesStatus(rootEntries: Map<string, ComparisonFileNode>, element: ComparisonFileNode): ComparisonFileNode {
     const relativePath = element.relativePath;
     let topMostUpdatedEntry: ComparisonFileNode | null = null;
     let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
@@ -217,9 +172,7 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     // Find the initial root folder in rootEntries based on the rootFolderName
     let currentEntry = rootEntries.get(rootFolderName);
     if (!currentEntry || !currentEntry.isDirectory()) {
-      logErrorMessage(
-        `Root folder "${rootFolderName}" not found in root entries.`,
-      );
+      logErrorMessage(`Root folder "${rootFolderName}" not found in root entries.`);
       return element;
     }
 

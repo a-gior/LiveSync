@@ -1,6 +1,6 @@
 export enum BaseNodeType {
   file = "file",
-  directory = "directory",
+  directory = "directory"
 }
 
 export interface BaseNodeData {
@@ -20,13 +20,7 @@ export abstract class BaseNode<T extends BaseNode<any>> {
   relativePath: string;
   children: Map<string, T>;
 
-  constructor(
-    data: BaseNodeData | string,
-    type?: BaseNodeType,
-    size?: number,
-    modifiedTime?: Date,
-    relativePath?: string,
-  ) {
+  constructor(data: BaseNodeData | string, type?: BaseNodeType, size?: number, modifiedTime?: Date, relativePath?: string) {
     if (typeof data === "string") {
       // Traditional constructor parameters
       this.name = data;
@@ -54,12 +48,7 @@ export abstract class BaseNode<T extends BaseNode<any>> {
     if (children instanceof Map) {
       this.children = children;
     } else {
-      this.children = new Map(
-        Object.entries(children).map(([key, value]) => [
-          key,
-          this.fromJSON(value),
-        ]),
-      );
+      this.children = new Map(Object.entries(children).map(([key, value]) => [key, this.fromJSON(value)]));
     }
   }
 
@@ -72,12 +61,7 @@ export abstract class BaseNode<T extends BaseNode<any>> {
       size: this.size,
       modifiedTime: this.modifiedTime.toISOString(),
       relativePath: this.relativePath,
-      children: Object.fromEntries(
-        Array.from(this.children.entries()).map(([key, value]) => [
-          key,
-          value.toJSON(),
-        ]),
-      ),
+      children: Object.fromEntries(Array.from(this.children.entries()).map(([key, value]) => [key, value.toJSON()]))
     };
   }
 

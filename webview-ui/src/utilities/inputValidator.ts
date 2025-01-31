@@ -41,34 +41,18 @@ class InputValidator {
 
     for (const [, formGroup] of Object.entries(form.formGroups)) {
       for (const formField of formGroup.fields) {
-        console.log("Checking formField", formField);
-
         // Clear any previous error message
         if (formField.htmlElement) {
-          const existingError =
-            formField.htmlElement.querySelector(".error-message");
+          const existingError = formField.htmlElement.querySelector(".error-message");
           if (existingError) {
             existingError.remove();
           }
         }
 
         // Check required and visible fields
-        if (
-          formField.visible &&
-          formField.required &&
-          !formField.value &&
-          !formField.files
-        ) {
-          console.log(
-            `FormField ${formField.name} is required and visible but has no value/files: ${formField.value}`,
-            formField.files,
-          );
-
+        if (formField.visible && formField.required && !formField.value && !formField.files) {
           // Add error message
-          errorDisplayer.display(
-            formField.htmlElement,
-            `${formField.name} is required.`,
-          );
+          errorDisplayer.display(formField.htmlElement, `${formField.name} is required.`);
           isValid = false;
           continue;
         }
@@ -78,10 +62,7 @@ class InputValidator {
           const htmlInputElement = formField.htmlElement.querySelector("input");
           if (!formField.validationCallback(htmlInputElement)) {
             // Add error message
-            errorDisplayer.display(
-              formField.htmlElement,
-              `${formField.name} failed validation.`,
-            );
+            errorDisplayer.display(formField.htmlElement, `${formField.name} failed validation.`);
             isValid = false;
             continue;
           }

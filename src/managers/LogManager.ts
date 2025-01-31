@@ -8,7 +8,7 @@ export const LOG_FLAGS = {
   CONSOLE_AND_LOG_MANAGER: { console: true, logManager: true, vscode: false },
   CONSOLE_AND_VSCODE: { console: true, logManager: false, vscode: true },
   LOG_MANAGER_AND_VSCODE: { console: false, logManager: true, vscode: true },
-  ALL: { console: true, logManager: true, vscode: true },
+  ALL: { console: true, logManager: true, vscode: true }
 };
 type LogFlags = (typeof LOG_FLAGS)[keyof typeof LOG_FLAGS];
 
@@ -64,12 +64,7 @@ function deepClone<T>(obj: T): T {
   return obj;
 }
 
-export function logErrorMessage(
-  error: string,
-  flags: LogFlags = LOG_FLAGS.CONSOLE_ONLY,
-  details?: any,
-  actions?: LogErrorAction,
-) {
+export function logErrorMessage(error: string, flags: LogFlags = LOG_FLAGS.CONSOLE_ONLY, details?: any, actions?: LogErrorAction) {
   // Log to console
   if (flags.console) {
     if (details !== undefined) {
@@ -88,29 +83,21 @@ export function logErrorMessage(
   // Show error message in VS Code with optional actions
   if (flags.vscode) {
     const actionTitles = actions?.map((action) => action.title) || [];
-    vscode.window
-      .showErrorMessage(`Error: ${error}`, ...actionTitles)
-      .then((selectedAction) => {
-        if (!selectedAction) {
-          return;
-        }
+    vscode.window.showErrorMessage(`Error: ${error}`, ...actionTitles).then((selectedAction) => {
+      if (!selectedAction) {
+        return;
+      }
 
-        // Execute the command associated with the selected action
-        const action = actions?.find(
-          (action) => action.title === selectedAction,
-        );
-        if (action && action.command) {
-          vscode.commands.executeCommand(action.command);
-        }
-      });
+      // Execute the command associated with the selected action
+      const action = actions?.find((action) => action.title === selectedAction);
+      if (action && action.command) {
+        vscode.commands.executeCommand(action.command);
+      }
+    });
   }
 }
 
-export function logInfoMessage(
-  message: string,
-  flags: LogFlags = LOG_FLAGS.CONSOLE_ONLY,
-  details?: any,
-) {
+export function logInfoMessage(message: string, flags: LogFlags = LOG_FLAGS.CONSOLE_ONLY, details?: any) {
   if (flags.console) {
     if (details !== undefined) {
       const serializedDetails = deepClone(details); // Use custom serialization for complex objects
@@ -164,7 +151,7 @@ export function logServerUnreachableError(flags: LogFlags = LOG_FLAGS.ALL) {
   // Default actions for this error
   const errorActions: LogErrorAction = [
     { title: "Open Configuration", command: "livesync.configuration" },
-    { title: "Retry Connection", command: "livesync.testConnection" },
+    { title: "Retry Connection", command: "livesync.testConnection" }
   ];
 
   logErrorMessage(errorMessage, flags, undefined, errorActions);

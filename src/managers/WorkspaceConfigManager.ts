@@ -27,22 +27,19 @@ export class WorkspaceConfigManager {
         authMethod: config.get<string>("authMethod", ""),
         password: config.get<string>("password", ""),
         privateKeyPath: config.get<string>("privateKeyPath", ""),
-        passphrase: config.get<string>("passphrase", ""),
+        passphrase: config.get<string>("passphrase", "")
       },
       remotePath: config.get<string>("remotePath", ""),
-      fileEventActions: config.get<FileEventActionsMessage["actions"]>(
-        "fileEventActions",
-        {
-          actionOnUpload: "check&upload",
-          actionOnDownload: "check&download",
-          actionOnSave: "check&save",
-          actionOnCreate: "create",
-          actionOnDelete: "none",
-          actionOnMove: "check&move",
-          actionOnOpen: "check&download",
-        },
-      ),
-      ignoreList: config.get<string[]>("ignoreList", []),
+      fileEventActions: config.get<FileEventActionsMessage["actions"]>("fileEventActions", {
+        actionOnUpload: "check&upload",
+        actionOnDownload: "check&download",
+        actionOnSave: "check&save",
+        actionOnCreate: "create",
+        actionOnDelete: "none",
+        actionOnMove: "check&move",
+        actionOnOpen: "check&download"
+      }),
+      ignoreList: config.get<string[]>("ignoreList", [])
     };
   }
 
@@ -51,11 +48,9 @@ export class WorkspaceConfigManager {
     if (this.isMultiRootWorkspace()) {
       logErrorMessage(
         "LiveSync requires a single folder in the workspace to configure correctly. Please ensure only one folder is selected.",
-        LOG_FLAGS.ALL,
+        LOG_FLAGS.ALL
       );
-      throw new Error(
-        "LiveSync requires a single folder in the workspace to configure correctly.",
-      );
+      throw new Error("LiveSync requires a single folder in the workspace to configure correctly.");
     }
 
     const targetFolder = folderUri || workspace.workspaceFolders?.[0];
@@ -74,15 +69,13 @@ export class WorkspaceConfigManager {
       passphrase: state.configuration?.passphrase,
       remotePath: state.remotePath,
       fileEventActions: state.fileEventActions,
-      ignoreList: state.ignoreList,
+      ignoreList: state.ignoreList
     });
   }
 
   // Initialize event listeners for workspace changes
   static initialize(): void {
-    workspace.onDidChangeWorkspaceFolders(
-      this.initializeConfiguration.bind(this),
-    );
+    workspace.onDidChangeWorkspaceFolders(this.initializeConfiguration.bind(this));
   }
 
   // Initialize the configuration based on the workspace type
@@ -91,7 +84,7 @@ export class WorkspaceConfigManager {
       this.isMultiRootWorkspace()
         ? "Multi-root workspace detected. Using global configuration."
         : "Single folder workspace detected. Using folder-specific configuration.",
-      LOG_FLAGS.CONSOLE_AND_LOG_MANAGER,
+      LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
     );
 
     this._workspaceConfig = this.loadWorkspaceConfiguration();
@@ -132,10 +125,7 @@ export class WorkspaceConfigManager {
   static getRemotePath(): string {
     const workspaceConfig = this.getWorkspaceConfiguration();
 
-    if (
-      !workspaceConfig.remotePath ||
-      workspaceConfig.remotePath.length === 0
-    ) {
+    if (!workspaceConfig.remotePath || workspaceConfig.remotePath.length === 0) {
       logErrorMessage("Remote path not configured", LOG_FLAGS.ALL);
       throw new Error("Remote path not configured");
     }
@@ -147,7 +137,7 @@ export class WorkspaceConfigManager {
   static getWorkspaceFullPaths() {
     return {
       localPath: this.getWorkspaceLocalPath(),
-      remotePath: this.getRemotePath(),
+      remotePath: this.getRemotePath()
     };
   }
 
@@ -180,14 +170,11 @@ export class WorkspaceConfigManager {
       const config = this.getConfiguration();
       await config.update(paramName, value, ConfigurationTarget.Workspace);
 
-      console.log(`${paramName} updated`);
+      logInfoMessage(`${paramName} updated`);
       // Reload the in-memory configuration
       this.reload();
     } catch (error: any) {
-      logErrorMessage(
-        `Failed to update configuration: ${paramName}`,
-        LOG_FLAGS.CONSOLE_AND_LOG_MANAGER,
-      );
+      logErrorMessage(`Failed to update configuration: ${paramName}`, LOG_FLAGS.CONSOLE_AND_LOG_MANAGER);
       throw new Error(error.message);
     }
   }
@@ -200,7 +187,7 @@ export class WorkspaceConfigManager {
       for (const [key, value] of Object.entries(updates)) {
         await config.update(key, value, ConfigurationTarget.Workspace);
       }
-      console.log("Batch configuration updates applied:", updates);
+      logInfoMessage("Batch configuration updates applied:", LOG_FLAGS.CONSOLE_ONLY, updates);
 
       // Reload the configuration once after all updates
       this.reload();
@@ -236,9 +223,7 @@ export class WorkspaceConfigManager {
     }
 
     // Generate a unique identifier for the workspace
-    const identifier = workspacePath
-      ? crypto.createHash("md5").update(workspacePath).digest("hex")
-      : "global";
+    const identifier = workspacePath ? crypto.createHash("md5").update(workspacePath).digest("hex") : "global";
 
     return { path: workspacePath, identifier };
   }

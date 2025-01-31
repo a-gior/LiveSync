@@ -2,26 +2,16 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
-import { SFTPError } from "../DTOs/sftpErrorDTO";
 import * as ssh2 from "ssh2";
 import { normalizePath } from "../utilities/fileUtils/filePathUtils";
+import { logInfoMessage } from "../managers/LogManager";
 
 export abstract class BaseClient {
   protected isConnected: boolean = false;
   protected isConnecting: boolean = false;
-  protected _errorMsgs: SFTPError[] = [];
 
-  abstract connect(
-    config: ConfigurationMessage["configuration"],
-  ): Promise<void>;
+  abstract connect(config: ConfigurationMessage["configuration"]): Promise<void>;
   abstract disconnect(): Promise<void>;
-
-  protected _addError(msg: string, err: any): void {
-    this._errorMsgs.push({
-      msg: msg + ": ",
-      error: err,
-    });
-  }
 
   async waitForConnection(): Promise<void> {
     const timeout = 5000;
@@ -33,22 +23,20 @@ export abstract class BaseClient {
     while (this.isConnecting && currentTime <= timeout) {
       await delay(pause);
       currentTime += pause;
-      console.log(
-        `Waiting for connection ${currentTime}. Retries ${retries++}/${timeout / pause}`,
-      );
+      logInfoMessage(`Waiting for connection ${currentTime}. Retries ${retries++}/${timeout / pause}`);
     }
   }
 
   protected getConnectionOptions(
     config: ConfigurationMessage["configuration"],
-    timeout?: number, // Optional timeout in milliseconds
+    timeout?: number // Optional timeout in milliseconds
   ): any {
     const connectionOptions: ssh2.ConnectConfig = {
       host: config.hostname,
       port: config.port,
       username: config.username,
       readyTimeout: timeout || 5000, // Handshake timeout
-      timeout: timeout || 5000, // Socket-level timeout
+      timeout: timeout || 5000 // Socket-level timeout
     };
 
     if (config.authMethod === "auth-password") {
@@ -62,9 +50,7 @@ export abstract class BaseClient {
 
       // Handle '~' (home directory) expansion on both Windows & Linux/macOS
       if (privateKeyPath.startsWith("~")) {
-        privateKeyPath = normalizePath(
-          path.join(os.homedir(), privateKeyPath.slice(1)),
-        );
+        privateKeyPath = normalizePath(path.join(os.homedir(), privateKeyPath.slice(1)));
       }
 
       // Convert Windows-style backslashes to forward slashes for SSH compatibility
@@ -87,9 +73,5 @@ export abstract class BaseClient {
     }
 
     return connectionOptions;
-  }
-
-  getErrors(): SFTPError[] {
-    return this._errorMsgs;
   }
 }

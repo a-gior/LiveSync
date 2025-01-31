@@ -115,12 +115,7 @@
   },
   "angular": {
     "extensions": [],
-    "filenames": [
-      ".angular-cli.json",
-      ".angular.json",
-      "angular-cli.json",
-      "angular.json"
-    ],
+    "filenames": [".angular-cli.json", ".angular.json", "angular-cli.json", "angular.json"],
     "languageIds": []
   },
   "ng_component_dart": {
@@ -435,12 +430,7 @@
   },
   "astroconfig": {
     "extensions": [],
-    "filenames": [
-      "astro.config.ts",
-      "astro.config.js",
-      "astro.config.mjs",
-      "astro.config.cjs"
-    ],
+    "filenames": ["astro.config.ts", "astro.config.js", "astro.config.mjs", "astro.config.cjs"],
     "languageIds": []
   },
   "ats": {
@@ -742,20 +732,7 @@
     "languageIds": ["cddl"]
   },
   "cert": {
-    "extensions": [
-      "crt",
-      "pfx",
-      "stl",
-      "p7b",
-      "src",
-      "crl",
-      "der",
-      "sst",
-      "p7r",
-      "p12",
-      "csr",
-      "cer"
-    ],
+    "extensions": ["crt", "pfx", "stl", "p7b", "src", "crl", "der", "sst", "p7r", "p12", "csr", "cer"],
     "filenames": [],
     "languageIds": []
   },
@@ -801,13 +778,7 @@
   },
   "chef": {
     "extensions": [],
-    "filenames": [
-      "policyfile.rb",
-      "berksfile.lock",
-      "berksfile",
-      "policyfile.lock.json",
-      "chefignore"
-    ],
+    "filenames": ["policyfile.rb", "berksfile.lock", "berksfile", "policyfile.lock.json", "chefignore"],
     "languageIds": []
   },
   "class": {
@@ -872,14 +843,7 @@
   },
   "codekit": {
     "extensions": ["kit"],
-    "filenames": [
-      "config.codekit2",
-      ".config.codekit2",
-      "config.codekit3",
-      ".config.codekit3",
-      ".config.codekit",
-      "config.codekit"
-    ],
+    "filenames": ["config.codekit2", ".config.codekit2", "config.codekit3", ".config.codekit3", ".config.codekit", "config.codekit"],
     "languageIds": []
   },
   "coffeelint": {
@@ -1035,26 +999,11 @@
   },
   "cypress": {
     "extensions": [],
-    "filenames": [
-      "cypress.config.js",
-      "cypress.json",
-      "cypress.config.mjs",
-      "cypress.config.ts",
-      "cypress.config.cjs",
-      "cypress.env.json"
-    ],
+    "filenames": ["cypress.config.js", "cypress.json", "cypress.config.mjs", "cypress.config.ts", "cypress.config.cjs", "cypress.env.json"],
     "languageIds": []
   },
   "cypress_spec": {
-    "extensions": [
-      "cy.jsx",
-      "cy.tsx",
-      "cy.js",
-      "cy.coffee",
-      "cy.ts",
-      "cy.mjs",
-      "cy.cjs"
-    ],
+    "extensions": ["cy.jsx", "cy.tsx", "cy.js", "cy.coffee", "cy.ts", "cy.mjs", "cy.cjs"],
     "filenames": [],
     "languageIds": []
   },
@@ -1216,13 +1165,7 @@
     "languageIds": ["doxygen"]
   },
   "drawio": {
-    "extensions": [
-      "dio .drawio.png",
-      ".dio.svg",
-      ".drawio.svg",
-      "drawio",
-      ".dio.png"
-    ],
+    "extensions": ["dio .drawio.png", ".dio.svg", ".drawio.svg", "drawio", ".dio.png"],
     "filenames": [],
     "languageIds": []
   },
@@ -1388,12 +1331,7 @@
   },
   "expo": {
     "extensions": [],
-    "filenames": [
-      "app.config.js",
-      "app.config.json",
-      "app.json",
-      "app.config.json5"
-    ],
+    "filenames": ["app.config.js", "app.config.json", "app.json", "app.config.json5"],
     "languageIds": []
   },
   "falcon": {
@@ -1473,24 +1411,13 @@
   },
   "formkit": {
     "extensions": [],
-    "filenames": [
-      "formkit.config.ts",
-      "formkit.config.cjs",
-      "formkit.config.mjs",
-      "formkit.config.js"
-    ],
+    "filenames": ["formkit.config.ts", "formkit.config.cjs", "formkit.config.mjs", "formkit.config.js"],
     "languageIds": []
   },
   "fortran": {
     "extensions": [],
     "filenames": [],
-    "languageIds": [
-      "fortran",
-      "fortran_fixed-form",
-      "FortranFreeForm",
-      "fortran-modern",
-      "FortranFixedForm"
-    ]
+    "languageIds": ["fortran", "fortran_fixed-form", "FortranFreeForm", "fortran-modern", "FortranFixedForm"]
   },
   "fossa": {
     "extensions": [],
@@ -1544,15 +1471,7 @@
   },
   "git": {
     "extensions": [],
-    "filenames": [
-      ".gitattributes",
-      ".mailmap",
-      ".issuetracker",
-      ".gitignore",
-      ".gitkeep",
-      ".gitconfig",
-      ".gitmodules"
-    ],
+    "filenames": [".gitattributes", ".mailmap", ".issuetracker", ".gitignore", ".gitkeep", ".gitconfig", ".gitmodules"],
     "languageIds": ["git-commit", "ignore", "git-rebase"]
   },
   "gamemaker": {
@@ -1668,11 +1587,7 @@
   },
   "graphql_config": {
     "extensions": [],
-    "filenames": [
-      ".graphqlconfig",
-      ".graphqlconfig.yml",
-      ".graphqlconfig.yaml"
-    ],
+    "filenames": [".graphqlconfig", ".graphqlconfig.yml", ".graphqlconfig.yaml"],
     "languageIds": []
   },
   "graphviz": {
@@ -1709,14 +1624,7 @@
   },
   "grunt": {
     "extensions": [],
-    "filenames": [
-      "gruntfile.babel.ts",
-      "gruntfile.ts",
-      "gruntfile.babel.coffee",
-      "gruntfile.js",
-      "gruntfile.coffee",
-      "gruntfile.babel.js"
-    ],
+    "filenames": ["gruntfile.babel.ts", "gruntfile.ts", "gruntfile.babel.coffee", "gruntfile.js", "gruntfile.coffee", "gruntfile.babel.js"],
     "languageIds": []
   },
   "gulp": {
@@ -1844,14 +1752,7 @@
   },
   "husky": {
     "extensions": [],
-    "filenames": [
-      ".huskyrc",
-      ".huskyrc.yml",
-      ".huskyrc.js",
-      "husky.config.js",
-      ".huskyrc.yaml",
-      ".huskyrc.json"
-    ],
+    "filenames": [".huskyrc", ".huskyrc.yml", ".huskyrc.js", "husky.config.js", ".huskyrc.yaml", ".huskyrc.json"],
     "languageIds": []
   },
   "hy": {
@@ -2062,12 +1963,7 @@
   },
   "jscpd": {
     "extensions": [],
-    "filenames": [
-      "jscpd-report.html",
-      "jscpd-report.json",
-      ".jscpd.json",
-      "jscpd-report.xml"
-    ],
+    "filenames": ["jscpd-report.html", "jscpd-report.json", ".jscpd.json", "jscpd-report.xml"],
     "languageIds": []
   },
   "jshint": {
@@ -2246,12 +2142,7 @@
   },
   "lighthouse": {
     "extensions": [],
-    "filenames": [
-      ".lighthouserc.json",
-      ".lighthouserc.yaml",
-      ".lighthouserc.js",
-      ".lighthouserc.yml"
-    ],
+    "filenames": [".lighthouserc.json", ".lighthouserc.yaml", ".lighthouserc.js", ".lighthouserc.yml"],
     "languageIds": []
   },
   "lisp": {
@@ -2381,21 +2272,7 @@
     "languageIds": []
   },
   "matlab": {
-    "extensions": [
-      "mn",
-      "mum",
-      "mx",
-      "xvc",
-      "slddc",
-      "smv",
-      "mex",
-      "rwd",
-      "mexrs6",
-      "mx3",
-      "fig",
-      "slx",
-      "mexn"
-    ],
+    "extensions": ["mn", "mum", "mx", "xvc", "slddc", "smv", "mex", "rwd", "mexrs6", "mx3", "fig", "slx", "mexn"],
     "filenames": [],
     "languageIds": ["matlab"]
   },
@@ -2451,25 +2328,12 @@
   },
   "mocha": {
     "extensions": [],
-    "filenames": [
-      ".mocharc.json",
-      ".mocharc.jsonc",
-      "mocha.opts",
-      ".mocharc.yml",
-      ".mocharc.js",
-      ".mocharc.yaml"
-    ],
+    "filenames": [".mocharc.json", ".mocharc.jsonc", "mocha.opts", ".mocharc.yml", ".mocharc.js", ".mocharc.yaml"],
     "languageIds": []
   },
   "modernizr": {
     "extensions": [],
-    "filenames": [
-      "modernizrrc.js",
-      ".modernizrrc.js",
-      ".modernizr.js",
-      "modernizr.js",
-      "modernizr"
-    ],
+    "filenames": ["modernizrrc.js", ".modernizrrc.js", ".modernizr.js", "modernizr.js", "modernizr"],
     "languageIds": []
   },
   "mojolicious": {
@@ -2479,11 +2343,7 @@
   },
   "moleculer": {
     "extensions": [],
-    "filenames": [
-      "moleculer.config.js",
-      "moleculer.config.ts",
-      "moleculer.config.json"
-    ],
+    "filenames": ["moleculer.config.js", "moleculer.config.ts", "moleculer.config.json"],
     "languageIds": []
   },
   "mongo": {
@@ -2518,12 +2378,7 @@
   },
   "nestjs": {
     "extensions": [],
-    "filenames": [
-      "nest-cli.json",
-      "nestconfig.json",
-      ".nestconfig.json",
-      ".nest-cli.json"
-    ],
+    "filenames": ["nest-cli.json", "nestconfig.json", ".nestconfig.json", ".nest-cli.json"],
     "languageIds": []
   },
   "nest_adapter_js": {
@@ -2698,13 +2553,7 @@
   },
   "npm": {
     "extensions": [],
-    "filenames": [
-      "npm-shrinkwrap.json",
-      ".npmrc",
-      "package-lock.json",
-      "package.json",
-      ".npmignore"
-    ],
+    "filenames": ["npm-shrinkwrap.json", ".npmrc", "package-lock.json", "package.json", ".npmignore"],
     "languageIds": []
   },
   "nsi": {
@@ -2714,15 +2563,7 @@
   },
   "nsri": {
     "extensions": [],
-    "filenames": [
-      ".nsrirc.yaml",
-      ".nsrirc.yml",
-      "nsri.config.js",
-      ".nsrirc.js",
-      ".nsrirc",
-      ".nsriignore",
-      ".nsrirc.json"
-    ],
+    "filenames": [".nsrirc.yaml", ".nsrirc.yml", "nsri.config.js", ".nsrirc.js", ".nsrirc", ".nsriignore", ".nsrirc.json"],
     "languageIds": []
   },
   "nsri-integrity": {
@@ -2822,13 +2663,7 @@
   },
   "paket": {
     "extensions": [],
-    "filenames": [
-      "paket.local",
-      "paket.references",
-      "paket.dependencies",
-      "paket.lock",
-      "paket.template"
-    ],
+    "filenames": ["paket.local", "paket.references", "paket.dependencies", "paket.lock", "paket.template"],
     "languageIds": []
   },
   "patch": {
@@ -2902,53 +2737,17 @@
     "languageIds": []
   },
   "php": {
-    "extensions": [
-      "phar",
-      "php6",
-      "php3",
-      "phpt",
-      "php5",
-      "phpsa",
-      "php4",
-      "phps",
-      "phtml",
-      "php1",
-      "php2"
-    ],
+    "extensions": ["phar", "php6", "php3", "phpt", "php5", "phpsa", "php4", "phps", "phtml", "php1", "php2"],
     "filenames": [],
     "languageIds": ["php2"]
   },
   "php2": {
-    "extensions": [
-      "phar",
-      "php6",
-      "php3",
-      "phpt",
-      "php5",
-      "phpsa",
-      "php4",
-      "phps",
-      "phtml",
-      "php1",
-      "php2"
-    ],
+    "extensions": ["phar", "php6", "php3", "phpt", "php5", "phpsa", "php4", "phps", "phtml", "php1", "php2"],
     "filenames": [],
     "languageIds": ["php"]
   },
   "php3": {
-    "extensions": [
-      "phar",
-      "php6",
-      "php3",
-      "phpt",
-      "php5",
-      "phpsa",
-      "php4",
-      "phps",
-      "phtml",
-      "php1",
-      "php2"
-    ],
+    "extensions": ["phar", "php6", "php3", "phpt", "php5", "phpsa", "php4", "phps", "phtml", "php1", "php2"],
     "filenames": [],
     "languageIds": ["php3"]
   },
@@ -2985,11 +2784,7 @@
   "platformio": {
     "extensions": [],
     "filenames": ["platformio.ini"],
-    "languageIds": [
-      "platformio-debug.disassembly",
-      "platformio-debug.memoryview",
-      "platformio-debug.asm"
-    ]
+    "languageIds": ["platformio-debug.disassembly", "platformio-debug.memoryview", "platformio-debug.asm"]
   },
   "plantuml": {
     "extensions": ["plantuml", "pu", "puml", "iuml"],
@@ -3068,42 +2863,12 @@
     "languageIds": []
   },
   "powerpoint": {
-    "extensions": [
-      "potm",
-      "pot",
-      "ppam",
-      "ppsm",
-      "pps",
-      "pptm",
-      "pa",
-      "ppsx",
-      "sldx",
-      "sldm",
-      "potx",
-      "ppa",
-      "ppt",
-      "pptx"
-    ],
+    "extensions": ["potm", "pot", "ppam", "ppsm", "pps", "pptm", "pa", "ppsx", "sldx", "sldm", "potx", "ppa", "ppt", "pptx"],
     "filenames": [],
     "languageIds": []
   },
   "powerpoint2": {
-    "extensions": [
-      "potm",
-      "pot",
-      "ppam",
-      "ppsm",
-      "pps",
-      "pptm",
-      "pa",
-      "ppsx",
-      "sldx",
-      "sldm",
-      "potx",
-      "ppa",
-      "ppt",
-      "pptx"
-    ],
+    "extensions": ["potm", "pot", "ppam", "ppsm", "pps", "pptm", "pa", "ppsx", "sldx", "sldm", "potx", "ppa", "ppt", "pptx"],
     "filenames": [],
     "languageIds": []
   },
@@ -3213,11 +2978,7 @@
   },
   "protractor": {
     "extensions": [],
-    "filenames": [
-      "protractor.conf.ts",
-      "protractor.conf.coffee",
-      "protractor.conf.js"
-    ],
+    "filenames": ["protractor.conf.ts", "protractor.conf.coffee", "protractor.conf.js"],
     "languageIds": []
   },
   "publisher": {
@@ -3232,13 +2993,7 @@
   },
   "pug": {
     "extensions": [],
-    "filenames": [
-      ".pug-lintrc.json",
-      ".pug-lintrc.js",
-      ".jade-lintrc",
-      ".pug-lintrc",
-      ".jade-lint.json"
-    ],
+    "filenames": [".pug-lintrc.json", ".pug-lintrc.js", ".jade-lintrc", ".pug-lintrc", ".jade-lint.json"],
     "languageIds": ["jade"]
   },
   "purescript": {
@@ -3581,12 +3336,7 @@
   },
   "serverless": {
     "extensions": [],
-    "filenames": [
-      "serverless.yml",
-      "serverless.json",
-      "serverless.ts",
-      "serverless.js"
-    ],
+    "filenames": ["serverless.yml", "serverless.json", "serverless.ts", "serverless.js"],
     "languageIds": []
   },
   "sequelize": {
@@ -3949,28 +3699,12 @@
     "languageIds": []
   },
   "testjs": {
-    "extensions": [
-      "test.js",
-      "test.mjs",
-      "test.jsx",
-      "spec.mjs",
-      "spec.js",
-      "spec.jsx"
-    ],
+    "extensions": ["test.js", "test.mjs", "test.jsx", "spec.mjs", "spec.js", "spec.jsx"],
     "filenames": [],
     "languageIds": []
   },
   "testts": {
-    "extensions": [
-      "spec.tsx",
-      "e2e-test.ts",
-      "spec.ts",
-      "e2e-test.tsx",
-      "e2e-spec.tsx",
-      "test.ts",
-      "e2e-spec.ts",
-      "test.tsx"
-    ],
+    "extensions": ["spec.tsx", "e2e-test.ts", "spec.ts", "e2e-test.tsx", "e2e-spec.tsx", "test.ts", "e2e-spec.ts", "test.tsx"],
     "filenames": [],
     "languageIds": []
   },
@@ -4138,14 +3872,7 @@
   },
   "unlicense": {
     "extensions": [],
-    "filenames": [
-      "unlicence",
-      "unlicence.md",
-      "unlicense.md",
-      "unlicence.txt",
-      "unlicense.txt",
-      "unlicense"
-    ],
+    "filenames": ["unlicence", "unlicence.md", "unlicense.md", "unlicence.txt", "unlicense.txt", "unlicense"],
     "languageIds": []
   },
   "vagrant": {
@@ -4288,42 +4015,22 @@
   },
   "vscode": {
     "extensions": [],
-    "filenames": [
-      ".vscodeignore",
-      "vscodeignore.json",
-      "tasks.json",
-      "launch.json"
-    ],
+    "filenames": [".vscodeignore", "vscodeignore.json", "tasks.json", "launch.json"],
     "languageIds": []
   },
   "vscode2": {
     "extensions": [],
-    "filenames": [
-      ".vscodeignore",
-      "vscodeignore.json",
-      "tasks.json",
-      "launch.json"
-    ],
+    "filenames": [".vscodeignore", "vscodeignore.json", "tasks.json", "launch.json"],
     "languageIds": []
   },
   "vscode3": {
     "extensions": [],
-    "filenames": [
-      ".vscodeignore",
-      "vscodeignore.json",
-      "tasks.json",
-      "launch.json"
-    ],
+    "filenames": [".vscodeignore", "vscodeignore.json", "tasks.json", "launch.json"],
     "languageIds": []
   },
   "vscode-insiders": {
     "extensions": [],
-    "filenames": [
-      ".vscodeignore",
-      "vscodeignore.json",
-      "tasks.json",
-      "launch.json"
-    ],
+    "filenames": [".vscodeignore", "vscodeignore.json", "tasks.json", "launch.json"],
     "languageIds": []
   },
   "vsix": {
@@ -4343,12 +4050,7 @@
   },
   "vueconfig": {
     "extensions": [],
-    "filenames": [
-      "vue.config.mjs",
-      "vue.config.cjs",
-      "vue.config.js",
-      ".vuerc"
-    ],
+    "filenames": ["vue.config.mjs", "vue.config.cjs", "vue.config.js", ".vuerc"],
     "languageIds": []
   },
   "wallaby": {
@@ -4596,15 +4298,7 @@
   },
   "yarn": {
     "extensions": [],
-    "filenames": [
-      ".yarn-metadata.json",
-      ".yarnrc.yml",
-      ".yarnrc",
-      ".yarnclean",
-      ".yarnignore",
-      "yarn.lock",
-      ".yarn-integrity"
-    ],
+    "filenames": [".yarn-metadata.json", ".yarnrc.yml", ".yarnrc", ".yarnclean", ".yarnignore", "yarn.lock", ".yarn-integrity"],
     "languageIds": []
   },
   "yeoman": {
@@ -4633,36 +4327,12 @@
     "languageIds": []
   },
   "zip": {
-    "extensions": [
-      "zipx",
-      "tgz",
-      "bz",
-      "gz",
-      "xz",
-      "bzip2",
-      "bz2",
-      "7z",
-      "rar",
-      "zip",
-      "tar"
-    ],
+    "extensions": ["zipx", "tgz", "bz", "gz", "xz", "bzip2", "bz2", "7z", "rar", "zip", "tar"],
     "filenames": [],
     "languageIds": []
   },
   "zip2": {
-    "extensions": [
-      "zipx",
-      "tgz",
-      "bz",
-      "gz",
-      "xz",
-      "bzip2",
-      "bz2",
-      "7z",
-      "rar",
-      "zip",
-      "tar"
-    ],
+    "extensions": ["zipx", "tgz", "bz", "gz", "xz", "bzip2", "bz2", "7z", "rar", "zip", "tar"],
     "filenames": [],
     "languageIds": []
   }

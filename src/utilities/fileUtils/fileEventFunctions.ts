@@ -1,33 +1,15 @@
 import { window, commands, Uri } from "vscode";
-import {
-  getCorrespondingPath,
-  normalizePath,
-  pathExists,
-} from "./filePathUtils";
-import {
-  uploadRemoteFile,
-  compareRemoteFileHash,
-  deleteRemoteFile,
-  moveRemoteFile,
-  downloadRemoteFile,
-} from "./sftpOperations";
+import { getCorrespondingPath, normalizePath, pathExists } from "./filePathUtils";
+import { uploadRemoteFile, compareRemoteFileHash, deleteRemoteFile, moveRemoteFile, downloadRemoteFile } from "./sftpOperations";
 import * as path from "path";
 import JsonManager from "../../managers/JsonManager";
-import {
-  LOG_FLAGS,
-  logErrorMessage,
-  logInfoMessage,
-} from "../../managers/LogManager";
+import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../../managers/LogManager";
 import { FileNodeSource } from "../FileNode";
 import { listRemoteFilesRecursive } from "./fileListing";
 import { ActionOn, ActionResult, Check } from "../enums";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 
-function getPromptMessage(
-  check: Check,
-  localPath: string,
-  remotePath: string,
-): string {
+function getPromptMessage(check: Check, localPath: string, remotePath: string): string {
   switch (check) {
     case Check.remoteExists:
       return `The remote file at ${remotePath} already exists. Do you want to overwrite it with the local changes?`;
@@ -64,12 +46,7 @@ function getCheckMessage(action: ActionOn, filePath: string): string {
 }
 
 // Prompts the user, offering options to overwrite, show differences, or cancel.
-async function showOverwritePrompt(
-  checkMessage: Check,
-  localPath: string,
-  remotePath: string,
-  showDiff: boolean = false,
-) {
+async function showOverwritePrompt(checkMessage: Check, localPath: string, remotePath: string, showDiff: boolean = false) {
   // Set Options, add ShowDiff button depending on showDiff boolean
   const options = ["Yes"];
   if (showDiff) {
@@ -77,17 +54,13 @@ async function showOverwritePrompt(
   }
 
   // Prompt the user
-  const userResponse = await window.showWarningMessage(
-    getPromptMessage(checkMessage, localPath, remotePath),
-    { modal: true },
-    ...options,
-  );
+  const userResponse = await window.showWarningMessage(getPromptMessage(checkMessage, localPath, remotePath), { modal: true }, ...options);
 
   // Return action depending on user's choice
   if (userResponse === "Show Diff") {
     commands.executeCommand("livesync.fileEntryShowDiff", {
       localPath,
-      remotePath,
+      remotePath
     });
     return ActionResult.IsNotSame;
   } else if (userResponse !== "Yes") {
@@ -134,12 +107,7 @@ async function updateRemoteFilesJsonForPaths(...filePaths: string[]) {
 }
 
 // Handles the checking process before performing an action, including hash comparison and existence checks.
-export async function handleFileCheck(
-  action: ActionOn,
-  actionParameter: string,
-  localPath: string,
-  remotePath: string,
-) {
+export async function handleFileCheck(action: ActionOn, actionParameter: string, localPath: string, remotePath: string) {
   // If no check are required, we proceed to do the action
   if (!actionParameter.includes("check")) {
     return ActionResult.ActionPerformed;
@@ -157,11 +125,7 @@ export async function handleFileCheck(
       }
 
       // Prompt user to perform action or not
-      return await showOverwritePrompt(
-        Check.localExists,
-        localPath,
-        remotePath,
-      );
+      return await showOverwritePrompt(Check.localExists, localPath, remotePath);
     }
 
     return ActionResult.ActionPerformed;
@@ -208,11 +172,7 @@ export async function handleFileCheck(
       case ActionOn.Upload:
       case ActionOn.Save:
         if (actionResult === ActionResult.Exists && !isSameRemoteHash) {
-          return await showOverwritePrompt(
-            Check.remoteNotSameOverwrite,
-            localPath,
-            remotePath,
-          );
+          return await showOverwritePrompt(Check.remoteNotSameOverwrite, localPath, remotePath);
         }
 
         if (actionResult === ActionResult.DontExist) {
@@ -222,11 +182,7 @@ export async function handleFileCheck(
 
       case ActionOn.Open:
         if (actionResult === ActionResult.Exists && !isSameRemoteHash) {
-          return await showOverwritePrompt(
-            Check.remoteNotSameDownload,
-            localPath,
-            remotePath,
-          );
+          return await showOverwritePrompt(Check.remoteNotSameDownload, localPath, remotePath);
         }
 
         if (actionResult === ActionResult.DontExist) {
@@ -237,11 +193,7 @@ export async function handleFileCheck(
       case ActionOn.Create:
       case ActionOn.Move:
         if (actionResult === ActionResult.Exists) {
-          return await showOverwritePrompt(
-            Check.remoteExists,
-            localPath,
-            remotePath,
-          );
+          return await showOverwritePrompt(Check.remoteExists, localPath, remotePath);
         }
 
         if (actionResult === ActionResult.DontExist) {
@@ -251,11 +203,7 @@ export async function handleFileCheck(
 
       case ActionOn.Delete:
         if (actionResult === ActionResult.DontExist) {
-          return await showOverwritePrompt(
-            Check.remoteNotExists,
-            localPath,
-            remotePath,
-          );
+          return await showOverwritePrompt(Check.remoteNotExists, localPath, remotePath);
         }
 
         if (actionResult === ActionResult.Exists) {
@@ -275,13 +223,8 @@ export async function handleFileCheck(
 
 // This function orchestrates the different file operations (e.g., move, save, delete).
 // It determines the correct action to perform based on the provided parameters and handles all necessary checks before proceeding.
-async function handleFileOperation(
-  action: ActionOn,
-  uri: Uri,
-  oldUri: Uri | null = null,
-): Promise<ActionResult> {
-  let actionParameter =
-    WorkspaceConfigManager.getParameter<string>(action) ?? "none";
+async function handleFileOperation(action: ActionOn, uri: Uri, oldUri: Uri | null = null): Promise<ActionResult> {
+  let actionParameter = WorkspaceConfigManager.getParameter<string>(action) ?? "none";
   if (actionParameter === "none") {
     return ActionResult.NoAction;
   }
@@ -291,12 +234,7 @@ async function handleFileOperation(
   const remotePath = getCorrespondingPath(localPath);
 
   // Handle check based on action parameters
-  const actionResult = await handleFileCheck(
-    action,
-    actionParameter,
-    localPath,
-    remotePath,
-  );
+  const actionResult = await handleFileCheck(action, actionParameter, localPath, remotePath);
 
   // Perform actions for each action
   if (actionResult === ActionResult.ActionPerformed) {
@@ -306,10 +244,7 @@ async function handleFileOperation(
           const localPathOld = oldUri.fsPath;
           const remotePathOld = getCorrespondingPath(localPathOld);
           await moveRemoteFile(remotePathOld, remotePath);
-          logInfoMessage(
-            `File moved to remote at ${remotePath}`,
-            LOG_FLAGS.ALL,
-          );
+          logInfoMessage(`File moved to remote at ${remotePath}`, LOG_FLAGS.ALL);
 
           // Update JSON Remote Files
           await updateRemoteFilesJsonForPaths(remotePath);
@@ -320,10 +255,7 @@ async function handleFileOperation(
       case ActionOn.Save:
       case ActionOn.Create:
         await uploadRemoteFile(localPath, remotePath);
-        logInfoMessage(
-          `File uploaded to remote at ${remotePath}`,
-          LOG_FLAGS.ALL,
-        );
+        logInfoMessage(`File uploaded to remote at ${remotePath}`, LOG_FLAGS.ALL);
 
         // Update JSON Remote Files
         await updateRemoteFilesJsonForPaths(remotePath);
@@ -332,18 +264,12 @@ async function handleFileOperation(
       case ActionOn.Download:
       case ActionOn.Open:
         await downloadRemoteFile(remotePath, localPath);
-        logInfoMessage(
-          `File downloaded from remote at ${remotePath}`,
-          LOG_FLAGS.ALL,
-        );
+        logInfoMessage(`File downloaded from remote at ${remotePath}`, LOG_FLAGS.ALL);
         break;
 
       case ActionOn.Delete:
         await deleteRemoteFile(remotePath);
-        logInfoMessage(
-          `File deleted on remote at ${remotePath}`,
-          LOG_FLAGS.ALL,
-        );
+        logInfoMessage(`File deleted on remote at ${remotePath}`, LOG_FLAGS.ALL);
 
         // Update JSON Remote Files
         await updateRemoteFilesJsonForPaths(remotePath);
@@ -366,10 +292,7 @@ export async function fileDelete(uri: Uri): Promise<ActionResult> {
   return await handleFileOperation(ActionOn.Delete, uri);
 }
 
-export async function fileMove(
-  oldUri: Uri,
-  newUri: Uri,
-): Promise<ActionResult> {
+export async function fileMove(oldUri: Uri, newUri: Uri): Promise<ActionResult> {
   return await handleFileOperation(ActionOn.Move, newUri, oldUri);
 }
 

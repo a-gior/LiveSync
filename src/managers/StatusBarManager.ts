@@ -8,22 +8,12 @@ export class StatusBarManager {
 
   private static getStatusBarItem(): vscode.StatusBarItem {
     if (!this.statusBarItem) {
-      this.statusBarItem = vscode.window.createStatusBarItem(
-        vscode.StatusBarAlignment.Left,
-        100,
-      );
+      this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     }
     return this.statusBarItem;
   }
 
-  static showMessage(
-    message: string,
-    tooltip?: string,
-    command?: string,
-    duration?: number,
-    icon?: string,
-    loading?: boolean,
-  ) {
+  static showMessage(message: string, tooltip?: string, command?: string, duration?: number, icon?: string, loading?: boolean) {
     const statusBarItem = this.getStatusBarItem();
 
     let displayIcon = icon ? `$(${icon}) ` : "";
@@ -38,10 +28,7 @@ export class StatusBarManager {
     }
 
     // Check if the actual message is different
-    if (
-      this.currentMessage !== actualMessage ||
-      this.currentIcon !== displayIcon
-    ) {
+    if (this.currentMessage !== actualMessage || this.currentIcon !== displayIcon) {
       statusBarItem.text = `${displayIcon}${actualMessage}`;
       statusBarItem.tooltip = tooltip || "";
       statusBarItem.command = command || "livesync.showLogs";
@@ -73,10 +60,7 @@ export class StatusBarManager {
 
   static createPermanentIcon() {
     if (!this.permanentItem) {
-      this.permanentItem = vscode.window.createStatusBarItem(
-        vscode.StatusBarAlignment.Left,
-        100,
-      );
+      this.permanentItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
       this.permanentItem.text = "$(gear) LiveSync";
       this.permanentItem.tooltip = "Open Settings";
       this.permanentItem.command = "livesync.configuration";
