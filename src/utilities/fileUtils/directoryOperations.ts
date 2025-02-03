@@ -1,4 +1,3 @@
-import { window } from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { SFTPClient } from "../../services/SFTPClient";
@@ -10,6 +9,7 @@ import { BaseNodeType } from "../BaseNode";
 import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 import { SSHClient } from "../../services/SSHClient";
+import { LOG_FLAGS, logErrorMessage } from "../../managers/LogManager";
 
 // Set a limit for the number of concurrent file operations, from 10 onwards triggers a warning for too much event listeners
 const limit = pLimit(9);
@@ -68,8 +68,7 @@ export async function uploadDirectory(rootEntry: ComparisonFileNode) {
       await uploadFilesWithLimit(sftpClient, filePaths);
     }, `Upload Dir ${rootEntry.relativePath}`);
   } catch (error: any) {
-    console.error(`Failed to upload directory: ${error.message}`);
-    window.showErrorMessage(`Failed to upload directory: ${error.message}`);
+    logErrorMessage(`Failed to upload directory: ${error.message}`, LOG_FLAGS.ALL);
   }
 }
 
@@ -127,8 +126,7 @@ export async function downloadDirectory(remoteEntry: ComparisonFileNode) {
       await downloadFilesWithLimit(sftpClient, filePaths);
     }, `Download Dir ${remoteEntry.relativePath}`);
   } catch (error: any) {
-    console.error(`Failed to download directory: ${error.message}`);
-    window.showErrorMessage(`Failed to download directory: ${error.message}`);
+    logErrorMessage(`Failed to download directory: ${error.message}`, LOG_FLAGS.ALL);
   }
 }
 
@@ -159,7 +157,6 @@ export async function deleteRemoteDirectory(fileEntry: FileNode): Promise<void> 
       await sftpClient.deleteDirectory(remoteDir);
     }, `Delete Dir ${fileEntry.fullPath}`);
   } catch (error: any) {
-    console.error(`Failed to delete remote directory: ${error.message}`);
-    window.showErrorMessage(`Failed to delete remote directory: ${error.message}`);
+    logErrorMessage(`Failed to delete directory: ${error.message}`, LOG_FLAGS.ALL);
   }
 }

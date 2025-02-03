@@ -19,6 +19,8 @@ export async function listRemoteFilesRecursive(remoteDir: string): Promise<FileN
   const connectionManager = ConnectionManager.getInstance(configuration);
 
   let lastBufferedFile: FileNode | undefined; // Always buffer the last file entry for the hash
+  let totalItems = 0;
+  let processedItems = 0;
 
   if (!(await pathExists(remoteDir, FileNodeSource.remote))) {
     logErrorMessage(
@@ -28,89 +30,101 @@ export async function listRemoteFilesRecursive(remoteDir: string): Promise<FileN
     return undefined;
   }
 
-  try {
-    return await connectionManager.doSSHOperation(async (sshClient) => {
-      const command = `find "${remoteDir}" -exec sh -c 'if [ -d "$1" ]; then stat --format="%n,%s,%Y,%F," "$1"; else stat --format="%n,%s,%Y,%F" "$1" && sha256sum "$1" | awk "{printf \\"%s\\\\n\\", \\\$1}"; fi' sh {} \\;`;
+  return await connectionManager.doSSHOperation(async (sshClient) => {
+    // Step 1: Get the total number of items in the directory (folders + files)
+    const countCommand = `find "${remoteDir}" | wc -l`;
+    const countOutput = await sshClient.executeCommand(countCommand);
+    totalItems = parseInt(countOutput.trim(), 10) || 0;
 
-      let rootEntry: FileNode | undefined;
-      let currentEntry: FileNode | undefined;
+    if (totalItems === 0) {
+      logErrorMessage(`<listRemoteFilesRecursive> No files found in ${remoteDir}`, LOG_FLAGS.CONSOLE_AND_LOG_MANAGER);
+      return undefined;
+    }
 
-      await sshClient.executeCommand(command, async (data?: string) => {
-        if (!data) {
-          return;
-        }
+    // Step 2: Start processing items and updating the progress
+    const command = `find "${remoteDir}" -exec sh -c 'if [ -d "$1" ]; then stat --format="%n,%s,%Y,%F," "$1"; else stat --format="%n,%s,%Y,%F" "$1" && sha256sum "$1" | awk "{printf \\"%s\\\\n\\", \\\$1}"; fi' sh {} \\;`;
 
-        const lines = data.trim().split("\n");
+    let rootEntry: FileNode | undefined;
+    let currentEntry: FileNode | undefined;
 
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-
-          const splitLine = line.split(",");
-          if (splitLine.length === 1) {
-            // It's a hash, apply it to the last buffered file
-            if (lastBufferedFile) {
-              lastBufferedFile.hash = await generateHash(lastBufferedFile.fullPath, FileNodeSource.remote, BaseNodeType.file, line);
-              lastBufferedFile = undefined; // Clear the buffer after applying the hash
-            } else {
-              // console.warn(`Unexpected hash with no buffered file. It may be due to a previously ignored or skipped file. Hash: ${line}`);
-            }
-            continue; // Move on to the next line
-          }
-
-          // Process the metadata line
-          const [fullPath, size, modifyTime, type] = splitLine;
-          const entryType = type === "directory" ? BaseNodeType.directory : BaseNodeType.file;
-
-          if (shouldIgnore(fullPath)) {
-            continue;
-          }
-
-          const newEntry = new FileNode(
-            path.basename(fullPath),
-            entryType,
-            parseInt(size, 10),
-            new Date(parseInt(modifyTime, 10) * 1000),
-            fullPath,
-            FileNodeSource.remote
-          );
-
-          // Buffer the file if it's not a directory (we'll process its hash when it appears)
-          if (entryType === BaseNodeType.file) {
-            lastBufferedFile = newEntry;
-          }
-
-          // Handle the root entry or current entry for directories
-          if (!rootEntry) {
-            rootEntry = newEntry;
-            currentEntry = rootEntry;
-          } else {
-            const relativePath = normalizePath(path.relative(rootEntry.fullPath, fullPath));
-            const pathParts = splitParts(relativePath);
-
-            let tempEntry = currentEntry;
-
-            for (const part of pathParts) {
-              if (tempEntry!.children.has(part)) {
-                tempEntry = tempEntry!.children.get(part)!;
-              } else {
-                tempEntry!.addChild(newEntry);
-                break;
-              }
-            }
-          }
-        }
-      });
-
-      if (!rootEntry) {
-        throw new Error(`<listRemoteFilesRecursive> Could not build the FileNode for the file/folder at ${remoteDir}`);
+    await sshClient.executeCommand(command, async (data?: string) => {
+      if (!data) {
+        return;
       }
 
-      return rootEntry;
-    }, `Listing files on ${remoteDir}`);
-  } catch (error) {
-    console.error("Recursive remote listing failed:", error);
-    return new FileNode("", BaseNodeType.directory, 0, new Date(), "", FileNodeSource.remote);
-  }
+      const lines = data.trim().split("\n");
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        const splitLine = line.split(",");
+        if (splitLine.length === 1) {
+          // It's a hash, apply it to the last buffered file
+          if (lastBufferedFile) {
+            lastBufferedFile.hash = await generateHash(lastBufferedFile.fullPath, FileNodeSource.remote, BaseNodeType.file, line);
+            lastBufferedFile = undefined; // Clear the buffer after applying the hash
+          } else {
+            // console.warn(`Unexpected hash with no buffered file. It may be due to a previously ignored or skipped file. Hash: ${line}`);
+          }
+          continue; // Move on to the next line
+        }
+
+        // Process the metadata line
+        const [fullPath, size, modifyTime, type] = splitLine;
+        const entryType = type === "directory" ? BaseNodeType.directory : BaseNodeType.file;
+
+        if (shouldIgnore(fullPath)) {
+          processedItems++;
+          continue;
+        }
+
+        const newEntry = new FileNode(
+          path.basename(fullPath),
+          entryType,
+          parseInt(size, 10),
+          new Date(parseInt(modifyTime, 10) * 1000),
+          fullPath,
+          FileNodeSource.remote
+        );
+
+        // Buffer the file if it's not a directory (we'll process its hash when it appears)
+        if (entryType === BaseNodeType.file) {
+          lastBufferedFile = newEntry;
+        }
+
+        // Handle the root entry or current entry for directories
+        if (!rootEntry) {
+          rootEntry = newEntry;
+          currentEntry = rootEntry;
+        } else {
+          const relativePath = normalizePath(path.relative(rootEntry.fullPath, fullPath));
+          const pathParts = splitParts(relativePath);
+
+          let tempEntry = currentEntry;
+
+          for (const part of pathParts) {
+            if (tempEntry!.children.has(part)) {
+              tempEntry = tempEntry!.children.get(part)!;
+            } else {
+              tempEntry!.addChild(newEntry);
+              break;
+            }
+          }
+        }
+
+        // Update processed items count and status bar progress
+        processedItems++;
+        const progress = Math.min(100, Math.round((processedItems / totalItems) * 100));
+        StatusBarManager.showProgress(progress); // Suggestion du DOUY
+      }
+    });
+
+    if (!rootEntry) {
+      throw new Error(`<listRemoteFilesRecursive> Could not build the FileNode for the file/folder at ${remoteDir}`);
+    }
+
+    return rootEntry;
+  }, `Listing files on ${remoteDir}`);
 }
 
 export async function listLocalFilesRecursive(localDir: string): Promise<FileNode | undefined> {
@@ -170,8 +184,8 @@ export async function listLocalFilesRecursive(localDir: string): Promise<FileNod
     );
 
     await Promise.all(promises); // Wait for all current directory operations to complete
-    StatusBarManager.showMessage(`Local file listed`, "", "", 3000, "check");
   }
 
+  StatusBarManager.showMessage(`Local file listed`, "", "", 3000, "check");
   return rootEntry;
 }

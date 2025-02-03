@@ -83,7 +83,7 @@ export function logErrorMessage(error: string, flags: LogFlags = LOG_FLAGS.CONSO
   // Show error message in VS Code with optional actions
   if (flags.vscode) {
     const actionTitles = actions?.map((action) => action.title) || [];
-    vscode.window.showErrorMessage(`Error: ${error}`, ...actionTitles).then((selectedAction) => {
+    vscode.window.showErrorMessage(`${error}`, ...actionTitles).then((selectedAction) => {
       if (!selectedAction) {
         return;
       }
@@ -110,7 +110,7 @@ export function logInfoMessage(message: string, flags: LogFlags = LOG_FLAGS.CONS
     LogManager.log(`[INFO] ${message}`);
   }
   if (flags.vscode) {
-    vscode.window.showInformationMessage(`Info: ${message}`);
+    vscode.window.showInformationMessage(`${message}`);
   }
 }
 
@@ -145,7 +145,7 @@ export class LogManager {
   }
 }
 
-export function logServerUnreachableError(flags: LogFlags = LOG_FLAGS.ALL) {
+export function logConfigError(flag: LogFlags = LOG_FLAGS.ALL) {
   const errorMessage = "The server is unreachable. Check your configuration.";
 
   // Default actions for this error
@@ -154,5 +154,5 @@ export function logServerUnreachableError(flags: LogFlags = LOG_FLAGS.ALL) {
     { title: "Retry Connection", command: "livesync.testConnection" }
   ];
 
-  logErrorMessage(errorMessage, flags, undefined, errorActions);
+  logErrorMessage(errorMessage, flag, undefined, errorActions);
 }

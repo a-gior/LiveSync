@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { ensureDirectoryExists } from "../utilities/fileUtils/fileOperations";
-import { isRootPath, joinParts, splitParts } from "../utilities/fileUtils/filePathUtils";
+import { joinParts, splitParts } from "../utilities/fileUtils/filePathUtils";
 import { listLocalFilesRecursive, listRemoteFilesRecursive } from "../utilities/fileUtils/fileListing";
 import { getIconForFile, getIconForFolder, loadFolderIconMappings, loadIconMappings, loadLanguageIdMappings } from "./IconLoader";
 import {
@@ -103,14 +103,10 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
     const treeItem = new vscode.TreeItem(label, collapsibleState);
 
     if (element.status && element.type) {
-      if (isRootPath(element.relativePath)) {
-        treeItem.iconPath = getIconForFolder("root_folder", DEFAULT_FOLDER_ICON);
-      } else {
-        treeItem.iconPath =
-          element.type === BaseNodeType.directory
-            ? getIconForFolder(element.name, DEFAULT_FOLDER_ICON)
-            : getIconForFile(element.name, DEFAULT_FILE_ICON_PATH);
-      }
+      treeItem.iconPath =
+        element.type === BaseNodeType.directory
+          ? getIconForFolder(element.name, DEFAULT_FOLDER_ICON)
+          : getIconForFile(element.name, DEFAULT_FILE_ICON_PATH);
       treeItem.contextValue = `fileEntry-${element.type}-${element.status}`;
       treeItem.description = ComparisonStatus[element.status];
       const query = `?status=${ComparisonStatus[element.status]}`;
@@ -198,7 +194,7 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
       return comparisonFileNode;
     } catch (error) {
       StatusBarManager.showMessage("SFTP operation failed", "", "", 3000, "error");
-      console.error("<getComparisonFileNode> Error:", error);
+      logErrorMessage("<getComparisonFileNode> Error:", LOG_FLAGS.CONSOLE_ONLY, error);
       throw Error("Error getting ComparisonFileNode");
     } finally {
       const endTime = performance.now(); // End timing
@@ -208,22 +204,29 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
   }
 
   async updateRootElements(action: Action, element: ComparisonFileNode): Promise<ComparisonFileNode> {
+    let updatedElement: ComparisonFileNode;
+
     switch (action) {
       case Action.Add:
-        // Handle adding the element
-        return await JsonManager.addComparisonFileNode(element, this.rootElements);
+        updatedElement = await JsonManager.addComparisonFileNode(element, this.rootElements);
+        break;
 
       case Action.Remove:
-        // Handle deleting the element
-        return await JsonManager.deleteComparisonFileNode(element, this.rootElements);
+        updatedElement = await JsonManager.deleteComparisonFileNode(element, this.rootElements);
+        break;
 
       case Action.Update:
-        // Handle updating the element that exists
-        return await JsonManager.updateComparisonFileNode(element, this.rootElements);
+        updatedElement = await JsonManager.updateComparisonFileNode(element, this.rootElements);
+        break;
 
       default:
         throw new Error(`Unknown action: ${action}`);
     }
+
+    // Save changes to JSON after rootElements is updated
+    await this.jsonManager.updateFullJson(JsonType.COMPARE, this.rootElements);
+
+    return updatedElement; // Ensure the function still returns the updated node
   }
 
   private applyViewMode(nodes: ComparisonFileNode[]): ComparisonFileNode[] {

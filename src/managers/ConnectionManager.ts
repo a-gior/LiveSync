@@ -3,7 +3,7 @@ import { SFTPClient } from "../services/SFTPClient";
 import { SSHClient } from "../services/SSHClient";
 import { StatusBarManager } from "./StatusBarManager";
 import * as net from "net";
-import { logErrorMessage, logInfoMessage } from "./LogManager";
+import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
 
 export class ConnectionManager {
   private static instance: ConnectionManager | null = null;
@@ -92,7 +92,14 @@ export class ConnectionManager {
         );
         return await this.retryOperation(operation, retries - 1);
       }
-      logErrorMessage(`Operation failed, Error: [${error.code}] ${error.message}.`);
+
+      // Modify error message for ERR_BAD_PATH
+      let errorMessage = error.message;
+      if (error.code === "ERR_BAD_PATH" && errorMessage.includes("No such file")) {
+        errorMessage = errorMessage.substring(errorMessage.indexOf("No such file"));
+      }
+
+      logErrorMessage(`[${error.code}] ${errorMessage}`, LOG_FLAGS.VSCODE_ONLY);
       throw error;
     }
   }

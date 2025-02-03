@@ -64,6 +64,12 @@ export class FileEventHandler {
         if (FileEventHandler.enableFileSave) {
           await FileEventHandler.handleFileSave(document, treeDataProvider);
         }
+      }),
+
+      vscode.workspace.onDidChangeConfiguration(async () => {
+        if (WorkspaceConfigManager.isVscodeSettingsValid) {
+          WorkspaceConfigManager.reload();
+        }
       })
     );
   }
@@ -100,8 +106,8 @@ export class FileEventHandler {
         const settingsPath = path.join(workspaceFolder.uri.fsPath, ".vscode", "settings.json");
         if (filePath === settingsPath) {
           if (action === Action.Save) {
-            WorkspaceConfigManager.reload();
             logInfoMessage(`<handleFile${action}> Detected configuration file at ${filePath}, reloading workspace configuration.`);
+            WorkspaceConfigManager.reload();
           } else {
             logInfoMessage(`<handleFile${action}> Detected configuration file at ${filePath}, skipping further processing of this event.`);
           }
@@ -168,7 +174,7 @@ export class FileEventHandler {
         const updatedNode = await treeDataProvider.updateRootElements(Action.Add, comparisonNode);
         await treeDataProvider.refresh(updatedNode);
       } catch (err: any) {
-        console.error("<handleFileCreate> Error: ", err);
+        logErrorMessage("<handleFileCreate> Error: ", LOG_FLAGS.CONSOLE_ONLY, err);
       }
     }
   }
@@ -214,7 +220,7 @@ export class FileEventHandler {
         const deletedNode = await treeDataProvider.updateRootElements(action, nodeToDelete);
         await treeDataProvider.refresh(deletedNode);
       } catch (err: any) {
-        console.error("<handleFileDelete> Error: ", err);
+        logErrorMessage("<handleFileDelete> Error: ", LOG_FLAGS.CONSOLE_ONLY, err);
       }
     }
   }
@@ -266,7 +272,7 @@ export class FileEventHandler {
       const savedNode = await treeDataProvider.updateRootElements(Action.Update, nodeToSave);
       await treeDataProvider.refresh(savedNode);
     } catch (err: any) {
-      logErrorMessage(`${err.message}`, LOG_FLAGS.ALL);
+      logErrorMessage("<handleFileSave> Error: ", LOG_FLAGS.CONSOLE_ONLY, err);
     }
   }
 
@@ -384,7 +390,7 @@ export class FileEventHandler {
           await treeDataProvider.refresh(addedNode);
         }
       } catch (err: any) {
-        console.error("<handleFileRename> Error: ", err);
+        logErrorMessage("<handleFileRename> Error: ", LOG_FLAGS.CONSOLE_ONLY, err);
       }
     }
   }
@@ -411,14 +417,24 @@ export class FileEventHandler {
       }
 
       const fileDownloaded = await fileOpen(document.uri);
-      if (fileDownloaded) {
-        openedNode.status = ComparisonStatus.unchanged;
+
+      if (fileDownloaded === ActionResult.ActionPerformed) {
+        openedNode.status = ComparisonStatus.unchanged; // File saved remotely
+      }
+      if (fileDownloaded === ActionResult.DontExist) {
+        openedNode.status = ComparisonStatus.added; // File doesn't exist remotely
+      }
+      if (fileDownloaded === ActionResult.Exists) {
+        openedNode.status = ComparisonStatus.unchanged; // File exists remotely and are the same
+      }
+      if (fileDownloaded === ActionResult.IsNotSame) {
+        openedNode.status = ComparisonStatus.modified; // File exists remotely and are not the same
       }
 
       const savedNode = await treeDataProvider.updateRootElements(Action.Update, openedNode);
       await treeDataProvider.refresh(savedNode);
     } catch (err: any) {
-      console.error("<handleFileOpen> Error: ", err);
+      logErrorMessage("<handleFileOpen> Error: ", LOG_FLAGS.CONSOLE_ONLY, err);
     }
   }
 
@@ -452,7 +468,7 @@ export class FileEventHandler {
       const updatedNode = await treeDataProvider.updateRootElements(Action.Update, fileNode);
       await treeDataProvider.refresh(updatedNode);
     } catch (err: any) {
-      logErrorMessage(`${err.message}`, LOG_FLAGS.ALL);
+      logErrorMessage("<handleFileDownload> Error: ", LOG_FLAGS.CONSOLE_ONLY, err);
     }
   }
 
@@ -486,7 +502,7 @@ export class FileEventHandler {
       const updatedNode = await treeDataProvider.updateRootElements(Action.Update, fileNode);
       await treeDataProvider.refresh(updatedNode);
     } catch (err: any) {
-      logErrorMessage(`${err.message}`, LOG_FLAGS.ALL);
+      logErrorMessage("<handleFileUpload> Error: ", LOG_FLAGS.CONSOLE_ONLY, err);
     }
   }
 

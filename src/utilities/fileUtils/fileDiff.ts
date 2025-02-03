@@ -28,14 +28,10 @@ export async function showDiff(input: ComparisonFileNode | { localPath: string; 
   const tmpDir = path.join(__dirname, "..", "..", "tmp");
   const localTmpPath = path.join(tmpDir, path.basename(remotePath));
 
-  try {
-    await downloadRemoteFile(remotePath, localTmpPath);
+  await downloadRemoteFile(remotePath, localTmpPath);
 
-    const localUri = Uri.file(localPath);
-    const remoteUri = Uri.file(localTmpPath);
+  const localUri = Uri.file(localPath);
+  const remoteUri = Uri.file(localTmpPath);
 
-    await commands.executeCommand("vscode.diff", localUri, remoteUri, `${path.basename(localPath)} : Local ↔ Remote`);
-  } catch (error: any) {
-    window.showErrorMessage(`Error showing diff: ${error.message}`);
-  }
+  await commands.executeCommand("vscode.diff", localUri, remoteUri, `${path.basename(localPath)} : Local ↔ Remote`);
 }

@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { ConfigurationPanel } from "../panels/ConfigurationPanel";
-import { LOG_FLAGS, logInfoMessage, LogManager } from "../managers/LogManager";
+import { logInfoMessage, LogManager } from "../managers/LogManager";
 import { SyncTreeDataProvider } from "../services/SyncTreeDataProvider";
 import { ComparisonFileNode, ComparisonStatus } from "../utilities/ComparisonFileNode";
 import { Action } from "../utilities/enums";
@@ -100,12 +100,11 @@ export class CommandManager {
           const comparisonFileNode = await compareCorrespondingEntry(element);
           const updatedElement = await treeDataProvider.updateRootElements(Action.Update, comparisonFileNode);
 
-          await JsonManager.getInstance().updateFullJson(JsonType.COMPARE, treeDataProvider.rootElements);
           await treeDataProvider.refresh(updatedElement);
         }
       },
 
-      "livesync.fileEntryShowDiff": async (input: ComparisonFileNode | vscode.Uri) => {
+      "livesync.showDiff": async (input: ComparisonFileNode | vscode.Uri) => {
         if (input instanceof vscode.Uri) {
           const comparisonNode = await JsonManager.findComparisonNodeFromUri(input, treeDataProvider);
           input = comparisonNode;
@@ -114,7 +113,7 @@ export class CommandManager {
         showDiff(input);
       },
 
-      "livesync.fileEntryUpload": async (element: ComparisonFileNode | vscode.Uri) => {
+      "livesync.upload": async (element: ComparisonFileNode | vscode.Uri) => {
         if (element instanceof vscode.Uri) {
           const comparisonNode = await JsonManager.findComparisonNodeFromUri(element, treeDataProvider);
           element = comparisonNode;
@@ -125,14 +124,13 @@ export class CommandManager {
 
           ComparisonFileNode.setComparisonStatus(element, ComparisonStatus.unchanged);
           const updatedNode = await treeDataProvider.updateRootElements(Action.Update, element);
-          await JsonManager.getInstance().updateFullJson(JsonType.COMPARE, treeDataProvider.rootElements);
           await treeDataProvider.refresh(updatedNode);
         } else {
           await FileEventHandler.handleFileUpload(element, treeDataProvider);
         }
       },
 
-      "livesync.fileEntryDownload": async (element: ComparisonFileNode | vscode.Uri) => {
+      "livesync.download": async (element: ComparisonFileNode | vscode.Uri) => {
         if (element instanceof vscode.Uri) {
           const comparisonNode = await JsonManager.findComparisonNodeFromUri(element, treeDataProvider);
           element = comparisonNode;
@@ -143,7 +141,6 @@ export class CommandManager {
 
           ComparisonFileNode.setComparisonStatus(element, ComparisonStatus.unchanged);
           const updatedNode = await treeDataProvider.updateRootElements(Action.Update, element);
-          await JsonManager.getInstance().updateFullJson(JsonType.COMPARE, treeDataProvider.rootElements);
           await treeDataProvider.refresh(updatedNode);
         } else {
           await FileEventHandler.handleFileDownload(element, treeDataProvider);
@@ -193,7 +190,6 @@ export class CommandManager {
             await sshClient.waitForConnection();
           }, "Test Connection");
 
-          logInfoMessage("Test connection successful.", LOG_FLAGS.ALL);
           return true;
         } catch (error: any) {
           return false;

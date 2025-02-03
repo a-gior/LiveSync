@@ -1,4 +1,4 @@
-import { window, Uri, commands } from "vscode";
+import { Uri, commands } from "vscode";
 import { Panel } from "./Panel";
 
 import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
@@ -8,12 +8,12 @@ import { FileEventActionsMessage } from "@shared/DTOs/messages/FileEventActionsM
 import { ConnectionManager } from "../managers/ConnectionManager";
 import { IgnoreListMessage } from "../DTOs/messages/IgnoreListMessage";
 import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
-import { LOG_FLAGS, logErrorMessage } from "../managers/LogManager";
+import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../managers/LogManager";
 
 export class ConfigurationPanel extends Panel {
   static render(extensionUri: Uri) {
     const viewType = "configurationViewType";
-    const title = "Configuration";
+    const title = "LiveSync Configuration";
     const localResourceRoots = [
       Uri.joinPath(extensionUri, "out"),
       Uri.joinPath(extensionUri, "resources"),
@@ -26,7 +26,12 @@ export class ConfigurationPanel extends Panel {
           break;
         case "testConnection":
           if (message.configuration) {
-            await commands.executeCommand("livesync.testConnection", message.configuration);
+            const result = await commands.executeCommand("livesync.testConnection", message.configuration);
+            if (result) {
+              logInfoMessage("Connection successful.", LOG_FLAGS.ALL);
+            } else {
+              logErrorMessage("Connection failed. Please check the configuration.", LOG_FLAGS.ALL);
+            }
           }
           break;
       }

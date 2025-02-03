@@ -9,7 +9,7 @@ export enum Action {
 
 export enum Check {
   remoteExists = "remoteExists",
-  remoteNotExists = "remoteNotExists",
+  remoteExistsDelete = "remoteExistsDelete",
   remoteNotSameOverwrite = "remoteNotSameOverwrite",
   remoteNotSameDownload = "remoteNotSameDownload",
   localExists = "localExists"

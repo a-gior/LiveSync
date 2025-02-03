@@ -1,6 +1,6 @@
 import * as path from "path";
 import Mocha from "mocha";
-import { glob, globSync, globStream, globStreamSync, Glob } from "glob";
+import { Glob } from "glob";
 
 export async function run(): Promise<void> {
   // Create the mocha test

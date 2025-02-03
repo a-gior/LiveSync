@@ -8,7 +8,7 @@ import { window } from "vscode";
 import { ConnectionManager } from "../../managers/ConnectionManager";
 import sftp from "ssh2-sftp-client";
 import { shouldIgnore } from "../shouldIgnore";
-import { logErrorMessage, logInfoMessage } from "../../managers/LogManager";
+import { logErrorMessage } from "../../managers/LogManager";
 import { BaseNodeType } from "../BaseNode";
 import JsonManager, { isFileNodeMap, JsonType } from "../../managers/JsonManager";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
@@ -21,16 +21,11 @@ export async function downloadRemoteFile(remotePath: string, localPath: string):
     return;
   }
 
-  try {
-    await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
-      const dir = path.dirname(localPath);
-      await fs.promises.mkdir(dir, { recursive: true });
-      await sftpClient.downloadFile(remotePath, localPath);
-    }, `Download ${remotePath}`);
-  } catch (error: any) {
-    logErrorMessage(`Failed to download file: ${error.message}`);
-    throw error;
-  }
+  await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+    const dir = path.dirname(localPath);
+    await fs.promises.mkdir(dir, { recursive: true });
+    await sftpClient.downloadFile(remotePath, localPath);
+  }, `Download ${remotePath}`);
 }
 
 export async function uploadRemoteFile(localPath: string, remotePath: string, checkParentDirExists: boolean = true): Promise<void> {
@@ -41,21 +36,16 @@ export async function uploadRemoteFile(localPath: string, remotePath: string, ch
     return;
   }
 
-  try {
-    await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
-      const remoteDir = path.dirname(remotePath);
-      if (checkParentDirExists) {
-        const dirExists = await sftpClient.pathExists(remoteDir);
-        if (!dirExists) {
-          await sftpClient.createDirectory(remoteDir);
-        }
+  await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+    const remoteDir = path.dirname(remotePath);
+    if (checkParentDirExists) {
+      const dirExists = await sftpClient.pathExists(remoteDir);
+      if (!dirExists) {
+        await sftpClient.createDirectory(remoteDir);
       }
-      await sftpClient.uploadFile(localPath, remotePath);
-    }, `Upload to ${remotePath}`);
-  } catch (error: any) {
-    logErrorMessage(`Failed to upload file: ${error.message}`);
-    throw error;
-  }
+    }
+    await sftpClient.uploadFile(localPath, remotePath);
+  }, `Upload to ${remotePath}`);
 }
 
 // Compare remote file hash with stored remote hash
@@ -77,7 +67,7 @@ export async function compareRemoteFileHash(remotePath: string): Promise<boolean
 
     return remoteEntry.hash === remoteFileHash;
   } catch (error) {
-    logErrorMessage("Error comparing remote file hash:", error);
+    logErrorMessage(`Error comparing remote file hash on ${remotePath}`);
     return false;
   }
 }

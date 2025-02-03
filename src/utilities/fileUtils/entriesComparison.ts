@@ -1,4 +1,5 @@
 import JsonManager from "../../managers/JsonManager";
+import { StatusBarManager } from "../../managers/StatusBarManager";
 import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
 import { listLocalFilesRecursive, listRemoteFilesRecursive } from "./fileListing";
 import { getFullPaths } from "./filePathUtils";
@@ -16,7 +17,7 @@ export async function compareCorrespondingEntry(comparisonFileNode: ComparisonFi
 
     return ComparisonFileNode.compareFileNodes(localEntry, remoteEntry);
   } catch (error: any) {
-    console.error("<compareCorrespondingEntry> Error:", error);
-    throw new Error(error.message);
+    StatusBarManager.showMessage("SFTP operation failed", "", "", 3000, "error");
+    throw new Error(`<compareCorrespondingEntry> Error: ${error.message}`);
   }
 }

@@ -11,7 +11,6 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished",
     "onView:yourSidebarViewId",
     "workspaceContains:.vscode/settings.json"
   ],
@@ -38,20 +37,12 @@
     },
     "commands": [
       {
-        "command": "livesync.helloWorld",
-        "title": "LiveSync: Hello World (Test Command)"
-      },
-      {
         "command": "livesync.configuration",
         "title": "LiveSync: Open Configuration Panel"
       },
       {
         "command": "livesync.refreshConfig",
         "title": "LiveSync: Reload Configuration Settings"
-      },
-      {
-        "command": "livesync.showHelloWorld",
-        "title": "LiveSync: Display Hello World (Svelte UI)"
       },
       {
         "command": "livesync.refreshAll",
@@ -64,18 +55,18 @@
         "icon": "resources/media/dark/debug-restart.svg"
       },
       {
-        "command": "livesync.fileEntryShowDiff",
+        "command": "livesync.showDiff",
         "title": "LiveSync: Show Diff",
         "icon": "resources/media/dark/arrow-both.svg"
       },
       {
-        "command": "livesync.fileEntryUpload",
-        "title": "LiveSync: Upload File",
+        "command": "livesync.upload",
+        "title": "LiveSync: Upload",
         "icon": "resources/media/dark/arrow-small-up.svg"
       },
       {
-        "command": "livesync.fileEntryDownload",
-        "title": "LiveSync: Download File",
+        "command": "livesync.download",
+        "title": "LiveSync: Download",
         "icon": "resources/media/dark/arrow-small-down.svg"
       },
       {
@@ -109,15 +100,17 @@
     "menus": {
       "view/item/context": [
         {
-          "command": "livesync.fileEntryUpload",
+          "command": "livesync.upload",
+          "when": "viewItem != fileEntry-file-removed",
           "group": "inline@1"
         },
         {
-          "command": "livesync.fileEntryDownload",
+          "command": "livesync.download",
+          "when": "viewItem != fileEntry-file-added",
           "group": "inline@2"
         },
         {
-          "command": "livesync.fileEntryShowDiff",
+          "command": "livesync.showDiff",
           "when": "viewItem =~ /^fileEntry-file/ && viewItem != fileEntry-file-added && viewItem != fileEntry-file-removed",
           "group": "inline@3"
         },
@@ -161,16 +154,16 @@
       ],
       "explorer/context": [
         {
-          "command": "livesync.fileEntryShowDiff",
+          "command": "livesync.showDiff",
           "when": "!explorerResourceIsFolder",
           "group": "LiveSync@1"
         },
         {
-          "command": "livesync.fileEntryUpload",
+          "command": "livesync.upload",
           "group": "LiveSync@2"
         },
         {
-          "command": "livesync.fileEntryDownload",
+          "command": "livesync.download",
           "group": "LiveSync@3"
         },
         {

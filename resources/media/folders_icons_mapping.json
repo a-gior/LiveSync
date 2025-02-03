@@ -4,11 +4,6 @@
     "filenames": [],
     "languageIds": []
   },
-  "root_folder": {
-    "extensions": [],
-    "filenames": ["root_folder"],
-    "languageIds": []
-  },
   "android": {
     "extensions": ["android"],
     "filenames": [],

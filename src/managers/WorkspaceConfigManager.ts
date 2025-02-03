@@ -1,8 +1,8 @@
-import { workspace, ConfigurationTarget, WorkspaceFolder } from "vscode";
+import { workspace, ConfigurationTarget } from "vscode";
 import * as crypto from "crypto";
 import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 import { FileEventActionsMessage } from "../DTOs/messages/FileEventActionsMessage";
-import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
+import { LOG_FLAGS, logConfigError, logErrorMessage, logInfoMessage } from "./LogManager";
 import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
 import { IgnoreListMessage } from "../DTOs/messages/IgnoreListMessage";
 import path from "path";
@@ -10,6 +10,7 @@ import { FileEventHandler } from "../services/FileEventHandler";
 
 export class WorkspaceConfigManager {
   private static _workspaceConfig: ConfigurationState | undefined;
+  public static isVscodeSettingsValid: boolean = false;
 
   // Check if the workspace is multi-root
   static isMultiRootWorkspace(): boolean {
@@ -18,7 +19,11 @@ export class WorkspaceConfigManager {
 
   // Load the configuration for the workspace
   static loadWorkspaceConfiguration() {
-    const config = this.getConfiguration();
+    if (!WorkspaceConfigManager.isVSCodeConfigValid()) {
+      logConfigError();
+    }
+
+    const config = this.getVSCodeConfiguration();
 
     this._workspaceConfig = {
       configuration: {
@@ -45,7 +50,7 @@ export class WorkspaceConfigManager {
   }
 
   // Get the appropriate configuration object
-  static getConfiguration(folderUri?: WorkspaceFolder) {
+  static getVSCodeConfiguration() {
     if (this.isMultiRootWorkspace()) {
       logErrorMessage(
         "LiveSync requires a single folder in the workspace to configure correctly. Please ensure only one folder is selected.",
@@ -54,8 +59,45 @@ export class WorkspaceConfigManager {
       throw new Error("LiveSync requires a single folder in the workspace to configure correctly.");
     }
 
-    const targetFolder = folderUri || workspace.workspaceFolders?.[0];
+    const targetFolder = workspace.workspaceFolders?.[0];
     return workspace.getConfiguration("LiveSync", targetFolder?.uri);
+  }
+
+  static isVSCodeConfigValid(): boolean {
+    const config = this.getVSCodeConfiguration();
+
+    const connectionSettings = {
+      hostname: config.get<string>("hostname"),
+      port: config.get<number>("port", 22),
+      username: config.get<string>("username"),
+      authMethod: config.get<string>("authMethod"),
+      password: config.get<string>("password"),
+      privateKeyPath: config.get<string>("privateKeyPath"),
+      passphrase: config.get<string>("passphrase")
+    };
+
+    // Helper function to check if a value is set
+    const isSet = (value: any) => !!(value && value.trim() !== "");
+
+    // Validate required fields
+    if (!isSet(connectionSettings.hostname) || !isSet(connectionSettings.username) || !isSet(connectionSettings.authMethod)) {
+      this.isVscodeSettingsValid = false;
+      return false;
+    }
+
+    // Validate authentication method
+    if (connectionSettings.authMethod === "auth-password" && !isSet(connectionSettings.password)) {
+      this.isVscodeSettingsValid = false;
+      return false;
+    }
+
+    if (connectionSettings.authMethod === "auth-sshKey" && !isSet(connectionSettings.privateKeyPath)) {
+      this.isVscodeSettingsValid = false;
+      return false;
+    }
+
+    this.isVscodeSettingsValid = true;
+    return true;
   }
 
   // Save the workspace configuration
@@ -102,6 +144,11 @@ export class WorkspaceConfigManager {
 
   // Get the remote server configuration
   static getRemoteServerConfigured(): ConfigurationMessage["configuration"] {
+    if (!this.isVscodeSettingsValid) {
+      logConfigError();
+      throw new Error("LiveSync is not configured or is invalid");
+    }
+
     const workspaceConfig = this.getWorkspaceConfiguration();
 
     if (!workspaceConfig.configuration) {
@@ -125,6 +172,11 @@ export class WorkspaceConfigManager {
 
   // Get configured remote path
   static getRemotePath(): string {
+    if (!this.isVscodeSettingsValid) {
+      logConfigError();
+      throw new Error("LiveSync is not configured or is invalid");
+    }
+
     const workspaceConfig = this.getWorkspaceConfiguration();
 
     if (!workspaceConfig.remotePath || workspaceConfig.remotePath.length === 0) {
@@ -149,6 +201,11 @@ export class WorkspaceConfigManager {
 
   // Get ignore list
   static getIgnoreList(): IgnoreListMessage["ignoreList"] {
+    if (!this.isVscodeSettingsValid) {
+      logConfigError();
+      throw new Error("LiveSync is not configured or is invalid");
+    }
+
     const workspaceConfig = this.getWorkspaceConfiguration();
 
     if (!workspaceConfig.ignoreList) {
@@ -161,7 +218,12 @@ export class WorkspaceConfigManager {
 
   // Get a specific parameter
   static getParameter<T>(paramName: string): T | undefined {
-    const config = this.getConfiguration();
+    if (!this.isVscodeSettingsValid) {
+      logConfigError();
+      throw new Error("LiveSync is not configured or is invalid");
+    }
+
+    const config = this.getVSCodeConfiguration();
     return config.get<T>(paramName);
   }
 
@@ -171,7 +233,7 @@ export class WorkspaceConfigManager {
       FileEventHandler.enableFileSave = false;
 
       // Update the persistent settings in VS Code
-      const config = this.getConfiguration();
+      const config = this.getVSCodeConfiguration();
       await config.update(paramName, value, ConfigurationTarget.Workspace);
 
       logInfoMessage(`${paramName} updated`);
@@ -189,7 +251,7 @@ export class WorkspaceConfigManager {
   static async batchUpdate(updates: Record<string, any>): Promise<void> {
     try {
       FileEventHandler.enableFileSave = false;
-      const config = this.getConfiguration();
+      const config = this.getVSCodeConfiguration();
 
       // Perform all updates without reloading
       for (const [key, value] of Object.entries(updates)) {

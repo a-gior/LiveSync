@@ -6,7 +6,7 @@ import { TreeViewManager } from "./managers/TreeViewManager";
 import { StatusBarManager } from "./managers/StatusBarManager";
 import { FileStatusDecorationProvider } from "./services/FileDecorationProvider";
 import { WorkspaceConfigManager } from "./managers/WorkspaceConfigManager";
-import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./managers/LogManager";
+import { LOG_FLAGS, logConfigError, logErrorMessage, logInfoMessage } from "./managers/LogManager";
 
 export async function activate(context: vscode.ExtensionContext) {
   // Only activate Livesync if there is a single folder in the workspace
@@ -16,6 +16,10 @@ export async function activate(context: vscode.ExtensionContext) {
       LOG_FLAGS.ALL
     );
     return;
+  }
+
+  if (!(await WorkspaceConfigManager.isVSCodeConfigValid())) {
+    logConfigError();
   }
 
   // Register file status decoration provider

@@ -93,13 +93,6 @@ export function getRelativePath(fullPath: string) {
   throw new Error(`Couldnt find relative path of ${fullPath}`);
 }
 
-export function isRootPath(targetPath: string): boolean {
-  const normalizedTargetPath = normalizePath(targetPath);
-  const { localPath, remotePath } = WorkspaceConfigManager.getWorkspaceFullPaths();
-
-  return normalizedTargetPath === normalizePath(localPath) || normalizedTargetPath === normalizePath(remotePath);
-}
-
 export async function pathExists(path: string, source: FileNodeSource) {
   switch (source) {
     case FileNodeSource.local:

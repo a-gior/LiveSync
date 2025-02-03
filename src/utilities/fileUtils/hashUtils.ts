@@ -4,6 +4,7 @@ import { FileNodeSource } from "../FileNode";
 import { getRemoteFileContentHash } from "./sftpOperations";
 import { BaseNodeType } from "../BaseNode";
 import { getRelativePath } from "./filePathUtils";
+import { logErrorMessage } from "../../managers/LogManager";
 
 export async function generateHash(filePath: string, fileSource: FileNodeSource, fileType: BaseNodeType, fileContentHash: string = "") {
   if (fileType === BaseNodeType.file && fileContentHash === "") {
@@ -17,7 +18,7 @@ export async function generateHash(filePath: string, fileSource: FileNodeSource,
         });
         stream.on("error", (err) => {
           // reject(err);
-          console.error("<generateHash> Error reading file: ", err.message);
+          logErrorMessage(`<generateHash> Error reading file: ${err.message}`);
           resolve(""); // Return an empty string if there's an error (unhashable files like .asar, for instance)
         });
       });

@@ -1,7 +1,7 @@
 import { Client, ConnectConfig } from "ssh2";
 import { BaseClient } from "./BaseClient";
 import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
-import { logInfoMessage, LogManager } from "../managers/LogManager";
+import { LOG_FLAGS, logErrorMessage, logInfoMessage, LogManager } from "../managers/LogManager";
 
 export class SSHClient extends BaseClient {
   private static instance: SSHClient;
@@ -56,7 +56,7 @@ export class SSHClient extends BaseClient {
         .on("error", (err) => {
           this.isConnecting = false;
           this.isConnected = false;
-          console.error("SSH connection error:", err);
+          logErrorMessage("SSH connection error:", LOG_FLAGS.CONSOLE_ONLY, err);
           reject(err);
         })
         .connect(connectionOptions);

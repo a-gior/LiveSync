@@ -93,7 +93,7 @@ export class FileNode extends BaseNode<FileNode> {
 
       return fileNode;
     } catch (error) {
-      console.error(`Error getting FileNode for path ${localPath}:`, error);
+      logErrorMessage(`Error getting FileNode for path ${localPath}:`);
       throw error;
     }
   }
@@ -115,7 +115,7 @@ export class FileNode extends BaseNode<FileNode> {
         fullPath: remotePath
       });
     } catch (error) {
-      console.error(`Error getting FileNode for path ${remotePath}:`, error);
+      logErrorMessage(`Error getting FileNode for path ${remotePath}:`);
       throw error;
     }
   }
