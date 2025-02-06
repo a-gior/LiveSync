@@ -45,7 +45,7 @@ export class WorkspaceConfigManager {
         actionOnMove: "check&move",
         actionOnOpen: "check&download"
       }),
-      ignoreList: config.get<string[]>("ignoreList", [])
+      ignoreList: config.get<string[]>("ignoreList", [".vscode"])
     };
   }
 

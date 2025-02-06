@@ -57,7 +57,7 @@ suite("LiveSync Configuration Command Tests", () => {
         actionOnMove: "check&move",
         actionOnOpen: "check&download"
       },
-      ignoreList: []
+      ignoreList: [".vscode"]
     };
 
     assert.deepEqual(currentConfig, baseConfig, "Initial Config isnt equal to the base config");

@@ -6,7 +6,6 @@
     
     import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
     import { FullConfigurationMessage } from "@shared/DTOs/messages/FullConfigurationMessage";
-    import IgnoreList from "./IgnoreList.svelte";
     import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
     
 

@@ -4,8 +4,16 @@
   "description": "",
   "version": "0.0.1",
   "publisher": "agior",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/a-gior/LiveSync.git"
+  },
+  "bugs": {
+    "url": "https://github.com/a-gior/LiveSync/issues"
+  },
+  "homepage": "https://github.com/a-gior/LiveSync",
   "engines": {
-    "vscode": "^1.88.1"
+    "vscode": "^1.96.4"
   },
   "categories": [
     "Other"
@@ -150,6 +158,14 @@
           "command": "livesync.hideUnchanged",
           "when": "view == nodeDependencies && livesyncShowUnchanged == true",
           "group": "navigation@6"
+        },
+        {
+          "command": "livesync.upload",
+          "group": "LiveSync@7"
+        },
+        {
+          "command": "livesync.download",
+          "group": "LiveSync@8"
         }
       ],
       "explorer/context": [
@@ -317,7 +333,9 @@
           "items": {
             "type": "string"
           },
-          "default": [],
+          "default": [
+            ".vscode"
+          ],
           "order": 16
         }
       }

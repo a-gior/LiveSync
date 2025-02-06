@@ -71,8 +71,8 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
       let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
 
       const pathParts = splitParts(element.relativePath);
-      if (element.isDirectory() && pathParts.length > 1) {
-        this._onDidChangeTreeData.fire(element);
+      if (element.relativePath === "" || element.relativePath === ".") {
+        this._onDidChangeTreeData.fire(undefined);
       } else if (!element.isDirectory() && pathParts.length > 1) {
         const parentPathParts = pathParts.slice(0, pathParts.length - 1);
         const parentNode = await JsonManager.findNodeByPath(joinParts(parentPathParts), this.rootElements, rootFolderName);

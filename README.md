@@ -1,71 +1,122 @@
-# livesync README
+# LiveSync
 
-This is the README for your extension "livesync". After writing up a brief description, we recommend including the following sections.
+**LiveSync** is a Visual Studio Code extension that allows you to **synchronize a local folder (the current workspace) with a remote folder**.  
+It provides **flexible event-based sync rules**, allowing you to define how file operations (create, delete, rename, open, save) should be handled on the remote server.
 
-## Features
-
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
-
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
-
-## Requirements
-
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
-
-## Extension Settings
-
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-- `myExtension.enable`: Enable/disable this extension.
-- `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
+LiveSync **shows real-time differences** between local and remote files in the **Tree View**, provides **quick sync actions**, and offers **seamless configuration** via the **Configuration Panel** or `.vscode/settings.json`.
 
 ---
 
-## Following extension guidelines
+## 🌟 Features
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
+✔ **Two-Way Sync (Manual & Event-Based)** – Define sync rules for file creation, deletion, renaming, opening, and saving.  
+✔ **Customizable Sync Rules** – Handle events with `check`, `check & event`, `event`, or `none` options.  
+✔ **File & Folder Syncing** – Upload/download individual files or entire directories.  
+✔ **Live Difference Tracking** – Tree view displays differences between local and remote.  
+✔ **Explorer Context Menu Integration** – Right-click on files or folders to sync directly.  
+✔ **Ignore Rules** – Use glob patterns to exclude files or folders.  
+✔ **Multiple Refresh & View Options** – Switch between Tree/List view, show/hide unchanged files, and refresh differences.  
+✔ **Seamless Configuration** – Set up via **LiveSync's Configuration Panel** or `.vscode/settings.json`.
 
-- [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+---
 
-## Working with Markdown
+## 📌 Installation
 
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
+1. **Install VS Code** – Download [Visual Studio Code](https://code.visualstudio.com/).
+2. **Install LiveSync Extension**:
+   - Open **VS Code**.
+   - Go to **Extensions** (`Ctrl+Shift+X` / `Cmd+Shift+X` on Mac).
+   - Search for **LiveSync** and click **Install**.
 
-- Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-- Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-- Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
+---
 
-## For more information
+## ⚙️ Configuration
 
-- [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-- [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
+#### **Option 1: Use the Configuration Panel (Recommended)**
 
-**Enjoy!**
+LiveSync provides an easy-to-use configuration panel where you can set up your connection without manually editing JSON files.
+
+##### **How to Open the Configuration Panel:**
+
+1. **Via the Command Palette** (`Ctrl+Shift+P` or `Cmd+Shift+P` on Mac)
+   - Search for **LiveSync: Open Configuration Panel** and select it.
+2. **Via the Status Bar**
+   - Click the **LiveSync** icon in the **VS Code status bar** (bottom left).
+
+📷 **Example: Accessing Configuration Panel via Status Bar**<br>  
+![LiveSync Status Bar Icon](documentation/screenshots/status_bar_livesync_config.png)
+
+##### **How to Configure:**
+
+1. Fill in your **remote server details** (hostname, port, username, authentication method, etc.).
+2. (Optional) Click **Test Connection** to verify that the server is reachable.
+3. Click on **Save** to apply the configuration.
+
+📷 **Example: LiveSync Configuration Panel**<br>  
+![LiveSync Configuration Panel](documentation/screenshots/configuration_panel_remote_server.png)
+
+---
+
+#### **Option 2: Manually Create the JSON Configuration**
+
+If you prefer, you can manually configure LiveSync by editing `.vscode/settings.json`.
+
+1. Open your workspace folder in VS Code.
+2. Navigate to `.vscode/settings.json` (or create it if it doesn’t exist).
+3. Add the following configuration:
+
+```json
+{
+  "LiveSync.hostname": "your.server.com",
+  "LiveSync.port": 22,
+  "LiveSync.username": "your-username",
+  "LiveSync.authMethod": "auth-sshKey", // or "auth-password"
+  "LiveSync.privateKeyPath": "/path/to/private/key", // If using SSH key authentication
+  "LiveSync.remotePath": "/remote/path/to/sync",
+  "LiveSync.ignoreList": [".vscode", ".git", "node_modules"],
+
+  "LiveSync.actionOnUpload": "check&upload",
+  "LiveSync.actionOnDownload": "check&download",
+  "LiveSync.actionOnSave": "check&save",
+  "LiveSync.actionOnDelete": "none",
+  "LiveSync.actionOnMove": "check&move",
+  "LiveSync.actionOnCreate": "create",
+  "LiveSync.actionOnOpen": "check&download"
+}
+```
+
+---
+
+## 🌳 LiveSync Tree View
+
+Once your configuration is set up, LiveSync provides a **Tree View** in the VS Code Explorer. This view helps you **visualize differences between local and remote files**, making it easy to manage synchronization.
+
+📷 **Example: LiveSync Tree View**<br>
+![LiveSync Tree View](documentation/screenshots/tree_view_folder_unchanged.png)
+
+#### **Features and Actions in the Tree View**
+
+- **📄 Compare Local and Remote Files**
+
+  - Click on a file to **open a diff view** showing changes between local and remote versions.
+
+- **⬆ Upload / ⬇ Download**
+
+  - Right-click any file or folder to **manually upload or download** between local and remote.
+
+- **🔄 Refresh Differences**
+
+  - Click the **Refresh** button at the top to **re-scan and update the differences**.
+
+- **📂 Toggle Between Tree and List View**
+
+  - Switch between a **hierarchical folder structure (Tree)** and a **flat file list (List)** for better readability.
+
+- **👁 Hide/Show Unchanged Files**
+
+  - Toggle visibility for files that **haven't changed**, keeping the view clean.
+
+- **📉 Collapse All Folders**
+  - Quickly **collapse all expanded folders** to declutter the view.
+
+---
