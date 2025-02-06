@@ -1,11 +1,14 @@
-.vscode/**
-.vscode-test/**
-src/**
-.gitignore
-.yarnrc
-vsc-extension-quickstart.md
-**/tsconfig.json
-**/.eslintrc.json
-**/*.map
-**/*.ts
-**/.vscode-test.*
+# Ignore everything by default
+**/*
+
+# Explicitly include only the necessary folders
+!out/
+!resources/
+!webview-ui/public/
+
+# Always keep required extension files
+!package.json
+!package-lock.json
+!README.md
+!CHANGELOG.md
+!LICENSE
