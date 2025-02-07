@@ -44,7 +44,7 @@ LiveSync provides an easy-to-use configuration panel where you can set up your c
    - Click the **LiveSync** icon in the **VS Code status bar** (bottom left).
 
 📷 **Example: Accessing Configuration Panel via Status Bar**<br>  
-![LiveSync Status Bar Icon](documentation/screenshots/status_bar_livesync_config.png)
+![LiveSync Status Bar Icon](https://github.com/a-gior/LiveSync/blob/main/documentation/screenshots/status_bar_livesync_config.png)
 
 ##### **How to Configure:**
 
@@ -53,7 +53,7 @@ LiveSync provides an easy-to-use configuration panel where you can set up your c
 3. Click on **Save** to apply the configuration.
 
 📷 **Example: LiveSync Configuration Panel**<br>  
-![LiveSync Configuration Panel](documentation/screenshots/configuration_panel_remote_server.png)
+![LiveSync Configuration Panel](https://github.com/a-gior/LiveSync/blob/main/documentation/screenshots/configuration_panel_remote_server.png)
 
 ---
 
@@ -92,7 +92,7 @@ If you prefer, you can manually configure LiveSync by editing `.vscode/settings.
 Once your configuration is set up, LiveSync provides a **Tree View** in the VS Code Explorer. This view helps you **visualize differences between local and remote files**, making it easy to manage synchronization.
 
 📷 **Example: LiveSync Tree View**<br>
-![LiveSync Tree View](documentation/screenshots/tree_view_folder_unchanged.png)
+![LiveSync Tree View](https://github.com/a-gior/LiveSync/blob/main/documentation/screenshots/tree_view_folder_unchanged.png)
 
 #### **Features and Actions in the Tree View**
 

@@ -6,6 +6,10 @@
 !resources/
 !webview-ui/public/
 
+# Exclude specific subdirectory
+out/src/test/
+saved_data/*
+
 # Always keep required extension files
 !package.json
 !package-lock.json

@@ -38,8 +38,7 @@
         {
           "id": "nodeDependencies",
           "name": "Current Workspace",
-          "type": "tree",
-          "icon": "resources/media/liveysync-logo.svg"
+          "type": "tree"
         }
       ]
     },
@@ -55,27 +54,27 @@
       {
         "command": "livesync.refreshAll",
         "title": "LiveSync: Refresh Workspace Differences",
-        "icon": "resources/media/dark/debug-restart.svg"
+        "icon": "resources/media/dark/debug-restart.png"
       },
       {
         "command": "livesync.refresh",
         "title": "LiveSync: Refresh Differences",
-        "icon": "resources/media/dark/debug-restart.svg"
+        "icon": "resources/media/dark/debug-restart.png"
       },
       {
         "command": "livesync.showDiff",
         "title": "LiveSync: Show Diff",
-        "icon": "resources/media/dark/arrow-both.svg"
+        "icon": "resources/media/dark/arrow-both.png"
       },
       {
         "command": "livesync.upload",
         "title": "LiveSync: Upload",
-        "icon": "resources/media/dark/arrow-small-up.svg"
+        "icon": "resources/media/dark/arrow-small-up.png"
       },
       {
         "command": "livesync.download",
         "title": "LiveSync: Download",
-        "icon": "resources/media/dark/arrow-small-down.svg"
+        "icon": "resources/media/dark/arrow-small-down.png"
       },
       {
         "command": "livesync.toggleToTreeView",
@@ -382,7 +381,7 @@
     "rimraf": "^5.0.5",
     "ssh2": "^1.15.0",
     "tmp-promise": "^3.0.3",
-    "typescript": "^4.1.3"
+    "typescript": "^4.2.3"
   },
   "dependencies": {
     "net": "^1.0.2",
