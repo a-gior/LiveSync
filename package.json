@@ -29,7 +29,7 @@
         {
           "id": "package-explorer",
           "title": "LiveSync",
-          "icon": "resources/images/livesync-logo3.png"
+          "icon": "resources/icons/livesync-logo3.png"
         }
       ]
     },
