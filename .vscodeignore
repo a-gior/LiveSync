@@ -1,16 +1,18 @@
 # Ignore everything by default
 **/*
 
-# Explicitly include only the necessary folders
-!out/
+# Explicitly include necessary folders and files
+!out/shared
+!out/src/managers
+!out/src/panels
+!out/src/saved_data
+!out/src/services
+!out/src/utilities
+!out/src/extension.js*
+
 !resources/
 !webview-ui/public/
 
-# Exclude specific subdirectory
-out/src/test/
-saved_data/*
-
-# Always keep required extension files
 !package.json
 !package-lock.json
 !README.md
