@@ -2,15 +2,8 @@ import * as vscode from "vscode";
 import { ensureDirectoryExists } from "../utilities/fileUtils/fileOperations";
 import { joinParts, splitParts } from "../utilities/fileUtils/filePathUtils";
 import { listLocalFilesRecursive, listRemoteFilesRecursive } from "../utilities/fileUtils/fileListing";
-import { getIconForFile, getIconForFolder, loadFolderIconMappings, loadIconMappings, loadLanguageIdMappings } from "./IconLoader";
-import {
-  FOLDER_ICON_MAPPINGS_PATH,
-  LANGUAGEIDS_ICON_MAPPINGS_PATH,
-  ICON_MAPPINGS_PATH,
-  DEFAULT_FILE_ICON_PATH,
-  DEFAULT_FOLDER_ICON,
-  SAVE_DIR
-} from "../utilities/constants";
+import { IconLoader } from "./IconLoader";
+import { SAVE_DIR } from "../utilities/constants";
 import JsonManager, { isComparisonFileNodeMap, JsonType } from "../managers/JsonManager";
 import { ComparisonFileNode, ComparisonStatus } from "../utilities/ComparisonFileNode";
 import { BaseNode, BaseNodeType } from "../utilities/BaseNode";
@@ -37,10 +30,6 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
     this._showAsTree = showAsTree;
     this._showUnchanged = showUnchanged;
     this.jsonManager = JsonManager.getInstance();
-
-    loadIconMappings(ICON_MAPPINGS_PATH);
-    loadFolderIconMappings(FOLDER_ICON_MAPPINGS_PATH);
-    loadLanguageIdMappings(LANGUAGEIDS_ICON_MAPPINGS_PATH);
   }
 
   toggleViewMode(showAsTree: boolean): void {
@@ -104,9 +93,7 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
 
     if (element.status && element.type) {
       treeItem.iconPath =
-        element.type === BaseNodeType.directory
-          ? getIconForFolder(element.name, DEFAULT_FOLDER_ICON)
-          : getIconForFile(element.name, DEFAULT_FILE_ICON_PATH);
+        element.type === BaseNodeType.directory ? IconLoader.getFolderIcon(element.name) : IconLoader.getFileIcon(element.name);
       treeItem.contextValue = `fileEntry-${element.type}-${element.status}`;
       treeItem.description = ComparisonStatus[element.status];
       const query = `?status=${ComparisonStatus[element.status]}`;

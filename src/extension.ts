@@ -9,6 +9,9 @@ import { WorkspaceConfigManager } from "./managers/WorkspaceConfigManager";
 import { LOG_FLAGS, logConfigError, logErrorMessage, logInfoMessage } from "./managers/LogManager";
 
 export async function activate(context: vscode.ExtensionContext) {
+  const iconTheme = vscode.workspace.getConfiguration("workbench").get("iconTheme");
+  console.log("Active Icon Theme:", iconTheme);
+
   // Only activate Livesync if there is a single folder in the workspace
   if (WorkspaceConfigManager.isMultiRootWorkspace()) {
     logErrorMessage(

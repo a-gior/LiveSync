@@ -1,161 +1,37 @@
-import * as fs from "fs";
+import * as vscode from "vscode";
 import * as path from "path";
-import AdmZip from "adm-zip";
-import { FILE_ICONS_ZIP_PATH, FOLDER_ICONS_ZIP_PATH } from "../utilities/constants";
-import { BaseNodeType } from "../utilities/BaseNode";
 
-interface IconMappings {
-  [key: string]: {
-    extensions: string[];
-    filenames: string[];
-    languageIds: string[];
-  };
-}
-
-interface ZipWithMetadata {
-  zip: AdmZip;
-  path: string;
-}
-
-let iconMappings: IconMappings | null = null;
-let folderIconMappings: IconMappings | null = null;
-let languageIdMappings: { [key: string]: string } | null = null;
-
-const fileIconsZip: ZipWithMetadata = {
-  zip: new AdmZip(FILE_ICONS_ZIP_PATH),
-  path: FILE_ICONS_ZIP_PATH
-};
-const folderIconsZip: ZipWithMetadata = {
-  zip: new AdmZip(FOLDER_ICONS_ZIP_PATH),
-  path: FOLDER_ICONS_ZIP_PATH
-};
-
-// Cache for language IDs
-const languageIdCache: { [key: string]: string } = {};
-
-export function loadIconMappings(jsonFilePath: string) {
-  const jsonData = fs.readFileSync(jsonFilePath, "utf8");
-  iconMappings = JSON.parse(jsonData);
-}
-
-export function loadFolderIconMappings(jsonFilePath: string): void {
-  const jsonData = fs.readFileSync(jsonFilePath, "utf8");
-  folderIconMappings = JSON.parse(jsonData);
-}
-
-export function loadLanguageIdMappings(jsonFilePath: string): void {
-  const jsonData = fs.readFileSync(jsonFilePath, "utf8");
-  languageIdMappings = JSON.parse(jsonData);
-}
-
-function getLanguageIdFromMapping(extension: string): string {
-  if (languageIdCache[extension]) {
-    return languageIdCache[extension];
+export class IconLoader {
+  /**
+   * Retrieves the ThemeIcon for a file based on its full name.
+   * @param fileName - The full name of the file (e.g., "app.js").
+   * @returns A VS Code ThemeIcon for the file.
+   */
+  public static getFileIcon(fileName: string): vscode.ThemeIcon {
+    const fileExtension = path.extname(fileName); // Extract file extension
+    return this.getThemeIcon({ fileExtension });
   }
 
-  if (!languageIdMappings) {
-    throw new Error("LanguageIDs mappings have not been loaded. Call loadLanguageIdMappings first.");
+  /**
+   * Retrieves the ThemeIcon for a folder based on its full name.
+   * @param folderName - The full name of the folder (e.g., "src").
+   * @returns A VS Code ThemeIcon for the folder.
+   */
+  public static getFolderIcon(folderName: string): vscode.ThemeIcon {
+    return this.getThemeIcon({ folderName });
   }
 
-  if (languageIdMappings && languageIdMappings[extension]) {
-    const languageId = languageIdMappings[extension];
-    languageIdCache[extension] = languageId;
-    return languageId;
+  /**
+   * A generic function to get the ThemeIcon for a file, folder, or default fallback.
+   * @param params - Object containing fileExtension or folderName.
+   * @returns A VS Code ThemeIcon for the file or folder.
+   */
+  private static getThemeIcon(params: { fileExtension?: string; folderName?: string }): vscode.ThemeIcon {
+    const { folderName } = params;
+
+    // VS Code will automatically use the correct icon based on the file/folder name
+    return folderName
+      ? new vscode.ThemeIcon("folder") // Folders default to the "folder" icon
+      : new vscode.ThemeIcon("file"); // Files default to the "file" icon
   }
-
-  return "";
-}
-
-function getIcon(
-  name: string,
-  defaultIconPath: string,
-  type: BaseNodeType,
-  iconMappings: IconMappings,
-  fileIconsZip: ZipWithMetadata,
-  folderIconsZip: ZipWithMetadata
-): { light: string; dark: string } {
-  const zip = type === BaseNodeType.file ? fileIconsZip : folderIconsZip;
-
-  // Get the extension name without the dot
-  const fileExtension = path.extname(name).toLowerCase().substring(1);
-  const basename = path.basename(name, fileExtension).toLowerCase();
-
-  const entries = Object.entries(iconMappings).slice(1); // Skip the first element containing the default value (always true)
-
-  for (const [iconName, mappings] of entries) {
-    if (mappings.filenames.includes(basename) || mappings.extensions.includes(fileExtension)) {
-      const lightIconPath = `icons_light/${iconName}${type === BaseNodeType.directory ? "_opened" : ""}.svg`;
-      const darkIconPath = `icons_dark/${iconName}${type === BaseNodeType.directory ? "_opened" : ""}.svg`;
-
-      return {
-        light: extractIconFromZip(zip, lightIconPath, darkIconPath),
-        dark: extractIconFromZip(zip, darkIconPath)
-      };
-    }
-  }
-
-  return {
-    light: defaultIconPath,
-    dark: defaultIconPath
-  };
-  const defaultLightIconPath = `icons_light/${defaultIconPath}`;
-  const defaultDarkIconPath = `icons_dark/${defaultIconPath}`;
-  return {
-    light: extractIconFromZip(zip, defaultLightIconPath, defaultDarkIconPath),
-    dark: extractIconFromZip(zip, defaultDarkIconPath)
-  };
-}
-
-export function getIconForFile(filename: string, defaultIconPath: string): { light: string; dark: string } {
-  if (!iconMappings) {
-    throw new Error("Icon mappings have not been loaded. Call loadIconMappings first.");
-  }
-
-  const fileExtension = path.extname(filename);
-  const languageId = getLanguageIdFromMapping(fileExtension);
-  if (languageId) {
-    for (const [iconName, mappings] of Object.entries(iconMappings)) {
-      if (mappings.languageIds.includes(languageId)) {
-        const lightIconPath = `icons_light/${iconName}.svg`;
-        const darkIconPath = `icons_dark/${iconName}.svg`;
-
-        return {
-          light: extractIconFromZip(fileIconsZip, lightIconPath, darkIconPath),
-          dark: extractIconFromZip(fileIconsZip, darkIconPath)
-        };
-      }
-    }
-  }
-
-  return getIcon(filename, defaultIconPath, BaseNodeType.file, iconMappings, fileIconsZip, folderIconsZip);
-}
-
-export function getIconForFolder(foldername: string, defaultIconPath: string): { light: string; dark: string } {
-  if (!folderIconMappings) {
-    throw new Error("Icon mappings have not been loaded. Call loadIconMappings first.");
-  }
-  return getIcon(foldername, defaultIconPath, BaseNodeType.directory, folderIconMappings, fileIconsZip, folderIconsZip);
-}
-
-function extractIconFromZip(zipWithMetadata: ZipWithMetadata, iconPath: string, fallbackIconPath?: string): string {
-  const { zip, path: zipFilePath } = zipWithMetadata;
-  const tempDir = path.join(__dirname, "..", "temp_icons");
-
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir);
-  }
-
-  const tempIconPath = path.join(tempDir, path.basename(iconPath));
-
-  if (fs.existsSync(tempIconPath)) {
-    return tempIconPath;
-  }
-
-  const entry = zip.getEntry(iconPath) || (fallbackIconPath && zip.getEntry(fallbackIconPath));
-  if (entry) {
-    zip.extractEntryTo(entry, tempDir, false, true);
-    return tempIconPath;
-  }
-
-  throw new Error(`Icon not found in ${zipFilePath}: ${iconPath} - ${fallbackIconPath}`);
 }
