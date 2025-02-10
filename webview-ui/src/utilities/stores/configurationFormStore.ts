@@ -26,7 +26,6 @@ class ConfigurationFormStore {
 
     // Bind the method to the instance
     this.saveRemoteServerConfiguration = this.saveRemoteServerConfiguration.bind(this);
-    this.checkAuthMethod = this.checkAuthMethod.bind(this);
     this.saveFileEventActions = this.saveFileEventActions.bind(this);
     this.saveIgnoreList = this.saveIgnoreList.bind(this);
   }
@@ -43,7 +42,6 @@ class ConfigurationFormStore {
               component: GenericForm,
               props: {
                 formDataStore: this.remoteServerConfigFormStore,
-                onChange: this.checkAuthMethod,
                 onSubmit: this.saveRemoteServerConfiguration
               }
             },
@@ -115,12 +113,11 @@ class ConfigurationFormStore {
         hostname: this.getRemoteServerConfigFormData().formGroups["remote-server-form-group-0"].fields[0].value,
         port: parseInt(this.getRemoteServerConfigFormData().formGroups["remote-server-form-group-0"].fields[1].value),
         username: this.getRemoteServerConfigFormData().formGroups["remote-server-form-group-0"].fields[2].value,
-        authMethod: this.getRemoteServerConfigFormData().formGroups["remote-server-form-group-0"].fields[3].value,
-        password: this.getRemoteServerConfigFormData().formGroups["remote-server-form-group-0"].fields[4].value,
-        privateKeyPath: this.getRemoteServerConfigFormData().formGroups["remote-server-form-group-0"].fields[5].value,
-        passphrase: this.getRemoteServerConfigFormData().formGroups["remote-server-form-group-0"].fields[6].value
+        password: this.getRemoteServerConfigFormData().formGroups["remote-server-form-group-0"].fields[3].value,
+        privateKeyPath: this.getRemoteServerConfigFormData().formGroups["remote-server-form-group-0"].fields[4].value,
+        passphrase: this.getRemoteServerConfigFormData().formGroups["remote-server-form-group-0"].fields[5].value
       },
-      remotePath: this.getRemoteServerConfigFormData().formGroups["remote-server-form-group-0"].fields[7].value
+      remotePath: this.getRemoteServerConfigFormData().formGroups["remote-server-form-group-0"].fields[6].value
     };
     const currentState: ConfigurationState = vscode.getState();
 
@@ -166,18 +163,6 @@ class ConfigurationFormStore {
       ignoreList: ignoreListMessage.ignoreList
     });
     vscode.postMessage(ignoreListMessage);
-  }
-
-  checkAuthMethod(event) {
-    this.remoteServerConfigFormStore.update((remoteServerConfigFormData) => {
-      remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[4].visible = event.target.value === "auth-password";
-      return remoteServerConfigFormData;
-    });
-    this.remoteServerConfigFormStore.update((remoteServerConfigFormData) => {
-      remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[5].visible = event.target.value === "auth-sshKey";
-      remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[6].visible = event.target.value === "auth-sshKey";
-      return remoteServerConfigFormData;
-    });
   }
 }
 

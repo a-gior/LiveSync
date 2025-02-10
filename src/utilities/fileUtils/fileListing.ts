@@ -16,7 +16,7 @@ const limit = pLimit(9);
 
 export async function listRemoteFilesRecursive(remoteDir: string): Promise<FileNode | undefined> {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = ConnectionManager.getInstance(configuration);
+  const connectionManager = await ConnectionManager.getInstance(configuration);
 
   let lastBufferedFile: FileNode | undefined; // Always buffer the last file entry for the hash
   let totalItems = 0;

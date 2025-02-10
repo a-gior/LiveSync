@@ -208,16 +208,6 @@
           "description": "Username for LiveSync configuration.",
           "order": 3
         },
-        "LiveSync.authMethod": {
-          "type": "string",
-          "default": "auth-password",
-          "enum": [
-            "auth-password",
-            "auth-sshKey"
-          ],
-          "description": "authMethod for LiveSync configuration.",
-          "order": 4
-        },
         "LiveSync.password": {
           "type": "string",
           "default": "",

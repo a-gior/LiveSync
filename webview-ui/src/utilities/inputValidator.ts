@@ -25,7 +25,7 @@ class InputValidator {
   isValidPassword = (passwordInput: HTMLInputElement): boolean => {
     // Implement password validation logic (e.g., strength requirements)
     // Example validation: check for minimum length
-    return passwordInput.value.length >= 6;
+    return passwordInput.value.length >= 4;
   };
 
   isValidPath = (pathInput: HTMLInputElement): boolean => {
@@ -60,7 +60,7 @@ class InputValidator {
         // Check custom validation callback
         if (formField.htmlElement && formField.validationCallback) {
           const htmlInputElement = formField.htmlElement.querySelector("input");
-          if (!formField.validationCallback(htmlInputElement)) {
+          if (htmlInputElement.value && !formField.validationCallback(htmlInputElement)) {
             // Add error message
             errorDisplayer.display(formField.htmlElement, `${formField.name} failed validation.`);
             isValid = false;

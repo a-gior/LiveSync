@@ -7,7 +7,6 @@ export interface ConfigurationMessage extends Message {
     hostname: string;
     port: number;
     username: string;
-    authMethod: string;
     password?: string;
     privateKeyPath?: string;
     passphrase?: string;

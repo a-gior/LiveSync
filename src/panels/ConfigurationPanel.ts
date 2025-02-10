@@ -65,7 +65,7 @@ export class ConfigurationPanel extends Panel {
   static async saveRemotePath(remotePath: string) {
     const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
 
-    const connectionManager = ConnectionManager.getInstance(configuration);
+    const connectionManager = await ConnectionManager.getInstance(configuration);
     connectionManager
       .doSFTPOperation(async (sftpClient: SFTPClient) => {
         if (!(await sftpClient.pathExists(remotePath))) {
@@ -95,29 +95,28 @@ export class ConfigurationPanel extends Panel {
   }
 
   static async saveRemoteServerConfiguration(configuration: ConfigurationState["configuration"]): Promise<void> {
-    if (configuration) {
-      try {
+    try {
+      if (configuration) {
         const testResult = await commands.executeCommand("livesync.testConnection", configuration);
         if (!testResult) {
           throw new Error("Connection test failed. Please check the configuration.");
         }
 
-        const { hostname, port, username, authMethod, password, privateKeyPath, passphrase } = configuration;
+        const { hostname, port, username, password, privateKeyPath, passphrase } = configuration;
 
         await WorkspaceConfigManager.batchUpdate({
           hostname,
           port,
           username,
-          authMethod,
           password,
           privateKeyPath,
           passphrase
         });
-      } catch (error) {
-        logErrorMessage("Error saving remote server configuration: ", LOG_FLAGS.ALL, error);
+      } else {
+        throw new Error("Invalid configuration");
       }
-    } else {
-      throw new Error("Invalid configuration");
+    } catch (error: any) {
+      logErrorMessage(`Couldn't save configuration: ${error.message}`, LOG_FLAGS.ALL);
     }
   }
 

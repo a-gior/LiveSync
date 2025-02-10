@@ -21,6 +21,11 @@ export class SFTPClient extends BaseClient {
   }
 
   async connect(config: ConfigurationMessage["configuration"]): Promise<void> {
+    const connectionOptions: SftpClient.ConnectOptions = {
+      ...this.getConnectionOptions(config),
+      retries: 0
+    };
+
     await this.waitForConnection();
 
     if (this.isConnected) {
@@ -29,11 +34,6 @@ export class SFTPClient extends BaseClient {
 
     logInfoMessage(`Connecting using SFTP to ${config.hostname}:${config.port}`);
     this.isConnecting = true;
-
-    const connectionOptions: SftpClient.ConnectOptions = {
-      ...this.getConnectionOptions(config),
-      retries: 0
-    };
 
     return this._client
       .connect(connectionOptions)

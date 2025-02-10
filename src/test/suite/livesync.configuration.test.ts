@@ -31,7 +31,6 @@ suite("LiveSync Configuration Command Tests", () => {
     const configurationTest: ConfigurationMessage["configuration"] = {
       hostname: "192.168.1.18",
       port: 22,
-      authMethod: "auth-password",
       username: "centos",
       password: "centos",
       privateKeyPath: "",

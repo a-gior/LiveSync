@@ -184,7 +184,7 @@ export class CommandManager {
           configuration = WorkspaceConfigManager.getRemoteServerConfigured();
         }
 
-        const connectionManager = ConnectionManager.getInstance(configuration);
+        const connectionManager = await ConnectionManager.getInstance(configuration);
         try {
           await connectionManager.doSSHOperation(async (sshClient: SSHClient) => {
             await sshClient.waitForConnection();

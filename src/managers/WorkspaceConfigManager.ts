@@ -30,7 +30,6 @@ export class WorkspaceConfigManager {
         hostname: config.get<string>("hostname", ""),
         port: config.get<number>("port", 22),
         username: config.get<string>("username", ""),
-        authMethod: config.get<string>("authMethod", ""),
         password: config.get<string>("password", ""),
         privateKeyPath: config.get<string>("privateKeyPath", ""),
         passphrase: config.get<string>("passphrase", "")
@@ -70,7 +69,6 @@ export class WorkspaceConfigManager {
       hostname: config.get<string>("hostname"),
       port: config.get<number>("port", 22),
       username: config.get<string>("username"),
-      authMethod: config.get<string>("authMethod"),
       password: config.get<string>("password"),
       privateKeyPath: config.get<string>("privateKeyPath"),
       passphrase: config.get<string>("passphrase")
@@ -80,18 +78,13 @@ export class WorkspaceConfigManager {
     const isSet = (value: any) => !!(value && value.trim() !== "");
 
     // Validate required fields
-    if (!isSet(connectionSettings.hostname) || !isSet(connectionSettings.username) || !isSet(connectionSettings.authMethod)) {
+    if (!isSet(connectionSettings.hostname) || !isSet(connectionSettings.username)) {
       this.isVscodeSettingsValid = false;
       return false;
     }
 
     // Validate authentication method
-    if (connectionSettings.authMethod === "auth-password" && !isSet(connectionSettings.password)) {
-      this.isVscodeSettingsValid = false;
-      return false;
-    }
-
-    if (connectionSettings.authMethod === "auth-sshKey" && !isSet(connectionSettings.privateKeyPath)) {
+    if (!isSet(connectionSettings.privateKeyPath) && !isSet(connectionSettings.password)) {
       this.isVscodeSettingsValid = false;
       return false;
     }
@@ -106,7 +99,6 @@ export class WorkspaceConfigManager {
       hostname: state.configuration?.hostname,
       port: state.configuration?.port,
       username: state.configuration?.username,
-      authMethod: state.configuration?.authMethod,
       password: state.configuration?.password,
       privateKeyPath: state.configuration?.privateKeyPath,
       passphrase: state.configuration?.passphrase,

@@ -70,7 +70,6 @@ If you prefer, you can manually configure LiveSync by editing `.vscode/settings.
   "LiveSync.hostname": "your.server.com",
   "LiveSync.port": 22,
   "LiveSync.username": "your-username",
-  "LiveSync.authMethod": "auth-sshKey", // or "auth-password"
   "LiveSync.privateKeyPath": "/path/to/private/key", // If using SSH key authentication
   "LiveSync.remotePath": "/remote/path/to/sync",
   "LiveSync.ignoreList": [".vscode", ".git", "node_modules"],

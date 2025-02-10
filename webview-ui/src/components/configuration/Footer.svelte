@@ -33,17 +33,15 @@
         const currentHostname = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[0].value;
         const currentPort = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[1].value;
         const currentUsername = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[2].value;
-        const currentAuthMethod = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[3].value;
-        const currentPassword = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[4].value;
-        const currentPrivateKeyPath = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[5].value;
-        const currentPassphrase = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[6].value;
-        const currentRemotePath =  remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[7].value;
+        const currentPassword = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[3].value;
+        const currentPrivateKeyPath = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[4].value;
+        const currentPassphrase = remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[5].value;
+        const currentRemotePath =  remoteServerConfigFormData.formGroups["remote-server-form-group-0"].fields[6].value;
 
         const currentConfig: ConfigurationMessage["configuration"] = {
             hostname: currentHostname,
             port: Number(currentPort),
             username: currentUsername,
-            authMethod: currentAuthMethod,
             password: currentPassword,
             privateKeyPath: currentPrivateKeyPath,
             passphrase: currentPassphrase,

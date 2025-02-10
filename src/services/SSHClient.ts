@@ -20,6 +20,8 @@ export class SSHClient extends BaseClient {
   }
 
   async connect(config: ConfigurationMessage["configuration"]): Promise<void> {
+    const connectionOptions: ConnectConfig = this.getConnectionOptions(config);
+
     await this.waitForConnection();
 
     if (this.isConnected) {
@@ -28,8 +30,6 @@ export class SSHClient extends BaseClient {
 
     logInfoMessage(`Connecting using SSH to ${config.hostname}:${config.port}`);
     this.isConnecting = true;
-
-    const connectionOptions: ConnectConfig = this.getConnectionOptions(config);
 
     return new Promise((resolve, reject) => {
       this._client

@@ -22,11 +22,36 @@ export class ConnectionManager {
     this.sftpClient = SFTPClient.getInstance();
   }
 
-  static getInstance(config: ConfigurationMessage["configuration"]): ConnectionManager {
-    if (!ConnectionManager.instance || JSON.stringify(config) !== JSON.stringify(ConnectionManager.instance.configuration)) {
-      ConnectionManager.instance = new ConnectionManager(config);
+  static async getInstance(config?: ConfigurationMessage["configuration"]): Promise<ConnectionManager> {
+    // Ensure there is a valid instance or config provided
+    if (!ConnectionManager.instance && !config) {
+      throw new Error("ConnectionManager instance not initialized, and no configuration provided.");
     }
-    return ConnectionManager.instance;
+
+    // If no config is provided, reuse the existing instance
+    if (!config) {
+      return ConnectionManager.instance!;
+    }
+
+    // Determine if we need to create a new instance
+    const isNewConfig = !ConnectionManager.instance || JSON.stringify(config) !== JSON.stringify(ConnectionManager.instance.configuration);
+
+    if (isNewConfig) {
+      // Create a new instance
+      const newInstance = new ConnectionManager(config);
+
+      // Check server reachability before assigning the new instance
+      const isReachable = await this.isServerPingable(config.hostname, config.port);
+      if (!isReachable) {
+        throw new Error(`Server ${config.hostname}:${config.port} is not reachable.`);
+      }
+
+      // Assign the validated instance
+      ConnectionManager.instance = newInstance;
+    }
+
+    // Always return a valid instance
+    return ConnectionManager.instance!;
   }
 
   private async connectSSH() {
@@ -110,12 +135,7 @@ export class ConnectionManager {
     StatusBarManager.showMessage(`SSH${displayOperationName}`, "", "", 0, "sync~spin", true);
 
     try {
-      // Check if server is reachable in a quicker way
-      if (!(await this.isServerPingable())) {
-        throw new Error(`Server ${this.configuration.hostname}:${this.configuration.port} is not reachable.`);
-      }
-
-      await this.retryOperation(async () => await this.connectSSH(), 1);
+      await this.retryOperation(async () => await this.connectSSH(), 0);
       const result = await this.retryOperation(async () => await operation(this.sshClient));
       StatusBarManager.showMessage("SSH operation successful", "", "", 3000, "check");
       return result;
@@ -137,11 +157,6 @@ export class ConnectionManager {
     StatusBarManager.showMessage(`SFTP${displayOperationName}`, "", "", 0, "sync~spin", true);
 
     try {
-      // Check if server is reachable in a quicker way
-      if (!(await this.isServerPingable())) {
-        throw new Error(`Server ${this.configuration.hostname}:${this.configuration.port} is not reachable.`);
-      }
-
       await this.retryOperation(async () => await this.connectSFTP(), 1);
       const result = await this.retryOperation(async () => await operation(this.sftpClient));
       StatusBarManager.showMessage("SFTP operation successful", "", "", 3000, "check");
@@ -157,7 +172,7 @@ export class ConnectionManager {
     }
   }
 
-  async isServerPingable(): Promise<boolean> {
+  static async isServerPingable(hostname: string, port: number): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
       const socket = new net.Socket();
       const timeout = 2000; // 2 seconds timeout
@@ -176,7 +191,7 @@ export class ConnectionManager {
         resolve(false);
       });
 
-      socket.connect(this.configuration.port, this.configuration.hostname);
+      socket.connect(port, hostname);
     });
   }
 

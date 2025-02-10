@@ -52,7 +52,7 @@ async function uploadFilesWithLimit(sftpClient: SFTPClient, filePaths: { localPa
 
 export async function uploadDirectory(rootEntry: ComparisonFileNode) {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = ConnectionManager.getInstance(configuration);
+  const connectionManager = await ConnectionManager.getInstance(configuration);
 
   try {
     await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
@@ -74,7 +74,7 @@ export async function uploadDirectory(rootEntry: ComparisonFileNode) {
 
 async function createLocalDirectories(node: ComparisonFileNode) {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = ConnectionManager.getInstance(configuration);
+  const connectionManager = await ConnectionManager.getInstance(configuration);
   const filePaths: { remotePath: string; localPath: string }[] = [];
 
   const createDir = async (node: ComparisonFileNode) => {
@@ -115,7 +115,7 @@ async function downloadFilesWithLimit(sftpClient: SFTPClient, filePaths: { remot
 
 export async function downloadDirectory(remoteEntry: ComparisonFileNode) {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = ConnectionManager.getInstance(configuration);
+  const connectionManager = await ConnectionManager.getInstance(configuration);
 
   try {
     await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
@@ -132,7 +132,7 @@ export async function downloadDirectory(remoteEntry: ComparisonFileNode) {
 
 export async function deleteRemoteDirectory(fileEntry: FileNode): Promise<void> {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = ConnectionManager.getInstance(configuration);
+  const connectionManager = await ConnectionManager.getInstance(configuration);
 
   try {
     await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {

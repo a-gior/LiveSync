@@ -29,49 +29,47 @@ export abstract class BaseClient {
 
   protected getConnectionOptions(
     config: ConfigurationMessage["configuration"],
-    timeout?: number // Optional timeout in milliseconds
-  ): any {
+    timeout: number = 5000 // Default timeout in milliseconds
+  ): ssh2.ConnectConfig {
+    if (!config.privateKeyPath && !config.password) {
+      throw new Error("Either a password or a private key must be provided.");
+    }
+
     const connectionOptions: ssh2.ConnectConfig = {
       host: config.hostname,
       port: config.port,
       username: config.username,
-      readyTimeout: timeout || 5000, // Handshake timeout
-      timeout: timeout || 5000 // Socket-level timeout
+      readyTimeout: timeout, // Handshake timeout
+      timeout, // Socket-level timeout
+      password: config.password || undefined,
+      privateKey: config.privateKeyPath ? this.getPrivateKeyContent(config.privateKeyPath) : undefined,
+      passphrase: config.passphrase || undefined
     };
 
-    if (config.authMethod === "auth-password") {
-      connectionOptions.password = config.password;
-    } else if (config.authMethod === "auth-sshKey") {
-      if (!config.privateKeyPath) {
-        throw new Error("Private Key path is not provided");
-      }
+    return connectionOptions;
+  }
 
-      let privateKeyPath = config.privateKeyPath;
-
-      // Handle '~' (home directory) expansion on both Windows & Linux/macOS
-      if (privateKeyPath.startsWith("~")) {
-        privateKeyPath = normalizePath(path.join(os.homedir(), privateKeyPath.slice(1)));
-      }
-
-      // Convert Windows-style backslashes to forward slashes for SSH compatibility
-      if (process.platform === "win32") {
-        privateKeyPath = privateKeyPath.replace(/\\/g, "/");
-      }
-
-      // Ensure the private key file exists
-      if (!fs.existsSync(privateKeyPath)) {
-        throw new Error(`Private key file not found at ${privateKeyPath}`);
-      }
-
-      // Read the private key content
-      const privateKeyContent = fs.readFileSync(privateKeyPath, "utf8");
-
-      connectionOptions.privateKey = privateKeyContent;
-      connectionOptions.passphrase = config.passphrase || "";
-    } else {
-      throw new Error("Invalid authentication method");
+  private getPrivateKeyContent(privateKeyPath: string): string {
+    if (!privateKeyPath) {
+      return "";
     }
 
-    return connectionOptions;
+    // Handle '~' (home directory) expansion on both Windows & Linux/macOS
+    if (privateKeyPath.startsWith("~")) {
+      privateKeyPath = normalizePath(path.join(os.homedir(), privateKeyPath.slice(1)));
+    }
+
+    // Convert Windows-style backslashes to forward slashes for SSH compatibility
+    if (process.platform === "win32") {
+      privateKeyPath = privateKeyPath.replace(/\\/g, "/");
+    }
+
+    // Ensure the private key file exists
+    if (!fs.existsSync(privateKeyPath)) {
+      throw new Error(`Private key file not found at ${privateKeyPath}`);
+    }
+
+    // Read the private key content
+    return fs.readFileSync(privateKeyPath, "utf8");
   }
 }
