@@ -114,8 +114,8 @@ export class CommandManager {
 
       "livesync.upload": async (element) => handleAction(element, "upload", treeDataProvider),
       "livesync.download": async (element) => handleAction(element, "download", treeDataProvider),
-      "livesync.uploadAll": async () => handleAction(await getRootElement(treeDataProvider), "upload", treeDataProvider),
-      "livesync.downloadAll": async () => handleAction(await getRootElement(treeDataProvider), "download", treeDataProvider),
+      "livesync.uploadAll": async () => handleAction( getRootElement(treeDataProvider), "upload", treeDataProvider),
+      "livesync.downloadAll": async () => handleAction( getRootElement(treeDataProvider), "download", treeDataProvider),
 
 
       "livesync.toggleToListView": () => {

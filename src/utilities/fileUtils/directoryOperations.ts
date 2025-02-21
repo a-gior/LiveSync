@@ -32,10 +32,10 @@ async function createRemoteDirectories(fileEntry: ComparisonFileNode) {
       }
 
       // Add to the list if it's a directory with no children or no children that are directories
-      if (!hasChildDirectories) {
+      if (!hasChildDirectories && node.status !== ComparisonStatus.removed) {
         directoriesToCreate.add(remotePath);
       }
-    } else {
+    } else if(node.status !== ComparisonStatus.removed) {
       filePaths.push({ localPath, remotePath }); // Add file to the list
     }
   };

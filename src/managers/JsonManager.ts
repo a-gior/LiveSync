@@ -196,7 +196,7 @@ export default class JsonManager {
     const relativePath = getRelativePath(fileNode.fullPath);
     const pathParts = splitParts(relativePath);
 
-    if (pathParts.length === 1 && pathParts[0] === "") {
+    if (pathParts.length === 1 && pathParts[0] === ".") {
       fileNodeMap.set(rootFolderName, fileNode);
     } else {
       if (fileNodeMap.has(rootFolderName)) {

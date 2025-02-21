@@ -4,7 +4,7 @@
   "description": "LiveSync is a tool using SSH/SFTP for syncing and editing files securely between local environments and remote servers with robust file-change tracking.",
   "version": "1.0.0",
   "publisher": "agior",
-  "icon": "resources/icons/livesync-logo.png",
+  "icon": "resources/icons/livesync-logo_gold.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/a-gior/LiveSync.git"

@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import { Uri } from "vscode";
-import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
+import { ComparisonFileNode } from "../ComparisonFileNode";
 import { downloadDirectory, uploadDirectory } from "./directoryOperations";
 import { FileEventHandler } from "../../services/FileEventHandler";
 import { Action } from "../enums";
@@ -26,15 +26,18 @@ export async function handleAction(
 
   if (element.isDirectory()) {
     await (action === "upload" ? uploadDirectory(element) : downloadDirectory(element));
-    ComparisonFileNode.setComparisonStatus(element, ComparisonStatus.unchanged);
+
+    const { localPath, remotePath } = WorkspaceConfigManager.getWorkspaceFullPaths();
+    const comparisonFileNode = await treeDataProvider.getComparisonFileNode(localPath, remotePath);
+
+    const updatedNode = await treeDataProvider.updateRootElements(Action.Update, comparisonFileNode);
+    await treeDataProvider.refresh(updatedNode);
+
   } else {
     await (action === "upload"
       ? FileEventHandler.handleFileUpload(element, treeDataProvider)
       : FileEventHandler.handleFileDownload(element, treeDataProvider));
   }
-
-  const updatedNode = await treeDataProvider.updateRootElements(Action.Update, element);
-  await treeDataProvider.refresh(updatedNode);
 }
 
 async function resolveElement(
@@ -53,7 +56,7 @@ async function resolveElement(
   return input;
 }
 
-export async function getRootElement(treeDataProvider: SyncTreeDataProvider): Promise<ComparisonFileNode | null> {
+export function getRootElement(treeDataProvider: SyncTreeDataProvider): ComparisonFileNode | null {
   const rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
   const rootElement = treeDataProvider.rootElements.get(rootFolderName);
 
