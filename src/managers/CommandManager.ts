@@ -2,17 +2,16 @@ import * as vscode from "vscode";
 import { ConfigurationPanel } from "../panels/ConfigurationPanel";
 import { logInfoMessage, LogManager } from "../managers/LogManager";
 import { SyncTreeDataProvider } from "../services/SyncTreeDataProvider";
-import { ComparisonFileNode, ComparisonStatus } from "../utilities/ComparisonFileNode";
+import { ComparisonFileNode } from "../utilities/ComparisonFileNode";
 import { Action } from "../utilities/enums";
 import { showDiff } from "../utilities/fileUtils/fileDiff";
-import { downloadDirectory, uploadDirectory } from "../utilities/fileUtils/directoryOperations";
 import JsonManager, { JsonType } from "../managers/JsonManager";
 import { ConnectionManager } from "./ConnectionManager";
 import { SSHClient } from "../services/SSHClient";
 import { WorkspaceConfigManager } from "./WorkspaceConfigManager";
 import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
 import { compareCorrespondingEntry } from "../utilities/fileUtils/entriesComparison";
-import { FileEventHandler } from "../services/FileEventHandler";
+import { getRootElement, handleAction } from "../utilities/fileUtils/fileOperations";
 
 export class CommandManager {
   private static runningCommands: Set<string> = new Set();
@@ -113,39 +112,11 @@ export class CommandManager {
         showDiff(input);
       },
 
-      "livesync.upload": async (element: ComparisonFileNode | vscode.Uri) => {
-        if (element instanceof vscode.Uri) {
-          const comparisonNode = await JsonManager.findComparisonNodeFromUri(element, treeDataProvider);
-          element = comparisonNode;
-        }
+      "livesync.upload": async (element) => handleAction(element, "upload", treeDataProvider),
+      "livesync.download": async (element) => handleAction(element, "download", treeDataProvider),
+      "livesync.uploadAll": async () => handleAction(await getRootElement(treeDataProvider), "upload", treeDataProvider),
+      "livesync.downloadAll": async () => handleAction(await getRootElement(treeDataProvider), "download", treeDataProvider),
 
-        if (element.isDirectory()) {
-          await uploadDirectory(element);
-
-          ComparisonFileNode.setComparisonStatus(element, ComparisonStatus.unchanged);
-          const updatedNode = await treeDataProvider.updateRootElements(Action.Update, element);
-          await treeDataProvider.refresh(updatedNode);
-        } else {
-          await FileEventHandler.handleFileUpload(element, treeDataProvider);
-        }
-      },
-
-      "livesync.download": async (element: ComparisonFileNode | vscode.Uri) => {
-        if (element instanceof vscode.Uri) {
-          const comparisonNode = await JsonManager.findComparisonNodeFromUri(element, treeDataProvider);
-          element = comparisonNode;
-        }
-
-        if (element.isDirectory()) {
-          await downloadDirectory(element);
-
-          ComparisonFileNode.setComparisonStatus(element, ComparisonStatus.unchanged);
-          const updatedNode = await treeDataProvider.updateRootElements(Action.Update, element);
-          await treeDataProvider.refresh(updatedNode);
-        } else {
-          await FileEventHandler.handleFileDownload(element, treeDataProvider);
-        }
-      },
 
       "livesync.toggleToListView": () => {
         treeDataProvider.toggleViewMode(false);
@@ -174,7 +145,7 @@ export class CommandManager {
       "livesync.collapseAll": async () => {
         const jsonManager = JsonManager.getInstance();
         await jsonManager.clearFoldersState();
-        await vscode.commands.executeCommand("nodeDependencies.focus");
+        await vscode.commands.executeCommand("treeViewId.focus");
         await vscode.commands.executeCommand("list.collapseAll");
         logInfoMessage("All folders collapsed.");
       },

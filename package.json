@@ -1,9 +1,10 @@
 {
   "name": "livesync",
   "displayName": "LiveSync",
-  "description": "",
+  "description": "LiveSync is a tool using SSH/SFTP for syncing and editing files securely between local environments and remote servers with robust file-change tracking.",
   "version": "1.0.0",
   "publisher": "agior",
+  "icon": "resources/icons/livesync-logo.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/a-gior/LiveSync.git"
@@ -19,7 +20,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:yourSidebarViewId",
+    "onView:package-explorer",
     "workspaceContains:.vscode/settings.json"
   ],
   "main": "./out/src/extension.js",
@@ -29,14 +30,14 @@
         {
           "id": "package-explorer",
           "title": "LiveSync",
-          "icon": "resources/icons/livesync-logo3.png"
+          "icon": "resources/icons/livesync-logo.png"
         }
       ]
     },
     "views": {
       "package-explorer": [
         {
-          "id": "nodeDependencies",
+          "id": "treeViewId",
           "name": "Current Workspace",
           "type": "tree"
         }
@@ -74,6 +75,16 @@
       {
         "command": "livesync.download",
         "title": "LiveSync: Download",
+        "icon": "resources/media/dark/arrow-small-down.png"
+      },
+      {
+        "command": "livesync.uploadAll",
+        "title": "LiveSync: Upload the whole workspace without checking",
+        "icon": "resources/media/dark/arrow-small-up.png"
+      },
+      {
+        "command": "livesync.downloadAll",
+        "title": "LiveSync: Download the whole workspace without checking",
         "icon": "resources/media/dark/arrow-small-down.png"
       },
       {
@@ -130,40 +141,40 @@
       "view/title": [
         {
           "command": "livesync.refreshAll",
-          "when": "view == nodeDependencies",
+          "when": "view == treeViewId",
           "group": "navigation@1"
         },
         {
           "command": "livesync.collapseAll",
-          "when": "view == nodeDependencies",
+          "when": "view == treeViewId",
           "group": "navigation@2"
         },
         {
           "command": "livesync.toggleToListView",
-          "when": "view == nodeDependencies && livesyncViewMode == 'tree'",
+          "when": "view == treeViewId && livesyncViewMode == 'tree'",
           "group": "navigation@3"
         },
         {
           "command": "livesync.toggleToTreeView",
-          "when": "view == nodeDependencies && livesyncViewMode == 'list'",
+          "when": "view == treeViewId && livesyncViewMode == 'list'",
           "group": "navigation@4"
         },
         {
           "command": "livesync.showUnchanged",
-          "when": "view == nodeDependencies && livesyncShowUnchanged == false",
+          "when": "view == treeViewId && livesyncShowUnchanged == false",
           "group": "navigation@5"
         },
         {
           "command": "livesync.hideUnchanged",
-          "when": "view == nodeDependencies && livesyncShowUnchanged == true",
+          "when": "view == treeViewId && livesyncShowUnchanged == true",
           "group": "navigation@6"
         },
         {
-          "command": "livesync.upload",
+          "command": "livesync.uploadAll",
           "group": "LiveSync@7"
         },
         {
-          "command": "livesync.download",
+          "command": "livesync.downloadAll",
           "group": "LiveSync@8"
         }
       ],
@@ -331,51 +342,54 @@
     }
   },
   "scripts": {
-    "install:all": "npm install && cd webview-ui && npm install",
+    "install:dev": "npm install && cd webview-ui && npm install",
+    "install:prod": "npm run clean-install && cd webview-ui && npm run clean-install",
+    "clean-install": "rm -rf node_modules package-lock.json && npm install --omit=dev",
     "start:webview": "cd webview-ui && npm run dev",
     "build:webview": "cd webview-ui && npm run build",
-    "vscode:prepublish": "npm run compile && cd webview-ui && npm run build",
+    "vscode:prepublish": "npm run prepare-package",
+    "prepare-package": "npm run generate-deps-vscodeignore && rm -rf node_modules package-lock.json && npm install && npm run compile && cd webview-ui && rm -rf node_modules package-lock.json && npm install && npm run build",
+    "generate-deps-vscodeignore": "node scripts/generateVscodeIgnore.js",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "prepare": "husky",
     "custom-test": "node ./out/src/test/runTest.js",
     "custom-build-and-test": "npm run compile && node ./out/src/test/runTest.js",
     "vscode-test": "vscode-test",
     "vscode-build-and-test": "npm run compile && vscode-test"
   },
   "devDependencies": {
-    "@types/adm-zip": "^0.5.5",
     "@types/mocha": "^10.0.1",
     "@types/node": "18.x",
     "@types/ssh2": "^1.15.0",
     "@types/ssh2-sftp-client": "^9.0.3",
     "@types/tmp": "^0.2.6",
-    "@types/vscode": "^1.88.0",
+    "@types/vscode": "^1.96.4",
     "@types/vscode-webview": "^1.57.5",
     "@typescript-eslint/eslint-plugin": "^7.4.0",
     "@typescript-eslint/parser": "^7.4.0",
     "@vscode/test-cli": "^0.0.8",
-    "@vscode/test-electron": "^2.3.9",
-    "adm-zip": "^0.5.14",
+    "@vscode/test-electron": "^2.4.1",
+    "esbuild": "^0.25.0",
+    "esbuild-node-externals": "^1.18.0",
     "eslint": "^8.57.0",
     "glob": "^10.3.12",
     "husky": "^9.0.11",
     "jsonc-parser": "^3.2.1",
     "lint-staged": "^15.2.2",
-    "minimatch": "^9.0.5",
     "mocha": "^10.2.0",
-    "p-limit": "^3.1.0",
     "prettier": "3.2.5",
     "rimraf": "^5.0.5",
-    "ssh2": "^1.15.0",
-    "tmp-promise": "^3.0.3",
     "typescript": "^4.2.3"
   },
   "dependencies": {
+    "minimatch": "^9.0.5",
     "net": "^1.0.2",
-    "ssh2-sftp-client": "^11.0.0"
+    "p-limit": "^3.1.0",
+    "ssh2": "^1.15.0",
+    "ssh2-sftp-client": "^11.0.0",
+    "tmp-promise": "^3.0.3"
   },
   "lint-staged": {
     "**/*": "prettier --write --ignore-unknown"

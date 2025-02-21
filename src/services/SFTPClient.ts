@@ -1,4 +1,4 @@
-import SftpClient from "ssh2-sftp-client";
+const SftpClient = require("ssh2-sftp-client"); // Use CommonJS require
 import { BaseClient } from "./BaseClient";
 import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
 import { BaseNodeType } from "../utilities/BaseNode";
@@ -6,7 +6,7 @@ import { logInfoMessage, LogManager } from "../managers/LogManager";
 
 export class SFTPClient extends BaseClient {
   private static instance: SFTPClient;
-  private _client: SftpClient;
+  private _client;
 
   private constructor() {
     super();
@@ -21,7 +21,7 @@ export class SFTPClient extends BaseClient {
   }
 
   async connect(config: ConfigurationMessage["configuration"]): Promise<void> {
-    const connectionOptions: SftpClient.ConnectOptions = {
+    const connectionOptions = {
       ...this.getConnectionOptions(config),
       retries: 0
     };
@@ -42,7 +42,7 @@ export class SFTPClient extends BaseClient {
         this.isConnecting = false;
         logInfoMessage("SFTP connection is ready");
       })
-      .catch((err) => {
+      .catch((err: any) => {
         this.isConnecting = false;
         this.isConnected = false;
         throw err;

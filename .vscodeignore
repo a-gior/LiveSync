@@ -5,7 +5,6 @@
 !out/shared
 !out/src/managers
 !out/src/panels
-!out/src/saved_data
 !out/src/services
 !out/src/utilities
 !out/src/extension.js*
@@ -18,3 +17,43 @@
 !README.md
 !CHANGELOG.md
 !LICENSE
+
+#### Include only production dependencies ####
+# 📌 Main Extension Dependencies
+!node_modules/minimatch
+!node_modules/net
+!node_modules/p-limit
+!node_modules/ssh2-sftp-client
+!node_modules/ssh2
+!node_modules/tmp-promise
+!node_modules/brace-expansion
+!node_modules/yocto-queue
+!node_modules/concat-stream
+!node_modules/promise-retry
+!node_modules/asn1
+!node_modules/bcrypt-pbkdf
+!node_modules/tmp
+!node_modules/balanced-match
+!node_modules/buffer-from
+!node_modules/inherits
+!node_modules/concat-stream/node_modules/readable-stream
+!node_modules/typedarray
+!node_modules/err-code
+!node_modules/retry
+!node_modules/safer-buffer
+!node_modules/tweetnacl
+!node_modules/string_decoder
+!node_modules/util-deprecate
+!node_modules/safe-buffer
+# 📌 Webview UI Dependencies
+!webview-ui/node_modules/@vscode/webview-ui-toolkit
+!webview-ui/node_modules/@microsoft/fast-element
+!webview-ui/node_modules/@microsoft/fast-foundation
+!webview-ui/node_modules/@microsoft/fast-react-wrapper
+!webview-ui/node_modules/react
+!webview-ui/node_modules/tslib
+!webview-ui/node_modules/@microsoft/fast-web-utilities
+!webview-ui/node_modules/tabbable
+!webview-ui/node_modules/@microsoft/fast-foundation/node_modules/tslib
+!webview-ui/node_modules/exenv-es6
+##############################################

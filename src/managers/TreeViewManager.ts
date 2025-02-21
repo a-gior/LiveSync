@@ -10,7 +10,7 @@ export class TreeViewManager {
     const treeDataProvider = new SyncTreeDataProvider(showAsTree, showUnchanged);
     await treeDataProvider.loadRootElements();
 
-    const treeView = vscode.window.createTreeView("nodeDependencies", {
+    const treeView = vscode.window.createTreeView("treeViewId", {
       treeDataProvider: treeDataProvider
     });
 
