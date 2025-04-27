@@ -32,6 +32,8 @@
 !node_modules/promise-retry
 !node_modules/asn1
 !node_modules/bcrypt-pbkdf
+!node_modules/cpu-features
+!node_modules/nan
 !node_modules/tmp
 !node_modules/balanced-match
 !node_modules/buffer-from
@@ -42,6 +44,7 @@
 !node_modules/retry
 !node_modules/safer-buffer
 !node_modules/tweetnacl
+!node_modules/buildcheck
 !node_modules/string_decoder
 !node_modules/util-deprecate
 !node_modules/safe-buffer
