@@ -4,13 +4,16 @@ import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 import { FileEventActionsMessage } from "../DTOs/messages/FileEventActionsMessage";
 import { LOG_FLAGS, logConfigError, logErrorMessage, logInfoMessage } from "./LogManager";
 import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
-import { IgnoreListMessage } from "../DTOs/messages/IgnoreListMessage";
 import path from "path";
 import { FileEventHandler } from "../services/FileEventHandler";
+import { Minimatch } from "minimatch";
 
 export class WorkspaceConfigManager {
   private static _workspaceConfig: ConfigurationState | undefined;
   public static isVscodeSettingsValid: boolean = false;
+
+  // cache the compiled matchers so we only do this once
+  private static compiledIgnoreMatchers: Minimatch[] | null = null;
 
   // Check if the workspace is multi-root
   static isMultiRootWorkspace(): boolean {
@@ -191,21 +194,43 @@ export class WorkspaceConfigManager {
     return path.basename(this.getWorkspaceLocalPath());
   }
 
-  // Get ignore list
-  static getIgnoreList(): IgnoreListMessage["ignoreList"] {
-    if (!this.isVscodeSettingsValid) {
-      logConfigError();
-      throw new Error("LiveSync is not configured or is invalid");
+  /**
+   * Returns an array of pre-compiled Minimatch objects,
+   * expanding plain folder names into globs so they catch their contents.
+   */
+  static getIgnoreMatchers(): Minimatch[] {
+    if (!this.compiledIgnoreMatchers) {
+      if (!this.isVscodeSettingsValid) {
+        logConfigError();
+        throw new Error("LiveSync is not configured or is invalid");
+      }
+
+      const workspaceConfig = this.getWorkspaceConfiguration();
+      if (!workspaceConfig.ignoreList) {
+        logErrorMessage("Ignore List not configured", LOG_FLAGS.ALL);
+        throw new Error("Ignore List not configured");
+      }
+
+      const raw = workspaceConfig.ignoreList;
+
+      const expandedGlobs = raw.flatMap((pattern) =>
+        pattern.includes("/") || pattern.includes("*")
+          ? [pattern]
+          : [pattern, `**/${pattern}/**`]
+      );
+
+      // here we use the Minimatch class directly for typing
+      this.compiledIgnoreMatchers = expandedGlobs.map(
+        (glob) => new Minimatch(glob, { dot: true, matchBase: true })
+      );
     }
 
-    const workspaceConfig = this.getWorkspaceConfiguration();
+    return this.compiledIgnoreMatchers;
+  }
 
-    if (!workspaceConfig.ignoreList) {
-      logErrorMessage("Ignore List not configured", LOG_FLAGS.ALL);
-      throw new Error("Ignore List not configured");
-    }
-
-    return workspaceConfig.ignoreList;
+  /** Call if you expect the ignore list to change at runtime */
+  static refreshIgnoreMatchers(): void {
+    this.compiledIgnoreMatchers = null;
   }
 
   // Get a specific parameter
@@ -264,6 +289,7 @@ export class WorkspaceConfigManager {
   // Reload the in-memory workspace configuration
   static reload(): void {
     this.loadWorkspaceConfiguration();
+    this.refreshIgnoreMatchers();
   }
 
   /**
