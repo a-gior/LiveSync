@@ -1,76 +1,81 @@
 # LiveSync
 
-**LiveSync** is a Visual Studio Code extension that allows you to **synchronize a local folder (the current workspace) with a remote folder**.  
-It provides **flexible event-based sync rules**, allowing you to define how file operations (create, delete, rename, open, save) should be handled on the remote server.
+**LiveSync** is a Visual Studio Code extension that lets you **instantly sync your local workspace with a remote folder over SSH/SFTP** — with **real-time difference tracking**, **customizable sync events**, and an **intuitive visual interface**.
 
-LiveSync **shows real-time differences** between local and remote files in the **Tree View**, provides **quick sync actions**, and offers **seamless configuration** via the **Configuration Panel** or `.vscode/settings.json`.
-
----
-
-## 🌟 Features
-
-✔ **Two-Way Sync (Manual & Event-Based)** – Define sync rules for file creation, deletion, renaming, opening, and saving.  
-✔ **Customizable Sync Rules** – Handle events with `check`, `check & event`, `event`, or `none` options.  
-✔ **File & Folder Syncing** – Upload/download individual files or entire directories.  
-✔ **Live Difference Tracking** – Tree view displays differences between local and remote.  
-✔ **Explorer Context Menu Integration** – Right-click on files or folders to sync directly.  
-✔ **Ignore Rules** – Use glob patterns to exclude files or folders.  
-✔ **Multiple Refresh & View Options** – Switch between Tree/List view, show/hide unchanged files, and refresh differences.  
-✔ **Seamless Configuration** – Set up via **LiveSync's Configuration Panel** or `.vscode/settings.json`.
+It’s perfect for developers working with remote servers, staging environments, Raspberry Pis, or any SSH-accessible machine.  
+No more manual uploads, terminal back-and-forth, or wondering if a file is out of sync.
 
 ---
 
-## 📌 Installation
+## ⚡ Features at a Glance
 
-1. **Install VS Code** – Download [Visual Studio Code](https://code.visualstudio.com/).
-2. **Install LiveSync Extension**:
-   - Open **VS Code**.
-   - Go to **Extensions** (`Ctrl+Shift+X` / `Cmd+Shift+X` on Mac).
-   - Search for **LiveSync** and click **Install**.
+- 🟢 **Live Difference View** – Visualize what’s changed between local and remote at a glance.
+- 🔁 **Two-Way Sync Options** – Choose whether to sync on file create, save, delete, move, etc.
+- ⚙️ **Flexible Event Rules** – Set each event to trigger `check`, `upload`, `download`, or do nothing.
+- 📂 **Folder & File Sync** – Manually upload/download files or entire directories.
+- 🧩 **Ignore Patterns** – Use glob-style rules to exclude `node_modules`, `.git`, etc.
+- 🖱️ **Context Menu Integration** – Sync directly from the file explorer via right-click.
+- 🌲 **Tree/List Views** – Choose how to visualize and act on changed files.
+- 🎛️ **Visual Configuration Panel** – Set up without touching JSON files (but you still can).
 
 ---
 
-## ⚙️ Configuration
+## 🚀 Quick Start
 
-#### **Option 1: Use the Configuration Panel (Recommended)**
+### 1. Install the Extension
 
-LiveSync provides an easy-to-use configuration panel where you can set up your connection without manually editing JSON files.
+- Open **VS Code**
+- Go to **Extensions** (`Ctrl+Shift+X` / `Cmd+Shift+X`)
+- Search for **LiveSync**
+- Click **Install**
 
-##### **How to Open the Configuration Panel:**
+### 2. Set Up Your Connection
 
-1. **Via the Command Palette** (`Ctrl+Shift+P` or `Cmd+Shift+P` on Mac)
-   - Search for **LiveSync: Open Configuration Panel** and select it.
-2. **Via the Status Bar**
-   - Click the **LiveSync** icon in the **VS Code status bar** (bottom left).
+- Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
+- Run: `LiveSync: Open Configuration Panel`
+- Fill in your SSH/SFTP info
+- Click **Test Connection** → then **Save**
 
-📷 **Example: Accessing Configuration Panel via Status Bar**<br>  
-![LiveSync Status Bar Icon](./documentation/screenshots/status_bar_livesync_config.png)
-
-##### **How to Configure:**
-
-1. Fill in your **remote server details** (hostname, port, username, authentication method, etc.).
-2. (Optional) Click **Test Connection** to verify that the server is reachable.
-3. Click on **Save** to apply the configuration.
-
-📷 **Example: LiveSync Configuration Panel**<br>  
+📸 _Example:_  
 ![LiveSync Configuration Panel](./documentation/screenshots/configuration_panel_remote_server.png)
 
+### 3. Start Syncing
+
+- Open the **LiveSync Tree View** in the sidebar
+- Right-click a file or folder → **Upload**, **Download**, or **Show Diff**
+- Toggle between tree/list view, hide unchanged files, or refresh diffs
+
+📸 _Example:_  
+![LiveSync Tree View](./documentation/screenshots/tree_view_folder_unchanged.png)
+
 ---
 
-#### **Option 2: Manually Create the JSON Configuration**
+## ⚙️ Configuration Options
 
-If you prefer, you can manually configure LiveSync by editing `.vscode/settings.json`.
+### Option 1: Use the Configuration Panel (Recommended)
 
-1. Open your workspace folder in VS Code.
-2. Navigate to `.vscode/settings.json` (or create it if it doesn’t exist).
-3. Add the following configuration:
+The configuration panel is the easiest way to get started — no need to edit files manually.
+
+**How to Access It:**
+
+- Open Command Palette → `LiveSync: Open Configuration Panel`
+- Or click the **LiveSync icon** in the status bar (bottom-left corner)
+
+📸 _Example:_  
+![LiveSync Status Bar Icon](./documentation/screenshots/status_bar_livesync_config.png)
+
+---
+
+### Option 2: Manual `.vscode/settings.json` Setup
+
+If you prefer to edit your workspace settings manually:
 
 ```json
 {
   "LiveSync.hostname": "your.server.com",
   "LiveSync.port": 22,
   "LiveSync.username": "your-username",
-  "LiveSync.privateKeyPath": "/path/to/private/key", // If using SSH key authentication
+  "LiveSync.privateKeyPath": "/path/to/private/key",
   "LiveSync.remotePath": "/remote/path/to/sync",
   "LiveSync.ignoreList": [".vscode", ".git", "node_modules"],
 
@@ -86,36 +91,39 @@ If you prefer, you can manually configure LiveSync by editing `.vscode/settings.
 
 ---
 
-## 🌳 LiveSync Tree View
+## 🌳 Tree View Features
 
-Once your configuration is set up, LiveSync provides a **Tree View** in the VS Code Explorer. This view helps you **visualize differences between local and remote files**, making it easy to manage synchronization.
+LiveSync’s Tree View helps you **visualize and manage file differences** between local and remote folders.
 
-📷 **Example: LiveSync Tree View**<br>
-![LiveSync Tree View](./documentation/screenshots/tree_view_folder_unchanged.png)
+### Available Actions:
 
-#### **Features and Actions in the Tree View**
+- **📄 View Diffs** – Click a file to see the local vs. remote difference
+- **⬆ Upload / ⬇ Download** – Right-click files or folders to sync manually
+- **🔄 Refresh Differences** – Re-scan the current project to update changes
+- **📁 Tree vs. List View** – Choose how you browse files (hierarchical or flat)
+- **👁 Hide/Show Unchanged Files** – Clean up the view for faster triaging
+- **📉 Collapse All** – Quickly collapse the entire folder tree
 
-- **📄 Compare Local and Remote Files**
+---
 
-  - Click on a file to **open a diff view** showing changes between local and remote versions.
+## 💡 Tips & Troubleshooting
 
-- **⬆ Upload / ⬇ Download**
+- Works best with stable SSH/SFTP connections (slow networks may cause delays)
+- You can mix event-based and manual sync as needed
+- If something isn’t syncing right, check the **Output Panel** for logs
 
-  - Right-click any file or folder to **manually upload or download** between local and remote.
+---
 
-- **🔄 Refresh Differences**
+## 📣 Contribute or Report Issues
 
-  - Click the **Refresh** button at the top to **re-scan and update the differences**.
+Found a bug or have a feature idea?  
+Open an issue on GitHub: [LiveSync Issues](https://github.com/a-gior/LiveSync/issues)
 
-- **📂 Toggle Between Tree and List View**
+---
 
-  - Switch between a **hierarchical folder structure (Tree)** and a **flat file list (List)** for better readability.
+## 📌 License
 
-- **👁 Hide/Show Unchanged Files**
-
-  - Toggle visibility for files that **haven't changed**, keeping the view clean.
-
-- **📉 Collapse All Folders**
-  - Quickly **collapse all expanded folders** to declutter the view.
+This extension is licensed under the GPT-3 License.  
+See [LICENSE](./LICENSE) for details.
 
 ---
