@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.1] - Improved Ignore Logic 🧹
+
+### 🛠 Fixes & Improvements
+
+- **Enhanced File Ignoring Behavior** → Previously, adding a folder name to the ignore list would ignore only the folder itself and a file with that name (e.g., `dist` would ignore `dist/` and `dist`, but not `dist/file.js`).  
+  Now, the ignore logic properly excludes all **files and subfolders** within ignored directories, making it more reliable for cases like `node_modules`, `dist`, etc.
+  Glob patterns still work as expected — this update simply improves how folder names are handled when no pattern is used.
+
+---
+
 ## [1.0.0] - Initial Release 🚀
 
 ### 🎉 Features
