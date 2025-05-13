@@ -66,22 +66,22 @@
       {
         "command": "livesync.refreshAll",
         "title": "LiveSync: Refresh Workspace Differences",
-        "icon": "resources/media/dark/debug-restart.png"
+        "icon": "$(refresh)"
       },
       {
         "command": "livesync.refresh",
         "title": "LiveSync: Refresh Differences",
-        "icon": "resources/media/dark/debug-restart.png"
+        "icon": "$(refresh)"
       },
       {
         "command": "livesync.showDiff",
         "title": "LiveSync: Show Diff",
-        "icon": "resources/media/dark/arrow-both.png"
+        "icon": "$(arrow-both)"
       },
       {
         "command": "livesync.upload",
         "title": "LiveSync: Upload",
-        "icon": "resources/media/dark/arrow-small-up.png"
+        "icon": "$(arrow-up)"
       },
       {
         "command": "livesync.download",
@@ -91,12 +91,12 @@
       {
         "command": "livesync.uploadAll",
         "title": "LiveSync: Upload the whole workspace without checking",
-        "icon": "resources/media/dark/arrow-small-up.png"
+        "icon": "$(arrow-up)"
       },
       {
         "command": "livesync.downloadAll",
         "title": "LiveSync: Download the whole workspace without checking",
-        "icon": "resources/media/dark/arrow-small-down.png"
+        "icon": "$(arrow-down)"
       },
       {
         "command": "livesync.toggleToTreeView",
