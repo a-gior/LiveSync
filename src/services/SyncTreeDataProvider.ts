@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { ensureDirectoryExists } from "../utilities/fileUtils/fileOperations";
-import { joinParts, splitParts } from "../utilities/fileUtils/filePathUtils";
+import { getFullPaths, joinParts, splitParts } from "../utilities/fileUtils/filePathUtils";
 import { listLocalFilesRecursive, listRemoteFilesRecursive } from "../utilities/fileUtils/fileListing";
 import { IconLoader } from "./IconLoader";
 import { SAVE_DIR } from "../utilities/constants";
@@ -100,6 +100,16 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
       treeItem.resourceUri = vscode.Uri.file(element.relativePath).with({
         query
       });
+    }
+
+    // Attach command only to files
+    if (element.type === BaseNodeType.file && element.status !== ComparisonStatus.removed) {
+      let { localPath } = await getFullPaths(element);
+      treeItem.command = {
+        command: 'livesync.openFile',
+        title: 'Open File',
+        arguments: [localPath]
+      };
     }
 
     return treeItem;

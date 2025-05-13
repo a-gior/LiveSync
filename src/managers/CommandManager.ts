@@ -117,6 +117,11 @@ export class CommandManager {
       "livesync.uploadAll": async () => handleAction( getRootElement(treeDataProvider), "upload", treeDataProvider),
       "livesync.downloadAll": async () => handleAction( getRootElement(treeDataProvider), "download", treeDataProvider),
 
+      'livesync.openFile': (filePath: string) => {
+        console.log("Opening file:", filePath);
+        const uri = vscode.Uri.file(filePath);
+        vscode.window.showTextDocument(uri, { preview: true });
+      },
 
       "livesync.toggleToListView": () => {
         treeDataProvider.toggleViewMode(false);
