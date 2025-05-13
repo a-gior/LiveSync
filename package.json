@@ -86,7 +86,17 @@
       {
         "command": "livesync.download",
         "title": "LiveSync: Download",
-        "icon": "resources/media/dark/arrow-small-down.png"
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "livesync.deleteLocalFile",
+        "title": "LiveSync: Delete Local File",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "livesync.deleteRemoteFile",
+        "title": "LiveSync: Delete Remote File",
+        "icon": "$(trash)"
       },
       {
         "command": "livesync.uploadAll",
@@ -147,6 +157,16 @@
           "command": "livesync.refresh",
           "when": "viewItem =~ /^fileEntry-directory/",
           "group": "inline@4"
+        },
+        {
+          "command": "livesync.deleteLocalFile",
+          "when": "viewItem == fileEntry-file-added",
+          "group": "inline@5"
+        },
+        {
+          "command": "livesync.deleteRemoteFile",
+          "when": "viewItem == fileEntry-file-removed",
+          "group": "inline@5"
         }
       ],
       "view/title": [
