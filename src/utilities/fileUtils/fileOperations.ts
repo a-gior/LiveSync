@@ -1,13 +1,16 @@
 import * as fs from "fs";
 import { Uri } from "vscode";
-import { ComparisonFileNode } from "../ComparisonFileNode";
+import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
 import { downloadDirectory, uploadDirectory } from "./directoryOperations";
 import { FileEventHandler } from "../../services/FileEventHandler";
-import { Action } from "../enums";
+import { Action, ActionResult } from "../enums";
 import { SyncTreeDataProvider } from "../../services/SyncTreeDataProvider";
 import { logErrorMessage } from "../../managers/LogManager";
 import JsonManager from "../../managers/JsonManager";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
+import { unlink } from 'fs/promises';
+import { getFullPaths } from "./filePathUtils";
+import { fileDelete } from "./fileEventFunctions";
 
 export function ensureDirectoryExists(dirPath: string): void {
   if (!fs.existsSync(dirPath)) {
@@ -71,4 +74,49 @@ export function getRootElement(treeDataProvider: SyncTreeDataProvider): Comparis
   }
 
   return rootElement;
+}
+
+/**
+ * Deletes a file locally or remotely based on the isLocal flag.
+ */
+export async function performDelete(
+  node: ComparisonFileNode,
+  treeDataProvider: SyncTreeDataProvider
+): Promise<void> {
+  const isLocal = node.status === ComparisonStatus.added ? true : false;
+
+  // Build the absolute path Uri from the node's relativePath
+  const {localPath} = await getFullPaths(node);
+  const fileUri = Uri.file(localPath);
+
+  // Perform the correct deletion
+  let isDeleted = false;
+  if (isLocal) {
+    isDeleted = await deleteLocalFile(fileUri);
+
+  } else {
+    const fileDeletedAction = await fileDelete(fileUri);
+    isDeleted = fileDeletedAction === ActionResult.ActionPerformed;
+  }
+ 
+  if (isDeleted) {
+    // Remove node from rootElements
+    const deletedNode = await treeDataProvider.updateRootElements(Action.Remove, node);
+    await treeDataProvider.refresh(deletedNode);
+  }
+}
+
+/**
+ * Deletes the file at the given URI on the local filesystem.
+ * @param uri A vscode.Uri pointing to the file to delete
+ * @returns true if deletion succeeded, false otherwise
+ */
+async function deleteLocalFile(uri: Uri): Promise<boolean> {
+  try {
+    await unlink(uri.fsPath);
+    return true;
+  } catch (err: any) {
+    logErrorMessage(`Failed to delete local file ${uri.fsPath}, error: ${err.message || err}`);
+    return false;
+  }
 }
