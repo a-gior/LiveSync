@@ -3,7 +3,7 @@ import { getCorrespondingPath, normalizePath, pathExists } from "./filePathUtils
 import { uploadRemoteFile, compareRemoteFileHash, deleteRemoteFile, moveRemoteFile, downloadRemoteFile } from "./sftpOperations";
 import * as path from "path";
 import JsonManager from "../../managers/JsonManager";
-import { logErrorMessage, logInfoMessage } from "../../managers/LogManager";
+import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../../managers/LogManager";
 import { FileNodeSource } from "../FileNode";
 import { listRemoteFilesRecursive } from "./fileListing";
 import { ActionOn, ActionResult, Check } from "../enums";
@@ -212,6 +212,8 @@ export async function handleFileCheck(action: ActionOn, actionParameter: string,
 async function handleFileOperation(action: ActionOn, uri: Uri, oldUri: Uri | null = null): Promise<ActionResult> {
   let actionParameter = WorkspaceConfigManager.getParameter<string>(action) ?? "none";
   if (actionParameter === "none") {
+    const opName =  action.replace(/^actionOn/, '');
+    logInfoMessage( `Skipping ${opName} due to 'none' parameter.`, LOG_FLAGS.ALL);
     return ActionResult.NoAction;
   }
 
