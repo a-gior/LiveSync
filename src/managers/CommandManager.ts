@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { ConfigurationPanel } from "../panels/ConfigurationPanel";
-import { logInfoMessage, LogManager } from "../managers/LogManager";
+import { logErrorMessage, logInfoMessage, LogManager } from "../managers/LogManager";
 import { SyncTreeDataProvider } from "../services/SyncTreeDataProvider";
 import { ComparisonFileNode } from "../utilities/ComparisonFileNode";
 import { Action } from "../utilities/enums";
@@ -11,7 +11,9 @@ import { SSHClient } from "../services/SSHClient";
 import { WorkspaceConfigManager } from "./WorkspaceConfigManager";
 import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
 import { compareCorrespondingEntry } from "../utilities/fileUtils/entriesComparison";
-import { getRootElement, handleAction } from "../utilities/fileUtils/fileOperations";
+import { getRootElement, handleAction, performDelete } from "../utilities/fileUtils/fileOperations";
+import { Dialog } from "../services/Dialog";
+import { FileNodeSource } from "../utilities/FileNode";
 
 export class CommandManager {
   private static runningCommands: Set<string> = new Set();
@@ -121,6 +123,26 @@ export class CommandManager {
         console.log("Opening file:", filePath);
         const uri = vscode.Uri.file(filePath);
         vscode.window.showTextDocument(uri, { preview: true });
+      },
+
+      "livesync.deleteLocalFile": async (node: ComparisonFileNode) => {
+        const ok = await Dialog.confirmDelete(FileNodeSource.local, node.relativePath);
+        if (!ok) {return;}
+        try {
+          await performDelete(node, treeDataProvider);
+        } catch (e: any) {
+          logErrorMessage(`Failed to delete local file: ${e.message}`);
+        }
+      },
+
+      "livesync.deleteRemoteFile": async (node: ComparisonFileNode) => {
+        const ok = await Dialog.confirmDelete(FileNodeSource.remote, node.relativePath);
+        if (!ok) {return;}
+        try {
+          await performDelete(node, treeDataProvider);
+        } catch (e: any) {
+          logErrorMessage(`Failed to delete remote file: ${e.message}`);
+        }
       },
 
       "livesync.toggleToListView": () => {
