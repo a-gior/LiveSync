@@ -70,6 +70,45 @@ export default class JsonManager {
     saveMapToJsonDebounced(FOLDERS_STATE_JSON, this.foldersState);
   }
 
+  /**
+   * Recursively traverse each root element. If a node or any of its
+   * descendants is changed, mark its folder as expanded.
+   */
+  public async expandChangedFoldersRecursive(treeDataProvider: SyncTreeDataProvider): Promise<void> {
+    await this.waitForJsonLoad();
+    
+    const foldersState = new Map<string, boolean>();
+    this.foldersState = foldersState;
+
+    // Recurse bottom-up, returning true if subtree has a change
+    const recurse = (node: ComparisonFileNode): boolean => {
+      let hasChange = node.status !== ComparisonStatus.unchanged;
+
+      if (node.isDirectory()) {
+        for (const child of node.children.values()) {
+          if (recurse(child)) {
+            hasChange = true;
+          }
+        }
+        // only mark expansion if there was a change somewhere below (or on this folder)
+        if (hasChange) {
+          const key = JsonManager.getMapKey(node);
+          foldersState.set(key, true);
+        }
+      }
+
+      return hasChange;
+    };
+
+    // Walk every root
+    for (const root of treeDataProvider.rootElements.values()) {
+      recurse(root);
+    }
+
+    // Persist all expansions in one go 
+    await this.saveMapToJson(FOLDERS_STATE_JSON, this.foldersState);
+  }
+
   public async clearFoldersState(): Promise<void> {
     await this.waitForJsonLoad();
     if (!this.foldersState) {
@@ -80,7 +119,6 @@ export default class JsonManager {
     // Reset the in-memory map
     this.foldersState.clear();
 
-    // Optionally save an empty state to the JSON file to clear the persisted state
     await this.saveMapToJson(FOLDERS_STATE_JSON, this.foldersState);
   }
 

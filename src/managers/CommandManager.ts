@@ -14,6 +14,7 @@ import { compareCorrespondingEntry } from "../utilities/fileUtils/entriesCompari
 import { getRootElement, handleAction, performDelete } from "../utilities/fileUtils/fileOperations";
 import { Dialog } from "../services/Dialog";
 import { FileNodeSource } from "../utilities/FileNode";
+import { TreeViewManager } from "./TreeViewManager";
 
 export class CommandManager {
   private static runningCommands: Set<string> = new Set();
@@ -170,11 +171,42 @@ export class CommandManager {
       },
 
       "livesync.collapseAll": async () => {
+        
+        treeDataProvider.toggleViewExpansion(true);
+        context.globalState.update("collapseAll", true);
+        vscode.commands.executeCommand("setContext", "livesyncExpandMode", "collapse");
+
         const jsonManager = JsonManager.getInstance();
         await jsonManager.clearFoldersState();
         await vscode.commands.executeCommand("treeViewId.focus");
         await vscode.commands.executeCommand("list.collapseAll");
         logInfoMessage("All folders collapsed.");
+      },
+
+      'livesync.expandChangedFolders': async () => {
+        
+        treeDataProvider.toggleViewExpansion(false);
+        context.globalState.update("collapseAll", false);
+        vscode.commands.executeCommand("setContext", "livesyncExpandMode", "expand");
+
+        // Recompute which folders should be open
+        const jsonManager = JsonManager.getInstance();
+        await jsonManager.expandChangedFoldersRecursive(treeDataProvider);  // repopulates foldersState
+        const rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
+
+        // 2) then actually reveal each "opened" folder
+        const openedKeys = (await jsonManager.getFoldersState()).keys();
+        for (const key of openedKeys) {
+          // key === `${workspaceName}$$${relativePath}`
+          const [, relPath] = key.split('$$');
+          const node = await JsonManager.findNodeByPath(relPath, treeDataProvider.rootElements, rootFolderName);
+          if (node && relPath !== ".") {
+            // reveal with expand: true forces the UI to open it
+            await TreeViewManager.treeView.reveal(node, { expand: true, focus: false, select: false });
+          }
+        }
+
+        logInfoMessage("All changed folders expanded.");
       },
 
       "livesync.testConnection": async (configuration?: ConfigurationMessage["configuration"]) => {
@@ -192,7 +224,7 @@ export class CommandManager {
         } catch (error: any) {
           return false;
         }
-      }
+      },
     };
 
     // Register all commands with single execution logic

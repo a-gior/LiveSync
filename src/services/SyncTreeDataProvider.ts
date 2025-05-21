@@ -22,13 +22,15 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
 
   private _showUnchanged: boolean;
   private _showAsTree: boolean;
+  private _collapseAll: boolean;
 
   public rootElements: Map<string, ComparisonFileNode> = new Map<string, ComparisonFileNode>();
   private jsonManager: JsonManager;
 
-  constructor(showAsTree: boolean = true, showUnchanged: boolean = true) {
+  constructor(showAsTree: boolean = true, showUnchanged: boolean = true, collapseAll: boolean = true) {
     this._showAsTree = showAsTree;
     this._showUnchanged = showUnchanged;
+    this._collapseAll = collapseAll;
     this.jsonManager = JsonManager.getInstance();
   }
 
@@ -39,6 +41,11 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
 
   setShowUnchanged(showUnchanged: boolean): void {
     this._showUnchanged = showUnchanged;
+    this.refresh();
+  }
+
+  toggleViewExpansion(collapseAll: boolean): void {
+    this._collapseAll = collapseAll;
     this.refresh();
   }
 

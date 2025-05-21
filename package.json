@@ -134,6 +134,11 @@
         "command": "livesync.collapseAll",
         "title": "LiveSync: Collapse All Folders in View",
         "icon": "$(collapse-all)"
+      },
+      {
+        "command": "livesync.expandChangedFolders",
+        "title": "Expand Changed Folders",
+        "icon": "$(expand-all)"
       }
     ],
     "menus": {
@@ -177,7 +182,12 @@
         },
         {
           "command": "livesync.collapseAll",
-          "when": "view == treeViewId",
+          "when": "view == treeViewId && livesyncViewMode == 'tree' && livesyncExpandMode == 'expand'",
+          "group": "navigation@2"
+        },
+        {
+          "command": "livesync.expandChangedFolders",
+          "when": "view == treeViewId && livesyncViewMode == 'tree' && livesyncExpandMode == 'collapse'",
           "group": "navigation@2"
         },
         {
@@ -188,25 +198,27 @@
         {
           "command": "livesync.toggleToTreeView",
           "when": "view == treeViewId && livesyncViewMode == 'list'",
-          "group": "navigation@4"
+          "group": "navigation@3"
         },
         {
           "command": "livesync.showUnchanged",
           "when": "view == treeViewId && livesyncShowUnchanged == false",
-          "group": "navigation@5"
+          "group": "navigation@4"
         },
         {
           "command": "livesync.hideUnchanged",
           "when": "view == treeViewId && livesyncShowUnchanged == true",
-          "group": "navigation@6"
+          "group": "navigation@4"
         },
         {
           "command": "livesync.uploadAll",
-          "group": "LiveSync@7"
+          "when": "view == treeViewId",
+          "group": "navigation@5"
         },
         {
           "command": "livesync.downloadAll",
-          "group": "LiveSync@8"
+          "when": "view == treeViewId",
+          "group": "navigation@6"
         }
       ],
       "explorer/context": [

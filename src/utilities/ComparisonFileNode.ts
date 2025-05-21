@@ -196,13 +196,11 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
         }
       }
 
-      const isStatusDifferent = currentEntry.status !== newStatus;
-
       if (newStatus !== null) {
         currentEntry.status = newStatus;
       }
 
-      if (!topMostUpdatedEntry && isStatusDifferent) {
+      if (!topMostUpdatedEntry && currentEntry.status !== newStatus) {
         topMostUpdatedEntry = currentEntry; // Track the highest-level folder updated
       }
     }
