@@ -12,6 +12,8 @@ export class TreeViewManager {
   }
 
   static async initialize(context: vscode.ExtensionContext): Promise<SyncTreeDataProvider> {
+    const showAsTree = context.globalState.get<boolean>("showAsTree", false);
+    const showUnchanged = context.globalState.get<boolean>("showUnchanged", false);
     const collapseAll = context.globalState.get<boolean>("collapseAll", false);
 
     const treeDataProvider = new SyncTreeDataProvider(showAsTree, showUnchanged, collapseAll);
