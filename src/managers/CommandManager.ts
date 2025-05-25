@@ -15,6 +15,7 @@ import { getRootElement, handleAction, performDelete } from "../utilities/fileUt
 import { Dialog } from "../services/Dialog";
 import { FileNodeSource } from "../utilities/FileNode";
 import { TreeViewManager } from "./TreeViewManager";
+import { StatusBarManager } from "./StatusBarManager";
 
 export class CommandManager {
   private static runningCommands: Set<string> = new Set();
@@ -100,6 +101,7 @@ export class CommandManager {
           }
 
           const comparisonFileNode = await compareCorrespondingEntry(element);
+          StatusBarManager.showMessage("Comparing done!", "", "", 3000, "check");
           const updatedElement = await treeDataProvider.updateRootElements(Action.Update, comparisonFileNode);
 
           await treeDataProvider.refresh(updatedElement);

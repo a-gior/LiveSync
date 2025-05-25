@@ -186,6 +186,7 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
       const remoteFiles = await listRemoteFilesRecursive(remoteDir);
 
       const comparisonFileNode = ComparisonFileNode.compareFileNodes(localFiles, remoteFiles);
+      StatusBarManager.showMessage("Comparing done!", "", "", 3000, "check");
 
       if (remoteFiles) {
         const remoteFilesMap = new Map<string, FileNode>();

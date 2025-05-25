@@ -1,4 +1,3 @@
-import { logErrorMessage } from "../managers/LogManager";
 import { BaseNode, BaseNodeData, BaseNodeType } from "./BaseNode";
 import { FileNode } from "./FileNode";
 import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
@@ -87,29 +86,18 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     // Recursively compare children and add them to the ComparisonFileNode
     const allChildrenNames = new Set([...(localNode?.children.keys() || []), ...(remoteNode?.children.keys() || [])]);
 
-    let previousChildStatus: ComparisonStatus | undefined = undefined;
-
     for (const childName of allChildrenNames) {
       const localChild = localNode?.getChild(childName);
       const remoteChild = remoteNode?.getChild(childName);
       const childComparisonNode = this.compareFileNodes(localChild, remoteChild);
       comparisonNode.addChild(childComparisonNode);
 
-      if (!previousChildStatus) {
-        previousChildStatus = childComparisonNode.status;
-      }
-
-      // If any child is added, removed, or modified, mark the current node as modified
-      if (childComparisonNode.status !== previousChildStatus) {
+      // If any child is different than unchanged, mark the current folder node as modified
+      if (childComparisonNode.status !== ComparisonStatus.unchanged) {
         comparisonNode.status = ComparisonStatus.modified;
       }
     }
 
-    if (comparisonNode.status !== ComparisonStatus.modified && previousChildStatus) {
-      comparisonNode.status = previousChildStatus;
-    }
-
-    StatusBarManager.showMessage("Comparing done!", "", "", 3000, "check");
     return comparisonNode;
   }
 
@@ -164,47 +152,62 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
    * @param rootEntries The root elements map (from TreeDataProvider).
    * @param relativePath The relative path of the modified node.
    */
-  static updateParentDirectoriesStatus(rootEntries: Map<string, ComparisonFileNode>, element: ComparisonFileNode): ComparisonFileNode {
-    const relativePath = element.relativePath;
-    let topMostUpdatedEntry: ComparisonFileNode | null = null;
-    let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
-
-    // Find the initial root folder in rootEntries based on the rootFolderName
-    let currentEntry = rootEntries.get(rootFolderName);
-    if (!currentEntry || !currentEntry.isDirectory()) {
-      logErrorMessage(`Root folder "${rootFolderName}" not found in root entries.`);
+  static updateParentDirectoriesStatus(
+    rootEntries: Map<string, ComparisonFileNode>,
+    element: ComparisonFileNode
+  ): ComparisonFileNode {
+    const rootName = WorkspaceConfigManager.getWorkspaceBasename();
+    const rootNode = rootEntries.get(rootName);
+    if (!rootNode || !rootNode.isDirectory()) {
+      console.error(`Root "${rootName}" not found or not a directory.`);
       return element;
     }
-
-    const pathParts = splitParts(relativePath);
-    for (let i = 0; i < pathParts.length - 1; i++) {
-      const part = pathParts[i];
-      currentEntry = currentEntry.children.get(part);
-
-      if (!currentEntry || !currentEntry.isDirectory()) {
-        // If the current entry is not found or is not a directory, we stop
-        return topMostUpdatedEntry ?? element;
-      }
-
-      let newStatus: ComparisonStatus | null = null;
-      for (const child of currentEntry.children.values()) {
-        if (newStatus === null) {
-          newStatus = child.status;
-        } else if (child.status !== newStatus) {
-          newStatus = ComparisonStatus.modified;
-          break; // Early exit if any child has a different status
+  
+    // Split into segments, e.g. ['src','utils','file.ts']
+    const parts = splitParts(element.relativePath);
+    // The path to the folder containing `element`
+    const parentSegments = parts.slice(0, parts.length - 1);
+  
+    let topMostUpdated: ComparisonFileNode | null = null;
+  
+    // Walk from the deepest parent back up to the workspace root
+    for (let depth = parentSegments.length; depth > 0; depth--) {
+      // Build the relPath for this ancestor folder
+      const thisPath = parentSegments.slice(0, depth).join('/');
+      // Descend from rootNode to find it
+      let node: ComparisonFileNode | undefined = rootNode;
+      for (const seg of thisPath.split('/')) {
+        if (!node.isDirectory()) {
+          node = undefined;
+          break;
         }
+        node = node.children.get(seg);
+        if (!node) break;
       }
-
-      if (newStatus !== null) {
-        currentEntry.status = newStatus;
+      if (!node || !node.isDirectory()) {
+        break;
       }
-
-      if (!topMostUpdatedEntry && currentEntry.status !== newStatus) {
-        topMostUpdatedEntry = currentEntry; // Track the highest-level folder updated
+  
+      // Recompute: if any direct child ≠ unchanged → modified; else unchanged
+      const anyChanged = Array
+        .from(node.children.values())
+        .some(c => c.status !== ComparisonStatus.unchanged);
+  
+      const newStatus = anyChanged
+        ? ComparisonStatus.modified
+        : ComparisonStatus.unchanged;
+  
+      // If it’s already that status, nothing above will change either → stop
+      if (node.status === newStatus) {
+        break;
       }
+  
+      // Otherwise update it and remember it as the highest-level update so far
+      node.status = newStatus;
+      topMostUpdated = node;
     }
-
-    return topMostUpdatedEntry ?? element;
+  
+    // Return the topmost folder we actually changed, or the element if none
+    return topMostUpdated ?? element;
   }
 }
