@@ -27,44 +27,19 @@ export async function generateHash(filePath: string, fileSource: FileNodeSource,
     }
   }
 
-  return generateNodeHash(filePath, fileType, fileContentHash);
+  if (fileType === BaseNodeType.file) {
+    return fileContentHash;
+  }
+
+  return generateFolderHash(filePath);
 }
 
-export function generateNodeHash(fullPath: string, fileType: BaseNodeType, fileContentHash: string) {
+function generateFolderHash(fullPath: string) {
   const relativePath = getRelativePath(fullPath);
   const hash = crypto.createHash("sha256");
 
-  hash.update(`${relativePath}${fileType}${fileContentHash}`);
+  hash.update(`${relativePath}`);
   const filehash = hash.digest("hex");
 
   return filehash;
-}
-
-export async function getLocalFileHash(filePath: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    // Check if the path is a directory
-    stat(filePath, (err, stats) => {
-      if (err) {
-        return reject(`Error reading file stats: ${err.message}`);
-      }
-
-      if (stats.isDirectory()) {
-        return resolve("");
-      }
-
-      const hash = crypto.createHash("sha256");
-      const stream = createReadStream(filePath);
-
-      stream.on("data", (data) => hash.update(data));
-
-      stream.on("end", () => {
-        const fileHash = hash.digest("hex");
-        resolve(fileHash);
-      });
-
-      stream.on("error", (err) => {
-        reject(`Error reading file: ${err.message}`);
-      });
-    });
-  });
 }
