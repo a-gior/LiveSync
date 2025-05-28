@@ -18,7 +18,6 @@ export async function listRemoteFilesRecursive(remoteDir: string): Promise<FileN
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = await ConnectionManager.getInstance(configuration);
 
-  let lastBufferedFile: FileNode | undefined; // Always buffer the last file entry for the hash
   let totalItems = 0;
   let processedItems = 0;
 
@@ -31,101 +30,177 @@ export async function listRemoteFilesRecursive(remoteDir: string): Promise<FileN
   }
 
   return await connectionManager.doSSHOperation(async (sshClient) => {
-    // Step 1: Get the total number of items in the directory (folders + files)
-    const countCommand = `find "${remoteDir}" | wc -l`;
-    const countOutput = await sshClient.executeCommand(countCommand);
-    totalItems = parseInt(countOutput.trim(), 10) || 0;
+    // ----- COUNT STAGE -----
+    const countCommand   = `find "${remoteDir}" | wc -l`;
+    const countOutputRaw = await sshClient.executeCommand(countCommand);
+
+    const countLines      = countOutputRaw.trim().split("\n");
+    const countDeniedLines = countLines.filter(l => l.includes("Permission denied"));
+    const lastCountLine   = countLines[countLines.length - 1];
+    totalItems            = parseInt(lastCountLine.trim(), 10) || 0;
+
+    // Batch-ignore any paths denied in the count stage
+    const countDeniedPaths = countDeniedLines
+      .map(l => {
+        const m1 = l.match(/find: ‘(.+)’: Permission denied/);
+        const m2 = l.match(/sha256sum: (.+): Permission denied/);
+        return m1?.[1] ?? m2?.[1] ?? null;
+      })
+      .filter((p): p is string => !!p);
+
+    if (countDeniedPaths.length) {
+      await WorkspaceConfigManager.addToIgnoreList(...countDeniedPaths);
+      logErrorMessage(
+        `Skipped ${countDeniedPaths.length} inaccessible paths at count-stage:\n` +
+          countDeniedPaths.map(p => `  • ${p}`).join("\n"),
+        LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+      );
+    }
 
     if (totalItems === 0) {
-      logErrorMessage(`<listRemoteFilesRecursive> No files found in ${remoteDir}`, LOG_FLAGS.CONSOLE_AND_LOG_MANAGER);
+      logErrorMessage(
+        `<listRemoteFilesRecursive> No files found in ${remoteDir}`,
+        LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+      );
       return undefined;
     }
 
-    // Step 2: Start processing items and updating the progress
-    const command = `find "${remoteDir}" -exec sh -c 'if [ -d "$1" ]; then stat --format="%n,%s,%Y,%F," "$1"; else stat --format="%n,%s,%Y,%F" "$1" && sha256sum "$1" | awk "{printf \\"%s\\\\n\\", \\\$1}"; fi' sh {} \\;`;
+    // ----- DETAIL STAGE -----
+    const command = `
+    # 1) directories first
+    find "${remoteDir}" -type d \
+      -exec sh -c 'stat --format="%n,%s,%Y,%F," "$1"' sh {} \\; \
+    ;
+    # 2) then files
+    find "${remoteDir}" -type f \
+      -exec sh -c 'stat --format="%n,%s,%Y,%F" "$1" && \
+                    sha256sum "$1" | awk "{printf \\"%s\\\\n\\", \\$1}"' sh {} \\;
+  `;
+    console.log(`Command: ${command}`);
 
     let rootEntry: FileNode | undefined;
-    let currentEntry: FileNode | undefined;
+    const runtimeDeniedPaths: string[] = [];
 
-    await sshClient.executeCommand(command, async (data?: string) => {
-      if (!data) {
+    // We'll buffer directory/file metadata nodes until we know they hash successfully
+    interface BufferedMeta { node: FileNode; parent: FileNode }
+    let bufferedMeta: BufferedMeta | null = null;
+
+    await sshClient.executeCommand(command, async (rawLine: string) => {
+      const line = rawLine.trim();
+
+      // 1) Directory-access denied?
+      const findDenied = line.match(/^find: ‘(.+)’: Permission denied$/);
+      if (findDenied) {
+        // just skip directories we can't descend
         return;
       }
 
-      const lines = data.trim().split("\n");
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-
-        const splitLine = line.split(",");
-        if (splitLine.length === 1) {
-          // It's a hash, apply it to the last buffered file
-          if (lastBufferedFile) {
-            lastBufferedFile.hash = await generateHash(lastBufferedFile.fullPath, FileNodeSource.remote, BaseNodeType.file, line);
-            lastBufferedFile = undefined; // Clear the buffer after applying the hash
-          } else {
-            // console.warn(`Unexpected hash with no buffered file. It may be due to a previously ignored or skipped file. Hash: ${line}`);
-          }
-          continue; // Move on to the next line
-        }
-
-        // Process the metadata line
-        const [fullPath, size, modifyTime, type] = splitLine;
-        const entryType = type === "directory" ? BaseNodeType.directory : BaseNodeType.file;
-
-        if (shouldIgnore(fullPath)) {
-          processedItems++;
-          continue;
-        }
-
-        const newEntry = new FileNode(
-          path.basename(fullPath),
-          entryType,
-          parseInt(size, 10),
-          new Date(parseInt(modifyTime, 10) * 1000),
-          fullPath,
-          FileNodeSource.remote
-        );
-
-        // Buffer the file if it's not a directory (we'll process its hash when it appears)
-        if (entryType === BaseNodeType.file) {
-          lastBufferedFile = newEntry;
-        }
-
-        // Handle the root entry or current entry for directories
-        if (!rootEntry) {
-          rootEntry = newEntry;
-          currentEntry = rootEntry;
-        } else {
-          const relativePath = normalizePath(path.relative(rootEntry.fullPath, fullPath));
-          const pathParts = splitParts(relativePath);
-
-          let tempEntry = currentEntry;
-
-          for (const part of pathParts) {
-            if (tempEntry!.children.has(part)) {
-              tempEntry = tempEntry!.children.get(part)!;
-            } else {
-              tempEntry!.addChild(newEntry);
-              break;
-            }
-          }
-        }
-
-        // Update processed items count and status bar progress
+      // 2) File-hash denied?
+      const shaDenied = line.match(/^sha256sum: (.+): Permission denied$/);
+      if (shaDenied && bufferedMeta) {
+        runtimeDeniedPaths.push(shaDenied[1]);
+        bufferedMeta = null;               // drop the unhashed node
         processedItems++;
-        const progress = Math.min(100, Math.round((processedItems / totalItems) * 100));
-        StatusBarManager.showProgress(progress); // Suggestion du DOUY
+        StatusBarManager.showProgress(
+          Math.min(100, Math.round((processedItems / totalItems) * 100))
+        );
+        return;
+      }
+
+      // 3) Real hash line? 64 hex chars
+      if (/^[a-f0-9]{64}$/.test(line) && bufferedMeta) {
+        // assign the hash, then *attach* the FileNode into the tree
+        bufferedMeta.node.hash = await generateHash(bufferedMeta.node.fullPath, FileNodeSource.remote, BaseNodeType.file, line);
+        bufferedMeta.parent.addChild(bufferedMeta.node);
+        bufferedMeta = null;
+        processedItems++;
+        StatusBarManager.showProgress(
+          Math.min(100, Math.round((processedItems / totalItems) * 100))
+        );
+        return;
+      }
+
+      // 4) Metadata line: fullPath,size,modifyTime,type
+      const parts = line.split(",");
+      if (parts.length < 4) {
+        // unexpected line—ignore it
+        return;
+      }
+      const [fullPath, sizeStr, mtimeStr, typeStr] = parts;
+      if (shouldIgnore(fullPath)) {
+        processedItems++;
+        StatusBarManager.showProgress(
+          Math.min(100, Math.round((processedItems / totalItems) * 100))
+        );
+        return;
+      }
+
+      const size      = parseInt(sizeStr, 10);
+      const mtime     = new Date(parseInt(mtimeStr, 10) * 1000);
+      const entryType = typeStr === "directory"
+        ? BaseNodeType.directory
+        : BaseNodeType.file;
+
+      const node = new FileNode(
+        path.basename(fullPath),
+        entryType,
+        size,
+        mtime,
+        fullPath,
+        FileNodeSource.remote
+      );
+
+      // Find (or set) its parent in the tree
+      if (!rootEntry) {
+        // first directory or file becomes root
+        rootEntry = node;
+        processedItems++;
+        StatusBarManager.showProgress(
+          Math.min(100, Math.round((processedItems / totalItems) * 100))
+        );
+        return;
+      }
+
+      // Determine parent entry by walking from rootEntry
+      const relPath = normalizePath(path.relative(rootEntry.fullPath, fullPath));
+      const pathParts = splitParts(relPath);
+      let parent = rootEntry;
+      for (const part of pathParts.slice(0, -1)) {
+        parent = parent.children.get(part)!;
+      }
+
+      if (entryType === BaseNodeType.directory) {
+        // attach immediately
+        parent.addChild(node);
+        processedItems++;
+        StatusBarManager.showProgress(
+          Math.min(100, Math.round((processedItems / totalItems) * 100))
+        );
+      } else {
+        // buffer this file until its hash comes through
+        bufferedMeta = { node, parent: parent };
       }
     });
 
-    if (!rootEntry) {
-      throw new Error(`<listRemoteFilesRecursive> Could not build the FileNode for the file/folder at ${remoteDir}`);
+    // Add any runtime-denied files to the ignore list and log
+    if (runtimeDeniedPaths.length) {
+      await WorkspaceConfigManager.addToIgnoreList(...runtimeDeniedPaths);
+      logErrorMessage(
+        `Skipped ${runtimeDeniedPaths.length} inaccessible paths during scan:\n` +
+          runtimeDeniedPaths.map(p => `  • ${p}`).join("\n"),
+        LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+      );
     }
 
+    if (!rootEntry) {
+      throw new Error(
+        `<listRemoteFilesRecursive> Could not build the FileNode for ${remoteDir}`
+      );
+    }
     return rootEntry;
   }, `Listing files on ${remoteDir}`);
 }
+
 
 export async function listLocalFilesRecursive(localDir: string): Promise<FileNode | undefined> {
   StatusBarManager.showMessage(`Listing files of ${localDir}`, "", "", 0, "sync~spin", true);
