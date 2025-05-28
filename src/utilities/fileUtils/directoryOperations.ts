@@ -10,6 +10,7 @@ import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 import { SSHClient } from "../../services/SSHClient";
 import { LOG_FLAGS, logErrorMessage } from "../../managers/LogManager";
+import { shouldIgnore } from "../shouldIgnore";
 
 // Set a limit for the number of concurrent file operations, from 10 onwards triggers a warning for too much event listeners
 const limit = pLimit(9);
@@ -20,6 +21,10 @@ async function createRemoteDirectories(fileEntry: ComparisonFileNode) {
 
   const traverseNode = async (node: ComparisonFileNode) => {
     const { localPath, remotePath } = await getFullPaths(node);
+    
+    if(shouldIgnore(remotePath)) {
+      return;
+    }
 
     if (node.isDirectory()) {
       let hasChildDirectories = false;
@@ -80,12 +85,31 @@ async function createLocalDirectories(node: ComparisonFileNode) {
   const createDir = async (node: ComparisonFileNode) => {
     const { localPath, remotePath } = await getFullPaths(node);
 
-    if (node.isDirectory()) {
-      await fs.promises.mkdir(localPath, { recursive: true });
+    if(shouldIgnore(remotePath)) {
+      return;
+    }
 
-      const remoteEntries = await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
-        return await sftpClient.listFiles(remotePath);
-      });
+    if (node.isDirectory()) {
+
+      let remoteEntries: Array<{ name: string; type: string; size: number; modifyTime: number }>;
+      try {
+        remoteEntries = await connectionManager.doSFTPOperation(
+          async (sftpClient: SFTPClient) =>
+            sftpClient.listFiles(remotePath)
+        );
+        await fs.promises.mkdir(localPath, { recursive: true });
+      } catch (err: any) {
+        // only skip permission errors
+        if (err.code === "EACCES" || /permission denied/i.test(err.message)) {
+          logErrorMessage(
+            `Skipping remote directory due to permissions: ${remotePath}`,
+            LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+          );
+          return;
+        }
+        // rethrow unexpected SFTP errors
+        throw err;
+      }
 
       for (const remoteEntry of remoteEntries) {
         const fullLocalPath = normalizePath(path.join(localPath, remoteEntry.name));
