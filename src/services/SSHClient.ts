@@ -72,31 +72,46 @@ export class SSHClient extends BaseClient {
   }
 
   async executeCommand(command: string, dataCallback?: (data: string) => void): Promise<string> {
-    return new Promise<string>((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       this._client.exec(command, (err, stream) => {
-        if (err) {
-          return reject(err);
-        }
-
+        if (err) {return reject(err);}
         let output = "";
+        let lineBuf = "";
 
+        const onData = (data: string) => {
+          lineBuf += data;
+          const parts = lineBuf.split("\n");
+          lineBuf = parts.pop()!;         // last piece is partial
+          for (const line of parts) {
+            if (dataCallback) {dataCallback(line + "\n");}
+          }
+        };
+        
         stream
           .on("close", (code: number, signal: string) => {
-            if (code !== 0) {
+            // 1) Flush any leftover
+            if (lineBuf && dataCallback) {
+              dataCallback(lineBuf);
+            }
+
+            // 2) Treat code=0 or code=1 as “OK” (1 == permission-denied)
+            if (code !== 0 && code !== 1) {
               return reject(new Error(`Command exited with code ${code} and signal ${signal}`));
             }
+
+            // 3) If it *was* a 1, emit a warning so we know something was skipped
+            if (code === 1) {
+              logErrorMessage(
+                `Command finished with exit code 1 (some files or dirs may have been skipped due to permissions)`,
+                LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+              );
+            }
+
+            // 4) Resolve normally
             resolve(output);
           })
-          .on("data", (data: Buffer) => {
-            const dataString = data.toString();
-            if (dataCallback) {
-              dataCallback(dataString);
-            }
-            output += dataString;
-          })
-          .stderr.on("data", (data: Buffer) => {
-            output += data.toString();
-          });
+          .on("data",   (buf: Buffer) => { const s = buf.toString(); output += s; onData(s);           })
+          .stderr.on("data", (buf: Buffer) => { const s = buf.toString(); output += s; onData(s); });
       });
     });
   }
