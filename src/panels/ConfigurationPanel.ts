@@ -1,7 +1,6 @@
 import { Uri, commands } from "vscode";
 import { Panel } from "./Panel";
 
-import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 import { SFTPClient } from "../services/SFTPClient";
 import { FullConfigurationMessage } from "@shared/DTOs/messages/FullConfigurationMessage";
 import { FileEventActionsMessage } from "@shared/DTOs/messages/FileEventActionsMessage";
@@ -9,6 +8,7 @@ import { ConnectionManager } from "../managers/ConnectionManager";
 import { IgnoreListMessage } from "../DTOs/messages/IgnoreListMessage";
 import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../managers/LogManager";
+import { ConfigurationState } from "../DTOs/states/configurationState";
 
 export class ConfigurationPanel extends Panel {
   static render(extensionUri: Uri) {

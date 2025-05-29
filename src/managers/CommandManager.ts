@@ -117,10 +117,10 @@ export class CommandManager {
         showDiff(input);
       },
 
-      "livesync.upload": async (element) => handleAction(element, "upload", treeDataProvider),
-      "livesync.download": async (element) => handleAction(element, "download", treeDataProvider),
-      "livesync.uploadAll": async () => handleAction( getRootElement(treeDataProvider), "upload", treeDataProvider),
-      "livesync.downloadAll": async () => handleAction( getRootElement(treeDataProvider), "download", treeDataProvider),
+      "livesync.upload": async (element) => await handleAction(element, "upload", treeDataProvider),
+      "livesync.download": async (element) => await handleAction(element, "download", treeDataProvider),
+      "livesync.uploadAll": async () => await handleAction( getRootElement(treeDataProvider), "upload", treeDataProvider),
+      "livesync.downloadAll": async () => await handleAction( getRootElement(treeDataProvider), "download", treeDataProvider),
 
       'livesync.openFile': (filePath: string) => {
         console.log("Opening file:", filePath);
