@@ -1,12 +1,13 @@
 import { workspace, ConfigurationTarget } from "vscode";
 import * as crypto from "crypto";
-import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 import { FileEventActionsMessage } from "../DTOs/messages/FileEventActionsMessage";
 import { LOG_FLAGS, logConfigError, logErrorMessage, logInfoMessage } from "./LogManager";
 import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
 import path from "path";
 import { FileEventHandler } from "../services/FileEventHandler";
 import { Minimatch } from "minimatch";
+import { ConfigurationPanel } from "../panels/ConfigurationPanel";
+import { ConfigurationState } from "../DTOs/states/configurationState";
 
 export class WorkspaceConfigManager {
   private static _workspaceConfig: ConfigurationState | undefined;
@@ -226,6 +227,44 @@ export class WorkspaceConfigManager {
     }
 
     return this.compiledIgnoreMatchers;
+  }
+
+/**
+   * Adds one or more paths to the existing ignore list (skips duplicates).
+   * Usage: addToIgnoreList("/a", "/b", "/c")
+   */
+  static async addToIgnoreList(...paths: string[]) {
+    try {
+      // 1. Fetch current list (may be undefined)
+      const current: string[] | undefined = await WorkspaceConfigManager.getParameter<string[]>("ignoreList");
+      const ignoreList = Array.isArray(current) ? [...current] : [];
+
+      // 2. Filter out any that are already present
+      const uniqueNew = paths.filter(p => !ignoreList.includes(p));
+      if (uniqueNew.length === 0) {
+        logErrorMessage(
+          `No new paths to add to ignore list.`,
+          LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+        );
+        return;
+      }
+
+      // 3. Append & persist
+      ignoreList.push(...uniqueNew);
+      await ConfigurationPanel.saveIgnoreList(ignoreList);
+
+      // 4. Log summary
+      logErrorMessage(
+        `Added to ignore list:\n  • ${uniqueNew.join("\n  • ")}`,
+        LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+      );
+    } catch (error) {
+      logErrorMessage(
+        `Error adding to ignore list: ${paths.join(", ")}`,
+        LOG_FLAGS.ALL,
+        error
+      );
+    }
   }
 
   /** Call if you expect the ignore list to change at runtime */
