@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { ensureDirectoryExists } from "../utilities/fileUtils/fileOperations";
 import { getFullPaths, joinParts, splitParts } from "../utilities/fileUtils/filePathUtils";
-import { listLocalFilesRecursive, listRemoteFilesRecursive } from "../utilities/fileUtils/fileListing";
+import { listLocalFiles, listRemoteFiles } from "../utilities/fileUtils/fileListing";
 import { IconLoader } from "./IconLoader";
 import { SAVE_DIR } from "../utilities/constants";
 import JsonManager, { isComparisonFileNodeMap, JsonType } from "../managers/JsonManager";
@@ -13,6 +13,7 @@ import { FileNode } from "../utilities/FileNode";
 import path from "path";
 import { Action } from "../utilities/enums";
 import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
+import { TreeViewManager } from "../managers/TreeViewManager";
 
 export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonFileNode> {
   private _onDidChangeTreeData: vscode.EventEmitter<ComparisonFileNode | undefined | void> = new vscode.EventEmitter<
@@ -34,6 +35,14 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
     this.jsonManager = JsonManager.getInstance();
   }
 
+  public get settings() {
+    return {
+      showAsTree: this._showAsTree,
+      showUnchanged: this._showUnchanged,
+      collapseAll: this._collapseAll
+    };
+  }
+
   toggleViewMode(showAsTree: boolean): void {
     this._showAsTree = showAsTree;
     this.refresh();
@@ -49,6 +58,7 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
     this.refresh();
   }
 
+
   async loadRootElements(): Promise<void> {
     // Simulate async loading of root elements (e.g., from a JSON file)
     const comparisonEntries = await this.jsonManager.getFileEntriesMap(JsonType.COMPARE);
@@ -60,6 +70,7 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
 
   async refresh(element?: ComparisonFileNode): Promise<void> {
     logInfoMessage("Refreshing Tree: ", LOG_FLAGS.CONSOLE_ONLY, element);
+    TreeViewManager.updateMessage(this);
 
     if (!element) {
       this._onDidChangeTreeData.fire(undefined);
@@ -77,6 +88,7 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
         this._onDidChangeTreeData.fire(element);
       }
     }
+    
   }
 
   async getTreeItem(element: ComparisonFileNode): Promise<vscode.TreeItem> {
@@ -182,8 +194,8 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
   async getComparisonFileNode(localDir: string, remoteDir: string): Promise<ComparisonFileNode> {
     const startTime = performance.now(); // Start timing
     try {
-      const localFiles = await listLocalFilesRecursive(localDir);
-      const remoteFiles = await listRemoteFilesRecursive(remoteDir);
+      const localFiles = await listLocalFiles(localDir);
+      const remoteFiles = await listRemoteFiles(remoteDir);
 
       const comparisonFileNode = ComparisonFileNode.compareFileNodes(localFiles, remoteFiles);
       StatusBarManager.showMessage("Comparing done!", "", "", 3000, "check");
