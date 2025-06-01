@@ -5,7 +5,7 @@ import * as path from "path";
 import JsonManager from "../../managers/JsonManager";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../../managers/LogManager";
 import { FileNodeSource } from "../FileNode";
-import { listRemoteFilesRecursive } from "./fileListing";
+import { listRemoteFiles } from "./fileListing";
 import { ActionOn, ActionResult, Check } from "../enums";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 
@@ -95,7 +95,7 @@ async function updateRemoteFilesJsonForPaths(...filePaths: string[]) {
       const parentDirPath = path.dirname(filePath);
 
       // List the files recursively in the parent directory and update the JSON
-      const remoteFileNode = await listRemoteFilesRecursive(parentDirPath);
+      const remoteFileNode = await listRemoteFiles(parentDirPath);
       if (remoteFileNode) {
         await fileNodeManager.updateRemoteFilesJson(remoteFileNode);
         logInfoMessage(`Updated JSON Remote files for ${parentDirPath}`);
