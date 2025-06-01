@@ -1,7 +1,8 @@
 import * as fs from "fs/promises";
+import { Dirent, Stats } from "fs";
 import * as path from "path";
 import { FileNode, FileNodeSource } from "../FileNode";
-import pLimit = require("p-limit");
+import pLimit from "p-limit";
 import { ConnectionManager } from "../../managers/ConnectionManager";
 import { LOG_FLAGS, logErrorMessage } from "../../managers/LogManager";
 import { shouldIgnore } from "../shouldIgnore";
@@ -11,256 +12,467 @@ import { BaseNodeType } from "../BaseNode";
 import { normalizePath, pathExists, splitParts } from "./filePathUtils";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 
-// Set a limit for the number of concurrent file operations, from 10 onwards triggers a warning for too much event listeners
+// Limit concurrent file operations to 9
 const limit = pLimit(9);
 
-export async function listRemoteFilesRecursive(remoteDir: string): Promise<FileNode | undefined> {
-  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = await ConnectionManager.getInstance(configuration);
+//
+// ─── LOCAL FILE LISTING ─────────────────────────────────────────────────────────
+//
 
-  let totalItems = 0;
-  let processedItems = 0;
+/**
+ * Counts all files and directories under `dir`, excluding ignored ones, for progress tracking.
+ */
+async function countLocalItems(dir: string): Promise<number> {
+  let count = 0;
+  const queue: string[] = [dir];
 
-  if (!(await pathExists(remoteDir, FileNodeSource.remote))) {
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    let entries: Dirent[];
+    try {
+      entries = await fs.readdir(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const dirent of entries) {
+      const fullPath = normalizePath(path.join(current, dirent.name));
+      if (shouldIgnore(fullPath)) {
+        continue;
+      }
+      count++;
+      if (dirent.isDirectory()) {
+        queue.push(fullPath);
+      }
+    }
+  }
+
+  return count;
+}
+
+/**
+ * Builds the local file tree under `localDir`, showing real percentage progress.
+ */
+export async function listLocalFiles(
+  localDir: string
+): Promise<FileNode | undefined> {
+  StatusBarManager.showMessage(
+    `Listing files of ${localDir}`,
+    "",
+    "",
+    0,
+    "sync~spin",
+    true
+  );
+
+  const nodeType = await pathExists(localDir, FileNodeSource.local);
+  if (!nodeType) {
     logErrorMessage(
-      `<listRemoteFilesRecursive> Could not find remotely the specified file/folder at ${remoteDir}`,
+      `Could not find locally the specified file/folder at ${localDir}`,
       LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
     );
     return undefined;
   }
 
-  return await connectionManager.doSSHOperation(async (sshClient) => {
-    // ----- COUNT STAGE -----
-    const countCommand   = `find "${remoteDir}" | wc -l`;
-    const countOutputRaw = await sshClient.executeCommand(countCommand);
+  // Count total items for progress
+  const totalItems = await countLocalItems(localDir);
+  let processedItems = 0;
+  const updateProgress = () => {
+    const percent = totalItems > 0
+      ? Math.round((processedItems / totalItems) * 100)
+      : 100;
+    StatusBarManager.showProgress(Math.min(100, percent));
+  };
 
-    const countLines      = countOutputRaw.trim().split("\n");
-    const countDeniedLines = countLines.filter(l => l.includes("Permission denied"));
-    const lastCountLine   = countLines[countLines.length - 1];
-    totalItems            = parseInt(lastCountLine.trim(), 10) || 0;
-
-    // Batch-ignore any paths denied in the count stage
-    const countDeniedPaths = countDeniedLines
-      .map(l => {
-        const m1 = l.match(/find: ‘(.+)’: Permission denied/);
-        const m2 = l.match(/sha256sum: (.+): Permission denied/);
-        return m1?.[1] ?? m2?.[1] ?? null;
-      })
-      .filter((p): p is string => !!p);
-
-    if (countDeniedPaths.length) {
-      await WorkspaceConfigManager.addToIgnoreList(...countDeniedPaths);
-      logErrorMessage(
-        `Skipped ${countDeniedPaths.length} inaccessible paths at count-stage:\n` +
-          countDeniedPaths.map(p => `  • ${p}`).join("\n"),
-        LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
-      );
-    }
-
-    if (totalItems === 0) {
-      logErrorMessage(
-        `<listRemoteFilesRecursive> No files found in ${remoteDir}`,
-        LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
-      );
-      return undefined;
-    }
-
-    // ----- DETAIL STAGE -----
-    const command = `
-    # 1) directories first
-    find "${remoteDir}" -type d \
-      -exec sh -c 'stat --format="%n,%s,%Y,%F," "$1"' sh {} \\; \
-    ;
-    # 2) then files
-    find "${remoteDir}" -type f \
-      -exec sh -c 'stat --format="%n,%s,%Y,%F" "$1" && \
-                    sha256sum "$1" | awk "{printf \\"%s\\\\n\\", \\$1}"' sh {} \\;
-  `;
-    console.log(`Command: ${command}`);
-
-    let rootEntry: FileNode | undefined;
-    const runtimeDeniedPaths: string[] = [];
-
-    // We'll buffer directory/file metadata nodes until we know they hash successfully
-    interface BufferedMeta { node: FileNode; parent: FileNode }
-    let bufferedMeta: BufferedMeta | null = null;
-
-    await sshClient.executeCommand(command, async (rawLine: string) => {
-      const line = rawLine.trim();
-
-      // 1) Directory-access denied?
-      const findDenied = line.match(/^find: ‘(.+)’: Permission denied$/);
-      if (findDenied) {
-        // just skip directories we can't descend
-        return;
-      }
-
-      // 2) File-hash denied?
-      const shaDenied = line.match(/^sha256sum: (.+): Permission denied$/);
-      if (shaDenied && bufferedMeta) {
-        runtimeDeniedPaths.push(shaDenied[1]);
-        bufferedMeta = null;               // drop the unhashed node
-        processedItems++;
-        StatusBarManager.showProgress(
-          Math.min(100, Math.round((processedItems / totalItems) * 100))
-        );
-        return;
-      }
-
-      // 3) Real hash line? 64 hex chars
-      if (/^[a-f0-9]{64}$/.test(line) && bufferedMeta) {
-        // assign the hash, then *attach* the FileNode into the tree
-        bufferedMeta.node.hash = await generateHash(bufferedMeta.node.fullPath, FileNodeSource.remote, BaseNodeType.file, line);
-        bufferedMeta.parent.addChild(bufferedMeta.node);
-        bufferedMeta = null;
-        processedItems++;
-        StatusBarManager.showProgress(
-          Math.min(100, Math.round((processedItems / totalItems) * 100))
-        );
-        return;
-      }
-
-      // 4) Metadata line: fullPath,size,modifyTime,type
-      const parts = line.split(",");
-      if (parts.length < 4) {
-        // unexpected line—ignore it
-        return;
-      }
-      const [fullPath, sizeStr, mtimeStr, typeStr] = parts;
-      if (shouldIgnore(fullPath)) {
-        processedItems++;
-        StatusBarManager.showProgress(
-          Math.min(100, Math.round((processedItems / totalItems) * 100))
-        );
-        return;
-      }
-
-      const size      = parseInt(sizeStr, 10);
-      const mtime     = new Date(parseInt(mtimeStr, 10) * 1000);
-      const entryType = typeStr === "directory"
-        ? BaseNodeType.directory
-        : BaseNodeType.file;
-
-      const node = new FileNode(
-        path.basename(fullPath),
-        entryType,
-        size,
-        mtime,
-        fullPath,
-        FileNodeSource.remote
-      );
-
-      // Find (or set) its parent in the tree
-      if (!rootEntry) {
-        // first directory or file becomes root
-        rootEntry = node;
-        processedItems++;
-        StatusBarManager.showProgress(
-          Math.min(100, Math.round((processedItems / totalItems) * 100))
-        );
-        return;
-      }
-
-      // Determine parent entry by walking from rootEntry
-      const relPath = normalizePath(path.relative(rootEntry.fullPath, fullPath));
-      const pathParts = splitParts(relPath);
-      let parent = rootEntry;
-      for (const part of pathParts.slice(0, -1)) {
-        parent = parent.children.get(part)!;
-      }
-
-      if (entryType === BaseNodeType.directory) {
-        // attach immediately
-        parent.addChild(node);
-        processedItems++;
-        StatusBarManager.showProgress(
-          Math.min(100, Math.round((processedItems / totalItems) * 100))
-        );
-      } else {
-        // buffer this file until its hash comes through
-        bufferedMeta = { node, parent: parent };
-      }
-    });
-
-    // Add any runtime-denied files to the ignore list and log
-    if (runtimeDeniedPaths.length) {
-      await WorkspaceConfigManager.addToIgnoreList(...runtimeDeniedPaths);
-      logErrorMessage(
-        `Skipped ${runtimeDeniedPaths.length} inaccessible paths during scan:\n` +
-          runtimeDeniedPaths.map(p => `  • ${p}`).join("\n"),
-        LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
-      );
-    }
-
-    if (!rootEntry) {
-      throw new Error(
-        `<listRemoteFilesRecursive> Could not build the FileNode for ${remoteDir}`
-      );
-    }
-    return rootEntry;
-  }, `Listing files on ${remoteDir}`);
-}
-
-
-export async function listLocalFilesRecursive(localDir: string): Promise<FileNode | undefined> {
-  StatusBarManager.showMessage(`Listing files of ${localDir}`, "", "", 0, "sync~spin", true);
-
-  const nodeType = await pathExists(localDir, FileNodeSource.local);
-  if (!nodeType) {
-    logErrorMessage(`Could not find locally the specified file/folder at ${localDir}`, LOG_FLAGS.CONSOLE_AND_LOG_MANAGER);
+  // Stat root once
+  let rootStats: Stats;
+  try {
+    rootStats = await fs.stat(localDir);
+  } catch (err: any) {
+    logErrorMessage(
+      `Error stating root directory ${localDir}: ${err.message}`,
+      LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+    );
     return undefined;
   }
 
   const rootEntry = new FileNode(
     path.basename(localDir),
     nodeType,
-    (await fs.stat(localDir)).size,
-    (await fs.stat(localDir)).mtime,
+    rootStats.size,
+    rootStats.mtime,
     normalizePath(localDir),
     FileNodeSource.local
   );
 
-  rootEntry.hash = await generateHash(normalizePath(localDir), FileNodeSource.local, nodeType);
+  // Use a FIFO queue for breadth-first traversal
+  const dirQueue: FileNode[] = [];
+  if (rootEntry.isDirectory()) {
+    dirQueue.push(rootEntry);
+    processedItems++; // count the root itself
+    updateProgress();
+  }
 
-  const stack = [rootEntry];
+  // Traverse directories
+  while (dirQueue.length > 0) {
+    const currentDirNode = dirQueue.shift()!;
+    const currentDirPath = currentDirNode.fullPath;
 
-  while (stack.length > 0) {
-    const currentEntry = stack.pop();
-    if (!currentEntry || shouldIgnore(currentEntry.fullPath) || !rootEntry.isDirectory()) {
+    let dirEntries: Dirent[];
+    try {
+      dirEntries = await fs.readdir(currentDirPath, { withFileTypes: true });
+    } catch (err: any) {
+      logErrorMessage(
+        `Error reading directory ${currentDirPath}: ${err.message}`,
+        LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+      );
       continue;
     }
 
-    const currentDir = currentEntry.fullPath;
-    const files = await fs.readdir(currentDir, { withFileTypes: true });
+    const tasks: Promise<void>[] = [];
 
-    const promises = files.map((file) =>
-      limit(async () => {
-        const filePath = path.join(currentDir, file.name);
-        const normalizedFilePath = normalizePath(filePath);
+    for (const dirent of dirEntries) {
+      tasks.push(
+        limit(async () => {
+          const entryName = dirent.name;
+          const fullPath = path.join(currentDirPath, entryName);
+          const normalizedFull = normalizePath(fullPath);
 
-        if (shouldIgnore(normalizedFilePath)) {
-          return;
-        }
+          if (shouldIgnore(normalizedFull)) {
+            processedItems++;
+            updateProgress();
+            return;
+          }
 
-        const stats = await fs.stat(normalizedFilePath);
-        const entryType = file.isDirectory() ? BaseNodeType.directory : BaseNodeType.file;
+          let st: Stats;
+          try {
+            st = await fs.stat(normalizedFull);
+          } catch (err: any) {
+            logErrorMessage(
+              `Error stating ${normalizedFull}: ${err.message}`,
+              LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+            );
+            processedItems++;
+            updateProgress();
+            return;
+          }
 
-        const newEntry = new FileNode(file.name, entryType, stats.size, stats.mtime, normalizedFilePath, FileNodeSource.local);
+          const entryType: BaseNodeType = st.isDirectory()
+            ? BaseNodeType.directory
+            : BaseNodeType.file;
 
-        newEntry.hash = await generateHash(normalizedFilePath, FileNodeSource.local, entryType);
+          const childNode = new FileNode(
+            entryName,
+            entryType,
+            st.size,
+            st.mtime,
+            normalizedFull,
+            FileNodeSource.local
+          );
 
-        if (file.isDirectory()) {
-          currentEntry.addChild(newEntry);
-          stack.push(newEntry); // Add directory to stack for further processing
-        } else {
-          currentEntry.addChild(newEntry);
-        }
-      })
-    );
+          currentDirNode.addChild(childNode);
+          processedItems++;
+          updateProgress();
 
-    await Promise.all(promises); // Wait for all current directory operations to complete
+          if (entryType === BaseNodeType.directory) {
+            dirQueue.push(childNode);
+            return;
+          }
+
+          // For files: compute hash
+          try {
+            childNode.hash = await generateHash(
+              normalizedFull,
+              FileNodeSource.local,
+              entryType
+            );
+          } catch (err: any) {
+            logErrorMessage(
+              `Error hashing ${normalizedFull}: ${err.message}`,
+              LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+            );
+          }
+        })
+      );
+    }
+
+    await Promise.all(tasks);
   }
 
-  StatusBarManager.showMessage(`Local file listed`, "", "", 3000, "check");
+  // Compute hashes for all folders
+  await computeFolderHashes(rootEntry);
+
+  StatusBarManager.showMessage(`Local files listed`, "", "", 3000, "check");
   return rootEntry;
+}
+
+//
+// ─── REMOTE FILE LISTING ────────────────────────────────────────────────────────
+//
+
+/**
+ * Listing remote files by batching find/stat/sha256 commands over SSH,
+ * showing real percentage progress.
+ */
+export async function listRemoteFiles(
+  remoteDir: string
+): Promise<FileNode | undefined> {
+  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
+  const connectionManager = await ConnectionManager.getInstance(configuration);
+
+  if (!(await pathExists(remoteDir, FileNodeSource.remote))) {
+    logErrorMessage(
+      `<listRemoteFiles> Could not find remotely the specified file/folder at ${remoteDir}`,
+      LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+    );
+    return undefined;
+  }
+
+  return connectionManager.doSSHOperation(
+    async (sshClient) => {
+      // Count total items for progress indication
+      const countCommand = `find "${remoteDir}" | wc -l`;
+      const countOutputRaw = await sshClient.executeCommand(countCommand);
+
+      const countLines = countOutputRaw.trim().split("\n");
+      const countDeniedLines = countLines.filter((l) =>
+        l.includes("Permission denied")
+      );
+      const lastCountLine = countLines[countLines.length - 1];
+      const totalItems = parseInt(lastCountLine.trim(), 10) || 0;
+      let processedItems = 0;
+      const updateProgress = () => {
+        const percent = totalItems > 0
+          ? Math.round((processedItems / totalItems) * 100)
+          : 100;
+        StatusBarManager.showProgress(Math.min(100, percent));
+      };
+
+      // Handle any denied paths from count stage
+      const countDeniedPaths = countDeniedLines
+        .map((l) => {
+          const m1 = l.match(/find: ‘(.+)’: Permission denied/);
+          const m2 = l.match(/sha256sum: (.+): Permission denied/);
+          return m1?.[1] ?? m2?.[1] ?? null;
+        })
+        .filter((p): p is string => !!p);
+
+      if (countDeniedPaths.length) {
+        await WorkspaceConfigManager.addToIgnoreList(...countDeniedPaths);
+        logErrorMessage(
+          `Skipped ${countDeniedPaths.length} inaccessible paths at count-stage:\n` +
+            countDeniedPaths.map((p) => `  • ${p}`).join("\n"),
+          LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+        );
+      }
+
+      if (totalItems === 0) {
+        logErrorMessage(
+          `<listRemoteFiles> No files found in ${remoteDir}`,
+          LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+        );
+        return undefined;
+      }
+
+      // 1) Fetch all directory metadata (path,size,mtime,type) in one stat batch
+      const dirStatCmd = `find "${remoteDir}" -type d -exec stat --format="%n,%s,%Y,%F" {} +`;
+      const dirsRaw = await sshClient.executeCommand(dirStatCmd);
+
+      // 2) Fetch all file stat info in one batch, strip leading remoteDir prefix, sort
+      const fileStatCmd = `
+        find "${remoteDir}" -type f -exec stat --format="%n,%s,%Y,%F" {} + \
+        | sed "s|^${remoteDir}/||" | sort
+      `;
+      const filesStatRaw = await sshClient.executeCommand(fileStatCmd);
+
+      // 3) Fetch all file hashes in one batch, strip prefix, sort
+      const fileHashCmd = `
+        find "${remoteDir}" -type f -exec sha256sum {} + \
+        | sed -E "s|\\s+${remoteDir}/|,|" | sort
+      `;
+      const filesHashRaw = await sshClient.executeCommand(fileHashCmd);
+
+      // Parse directory entries into a flat map
+      const dirEntries = dirsRaw.trim().split("\n");
+      const dirMap = new Map<string, { size: number; mtime: number }>();
+      for (const line of dirEntries) {
+        const parts = line.trim().split(",");
+        if (parts.length < 4) {
+          continue;
+        }
+        const fullPath = parts[0];
+        if (shouldIgnore(fullPath)) {
+          continue;
+        }
+
+        // Determine `rel` using splitParts
+        let rel: string;
+        if (fullPath === remoteDir) {
+          rel = ".";
+        } else if (fullPath.startsWith(remoteDir + "/")) {
+          const remainder = fullPath.slice(remoteDir.length + 1);
+          const segments = splitParts(remainder);
+          rel = segments.join("/");
+        } else {
+          const segments = splitParts(fullPath);
+          rel = segments.join("/");
+        }
+
+        const size = parseInt(parts[1], 10);
+        const mtime = parseInt(parts[2], 10) * 1000;
+        dirMap.set(rel, { size, mtime });
+        processedItems++;
+        updateProgress();
+      }
+
+      // Parse file stats into a map: relPath → { size, mtime }
+      const fileStatLines = filesStatRaw.trim().split("\n");
+      const fileStatMap = new Map<string, { size: number; mtime: number }>();
+      for (const raw of fileStatLines) {
+        const parts = raw.trim().split(",");
+        if (parts.length < 4) {
+          continue;
+        }
+        const fullPath = parts[0];
+        if (shouldIgnore(fullPath)) {
+          processedItems++;
+          updateProgress();
+          continue;
+        }
+
+        // fullPath is already relative (sed removed remoteDir/), so:
+        const segments = splitParts(fullPath);
+        const rel = segments.join("/");
+        const size = parseInt(parts[1], 10);
+        const mtime = parseInt(parts[2], 10) * 1000;
+        fileStatMap.set(rel, { size, mtime });
+        processedItems++;
+        updateProgress();
+      }
+
+      // Parse file hashes into a map: relPath → hash
+      const fileHashLines = filesHashRaw.trim().split("\n");
+      const fileHashMap = new Map<string, string>();
+      for (const raw of fileHashLines) {
+        const parts = raw.trim().split(",");
+        if (parts.length < 2) {
+          continue;
+        }
+        const rel = parts[1];
+        const hash = parts[0];
+        fileHashMap.set(rel, hash);
+        processedItems++;
+        updateProgress();
+      }
+
+      // Build directory FileNode objects first
+      let rootEntry: FileNode | undefined;
+      const dirNodeMap = new Map<string, FileNode>();
+
+      for (const [rel, meta] of dirMap.entries()) {
+        const name = rel === "." ? path.basename(remoteDir) : path.basename(rel);
+        const fullPath = rel === "." ? remoteDir : `${remoteDir}/${rel}`;
+        const node = new FileNode(
+          name,
+          BaseNodeType.directory,
+          meta.size,
+          new Date(meta.mtime),
+          fullPath,
+          FileNodeSource.remote
+        );
+        dirNodeMap.set(rel, node);
+        if (rel === ".") {
+          rootEntry = node;
+        }
+      }
+
+      if (!rootEntry) {
+        logErrorMessage(
+          `<listRemoteFiles> Could not build root for ${remoteDir}`,
+          LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+        );
+        return undefined;
+      }
+
+      // Attach each directory under its parent, using splitParts
+      for (const [rel, node] of dirNodeMap.entries()) {
+        if (rel === ".") {
+          continue;
+        }
+        const segments = splitParts(rel);
+        const parentRel =
+          segments.length === 1 ? "." : segments.slice(0, segments.length - 1).join("/");
+        const parentNode = dirNodeMap.get(parentRel);
+        if (parentNode) {
+          parentNode.addChild(node);
+        }
+      }
+
+      // Build file FileNode objects and attach under parent directories
+      for (const [rel, meta] of fileStatMap.entries()) {
+        const hash = fileHashMap.get(rel) || "";
+        const name = path.basename(rel);
+        const fullPath = `${remoteDir}/${rel}`;
+        const node = new FileNode(
+          name,
+          BaseNodeType.file,
+          meta.size,
+          new Date(meta.mtime),
+          fullPath,
+          FileNodeSource.remote
+        );
+        try {
+          node.hash = await generateHash(
+            fullPath,
+            FileNodeSource.remote,
+            BaseNodeType.file,
+            hash
+          );
+        } catch (err: any) {
+          logErrorMessage(
+            `Error hashing remote file ${fullPath}: ${err.message}`,
+            LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+          );
+        }
+
+        const segments = splitParts(rel);
+        const parentRel =
+          segments.length === 1 ? "." : segments.slice(0, segments.length - 1).join("/");
+        const parentNode = dirNodeMap.get(parentRel);
+        if (parentNode) {
+          parentNode.addChild(node);
+        }
+      }
+
+      // Compute hashes for all folders
+      await computeFolderHashes(rootEntry);
+
+      StatusBarManager.showMessage(`Remote files listed`, "", "", 3000, "check");
+      return rootEntry;
+    },
+    `Listing files on ${remoteDir}`
+  );
+}
+
+/**
+ * Recursively compute folder hashes for either local or remote trees.
+ */
+async function computeFolderHashes(node: FileNode): Promise<void> {
+  if (!node.isDirectory()) {
+    return;
+  }
+  for (const child of node.children.values()) {
+    await computeFolderHashes(child);
+  }
+  try {
+    node.hash = await generateHash(
+      node.fullPath,
+      node.source,
+      BaseNodeType.directory
+    );
+  } catch (err: any) {
+    logErrorMessage(
+      `Error hashing directory ${node.fullPath}: ${err.message}`,
+      LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+    );
+  }
 }
