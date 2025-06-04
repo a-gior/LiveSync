@@ -6,11 +6,9 @@ import { TreeViewManager } from "./managers/TreeViewManager";
 import { StatusBarManager } from "./managers/StatusBarManager";
 import { FileStatusDecorationProvider } from "./services/FileDecorationProvider";
 import { WorkspaceConfigManager } from "./managers/WorkspaceConfigManager";
-import { LOG_FLAGS, logConfigError, logErrorMessage, logInfoMessage } from "./managers/LogManager";
+import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./managers/LogManager";
 
 export async function activate(context: vscode.ExtensionContext) {
-  const iconTheme = vscode.workspace.getConfiguration("workbench").get("iconTheme");
-  console.log("Active Icon Theme:", iconTheme);
 
   // Only activate Livesync if there is a single folder in the workspace
   if (WorkspaceConfigManager.isMultiRootWorkspace()) {
@@ -20,22 +18,20 @@ export async function activate(context: vscode.ExtensionContext) {
     );
     return;
   }
-
-  if (!(await WorkspaceConfigManager.isVSCodeConfigValid())) {
-    logConfigError();
-  }
-
+  
   // Register file status decoration provider
   const fileStatusDecorationProvider = new FileStatusDecorationProvider();
   context.subscriptions.push(vscode.window.registerFileDecorationProvider(fileStatusDecorationProvider));
 
   // Initialize managers
   const treeDataProvider = await TreeViewManager.initialize(context);
+  CommandManager.registerCommands(context, treeDataProvider);
+  WorkspaceConfigManager.initialize(context);
   EventManager.initialize(context, treeDataProvider);
   StatusBarManager.createPermanentIcon();
-  CommandManager.registerCommands(context, treeDataProvider);
 
   logInfoMessage("LiveSync extension activated.");
+  
 }
 
 export function deactivate() {

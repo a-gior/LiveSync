@@ -1,4 +1,4 @@
-import { workspace, ConfigurationTarget } from "vscode";
+import { workspace, ConfigurationTarget, ExtensionContext } from "vscode";
 import * as crypto from "crypto";
 import { FileEventActionsMessage } from "../DTOs/messages/FileEventActionsMessage";
 import { LOG_FLAGS, logConfigError, logErrorMessage, logInfoMessage } from "./LogManager";
@@ -7,10 +7,11 @@ import path from "path";
 import { FileEventHandler } from "../services/FileEventHandler";
 import { Minimatch } from "minimatch";
 import { ConfigurationPanel } from "../panels/ConfigurationPanel";
-import { ConfigurationState } from "../DTOs/states/configurationState";
+import { ConfigurationState } from "../DTOs/states/ConfigurationState";
 
 export class WorkspaceConfigManager {
   private static _workspaceConfig: ConfigurationState | undefined;
+  private static _context: ExtensionContext;
   public static isVscodeSettingsValid: boolean = false;
 
   // cache the compiled matchers so we only do this once
@@ -24,7 +25,9 @@ export class WorkspaceConfigManager {
   // Load the configuration for the workspace
   static loadWorkspaceConfiguration() {
     if (!WorkspaceConfigManager.isVSCodeConfigValid()) {
-      logConfigError();
+      logConfigError(this._context, LOG_FLAGS.ALL, true);
+    } else {
+      this._context.globalState.update('suppressConfigError', false);
     }
 
     const config = this.getVSCodeConfiguration();
@@ -113,8 +116,17 @@ export class WorkspaceConfigManager {
   }
 
   // Initialize event listeners for workspace changes
-  static initialize(): void {
-    workspace.onDidChangeWorkspaceFolders(this.initializeConfiguration.bind(this));
+  public static initialize(context: ExtensionContext): void {
+    // 1) store the context
+    this._context = context;
+
+    // 2) run configuration logic immediately
+    this.initializeConfiguration();
+
+    // 3) re‐run whenever the workspace folders change
+    workspace.onDidChangeWorkspaceFolders(
+      () => this.initializeConfiguration()
+    );
   }
 
   // Initialize the configuration based on the workspace type
@@ -141,8 +153,7 @@ export class WorkspaceConfigManager {
   // Get the remote server configuration
   static getRemoteServerConfigured(): ConfigurationMessage["configuration"] {
     if (!this.isVscodeSettingsValid) {
-      logConfigError();
-      throw new Error("LiveSync is not configured or is invalid");
+      logConfigError(this._context, LOG_FLAGS.ALL, true);
     }
 
     const workspaceConfig = this.getWorkspaceConfiguration();
@@ -169,14 +180,13 @@ export class WorkspaceConfigManager {
   // Get configured remote path
   static getRemotePath(): string {
     if (!this.isVscodeSettingsValid) {
-      logConfigError();
-      throw new Error("LiveSync is not configured or is invalid");
+      logConfigError(this._context, LOG_FLAGS.ALL, true);
     }
 
     const workspaceConfig = this.getWorkspaceConfiguration();
 
     if (!workspaceConfig.remotePath || workspaceConfig.remotePath.length === 0) {
-      logErrorMessage("Remote path not configured", LOG_FLAGS.ALL);
+      // logErrorMessage("Remote path not configured", LOG_FLAGS.ALL);
       throw new Error("Remote path not configured");
     }
 
@@ -202,8 +212,7 @@ export class WorkspaceConfigManager {
   static getIgnoreMatchers(): Minimatch[] {
     if (!this.compiledIgnoreMatchers) {
       if (!this.isVscodeSettingsValid) {
-        logConfigError();
-        throw new Error("LiveSync is not configured or is invalid");
+        logConfigError(this._context, LOG_FLAGS.ALL, true);
       }
 
       const workspaceConfig = this.getWorkspaceConfiguration();
@@ -275,8 +284,7 @@ export class WorkspaceConfigManager {
   // Get a specific parameter
   static getParameter<T>(paramName: string): T | undefined {
     if (!this.isVscodeSettingsValid) {
-      logConfigError();
-      throw new Error("LiveSync is not configured or is invalid");
+      logConfigError(this._context, LOG_FLAGS.ALL, true);
     }
 
     const config = this.getVSCodeConfiguration();

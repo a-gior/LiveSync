@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { SilentError } from "../utilities/errors";
 
 // Define constants for the logging flags
 export const LOG_FLAGS = {
@@ -145,14 +146,29 @@ export class LogManager {
   }
 }
 
-export function logConfigError(flag: LogFlags = LOG_FLAGS.ALL) {
+export function logConfigError(ctx: vscode.ExtensionContext, flag: LogFlags = LOG_FLAGS.ALL, shouldThrow: boolean = false) {
   const errorMessage = "The server is unreachable. Check your configuration.";
+  const isSuppressed = ctx.globalState.get<boolean>(
+    'suppressConfigError',
+    false
+  );
+
+  if (isSuppressed ) {
+    // User clicked “Don’t show again” previously → skip showing this error
+    return;
+  }
+
 
   // Default actions for this error
   const errorActions: LogErrorAction = [
     { title: "Open Configuration", command: "livesync.configuration" },
-    { title: "Retry Connection", command: "livesync.testConnection" }
+    { title: "Retry Connection", command: "livesync.testConnection" },
+    {  title: `Don't show again`, command: 'livesync.dismissConfigError'}
   ];
 
   logErrorMessage(errorMessage, flag, undefined, errorActions);
+  
+  if (shouldThrow) {
+    throw new SilentError(errorMessage);
+  }
 }

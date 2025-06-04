@@ -135,6 +135,10 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
   }
 
   async getChildren(element?: ComparisonFileNode): Promise<ComparisonFileNode[]> {
+    if(!WorkspaceConfigManager.isVSCodeConfigValid()) {
+      return [];
+    }
+    
     if (!element) {
       try {
         const comparisonEntries = await this.jsonManager.getFileEntriesMap(JsonType.COMPARE);

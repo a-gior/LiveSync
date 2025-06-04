@@ -74,6 +74,7 @@ export class CommandManager {
       },
 
       "livesync.refreshAll": async () => {
+        WorkspaceConfigManager.reload();
         const { localPath, remotePath } = WorkspaceConfigManager.getWorkspaceFullPaths();
     
         // ───────────────────────────────────────────────────────────────────────────
@@ -281,6 +282,12 @@ export class CommandManager {
           return false;
         }
       },
+
+      'livesync.dismissConfigError': () => {
+        // Set a global‐state flag so we won’t show the error again until cleared
+        context.globalState.update('suppressConfigError', true);
+        logInfoMessage( 'Configuration errors will be suppressed until the settings.json becomes valid again.', LOG_FLAGS.ALL);
+      }
     };
 
     // Register all commands with single execution logic
