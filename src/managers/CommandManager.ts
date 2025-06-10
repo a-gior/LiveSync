@@ -16,10 +16,6 @@ import { Dialog } from "../services/Dialog";
 import { FileNodeSource } from "../utilities/FileNode";
 import { TreeViewManager } from "./TreeViewManager";
 import { StatusBarManager } from "./StatusBarManager";
-import {
-  listLocalFiles,
-  listRemoteFiles
-} from "../utilities/fileUtils/fileListing";
 
 export class CommandManager {
   private static runningCommands: Set<string> = new Set();
@@ -74,69 +70,12 @@ export class CommandManager {
       },
 
       "livesync.refreshAll": async () => {
-        WorkspaceConfigManager.reload();
-        const { localPath, remotePath } = WorkspaceConfigManager.getWorkspaceFullPaths();
-    
-        // ───────────────────────────────────────────────────────────────────────────
-        // 1) TIME the NEW optimized approach
-        // ───────────────────────────────────────────────────────────────────────────
-        let comparisonNode: ComparisonFileNode | null = null;
-        let durationMs = 0;
-    
-        try {
-          const t0 = performance.now();
-    
-          // 1.a) List local files (optimized)
-          const localRoot = await listLocalFiles(localPath);
-          // 1.b) List remote files (optimized)
-          const remoteRoot = await listRemoteFiles(remotePath);
-    
-          if (!localRoot || !remoteRoot) {
-            throw new Error("Listing returned undefined");
-          }
-    
-          // 1.c) Compare the two trees
-          comparisonNode = ComparisonFileNode.compareFileNodes(localRoot, remoteRoot);
-    
-          const t1 = performance.now();
-          durationMs = t1 - t0;
-          logInfoMessage(`Listing + compare (optimized): ${durationMs.toFixed(2)} ms`);
-          StatusBarManager.showMessage("Comparing done!", "", "", 3000, "check");
-        } catch (err: any) {
-          logErrorMessage(
-            `<refreshAll> Optimized listing+compare failed: ${err.message}`,
-            LOG_FLAGS.CONSOLE_AND_LOG_MANAGER,
-            err
-          );
-          StatusBarManager.showMessage("Refresh All failed", "", "", 3000, "error");
-          return;
-        }
-    
-        // ───────────────────────────────────────────────────────────────────────────
-        // 2) Update the tree with the comparison result
-        // ───────────────────────────────────────────────────────────────────────────
-        if (!comparisonNode) {
-          StatusBarManager.showMessage("Refresh All failed: no comparison result", "", "", 3000, "error");
-          return;
-        }
-    
-        const existingNode = treeDataProvider.rootElements.get(comparisonNode.name);
-        if (existingNode) {
-          // Update properties in-place
-          Object.assign(existingNode, comparisonNode);
-        } else {
-          // Insert new root-level node
-          treeDataProvider.rootElements.set(comparisonNode.name, comparisonNode);
-        }
-    
-        // Persist the comparison JSON
-        await JsonManager.getInstance().updateFullJson(JsonType.COMPARE, treeDataProvider.rootElements);
-    
-        // Finally refresh the view
-        await treeDataProvider.refresh();
+        await vscode.commands.executeCommand("livesync.refresh");
       },
 
       "livesync.refresh": async (element?: ComparisonFileNode | vscode.Uri) => {
+        WorkspaceConfigManager.reload();
+
         if (!element) {
           const { localPath, remotePath } = WorkspaceConfigManager.getWorkspaceFullPaths();
           const comparisonFileNode = await treeDataProvider.getComparisonFileNode(localPath, remotePath);
