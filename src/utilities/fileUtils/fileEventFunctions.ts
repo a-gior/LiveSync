@@ -232,6 +232,8 @@ async function handleFileOperation(action: ActionOn, uri: Uri, oldUri: Uri | nul
           const localPathOld = oldUri.fsPath;
           const remotePathOld = getCorrespondingPath(localPathOld);
           await moveRemoteFile(remotePathOld, remotePath);
+          
+          await updateRemoteFilesJsonForPaths(remotePathOld, remotePath);
         }
         break;
 
@@ -239,20 +241,21 @@ async function handleFileOperation(action: ActionOn, uri: Uri, oldUri: Uri | nul
       case ActionOn.Save:
       case ActionOn.Create:
         await uploadRemoteFile(localPath, remotePath);
+        await updateRemoteFilesJsonForPaths(remotePath);
         break;
 
       case ActionOn.Download:
       case ActionOn.Open:
         await downloadRemoteFile(remotePath, localPath);
+        await updateRemoteFilesJsonForPaths(remotePath);
         break;
 
       case ActionOn.Delete:
         await deleteRemoteFile(remotePath);
+        await updateRemoteFilesJsonForPaths(remotePath);
         break;
     }
 
-    // Update JSON Remote Files
-    await updateRemoteFilesJsonForPaths(remotePath);
   }
 
   return actionResult;
