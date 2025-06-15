@@ -329,17 +329,17 @@ export default class JsonManager {
   public static async findNodeByPath<T extends FileNode | ComparisonFileNode>(
     filePath: string,
     rootEntries: Map<string, T>,
-    pairedFolderName?: string
+    rootName?: string
   ): Promise<T | undefined> {
     if (!filePath || filePath === "." || filePath === "") {
-      return pairedFolderName ? rootEntries.get(pairedFolderName) : undefined;
+      return rootName ? rootEntries.get(rootName) : undefined;
     }
 
     try {
-      if (pairedFolderName) {
-        const rootNode = rootEntries.get(pairedFolderName);
+      if (rootName) {
+        const rootNode = rootEntries.get(rootName);
         if (!rootNode) {
-          throw new Error(`Root node not found: ${pairedFolderName}`);
+          throw new Error(`Root node not found: ${rootName}`);
         }
 
         const pathParts = splitParts(filePath);
@@ -405,16 +405,7 @@ export default class JsonManager {
 
       parentNode.children.delete(element.name);
 
-      const tempNode = new ComparisonFileNode(
-        element.name,
-        element.type,
-        element.size,
-        element.modifiedTime,
-        element.relativePath,
-        ComparisonStatus.removed
-      );
-
-      return ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, tempNode);
+      return ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, parentNode);
     } catch (error: any) {
       logErrorMessage("Delete node failed", LOG_FLAGS.ALL, error.message);
       throw new Error("Deleting node to rootElements failed");
