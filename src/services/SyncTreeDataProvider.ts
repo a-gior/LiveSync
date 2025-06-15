@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { ensureDirectoryExists } from "../utilities/fileUtils/fileOperations";
-import { getFullPaths, joinParts, splitParts } from "../utilities/fileUtils/filePathUtils";
+import { getFullPaths } from "../utilities/fileUtils/filePathUtils";
 import { listLocalFiles, listRemoteFiles } from "../utilities/fileUtils/fileListing";
 import { IconLoader } from "./IconLoader";
 import { SAVE_DIR } from "../utilities/constants";
@@ -71,23 +71,34 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
   async refresh(element?: ComparisonFileNode): Promise<void> {
     logInfoMessage("Refreshing Tree: ", LOG_FLAGS.CONSOLE_ONLY, element);
     TreeViewManager.updateMessage(this);
-
-    if (!element) {
+  
+    const rootName = WorkspaceConfigManager.getWorkspaceBasename();
+  
+    // 1) Lst mode OR No element OR root element => full refresh
+    if (!this._showAsTree || !element || element.relativePath === "" || element.relativePath === ".") {
       this._onDidChangeTreeData.fire(undefined);
-    } else {
-      let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
-
-      const pathParts = splitParts(element.relativePath);
-      if (element.relativePath === "" || element.relativePath === ".") {
-        this._onDidChangeTreeData.fire(undefined);
-      } else if (!element.isDirectory() && pathParts.length > 1) {
-        const parentPathParts = pathParts.slice(0, pathParts.length - 1);
-        const parentNode = await JsonManager.findNodeByPath(joinParts(parentPathParts), this.rootElements, rootFolderName);
+      return;
+    }
+  
+    // 2) File => refresh its parent folder (dirname "foo.ts" → "" → root)
+    if (!element.isDirectory()) {
+      const parentRel = path.dirname(element.relativePath);
+      
+      if(parentRel !== ".") {
+        const parentNode = await JsonManager.findNodeByPath(
+          parentRel,
+          this.rootElements,
+          rootName
+        );
         this._onDidChangeTreeData.fire(parentNode);
       } else {
-        this._onDidChangeTreeData.fire(element);
+        this._onDidChangeTreeData.fire();
       }
+      return;
     }
+  
+    // 3) Directory => refresh that directory node
+    this._onDidChangeTreeData.fire(element);
     
   }
 
@@ -318,6 +329,27 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
     // Start recursion
     recurse(nodes);
 
+    // Sort the view nodes after processing
+    this.sortViewNodes(viewNodes);
     return viewNodes;
+  }
+
+  private sortViewNodes(nodes: ComparisonFileNode[]): void {
+    // directories first, then files, alphabetically
+    nodes.sort((a, b) => {
+      if (a.isDirectory() !== b.isDirectory()) {
+        return a.isDirectory() ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    });
+  
+    // if you’re in tree-mode, recurse into each folder’s children
+    if (this._showAsTree) {
+      for (const n of nodes) {
+        if (n.children && n.children.size) {
+          this.sortViewNodes(Array.from(n.children.values()));
+        }
+      }
+    }
   }
 }
