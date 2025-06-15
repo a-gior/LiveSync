@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import { SilentError } from "../utilities/errors";
 
 // Define constants for the logging flags
 export const LOG_FLAGS = {
@@ -169,6 +168,6 @@ export function logConfigError(ctx: vscode.ExtensionContext, flag: LogFlags = LO
   logErrorMessage(errorMessage, flag, undefined, errorActions);
   
   if (shouldThrow) {
-    throw new SilentError(errorMessage);
+    throw new Error(errorMessage);
   }
 }
