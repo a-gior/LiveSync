@@ -4,7 +4,7 @@ import * as path from "path";
 import { FileNode, FileNodeSource } from "../FileNode";
 import pLimit from "p-limit";
 import { ConnectionManager } from "../../managers/ConnectionManager";
-import { LOG_FLAGS, logErrorMessage } from "../../managers/LogManager";
+import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../../managers/LogManager";
 import { shouldIgnore } from "../shouldIgnore";
 import { generateHash } from "./hashUtils";
 import { StatusBarManager } from "../../managers/StatusBarManager";
@@ -453,24 +453,22 @@ export async function listRemoteFiles(
   );
 }
 
+
 export async function listRemoteFile(remoteFilePath: string): Promise<FileNode | undefined> {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = await ConnectionManager.getInstance(configuration);
 
-  return connectionManager.doSSHOperation(
+  // Try to fetch as a single file
+  const fileNode = await connectionManager.doSSHOperation(
     async (sshClient) => {
-      // Check if it's a valid file
+      // 1) is it a regular file?
       const fileCheckCmd = `[ -f "${remoteFilePath}" ] && echo "true" || echo "false"`;
       const isFileOutput = await sshClient.executeCommand(fileCheckCmd);
       if (isFileOutput.trim() !== "true") {
-        logErrorMessage(
-          `<listRemoteFile> Path is not a file or doesn't exist: ${remoteFilePath}`,
-          LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
-        );
         return undefined;
       }
 
-      // Get stat info: size, mtime
+      // 2) grab size + mtime
       const statCmd = `stat --format="%s,%Y" "${remoteFilePath}"`;
       const statOutput = await sshClient.executeCommand(statCmd);
       const [sizeStr, mtimeStr] = statOutput.trim().split(",");
@@ -478,6 +476,7 @@ export async function listRemoteFile(remoteFilePath: string): Promise<FileNode |
       const mtime = new Date(parseInt(mtimeStr, 10) * 1000);
       const name = path.basename(remoteFilePath);
 
+      // 3) build the FileNode
       const node = new FileNode(
         name,
         BaseNodeType.file,
@@ -487,6 +486,7 @@ export async function listRemoteFile(remoteFilePath: string): Promise<FileNode |
         FileNodeSource.remote
       );
 
+      // 4) compute hash
       try {
         node.hash = await generateHash(
           remoteFilePath,
@@ -504,6 +504,18 @@ export async function listRemoteFile(remoteFilePath: string): Promise<FileNode |
     },
     `Fetching info from ${remoteFilePath}`
   );
+
+  if (fileNode) {
+    return fileNode;
+  }
+
+  // Fallback: path wasn’t a file (or didn’t exist) → list its parent directory
+  const parentDir = path.dirname(remoteFilePath);
+  logInfoMessage(
+    `<listRemoteFile> Path isn’t a file or doesn’t exist, falling back to listRemoteFiles for ${parentDir}`,
+    LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+  );
+  return listRemoteFiles(parentDir);
 }
 
 /**
