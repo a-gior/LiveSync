@@ -453,6 +453,59 @@ export async function listRemoteFiles(
   );
 }
 
+export async function listRemoteFile(remoteFilePath: string): Promise<FileNode | undefined> {
+  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
+  const connectionManager = await ConnectionManager.getInstance(configuration);
+
+  return connectionManager.doSSHOperation(
+    async (sshClient) => {
+      // Check if it's a valid file
+      const fileCheckCmd = `[ -f "${remoteFilePath}" ] && echo "true" || echo "false"`;
+      const isFileOutput = await sshClient.executeCommand(fileCheckCmd);
+      if (isFileOutput.trim() !== "true") {
+        logErrorMessage(
+          `<listRemoteFile> Path is not a file or doesn't exist: ${remoteFilePath}`,
+          LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+        );
+        return undefined;
+      }
+
+      // Get stat info: size, mtime
+      const statCmd = `stat --format="%s,%Y" "${remoteFilePath}"`;
+      const statOutput = await sshClient.executeCommand(statCmd);
+      const [sizeStr, mtimeStr] = statOutput.trim().split(",");
+      const size = parseInt(sizeStr, 10);
+      const mtime = new Date(parseInt(mtimeStr, 10) * 1000);
+      const name = path.basename(remoteFilePath);
+
+      const node = new FileNode(
+        name,
+        BaseNodeType.file,
+        size,
+        mtime,
+        remoteFilePath,
+        FileNodeSource.remote
+      );
+
+      try {
+        node.hash = await generateHash(
+          remoteFilePath,
+          FileNodeSource.remote,
+          BaseNodeType.file
+        );
+      } catch (err: any) {
+        logErrorMessage(
+          `Error hashing remote file ${remoteFilePath}: ${err.message}`,
+          LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+        );
+      }
+
+      return node;
+    },
+    `Fetching info from ${remoteFilePath}`
+  );
+}
+
 /**
  * Recursively compute folder hashes for either local or remote trees.
  */
