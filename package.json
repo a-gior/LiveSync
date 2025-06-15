@@ -174,20 +174,6 @@
           "group": "inline@5"
         }
       ],
-      "editor/context": [
-        {
-          "command": "livesync.upload",
-          "group": "inline@1"
-        },
-        {
-          "command": "livesync.download",
-          "group": "inline@2"
-        },
-        {
-          "command": "livesync.showDiff",
-          "group": "inline@3"
-        }
-      ],
       "view/title": [
         {
           "command": "livesync.refreshAll",
