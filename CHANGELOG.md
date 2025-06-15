@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.3] - Editor Integration & Tree View Improvements ✨
+
+### Added
+- Commands to Upload, Download, Show Diff and Refresh directly from the editor’s right-click menu  
+- Delete actions for new or removed files in the LiveSync tree view  
+- “Expand Changed” command to expand all files and folders with differences at once  
+- “Don’t show again” option on the configuration-warning popup when LiveSync isn’t set up  
+- Open files in the editor by clicking them in the LiveSync tree view  
+
+### Changed
+- Folder status now marked **unchanged** only if **all** children are unchanged; otherwise marked **modified**  
+- Tree view now refreshes individual files and folders reliably, including root-level files on save  
+
+### Fixed
+- Inconsistent ordering of items in the tree view  
+- Status not updating correctly after renaming or moving files  
+
+### Improvements
+- Much faster comparisons for large directories  
+- SSH listing skips “Permission denied” paths without aborting the operation  
+- Clear informational messages during loading and when no differences are found  
+
 ## [1.0.2] - Docs & Ignore Logic Fix 📚🛠
 
 ### 📚 Documentation
