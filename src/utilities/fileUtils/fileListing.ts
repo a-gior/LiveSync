@@ -1,8 +1,6 @@
 import * as fs from "fs/promises";
-import { Dirent, Stats } from "fs";
 import * as path from "path";
 import { FileNode, FileNodeSource } from "../FileNode";
-import pLimit from "p-limit";
 import { ConnectionManager } from "../../managers/ConnectionManager";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../../managers/LogManager";
 import { shouldIgnore } from "../shouldIgnore";
@@ -11,199 +9,101 @@ import { StatusBarManager } from "../../managers/StatusBarManager";
 import { BaseNodeType } from "../BaseNode";
 import { normalizePath, pathExists, splitParts } from "./filePathUtils";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
-
-// Limit concurrent file operations to 9
-const limit = pLimit(9);
+import fg, { Entry } from "fast-glob";
+import pMap from "p-map";
+import { createHash } from "crypto";
 
 //
 // ─── LOCAL FILE LISTING ─────────────────────────────────────────────────────────
 //
 
 /**
- * Counts all files and directories under `dir`, excluding ignored ones, for progress tracking.
- */
-async function countLocalItems(dir: string): Promise<number> {
-  let count = 0;
-  const queue: string[] = [dir];
-
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    let entries: Dirent[];
-    try {
-      entries = await fs.readdir(current, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const dirent of entries) {
-      const fullPath = normalizePath(path.join(current, dirent.name));
-      if (shouldIgnore(fullPath)) {
-        continue;
-      }
-      count++;
-      if (dirent.isDirectory()) {
-        queue.push(fullPath);
-      }
-    }
-  }
-
-  return count;
-}
-
-/**
  * Builds the local file tree under `localDir`, showing real percentage progress.
  */
-export async function listLocalFiles(
-  localDir: string
-): Promise<FileNode | undefined> {
-  StatusBarManager.showMessage(
-    `Listing files of ${localDir}`,
-    "",
-    "",
-    0,
-    "sync~spin",
-    true
-  );
+export async function listLocalFiles(localDir: string): Promise<FileNode | undefined> {
+  StatusBarManager.showMessage(`Listing files of ${localDir}`, "", "", 0, "sync~spin", true);
 
-  const nodeType = await pathExists(localDir, FileNodeSource.local);
-  if (!nodeType) {
-    logErrorMessage(
-      `Could not find locally the specified file/folder at ${localDir}`,
-      LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
-    );
-    return undefined;
-  }
-
-  // Count total items for progress
-  const totalItems = await countLocalItems(localDir);
-  let processedItems = 0;
-  const updateProgress = () => {
-    const percent = totalItems > 0
-      ? Math.round((processedItems / totalItems) * 100)
-      : 100;
-    StatusBarManager.showProgress(Math.min(100, percent));
-  };
-
-  // Stat root once
-  let rootStats: Stats;
-  try {
-    rootStats = await fs.stat(localDir);
-  } catch (err: any) {
-    logErrorMessage(
-      `Error stating root directory ${localDir}: ${err.message}`,
-      LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
-    );
-    return undefined;
-  }
-
+  // Prepare root node
+  const rootStats = await fs.stat(localDir);
   const rootEntry = new FileNode(
     path.basename(localDir),
-    nodeType,
+    BaseNodeType.directory,
     rootStats.size,
     rootStats.mtime,
     normalizePath(localDir),
     FileNodeSource.local
   );
 
-  // Use a FIFO queue for breadth-first traversal
-  const dirQueue: FileNode[] = [];
-  if (rootEntry.isDirectory()) {
-    dirQueue.push(rootEntry);
-    processedItems++; // count the root itself
-    updateProgress();
-  }
+  // BFS queue for directories
+  const dirQueue: FileNode[] = [rootEntry];
+  // Collect file nodes to hash later
+  const fileNodes: FileNode[] = [];
 
-  // Traverse directories
   while (dirQueue.length > 0) {
-    const currentDirNode = dirQueue.shift()!;
-    const currentDirPath = currentDirNode.fullPath;
-
-    let dirEntries: Dirent[];
-    try {
-      dirEntries = await fs.readdir(currentDirPath, { withFileTypes: true });
-    } catch (err: any) {
-      logErrorMessage(
-        `Error reading directory ${currentDirPath}: ${err.message}`,
-        LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
-      );
+    const current = dirQueue.shift()!;
+    // Skip if ignored (and don't descend)
+    if (shouldIgnore(current.fullPath)) {
       continue;
     }
 
-    const tasks: Promise<void>[] = [];
-
-    for (const dirent of dirEntries) {
-      tasks.push(
-        limit(async () => {
-          const entryName = dirent.name;
-          const fullPath = path.join(currentDirPath, entryName);
-          const normalizedFull = normalizePath(fullPath);
-
-          if (shouldIgnore(normalizedFull)) {
-            processedItems++;
-            updateProgress();
-            return;
-          }
-
-          let st: Stats;
-          try {
-            st = await fs.stat(normalizedFull);
-          } catch (err: any) {
-            logErrorMessage(
-              `Error stating ${normalizedFull}: ${err.message}`,
-              LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
-            );
-            processedItems++;
-            updateProgress();
-            return;
-          }
-
-          const entryType: BaseNodeType = st.isDirectory()
-            ? BaseNodeType.directory
-            : BaseNodeType.file;
-
-          const childNode = new FileNode(
-            entryName,
-            entryType,
-            st.size,
-            st.mtime,
-            normalizedFull,
-            FileNodeSource.local
-          );
-
-          currentDirNode.addChild(childNode);
-          processedItems++;
-          updateProgress();
-
-          if (entryType === BaseNodeType.directory) {
-            dirQueue.push(childNode);
-            return;
-          }
-
-          // For files: compute hash
-          try {
-            childNode.hash = await generateHash(
-              normalizedFull,
-              FileNodeSource.local,
-              entryType
-            );
-          } catch (err: any) {
-            logErrorMessage(
-              `Error hashing ${normalizedFull}: ${err.message}`,
-              LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
-            );
-          }
-        })
-      );
+    // List immediate children using fast-glob
+    let entries: Entry[];
+    try {
+      entries = await fg("*", {
+        cwd: current.fullPath,
+        dot: true,
+        stats: true,
+        onlyFiles: false
+      });
+    } catch (err: any) {
+      continue;
     }
 
-    await Promise.all(tasks);
+    for (const e of entries) {
+      const stats = e.stats;
+      if (!stats) {continue;}
+
+      const entryName = e.path;
+      const fullPath = normalizePath(path.join(current.fullPath, entryName));
+      if (shouldIgnore(fullPath)) {
+        continue;
+      }
+
+      const type = stats.isDirectory() ? BaseNodeType.directory : BaseNodeType.file;
+      const child = new FileNode(
+        entryName,
+        type,
+        stats.size,
+        new Date(stats.mtimeMs),
+        fullPath,
+        FileNodeSource.local
+      );
+      current.addChild(child);
+
+      if (type === BaseNodeType.directory) {
+        dirQueue.push(child);
+      } else {
+        fileNodes.push(child);
+      }
+    }
   }
 
-  // Compute hashes for all folders
+  // Hash all files in parallel (limit concurrency)
+  await pMap(
+    fileNodes,
+    async node => {
+      node.hash = await generateHash(node.fullPath, node.source, node.type);
+    },
+    { concurrency: 16 }
+  );
+
+  // Compute directory hashes purely in memory
   await computeFolderHashes(rootEntry);
 
   StatusBarManager.showMessage(`Local files listed`, "", "", 3000, "check");
   return rootEntry;
 }
+
 
 //
 // ─── REMOTE FILE LISTING ────────────────────────────────────────────────────────
@@ -518,26 +418,14 @@ export async function listRemoteFile(remoteFilePath: string): Promise<FileNode |
   return listRemoteFiles(parentDir);
 }
 
-/**
- * Recursively compute folder hashes for either local or remote trees.
- */
 async function computeFolderHashes(node: FileNode): Promise<void> {
-  if (!node.isDirectory()) {
-    return;
-  }
-  for (const child of node.children.values()) {
-    await computeFolderHashes(child);
-  }
-  try {
-    node.hash = await generateHash(
-      node.fullPath,
-      node.source,
-      BaseNodeType.directory
-    );
-  } catch (err: any) {
-    logErrorMessage(
-      `Error hashing directory ${node.fullPath}: ${err.message}`,
-      LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
-    );
-  }
+  if (!node.isDirectory()) {return;}
+  // first recurse
+  await Promise.all(Array.from(node.children.values()).map(n => computeFolderHashes(n)));
+  // then combine child hashes
+  const combined = Array.from(node.children.values())
+    .map(c => c.hash ?? "")
+    .sort()
+    .join("");
+  node.hash = createHash("sha256").update(combined).digest("hex");
 }
