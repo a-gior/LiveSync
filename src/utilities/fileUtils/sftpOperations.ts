@@ -148,3 +148,16 @@ export async function deleteRemoteFile(remotePath: string): Promise<void> {
     window.showErrorMessage(`Failed to delete remote file: ${error.message}`);
   }
 }
+
+export async function compareFileHash(
+  localPath: string,
+  remotePath: string
+): Promise<boolean> {
+  // Compute both hashes in parallel
+  const [localHash, remoteHash] = await Promise.all([
+    generateHash(localPath, FileNodeSource.local, BaseNodeType.file),
+    generateHash(remotePath, FileNodeSource.remote, BaseNodeType.file)
+  ]);
+
+  return localHash === remoteHash;
+}
