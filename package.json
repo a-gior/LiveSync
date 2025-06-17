@@ -2,7 +2,7 @@
   "name": "livesync",
   "displayName": "LiveSync",
   "description": "Instant file sync over SSH/SFTP with diff tracking and easy config UI.",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "publisher": "agior",
   "icon": "resources/icons/livesync-logo-gold.png",
   "repository": {
