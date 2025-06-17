@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.4] - Performance & Status Fixes 🏎️
+
+### Improvements
+
+Significantly faster local file listing that skips ignored folders and shows real-time progress in the status bar
+
+LiveSync tree now updates file statuses immediately when files are saved or other events occur
+
 ## [1.0.3] - Editor Integration & Tree View Improvements ✨
 
 ### Added
