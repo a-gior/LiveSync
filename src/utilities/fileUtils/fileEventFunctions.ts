@@ -1,6 +1,6 @@
 import { window, commands, Uri } from "vscode";
 import { getCorrespondingPath, normalizePath, pathExists } from "./filePathUtils";
-import { uploadRemoteFile, compareRemoteFileHash, deleteRemoteFile, moveRemoteFile, downloadRemoteFile } from "./sftpOperations";
+import { uploadRemoteFile, compareRemoteFileHash, deleteRemoteFile, moveRemoteFile, downloadRemoteFile, compareFileHash } from "./sftpOperations";
 import * as path from "path";
 import JsonManager from "../../managers/JsonManager";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../../managers/LogManager";
@@ -36,9 +36,11 @@ function getCheckMessage(action: ActionOn, filePath: string): string {
     case ActionOn.Save:
     case ActionOn.Open:
       return `File ${fileName} has been modified on the remote server`;
+
     case ActionOn.Create:
     case ActionOn.Move:
       return `File ${fileName} already exists on the remote server`;
+
     case ActionOn.Delete:
       return `File ${fileName} doesn't exist on the remote server`;
   }
@@ -131,10 +133,8 @@ export async function handleFileCheck(action: ActionOn, actionParameter: string,
   // Check if remote file exists remotely
   const actionResult = await checkRemoteFileExistence(remotePath);
 
-  // Perform a hash check between remote file saved in JSON and remotely
+  // Perform a hash check between remote file saved in JSON and remotely (aka someone modified the file on the remote server)
   const isSameRemoteHash = await compareRemoteFileHash(remotePath);
-
-  // const isSame = await compareFileHash(localPath, remotePath);
 
   // Strict check
   if (actionParameter === "check") {
@@ -203,7 +203,9 @@ export async function handleFileCheck(action: ActionOn, actionParameter: string,
     return ActionResult.DontExist;
   }
 
-  return isSameRemoteHash ? ActionResult.Exists : ActionResult.IsNotSame;
+  // Compare local file hash with remote file hash
+  const isSame = await compareFileHash(localPath, remotePath);
+  return isSame ? ActionResult.Exists : ActionResult.IsNotSame;
 }
 
 // This function orchestrates the different file operations (e.g., move, save, delete).
