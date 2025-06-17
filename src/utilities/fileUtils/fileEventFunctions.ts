@@ -29,11 +29,10 @@ function getPromptMessage(check: Check, localPath: string, remotePath: string): 
 function getCheckMessage(action: ActionOn, filePath: string): string {
   const fileName = path.basename(filePath);
   switch (action) {
-    case ActionOn.Upload:
-      return `??`;
     case ActionOn.Download:
       return `File ${fileName} already exists locally`;
 
+    case ActionOn.Upload:
     case ActionOn.Save:
     case ActionOn.Open:
       return `File ${fileName} has been modified on the remote server`;
@@ -134,6 +133,8 @@ export async function handleFileCheck(action: ActionOn, actionParameter: string,
 
   // Perform a hash check between remote file saved in JSON and remotely
   const isSameRemoteHash = await compareRemoteFileHash(remotePath);
+
+  // const isSame = await compareFileHash(localPath, remotePath);
 
   // Strict check
   if (actionParameter === "check") {
