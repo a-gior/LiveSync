@@ -12,6 +12,73 @@ import { logErrorMessage } from "../../managers/LogManager";
 import { BaseNodeType } from "../BaseNode";
 import JsonManager, { isFileNodeMap, JsonType } from "../../managers/JsonManager";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
+import { pathExists, pathType } from "./filePathUtils";
+
+export async function moveRemoteFile(localPath:string, oldRemotePath: string, newRemotePath: string): Promise<void> {
+  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
+  const connectionManager = await ConnectionManager.getInstance(configuration);
+
+  if (shouldIgnore(oldRemotePath)) {
+    return;
+  }
+
+  try {
+    await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+      const localNodeType = await pathType(localPath, FileNodeSource.local);
+      switch(localNodeType) {
+        case BaseNodeType.directory:
+          await sftpClient.moveDirectory(oldRemotePath, newRemotePath);
+          break;
+
+        case BaseNodeType.file:
+          await sftpClient.moveFile(oldRemotePath, newRemotePath);
+          break;
+
+        case false:
+        default: 
+          throw new Error(`Local node should exist: ${oldRemotePath}`);
+          
+      }
+    }, `Move file from ${oldRemotePath} to ${newRemotePath}`);
+  } catch (error: any) {
+    logErrorMessage(`Failed to move remote file: ${error.message}`);
+    window.showErrorMessage(`Failed to move remote file: ${error.message}`);
+  }
+}
+
+export async function deleteRemoteFile(remotePath: string): Promise<void> {
+  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
+  const connectionManager = await ConnectionManager.getInstance(configuration);
+
+  if (shouldIgnore(remotePath)) {
+    return;
+  }
+
+  try {
+    await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+      const remoteNodeType = await pathType(remotePath, FileNodeSource.remote);
+
+      switch(remoteNodeType) {
+        case BaseNodeType.directory:
+          await sftpClient.deleteDirectory(remotePath);
+          break;
+  
+        case BaseNodeType.file:
+          await sftpClient.deleteFile(remotePath);
+          break;
+  
+        case false:
+        default: 
+          throw new Error(`Remote node should exist: ${remotePath}`);
+          
+      }
+      
+    }, `Delete ${remotePath}`);
+  } catch (error: any) {
+    logErrorMessage(`Failed to delete remote file: ${error.message}`);
+    window.showErrorMessage(`Failed to delete remote file: ${error.message}`);
+  }
+}
 
 export async function downloadRemoteFile(remotePath: string, localPath: string): Promise<void> {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
@@ -22,13 +89,32 @@ export async function downloadRemoteFile(remotePath: string, localPath: string):
   }
 
   await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
-    const dir = path.dirname(localPath);
-    await fs.promises.mkdir(dir, { recursive: true });
-    await sftpClient.downloadFile(remotePath, localPath);
+    const remoteNodeType = await pathType(remotePath, FileNodeSource.remote);
+
+    switch(remoteNodeType) {
+      case BaseNodeType.directory:
+        if(!await pathExists(localPath, FileNodeSource.local)) {
+          await fs.promises.mkdir(localPath, { recursive: true });
+        }
+        break;
+
+      case BaseNodeType.file:
+        const localDir = path.dirname(localPath);
+        if(!await pathExists(localDir, FileNodeSource.local)) {
+          await fs.promises.mkdir(localDir, { recursive: true });
+        }
+        await sftpClient.downloadFile(remotePath, localPath);
+        break;
+
+      case false:
+      default: 
+        throw new Error(`Remote node should exist: ${localPath}`);
+        
+    }
   }, `Download ${remotePath}`);
 }
 
-export async function uploadRemoteFile(localPath: string, remotePath: string, checkParentDirExists: boolean = true): Promise<void> {
+export async function uploadRemoteFile(localPath: string, remotePath: string): Promise<void> {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = await ConnectionManager.getInstance(configuration);
 
@@ -37,14 +123,27 @@ export async function uploadRemoteFile(localPath: string, remotePath: string, ch
   }
 
   await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
-    const remoteDir = path.dirname(remotePath);
-    if (checkParentDirExists) {
-      const dirExists = await sftpClient.pathExists(remoteDir);
-      if (!dirExists) {
-        await sftpClient.createDirectory(remoteDir);
-      }
+    const localNodeType = await pathType(localPath, FileNodeSource.local);
+
+    switch(localNodeType) {
+      case BaseNodeType.directory:
+        await sftpClient.createDirectory(remotePath);
+        break;
+
+      case BaseNodeType.file:
+        const remoteDir = path.dirname(remotePath);
+        const dirExists = await sftpClient.exists(remoteDir);
+        if (!dirExists) {
+          await sftpClient.createDirectory(remoteDir);
+        }
+        await sftpClient.uploadFile(localPath, remotePath);
+        break;
+
+      case false:
+      default: 
+        throw new Error(`Local node should exist: ${localPath}`);
+        
     }
-    await sftpClient.uploadFile(localPath, remotePath);
   }, `Upload to ${remotePath}`);
 }
 
@@ -91,15 +190,6 @@ export async function getRemoteFileContentHash(remotePath: string): Promise<stri
   return fileHash;
 }
 
-export async function remotePathExists(remotePath: string) {
-  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = await ConnectionManager.getInstance(configuration);
-
-  return await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
-    return await sftpClient.pathExists(remotePath);
-  }, `Checking if ${remotePath} exists`);
-}
-
 export async function getRemoteFileMetadata(remotePath: string): Promise<sftp.FileStats | undefined> {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = await ConnectionManager.getInstance(configuration);
@@ -110,42 +200,6 @@ export async function getRemoteFileMetadata(remotePath: string): Promise<sftp.Fi
     }, `Get data from ${remotePath}`);
   } catch (err: any) {
     logErrorMessage(`Couldn't fetch metadata for remote file ${remotePath}`);
-  }
-}
-
-export async function moveRemoteFile(oldRemotePath: string, newRemotePath: string): Promise<void> {
-  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = await ConnectionManager.getInstance(configuration);
-
-  if (shouldIgnore(oldRemotePath)) {
-    return;
-  }
-
-  try {
-    await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
-      await sftpClient.moveFile(oldRemotePath, newRemotePath);
-    }, `Move file from ${oldRemotePath} to ${newRemotePath}`);
-  } catch (error: any) {
-    logErrorMessage(`Failed to move remote file: ${error.message}`);
-    window.showErrorMessage(`Failed to move remote file: ${error.message}`);
-  }
-}
-
-export async function deleteRemoteFile(remotePath: string): Promise<void> {
-  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = await ConnectionManager.getInstance(configuration);
-
-  if (shouldIgnore(remotePath)) {
-    return;
-  }
-
-  try {
-    await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
-      await sftpClient.deleteFile(remotePath);
-    }, `Delete ${remotePath}`);
-  } catch (error: any) {
-    logErrorMessage(`Failed to delete remote file: ${error.message}`);
-    window.showErrorMessage(`Failed to delete remote file: ${error.message}`);
   }
 }
 
@@ -160,4 +214,13 @@ export async function compareFileHash(
   ]);
 
   return localHash === remoteHash;
+}
+
+export async function remotePathType(remotePath: string) {
+  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
+  const connectionManager = await ConnectionManager.getInstance(configuration);
+
+  return await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+    return await sftpClient.pathType(remotePath);
+  }, `Checking if ${remotePath} exists`);
 }
