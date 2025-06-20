@@ -1,13 +1,13 @@
 import { workspace, ConfigurationTarget, ExtensionContext } from "vscode";
 import * as crypto from "crypto";
-import { FileEventActionsMessage } from "../DTOs/messages/FileEventActionsMessage";
+import { FileEventActionsMessage } from "@shared/DTOs/messages/FileEventActionsMessage";
 import { LOG_FLAGS, logConfigError, logErrorMessage, logInfoMessage } from "./LogManager";
-import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
+import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
 import path from "path";
 import { FileEventHandler } from "../services/FileEventHandler";
 import { Minimatch } from "minimatch";
 import { ConfigurationPanel } from "../panels/ConfigurationPanel";
-import { ConfigurationState } from "../DTOs/states/ConfigurationState";
+import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 
 export class WorkspaceConfigManager {
   private static _workspaceConfig: ConfigurationState | undefined;

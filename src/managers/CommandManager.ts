@@ -9,7 +9,7 @@ import JsonManager, { JsonType } from "../managers/JsonManager";
 import { ConnectionManager } from "./ConnectionManager";
 import { SSHClient } from "../services/SSHClient";
 import { WorkspaceConfigManager } from "./WorkspaceConfigManager";
-import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
+import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
 import { compareCorrespondingEntry } from "../utilities/fileUtils/entriesComparison";
 import { getRootElement, handleAction, performDelete } from "../utilities/fileUtils/fileOperations";
 import { Dialog } from "../services/Dialog";

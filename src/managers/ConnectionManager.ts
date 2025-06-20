@@ -1,4 +1,4 @@
-import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
+import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
 import { SFTPClient } from "../services/SFTPClient";
 import { SSHClient } from "../services/SSHClient";
 import { StatusBarManager } from "./StatusBarManager";

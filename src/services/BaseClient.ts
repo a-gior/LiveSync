@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
+import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
 import * as ssh2 from "ssh2";
 import { normalizePath } from "../utilities/fileUtils/filePathUtils";
 import { logInfoMessage } from "../managers/LogManager";

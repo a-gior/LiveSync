@@ -7,7 +7,7 @@ import { shouldIgnore } from "../shouldIgnore";
 import { generateHash } from "./hashUtils";
 import { StatusBarManager } from "../../managers/StatusBarManager";
 import { BaseNodeType } from "../BaseNode";
-import { normalizePath, pathExists, splitParts } from "./filePathUtils";
+import { normalizePath, pathType, splitParts } from "./filePathUtils";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 import fg, { Entry } from "fast-glob";
 import pMap from "p-map";
@@ -119,7 +119,7 @@ export async function listRemoteFiles(
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = await ConnectionManager.getInstance(configuration);
 
-  if (!(await pathExists(remoteDir, FileNodeSource.remote))) {
+  if (!(await pathType(remoteDir, FileNodeSource.remote))) {
     logErrorMessage(
       `<listRemoteFiles> Could not find remotely the specified file/folder at ${remoteDir}`,
       LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
@@ -418,7 +418,7 @@ export async function listRemoteFile(remoteFilePath: string): Promise<FileNode |
   return listRemoteFiles(parentDir);
 }
 
-async function computeFolderHashes(node: FileNode): Promise<void> {
+export async function computeFolderHashes(node: FileNode): Promise<void> {
   if (!node.isDirectory()) {return;}
   // first recurse
   await Promise.all(Array.from(node.children.values()).map(n => computeFolderHashes(n)));

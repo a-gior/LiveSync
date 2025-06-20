@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { getRemoteFileMetadata } from "./fileUtils/sftpOperations";
-import { getRelativePath, pathExists } from "./fileUtils/filePathUtils";
+import { getRelativePath, pathType } from "./fileUtils/filePathUtils";
 import { BaseNode, BaseNodeData, BaseNodeType } from "./BaseNode";
 import { generateHash } from "./fileUtils/hashUtils";
 import { LOG_FLAGS, logErrorMessage } from "../managers/LogManager";
@@ -67,13 +67,13 @@ export class FileNode extends BaseNode<FileNode> {
   }
 
   async exists() {
-    return await pathExists(this.fullPath, this.source);
+    return await pathType(this.fullPath, this.source);
   }
 
   static async createFileNodeFromLocalPath(localPath: string): Promise<FileNode> {
     try {
       const stats = fs.lstatSync(localPath);
-      const nodeType = await pathExists(localPath, FileNodeSource.local);
+      const nodeType = await pathType(localPath, FileNodeSource.local);
       if (!nodeType) {
         logErrorMessage(`Could not find locally the specified file/folder at ${localPath}`, LOG_FLAGS.CONSOLE_AND_LOG_MANAGER);
         throw new Error();

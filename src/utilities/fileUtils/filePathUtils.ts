@@ -1,7 +1,7 @@
 import * as path from "path";
 import * as fs from "fs";
 import { FileNodeSource } from "../FileNode";
-import { remotePathExists } from "./sftpOperations";
+import { remotePathType } from "./sftpOperations";
 import { ComparisonFileNode } from "../ComparisonFileNode";
 import { BaseNodeType } from "../BaseNode";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
@@ -93,18 +93,22 @@ export function getRelativePath(fullPath: string) {
   throw new Error(`Couldnt find relative path of ${fullPath}`);
 }
 
-export async function pathExists(path: string, source: FileNodeSource) {
+export async function pathType(path: string, source: FileNodeSource) {
   switch (source) {
     case FileNodeSource.local:
-      return localPathExists(path);
+      return localPathType(path);
     case FileNodeSource.remote:
-      return await remotePathExists(path);
+      return await remotePathType(path);
     default:
       throw new Error("[FileNode - pathExists()] Wrong FileNode source.");
   }
 }
 
-function localPathExists(path: string): BaseNodeType | false {
+export async function pathExists(path: string, source: FileNodeSource): Promise<boolean> {
+  return await pathType(path, source) !== false;
+}
+
+function localPathType(path: string): BaseNodeType | false {
   if (fs.existsSync(path)) {
     const stats = fs.lstatSync(path);
     if (stats.isDirectory()) {

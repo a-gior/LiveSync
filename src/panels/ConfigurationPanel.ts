@@ -5,10 +5,10 @@ import { SFTPClient } from "../services/SFTPClient";
 import { FullConfigurationMessage } from "@shared/DTOs/messages/FullConfigurationMessage";
 import { FileEventActionsMessage } from "@shared/DTOs/messages/FileEventActionsMessage";
 import { ConnectionManager } from "../managers/ConnectionManager";
-import { IgnoreListMessage } from "../DTOs/messages/IgnoreListMessage";
+import { IgnoreListMessage } from "@shared/DTOs/messages/IgnoreListMessage";
 import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../managers/LogManager";
-import { ConfigurationState } from "../DTOs/states/configurationState";
+import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 
 export class ConfigurationPanel extends Panel {
   static render(extensionUri: Uri) {
@@ -68,7 +68,7 @@ export class ConfigurationPanel extends Panel {
     const connectionManager = await ConnectionManager.getInstance(configuration);
     connectionManager
       .doSFTPOperation(async (sftpClient: SFTPClient) => {
-        if (!(await sftpClient.pathExists(remotePath))) {
+        if (!(await sftpClient.exists(remotePath))) {
           logErrorMessage(`Remote path ${remotePath} does not exist`, LOG_FLAGS.ALL);
         }
       }, "Saving Remote path")

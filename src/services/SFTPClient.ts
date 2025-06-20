@@ -1,6 +1,6 @@
 const SftpClient = require("ssh2-sftp-client"); // Use CommonJS require
 import { BaseClient } from "./BaseClient";
-import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
+import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
 import { BaseNodeType } from "../utilities/BaseNode";
 import { logInfoMessage, LogManager } from "../managers/LogManager";
 
@@ -93,12 +93,17 @@ export class SFTPClient extends BaseClient {
     return ret;
   }
 
+  async moveDirectory(oldRemotePath: string, newRemotePath: string) {
+    // await this._client.rename(oldRemotePath, newRemotePath);
+    LogManager.log(`Moved/Renamed file from ${oldRemotePath} to ${newRemotePath}`);
+  }
+
   async moveFile(oldRemotePath: string, newRemotePath: string) {
     await this._client.rename(oldRemotePath, newRemotePath);
     LogManager.log(`Moved/Renamed file from ${oldRemotePath} to ${newRemotePath}`);
   }
 
-  async pathExists(remotePath: string): Promise<BaseNodeType | false> {
+  async pathType(remotePath: string): Promise<BaseNodeType | false> {
     const result = await this._client.exists(remotePath);
     if (result === false) {
       return false;
@@ -109,5 +114,9 @@ export class SFTPClient extends BaseClient {
     }
 
     return false;
+  }
+
+  async exists(remotePath: string): Promise<boolean> {
+    return (await this.pathType(remotePath)) !== false;
   }
 }

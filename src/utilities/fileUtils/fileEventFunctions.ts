@@ -1,5 +1,5 @@
 import { window, commands, Uri } from "vscode";
-import { getCorrespondingPath, normalizePath, pathExists } from "./filePathUtils";
+import { getCorrespondingPath, normalizePath, pathType } from "./filePathUtils";
 import { uploadRemoteFile, compareRemoteFileHash, deleteRemoteFile, moveRemoteFile, downloadRemoteFile, compareFileHash } from "./sftpOperations";
 import * as path from "path";
 import JsonManager from "../../managers/JsonManager";
@@ -74,14 +74,14 @@ async function showOverwritePrompt(checkMessage: Check, localPath: string, remot
 
 // Checks if a remote file exists
 async function checkRemoteFileExistence(remotePath: string) {
-  const exists = await pathExists(remotePath, FileNodeSource.remote);
+  const exists = await pathType(remotePath, FileNodeSource.remote);
 
   return exists ? ActionResult.Exists : ActionResult.DontExist;
 }
 
 // Checks if a local file exists
 async function checkLocalFileExistence(localPath: string) {
-  const exists = await pathExists(localPath, FileNodeSource.local);
+  const exists = await pathType(localPath, FileNodeSource.local);
 
   return exists ? ActionResult.Exists : ActionResult.DontExist;
 }
@@ -232,7 +232,7 @@ async function handleFileOperation(action: ActionOn, uri: Uri, oldUri: Uri | nul
         if (oldUri) {
           const localPathOld = oldUri.fsPath;
           const remotePathOld = getCorrespondingPath(localPathOld);
-          await moveRemoteFile(remotePathOld, remotePath);
+          await moveRemoteFile(localPath, remotePathOld, remotePath);
           
           await updateRemoteFilesJsonForPaths(remotePathOld, remotePath);
         }

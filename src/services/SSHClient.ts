@@ -1,6 +1,6 @@
 import { Client, ConnectConfig } from "ssh2";
 import { BaseClient } from "./BaseClient";
-import { ConfigurationMessage } from "../DTOs/messages/ConfigurationMessage";
+import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage, LogManager } from "../managers/LogManager";
 
 export class SSHClient extends BaseClient {
