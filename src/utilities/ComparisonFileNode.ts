@@ -3,6 +3,7 @@ import { FileNode } from "./FileNode";
 import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 import { splitParts } from "./fileUtils/filePathUtils";
 import { StatusBarManager } from "../managers/StatusBarManager";
+import JsonManager from "../managers/JsonManager";
 
 export enum ComparisonStatus {
   added = "added",
@@ -45,60 +46,77 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     this.showInTree = true;
   }
 
-  /**
-   * Recursively compares two FileNode objects and creates a ComparisonFileNode
-   * reflecting the differences. It also compares all children recursively.
-   *
-   * @param localNode - The FileNode object representing the local file structure.
-   * @param remoteNode - The FileNode object representing the remote file structure.
-   * @returns ComparisonFileNode object representing the comparison result.
-   */
-  static compareFileNodes(localNode?: FileNode, remoteNode?: FileNode): ComparisonFileNode {
-    StatusBarManager.showMessage(`Comparing...`, "", "", 0, "sync~spin", true);
-
-    // Determine the common properties for the ComparisonFileNode
+  static compareFileNodes(
+    localNode?: FileNode,
+    remoteNode?: FileNode
+  ): ComparisonFileNode {
+    StatusBarManager.showMessage(`Comparing…`, "", "", 0, "sync~spin", true);
+  
+    // Determine base properties
     const name = localNode ? localNode.name : remoteNode!.name;
-    const type = localNode ? localNode.type : remoteNode!.type;
-    const size = localNode ? localNode.size : remoteNode!.size;
-    const modifiedTime = localNode ? localNode.modifiedTime : remoteNode!.modifiedTime;
-    const relativePath = localNode ? localNode.relativePath : remoteNode!.relativePath;
+    const type = (localNode ?? remoteNode)!.type;
+    const size = (localNode ?? remoteNode)!.size;
+    const modifiedTime = (localNode ?? remoteNode)!.modifiedTime;
+    const relativePath = (localNode ?? remoteNode)!.relativePath;
+  
+    let status = ComparisonStatus.unchanged;
+  
+    if(name === "testfolder2") {
+      console.log("Comparing testfolder2");
+    }
 
-    let status: ComparisonStatus = ComparisonStatus.unchanged;
-
-    // Determine the status of the ComparisonFileNode based on the presence and properties of the local and remote nodes
+    // 1) New or deleted
     if (!localNode && remoteNode) {
       status = ComparisonStatus.removed;
     } else if (localNode && !remoteNode) {
       status = ComparisonStatus.added;
-    } else if (localNode && remoteNode) {
+    }
+    // 2) Both exist
+    else if (localNode && remoteNode) {
+      // Type changed?
       if (localNode.type !== remoteNode.type) {
         status = ComparisonStatus.modified;
-      } else if (localNode.type === BaseNodeType.file && remoteNode.type === BaseNodeType.file) {
+      }
+      // File vs. file: compare hashes
+      else if (type === BaseNodeType.file) {
         if (localNode.hash !== remoteNode.hash) {
           status = ComparisonStatus.modified;
         }
       }
-    }
-
-    // Create the ComparisonFileNode
-    const comparisonNode = new ComparisonFileNode(name, type, size, modifiedTime, relativePath, status);
-
-    // Recursively compare children and add them to the ComparisonFileNode
-    const allChildrenNames = new Set([...(localNode?.children.keys() || []), ...(remoteNode?.children.keys() || [])]);
-
-    for (const childName of allChildrenNames) {
-      const localChild = localNode?.getChild(childName);
-      const remoteChild = remoteNode?.getChild(childName);
-      const childComparisonNode = this.compareFileNodes(localChild, remoteChild);
-      comparisonNode.addChild(childComparisonNode);
-
-      // If any child is different than unchanged, mark the current folder node as modified
-      if (childComparisonNode.status !== ComparisonStatus.unchanged) {
-        comparisonNode.status = ComparisonStatus.modified;
+      // Directory vs. directory: if hashes match, nothing changed—early exit
+      else if (type === BaseNodeType.directory) {
+        if (localNode.hash === remoteNode.hash) {
+          // no children have changed
+          return new ComparisonFileNode(
+            name, type, size, modifiedTime, relativePath, ComparisonStatus.unchanged
+          );
+        }
+        // otherwise, we’ll recurse into children
+        status = ComparisonStatus.modified;
       }
     }
-
-    return comparisonNode;
+  
+    // Build the comparison node
+    const compNode = new ComparisonFileNode(
+      name, type, size, modifiedTime, relativePath, status
+    );
+  
+    // 3) If it’s a directory that may have changes, recurse children
+    if (type === BaseNodeType.directory) {
+      const names = new Set<string>([
+        ...(localNode?.children.keys() || []),
+        ...(remoteNode?.children.keys() || [])
+      ]);
+  
+      for (const childName of names) {
+        const l = localNode?.getChild(childName);
+        const r = remoteNode?.getChild(childName);
+        const childComp = this.compareFileNodes(l, r);
+        compNode.addChild(childComp);
+      }
+    }
+  
+    return compNode;
   }
 
   /**
@@ -152,10 +170,10 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
    * @param rootEntries The root elements map (from TreeDataProvider).
    * @param relativePath The relative path of the modified node.
    */
-  static updateParentDirectoriesStatus(
+  static async updateParentDirectoriesStatus(
     rootEntries: Map<string, ComparisonFileNode>,
     element: ComparisonFileNode
-  ): ComparisonFileNode {
+  ): Promise<ComparisonFileNode> {
     const rootName = WorkspaceConfigManager.getWorkspaceBasename();
     const rootNode = rootEntries.get(rootName);
     if (!rootNode || !rootNode.isDirectory()) {
@@ -163,51 +181,43 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
       return element;
     }
   
-    // Split into segments, e.g. ['src','utils','file.ts']
     const parts = splitParts(element.relativePath);
-    // The path to the folder containing `element`
-    const parentSegments = parts.slice(0, parts.length - 1);
+    const parents = parts.slice(0, -1);
+  
+    // Fast-path bail for pure add/remove
+    if (parents.length > 0) {
+      const firstParentRel = parents.join("/");
+      const firstParent = await JsonManager.findNodeByPath(firstParentRel, rootEntries, rootName);
+      if (
+        (element.status === ComparisonStatus.added   && firstParent?.status === ComparisonStatus.added) ||
+        (element.status === ComparisonStatus.removed && firstParent?.status === ComparisonStatus.removed)
+      ) {
+        return element;
+      }
+    }
   
     let topMostUpdated: ComparisonFileNode | null = null;
   
-    // Walk from the deepest parent back up to the workspace root
-    for (let depth = parentSegments.length; depth > 0; depth--) {
-      // Build the relPath for this ancestor folder
-      const thisPath = parentSegments.slice(0, depth).join('/');
-      // Descend from rootNode to find it
-      let node: ComparisonFileNode | undefined = rootNode;
-      for (const seg of thisPath.split('/')) {
-        if (!node.isDirectory()) {
-          node = undefined;
-          break;
-        }
-        node = node.children.get(seg);
-        if (!node) break;
-      }
-      if (!node || !node.isDirectory()) {
-        break;
-      }
+    // Walk up
+    for (let depth = parents.length; depth > 0; depth--) {
+      const relPath = parents.slice(0, depth).join("/");
+      const folder = await JsonManager.findNodeByPath(relPath, rootEntries, rootName);
+      if (!folder || !folder.isDirectory()) {break;}
   
-      // Recompute: if any direct child ≠ unchanged → modified; else unchanged
-      const anyChanged = Array
-        .from(node.children.values())
+      // If any child changed, mark modified
+      const anyChanged = Array.from(folder.children.values())
         .some(c => c.status !== ComparisonStatus.unchanged);
   
-      const newStatus = anyChanged
-        ? ComparisonStatus.modified
-        : ComparisonStatus.unchanged;
+      if (!anyChanged) {break;}
   
-      // If it’s already that status, nothing above will change either → stop
-      if (node.status === newStatus) {
+      if (folder.status !== ComparisonStatus.modified) {
+        folder.status = ComparisonStatus.modified;
+        topMostUpdated = folder;
+      } else {
         break;
       }
-  
-      // Otherwise update it and remember it as the highest-level update so far
-      node.status = newStatus;
-      topMostUpdated = node;
     }
   
-    // Return the topmost folder we actually changed, or the element if none
     return topMostUpdated ?? element;
   }
 }

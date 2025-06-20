@@ -383,7 +383,7 @@ export default class JsonManager {
 
       parentNode.addChild(element);
 
-      return ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, element);
+      return await ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, element);
     } catch (error) {
       logErrorMessage("Add node failed", LOG_FLAGS.ALL, error);
       throw new Error("Adding node to rootElements failed");
@@ -405,7 +405,7 @@ export default class JsonManager {
 
       parentNode.children.delete(element.name);
 
-      return ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, parentNode);
+      return await ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, parentNode);
     } catch (error: any) {
       logErrorMessage("Delete node failed", LOG_FLAGS.ALL, error.message);
       throw new Error("Deleting node to rootElements failed");
@@ -434,8 +434,8 @@ export default class JsonManager {
       element.setStatus(ComparisonStatus.modified);
       newParentNode.addChild(element);
 
-      ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, oldParentNode);
-      return ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, element);
+      await ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, oldParentNode);
+      return await ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, element);
     } catch (error) {
       logErrorMessage("Move node failed", LOG_FLAGS.ALL, error);
       throw new Error("Moving node to rootElements failed");
@@ -455,7 +455,7 @@ export default class JsonManager {
       }
 
       Object.assign(foundElement, element);
-      return ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, foundElement);
+      return await ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, foundElement);
     } catch (error: any) {
       logErrorMessage("Update node failed", LOG_FLAGS.ALL, error.message);
       throw new Error("Updating node to rootElements failed");
