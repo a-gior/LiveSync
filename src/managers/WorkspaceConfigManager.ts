@@ -42,15 +42,15 @@ export class WorkspaceConfigManager {
         passphrase: config.get<string>("passphrase", "")
       },
       remotePath: config.get<string>("remotePath", ""),
-      fileEventActions: config.get<FileEventActionsMessage["actions"]>("fileEventActions", {
-        actionOnUpload: "check&upload",
-        actionOnDownload: "check&download",
-        actionOnSave: "check&save",
-        actionOnCreate: "create",
-        actionOnDelete: "none",
-        actionOnMove: "check&move",
-        actionOnOpen: "check&download"
-      }),
+      fileEventActions: {
+        actionOnUpload: config.get<string>("actionOnUpload", "check&upload"),
+        actionOnDownload: config.get<string>("actionOnDownload", "check&download"),
+        actionOnSave: config.get<string>("actionOnSave", "check&save"),
+        actionOnCreate: config.get<string>("actionOnCreate", "create"),
+        actionOnDelete: config.get<string>("actionOnDelete", "none"),
+        actionOnMove: config.get<string>("actionOnMove", "check&move"),
+        actionOnOpen: config.get<string>("actionOnOpen", "check&download")
+      },
       ignoreList: config.get<string[]>("ignoreList", [".vscode"])
     };
   }
