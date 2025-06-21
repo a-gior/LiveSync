@@ -6,9 +6,14 @@ import { ComparisonFileNode, ComparisonStatus } from "../utilities/ComparisonFil
 export class TreeViewManager {
   
   private static _treeView: vscode.TreeView<ComparisonFileNode>;
+  private static _treeDataProvider: SyncTreeDataProvider;
 
   public static get treeView() {
     return this._treeView;
+  }
+  
+  public static get treeDataProvider() {
+    return this._treeDataProvider;
   }
 
   static async initialize(context: vscode.ExtensionContext): Promise<SyncTreeDataProvider> {
