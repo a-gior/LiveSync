@@ -3,6 +3,7 @@ import { BaseClient } from "./BaseClient";
 import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
 import { BaseNodeType } from "../utilities/BaseNode";
 import { logInfoMessage, LogManager } from "../managers/LogManager";
+import path from "path";
 
 export class SFTPClient extends BaseClient {
   private static instance: SFTPClient;
@@ -93,13 +94,9 @@ export class SFTPClient extends BaseClient {
     return ret;
   }
 
-  async moveDirectory(oldRemotePath: string, newRemotePath: string) {
-    // await this._client.rename(oldRemotePath, newRemotePath);
-    LogManager.log(`Moved/Renamed file from ${oldRemotePath} to ${newRemotePath}`);
-  }
-
   async moveFile(oldRemotePath: string, newRemotePath: string) {
-    await this._client.rename(oldRemotePath, newRemotePath);
+    const newPath = path.dirname(newRemotePath);
+    await this._client.rename(oldRemotePath, newPath);
     LogManager.log(`Moved/Renamed file from ${oldRemotePath} to ${newRemotePath}`);
   }
 

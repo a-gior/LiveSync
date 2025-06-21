@@ -12,7 +12,11 @@ import { logErrorMessage } from "../../managers/LogManager";
 import { BaseNodeType } from "../BaseNode";
 import JsonManager, { isFileNodeMap, JsonType } from "../../managers/JsonManager";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
-import { pathExists, pathType } from "./filePathUtils";
+import { getRelativePath, pathExists, pathType } from "./filePathUtils";
+import { uploadDirectory } from "./directoryOperations";
+import { TreeViewManager } from "../../managers/TreeViewManager";
+import { ComparisonFileNode } from "../ComparisonFileNode";
+import { compareCorrespondingEntry } from "./entriesComparison";
 
 export async function moveRemoteFile(localPath:string, oldRemotePath: string, newRemotePath: string): Promise<void> {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
@@ -23,23 +27,60 @@ export async function moveRemoteFile(localPath:string, oldRemotePath: string, ne
   }
 
   try {
-    await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+
+    const oldRemoteNodeExists = await pathExists(oldRemotePath, FileNodeSource.remote);
+
+    if(oldRemoteNodeExists) {
+      await connectionManager.doSSHOperation(async (sshClient: SSHClient) => {
+        await sshClient.move(oldRemotePath, newRemotePath);
+      });
+      
+    } else {
       const localNodeType = await pathType(localPath, FileNodeSource.local);
-      switch(localNodeType) {
-        case BaseNodeType.directory:
-          await sftpClient.moveDirectory(oldRemotePath, newRemotePath);
-          break;
 
-        case BaseNodeType.file:
-          await sftpClient.moveFile(oldRemotePath, newRemotePath);
-          break;
-
-        case false:
-        default: 
-          throw new Error(`Local node should exist: ${oldRemotePath}`);
-          
+      if(localNodeType === BaseNodeType.directory) {
+        const comparisonNode = await JsonManager.findNodeByPath(oldRemotePath, TreeViewManager.treeDataProvider.rootElements);
+        if(!comparisonNode) {
+          throw new Error(`Comparison node not found for ${oldRemotePath}`);
+        } else {
+          await uploadDirectory(comparisonNode);
+        }
+  
+      } else if(localNodeType === BaseNodeType.file) {
+        await uploadRemoteFile(localPath, newRemotePath);
       }
-    }, `Move file from ${oldRemotePath} to ${newRemotePath}`);
+  
+    }
+
+
+
+    // await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+    //   const localNodeType = await pathType(localPath, FileNodeSource.local);
+      
+    //   const oldRemoteDir = path.dirname(oldRemotePath);
+    //   const oldDirExists = await sftpClient.exists(oldRemoteDir);
+    //   if (!oldDirExists) {
+    //     await uploadDirectory(localPath, oldRemotePath);
+    //   }
+      
+    //   const newRemoteDir = path.dirname(newRemotePath);
+    //   const newDirExists = await sftpClient.exists(newRemoteDir);
+    //   if (!newDirExists) {
+    //     await sftpClient.createDirectory(newRemoteDir);
+    //   }
+
+    //   switch(localNodeType) {
+    //     case BaseNodeType.directory:
+    //     case BaseNodeType.file:
+    //       await sftpClient.moveFile(oldRemotePath, newRemotePath);
+    //       break;
+
+    //     case false:
+    //     default: 
+    //       throw new Error(`Local node should exist: ${oldRemotePath}`);
+          
+    //   }
+    // }, `Move file from ${oldRemotePath} to ${newRemotePath}`);
   } catch (error: any) {
     logErrorMessage(`Failed to move remote file: ${error.message}`);
     window.showErrorMessage(`Failed to move remote file: ${error.message}`);

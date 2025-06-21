@@ -132,4 +132,16 @@ export class SSHClient extends BaseClient {
       throw error;
     }
   }
+
+  async move(oldRemotePath: string, newRemotePath: string) {
+    const mvCommand = `mv "${oldRemotePath}" "${newRemotePath}"`;
+          
+    try {
+      await this.executeCommand(mvCommand);
+      LogManager.log(`Moved file from ${oldRemotePath} to ${newRemotePath}`);
+    } catch (error) {
+      LogManager.log("Error moving file");
+      throw error;
+    }
+  }
 }

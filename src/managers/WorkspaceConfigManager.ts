@@ -1,6 +1,5 @@
 import { workspace, ConfigurationTarget, ExtensionContext } from "vscode";
 import * as crypto from "crypto";
-import { FileEventActionsMessage } from "@shared/DTOs/messages/FileEventActionsMessage";
 import { LOG_FLAGS, logConfigError, logErrorMessage, logInfoMessage } from "./LogManager";
 import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
 import path from "path";
