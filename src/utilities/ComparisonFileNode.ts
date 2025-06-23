@@ -124,14 +124,14 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
    * @param node - The root ComparisonFileNode to update.
    * @param status - The ComparisonStatus to set for the node and its children.
    */
-  static setComparisonStatus(node: ComparisonFileNode, status: ComparisonStatus): void {
+  setStatus(status: ComparisonStatus): void {
     // Set the status for the current node
-    node.status = status;
+    this.status = status;
 
     // Iterate through the children if the node has any
-    if (node.listChildren().length > 0) {
-      for (const child of node.listChildren()) {
-        this.setComparisonStatus(child, status); // Recursively set status for children
+    if (this.listChildren().length > 0) {
+      for (const child of this.listChildren()) {
+        child.setStatus(status); // Recursively set status for children
       }
     }
   }
@@ -158,10 +158,6 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     } catch (error: any) {
       throw new Error(`Failed to clone ComparisonFileNode: ${error.message}`);
     }
-  }
-
-  setStatus(status: ComparisonStatus) {
-    this.status = status;
   }
 
   /**
@@ -208,9 +204,12 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
       const anyChanged = Array.from(folder.children.values())
         .some(c => c.status !== ComparisonStatus.unchanged);
   
-      if (!anyChanged) {break;}
-  
-      if (folder.status !== ComparisonStatus.modified) {
+      if (!anyChanged && folder.status !== ComparisonStatus.unchanged) {
+        folder.status = ComparisonStatus.unchanged;
+        topMostUpdated = folder;
+      } else if(!anyChanged) {
+        break;
+      } else if (folder.status !== ComparisonStatus.modified) {
         folder.status = ComparisonStatus.modified;
         topMostUpdated = folder;
       } else {
