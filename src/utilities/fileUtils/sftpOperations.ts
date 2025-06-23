@@ -4,21 +4,18 @@ import { SFTPClient } from "../../services/SFTPClient";
 import { generateHash } from "./hashUtils";
 import { FileNodeSource } from "../FileNode";
 import { SSHClient } from "../../services/SSHClient";
-import { window } from "vscode";
 import { ConnectionManager } from "../../managers/ConnectionManager";
 import sftp from "ssh2-sftp-client";
 import { shouldIgnore } from "../shouldIgnore";
-import { logErrorMessage } from "../../managers/LogManager";
+import { LOG_FLAGS, logErrorMessage } from "../../managers/LogManager";
 import { BaseNodeType } from "../BaseNode";
 import JsonManager, { isFileNodeMap, JsonType } from "../../managers/JsonManager";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
-import { getRelativePath, pathExists, pathType } from "./filePathUtils";
+import { pathExists, pathType } from "./filePathUtils";
 import { uploadDirectory } from "./directoryOperations";
 import { TreeViewManager } from "../../managers/TreeViewManager";
-import { ComparisonFileNode } from "../ComparisonFileNode";
-import { compareCorrespondingEntry } from "./entriesComparison";
 
-export async function moveRemoteFile(localPath:string, oldRemotePath: string, newRemotePath: string): Promise<void> {
+export async function moveRemoteFile(newLocalPath:string, oldRemotePath: string, newRemotePath: string): Promise<void> {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = await ConnectionManager.getInstance(configuration);
 
@@ -29,61 +26,22 @@ export async function moveRemoteFile(localPath:string, oldRemotePath: string, ne
   try {
 
     const oldRemoteNodeExists = await pathExists(oldRemotePath, FileNodeSource.remote);
+    if(!oldRemoteNodeExists) {
+      const treeDataProvider = TreeViewManager.treeDataProvider;
+      // If the old remote path does not exist, we need to upload the local directory
+      const comparisonFileNode = await treeDataProvider.getComparisonFileNode(newLocalPath, newRemotePath);
+      await uploadDirectory(comparisonFileNode);
 
-    if(oldRemoteNodeExists) {
+    } else {
+      // oldRemotePath exists, we can move and rename the file or directory
       await connectionManager.doSSHOperation(async (sshClient: SSHClient) => {
         await sshClient.move(oldRemotePath, newRemotePath);
       });
-      
-    } else {
-      const localNodeType = await pathType(localPath, FileNodeSource.local);
 
-      if(localNodeType === BaseNodeType.directory) {
-        const comparisonNode = await JsonManager.findNodeByPath(oldRemotePath, TreeViewManager.treeDataProvider.rootElements);
-        if(!comparisonNode) {
-          throw new Error(`Comparison node not found for ${oldRemotePath}`);
-        } else {
-          await uploadDirectory(comparisonNode);
-        }
-  
-      } else if(localNodeType === BaseNodeType.file) {
-        await uploadRemoteFile(localPath, newRemotePath);
-      }
-  
     }
 
-
-
-    // await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
-    //   const localNodeType = await pathType(localPath, FileNodeSource.local);
-      
-    //   const oldRemoteDir = path.dirname(oldRemotePath);
-    //   const oldDirExists = await sftpClient.exists(oldRemoteDir);
-    //   if (!oldDirExists) {
-    //     await uploadDirectory(localPath, oldRemotePath);
-    //   }
-      
-    //   const newRemoteDir = path.dirname(newRemotePath);
-    //   const newDirExists = await sftpClient.exists(newRemoteDir);
-    //   if (!newDirExists) {
-    //     await sftpClient.createDirectory(newRemoteDir);
-    //   }
-
-    //   switch(localNodeType) {
-    //     case BaseNodeType.directory:
-    //     case BaseNodeType.file:
-    //       await sftpClient.moveFile(oldRemotePath, newRemotePath);
-    //       break;
-
-    //     case false:
-    //     default: 
-    //       throw new Error(`Local node should exist: ${oldRemotePath}`);
-          
-    //   }
-    // }, `Move file from ${oldRemotePath} to ${newRemotePath}`);
   } catch (error: any) {
-    logErrorMessage(`Failed to move remote file: ${error.message}`);
-    window.showErrorMessage(`Failed to move remote file: ${error.message}`);
+    logErrorMessage(`Failed to move remote file: ${error.message}`, LOG_FLAGS.ALL);
   }
 }
 
@@ -116,8 +74,7 @@ export async function deleteRemoteFile(remotePath: string): Promise<void> {
       
     }, `Delete ${remotePath}`);
   } catch (error: any) {
-    logErrorMessage(`Failed to delete remote file: ${error.message}`);
-    window.showErrorMessage(`Failed to delete remote file: ${error.message}`);
+    logErrorMessage(`Failed to delete remote file: ${error.message}`, LOG_FLAGS.ALL);
   }
 }
 
