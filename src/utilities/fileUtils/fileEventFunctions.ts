@@ -99,7 +99,13 @@ async function updateRemoteFilesJsonForPaths(...filePaths: string[]) {
         await fileNodeManager.updateRemoteFilesJson(remoteFileNode);
         logInfoMessage(`Updated JSON Remote files for ${filePath}`);
       } else {
-        logErrorMessage(`Couldnt find remote file node at ${filePath}`);
+        const dirPath = path.dirname(filePath);
+        const dirRemoteFileNode = await listRemoteFile(dirPath);
+        if(dirRemoteFileNode) {
+          await fileNodeManager.updateRemoteFilesJson(dirRemoteFileNode);
+        } else {
+          logErrorMessage(`Couldnt find remote file node at ${dirPath}`);
+        }
       }
     }
   }
@@ -184,6 +190,13 @@ export async function handleFileCheck(action: ActionOn, actionParameter: string,
           return await showOverwritePrompt(Check.remoteExists, localPath, remotePath);
         }
 
+        const actionOnUpload = WorkspaceConfigManager.getParameter<string>(ActionOn.Upload) ?? "";
+        if(actionResult === ActionResult.DontExist &&  !actionOnUpload.includes("upload")) {
+          const opName =  action.replace(/^actionOn/, '');
+          logInfoMessage( `Skipping ${opName} due to 'none' parameter for uploads.`, LOG_FLAGS.ALL);
+          return ActionResult.NoAction;
+        }
+
         return ActionResult.ActionPerformed; // File dont exist on remote so we can perform action safely
 
       case ActionOn.Delete:
@@ -230,8 +243,7 @@ async function handleFileOperation(action: ActionOn, uri: Uri, oldUri: Uri | nul
     switch (action) {
       case ActionOn.Move:
         if (oldUri) {
-          const localPathOld = oldUri.fsPath;
-          const remotePathOld = getCorrespondingPath(localPathOld);
+          const remotePathOld = getCorrespondingPath(oldUri.fsPath);
           await moveRemoteFile(localPath, remotePathOld, remotePath);
           
           await updateRemoteFilesJsonForPaths(remotePathOld, remotePath);
