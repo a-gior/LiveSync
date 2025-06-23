@@ -21,9 +21,9 @@ export class TreeViewManager {
     const showUnchanged = context.globalState.get<boolean>("showUnchanged", false);
     const collapseAll = context.globalState.get<boolean>("collapseAll", false);
 
-    const treeDataProvider = new SyncTreeDataProvider(showAsTree, showUnchanged, collapseAll);
+    this._treeDataProvider = new SyncTreeDataProvider(showAsTree, showUnchanged, collapseAll);
     this._treeView = vscode.window.createTreeView("treeViewId", {
-      treeDataProvider: treeDataProvider
+      treeDataProvider: this._treeDataProvider
     });
     this._treeView.message = "Loading…";
 
@@ -39,12 +39,12 @@ export class TreeViewManager {
       JsonManager.getInstance().updateFolderState(event.element, false);
     });
 
-    await treeDataProvider.loadRootElements();
-    this.updateMessage(treeDataProvider);
+    await this._treeDataProvider.loadRootElements();
+    this.updateMessage(this._treeDataProvider);
 
     context.subscriptions.push(this._treeView);
 
-    return treeDataProvider;
+    return this._treeDataProvider;
   }
 
   public static updateMessage(provider: SyncTreeDataProvider) {
