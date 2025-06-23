@@ -384,8 +384,8 @@ export default class JsonManager {
       parentNode.addChild(element);
 
       return await ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, element);
-    } catch (error) {
-      logErrorMessage("Add node failed", LOG_FLAGS.ALL, error);
+    } catch (error: any) {
+      logErrorMessage("Add node failed", LOG_FLAGS.ALL, error.message);
       throw new Error("Adding node to rootElements failed");
     }
   }
@@ -409,36 +409,6 @@ export default class JsonManager {
     } catch (error: any) {
       logErrorMessage("Delete node failed", LOG_FLAGS.ALL, error.message);
       throw new Error("Deleting node to rootElements failed");
-    }
-  }
-
-  public static async moveComparisonFileNode(
-    element: ComparisonFileNode,
-    newPath: string,
-    rootEntries: Map<string, ComparisonFileNode>
-  ): Promise<ComparisonFileNode> {
-    try {
-      let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
-      const [oldParentNode, newParentNode] = await Promise.all([
-        this.findNodeByPath(path.dirname(element.relativePath), rootEntries, rootFolderName),
-        this.findNodeByPath(path.dirname(newPath), rootEntries, rootFolderName)
-      ]);
-
-      if (!oldParentNode || !newParentNode) {
-        throw new Error("Parent node not found");
-      }
-
-      oldParentNode.children.delete(element.name);
-      element.relativePath = newPath;
-      element.name = path.basename(newPath);
-      element.setStatus(ComparisonStatus.modified);
-      newParentNode.addChild(element);
-
-      await ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, oldParentNode);
-      return await ComparisonFileNode.updateParentDirectoriesStatus(rootEntries, element);
-    } catch (error) {
-      logErrorMessage("Move node failed", LOG_FLAGS.ALL, error);
-      throw new Error("Moving node to rootElements failed");
     }
   }
 
