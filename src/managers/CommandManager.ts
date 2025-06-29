@@ -39,7 +39,7 @@ export class CommandManager {
     try {
       returnResult = await command(...args);
     } catch (error: any) {
-      logInfoMessage(`Error executing command "${commandKey}": ${error.message}`);
+      logErrorMessage(`Error executing command "${commandKey}": ${error.message}`);
       throw error;
     } finally {
       this.runningCommands.delete(commandKey);

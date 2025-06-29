@@ -224,10 +224,9 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
       }
 
       return comparisonFileNode;
-    } catch (error) {
+    } catch (error: any) {
       StatusBarManager.showMessage("SFTP operation failed", "", "", 3000, "error");
-      logErrorMessage("<getComparisonFileNode> Error:", LOG_FLAGS.CONSOLE_ONLY, error);
-      throw Error("Error getting ComparisonFileNode");
+      throw error;
     } finally {
       const endTime = performance.now(); // End timing
       const executionTime = endTime - startTime; // Calculate the elapsed time in milliseconds
