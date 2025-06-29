@@ -7,8 +7,10 @@ import { StatusBarManager } from "./managers/StatusBarManager";
 import { FileStatusDecorationProvider } from "./services/FileDecorationProvider";
 import { WorkspaceConfigManager } from "./managers/WorkspaceConfigManager";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./managers/LogManager";
+import { ConnectionManager } from "./managers/ConnectionManager";
 
 export async function activate(context: vscode.ExtensionContext) {
+  logInfoMessage("LiveSync extension activating...");
 
   // Only activate Livesync if there is a single folder in the workspace
   if (WorkspaceConfigManager.isMultiRootWorkspace()) {
@@ -29,6 +31,12 @@ export async function activate(context: vscode.ExtensionContext) {
   WorkspaceConfigManager.initialize(context);
   EventManager.initialize(context, TreeViewManager.treeDataProvider);
   StatusBarManager.createPermanentIcon();
+
+  try {
+    await ConnectionManager.getInstance(WorkspaceConfigManager.getRemoteServerConfigured());
+  } catch(error: any) {
+    logErrorMessage(error.message, LOG_FLAGS.ALL);
+  }
 
   logInfoMessage("LiveSync extension activated.");
   
