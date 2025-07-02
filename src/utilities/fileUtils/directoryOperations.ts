@@ -1,7 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
 import { SFTPClient } from "../../services/SFTPClient";
-import { FileNode, FileNodeSource } from "../FileNode";
 import { getFullPaths, getRelativePath, normalizePath } from "./filePathUtils";
 import { ConnectionManager } from "../../managers/ConnectionManager";
 import pLimit = require("p-limit");
@@ -151,36 +150,5 @@ export async function downloadDirectory(remoteEntry: ComparisonFileNode) {
     }, `Download Dir ${remoteEntry.relativePath}`);
   } catch (error: any) {
     logErrorMessage(`Failed to download directory: ${error.message}`, LOG_FLAGS.ALL);
-  }
-}
-
-export async function deleteRemoteDirectory(fileEntry: FileNode): Promise<void> {
-  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = await ConnectionManager.getInstance(configuration);
-
-  try {
-    await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
-      const remoteDir = fileEntry.fullPath.replace(/\\/g, "/");
-      const children = await sftpClient.listFiles(remoteDir);
-      for (const child of children) {
-        const childPath = path.join(remoteDir, child.name).replace(/\\/g, "/");
-        if (child.type === "d") {
-          const subDirEntry = new FileNode(
-            child.name,
-            BaseNodeType.directory,
-            0,
-            new Date(child.modifyTime * 1000),
-            childPath,
-            FileNodeSource.remote
-          );
-          await deleteRemoteDirectory(subDirEntry);
-        } else {
-          await sftpClient.deleteFile(childPath);
-        }
-      }
-      await sftpClient.deleteDirectory(remoteDir);
-    }, `Delete Dir ${fileEntry.fullPath}`);
-  } catch (error: any) {
-    logErrorMessage(`Failed to delete directory: ${error.message}`, LOG_FLAGS.ALL);
   }
 }

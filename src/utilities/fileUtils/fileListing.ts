@@ -1,5 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import * as vscode from "vscode";
 import { FileNode, FileNodeSource } from "../FileNode";
 import { ConnectionManager } from "../../managers/ConnectionManager";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../../managers/LogManager";
@@ -7,101 +8,121 @@ import { shouldIgnore } from "../shouldIgnore";
 import { generateHash } from "./hashUtils";
 import { StatusBarManager } from "../../managers/StatusBarManager";
 import { BaseNodeType } from "../BaseNode";
-import { normalizePath, pathType, splitParts } from "./filePathUtils";
+import { getFullPaths, normalizePath, pathType, splitParts } from "./filePathUtils";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 import fg, { Entry } from "fast-glob";
 import pMap from "p-map";
 import { createHash } from "crypto";
+import { Stats } from "fs";
+import { ComparisonFileNode } from "../ComparisonFileNode";
+import { SyncTreeDataProvider } from "../../services/SyncTreeDataProvider";
+import JsonManager from "../../managers/JsonManager";
+import { compareCorrespondingEntry } from "./entriesComparison";
 
 //
 // ─── LOCAL FILE LISTING ─────────────────────────────────────────────────────────
 //
 
 /**
- * Builds the local file tree under `localDir`, showing real percentage progress.
+ * Walks the tree under `localDir`, skipping ignored paths,
+ * builds a FileNode tree (rooted at `localDir`), and invokes
+ * `onNode` for each node (both files and folders).
+ * Returns the `root` FileNode.
  */
-export async function listLocalFiles(localDir: string): Promise<FileNode | undefined> {
-  StatusBarManager.showMessage(`Listing files of ${localDir}`, "", "", 0, "sync~spin", true);
+async function traverseLocalTree(
+  localDir: string,
+  onNode: (node: FileNode) => void
+): Promise<FileNode | undefined> {
+  let rootStats: Stats;
+  try {
+    rootStats = await fs.stat(localDir);
+    if (!rootStats.isDirectory()) {return undefined;}
+  } catch {
+    return undefined;
+  }
 
-  // Prepare root node
-  const rootStats = await fs.stat(localDir);
-  const rootEntry = new FileNode(
-    path.basename(localDir),
+  const rootPath = normalizePath(localDir);
+  const root = new FileNode(
+    path.basename(rootPath),
     BaseNodeType.directory,
     rootStats.size,
     rootStats.mtime,
-    normalizePath(localDir),
+    rootPath,
     FileNodeSource.local
   );
 
-  // BFS queue for directories
-  const dirQueue: FileNode[] = [rootEntry];
-  // Collect file nodes to hash later
-  const fileNodes: FileNode[] = [];
+  const queue: FileNode[] = [root];
+  while (queue.length) {
+    const cur = queue.shift()!;
+    if (shouldIgnore(cur.fullPath)) {continue;}
 
-  while (dirQueue.length > 0) {
-    const current = dirQueue.shift()!;
-    // Skip if ignored (and don't descend)
-    if (shouldIgnore(current.fullPath)) {
-      continue;
-    }
-
-    // List immediate children using fast-glob
     let entries: Entry[];
     try {
       entries = await fg("*", {
-        cwd: current.fullPath,
+        cwd: cur.fullPath,
         dot: true,
         stats: true,
         onlyFiles: false
       });
-    } catch (err: any) {
+    } catch {
       continue;
     }
 
     for (const e of entries) {
-      const stats = e.stats;
-      if (!stats) {continue;}
+      if (!e.stats) {continue;}
+      const fullPath = normalizePath(path.join(cur.fullPath, e.path));
+      if (shouldIgnore(fullPath)) {continue;}
 
-      const entryName = e.path;
-      const fullPath = normalizePath(path.join(current.fullPath, entryName));
-      if (shouldIgnore(fullPath)) {
-        continue;
-      }
-
-      const type = stats.isDirectory() ? BaseNodeType.directory : BaseNodeType.file;
+      const isDir = e.stats.isDirectory();
       const child = new FileNode(
-        entryName,
-        type,
-        stats.size,
-        new Date(stats.mtimeMs),
+        e.path,
+        isDir ? BaseNodeType.directory : BaseNodeType.file,
+        e.stats.size,
+        new Date(e.stats.mtimeMs),
         fullPath,
         FileNodeSource.local
       );
-      current.addChild(child);
-
-      if (type === BaseNodeType.directory) {
-        dirQueue.push(child);
-      } else {
-        fileNodes.push(child);
-      }
+      cur.addChild(child);
+      onNode(child);
+      if (isDir) {queue.push(child);}
     }
   }
 
-  // Hash all files in parallel (limit concurrency)
-  await pMap(
-    fileNodes,
-    async node => {
-      node.hash = await generateHash(node.fullPath, node.source, node.type);
-    },
-    { concurrency: 16 }
-  );
+  return root;
+}
 
-  // Compute directory hashes purely in memory
-  await computeFolderHashes(rootEntry);
+export async function countLocalFiles(localDir: string): Promise<number> {
+  let count = 0;
+  await traverseLocalTree(localDir, () => {
+    count++;
+  });
+  return count;
+}
 
-  StatusBarManager.showMessage(`Local files listed`, "", "", 3000, "check");
-  return rootEntry;
+export async function listLocalFiles(localDir: string): Promise<FileNode|undefined> {
+  StatusBarManager.showMessage(`Listing files on ${localDir}`, "", "", 0, "sync~spin", true);
+
+  const fileNodes: FileNode[] = [];
+
+  const root = await traverseLocalTree(localDir, node => {
+    if (node.type === BaseNodeType.directory) {
+      // count this directory as “processed”
+      StatusBarManager.step();
+    } else {
+      fileNodes.push(node);
+    }
+  });
+  if (!root) {return undefined;}
+
+  // now hash files in parallel, updating progress per file
+  await pMap(fileNodes, async node => {
+    node.hash = await generateHash(node.fullPath, node.source, node.type);
+    StatusBarManager.step();
+  }, { concurrency: 16 });
+
+  await computeFolderHashes(root);
+  StatusBarManager.showMessage(`Listing files on ${localDir}`, "", "", 5000, "check");
+  return root;
 }
 
 
@@ -129,49 +150,6 @@ export async function listRemoteFiles(
 
   return connectionManager.doSSHOperation(
     async (sshClient) => {
-      // Count total items for progress indication
-      const countCommand = `find "${remoteDir}" | wc -l`;
-      const countOutputRaw = await sshClient.executeCommand(countCommand);
-
-      const countLines = countOutputRaw.trim().split("\n");
-      const countDeniedLines = countLines.filter((l) =>
-        l.includes("Permission denied")
-      );
-      const lastCountLine = countLines[countLines.length - 1];
-      const totalItems = parseInt(lastCountLine.trim(), 10) || 0;
-      let processedItems = 0;
-      const updateProgress = () => {
-        const percent = totalItems > 0
-          ? Math.round((processedItems / totalItems) * 100)
-          : 100;
-        StatusBarManager.showProgress(Math.min(100, percent));
-      };
-
-      // Handle any denied paths from count stage
-      const countDeniedPaths = countDeniedLines
-        .map((l) => {
-          const m1 = l.match(/find: ‘(.+)’: Permission denied/);
-          const m2 = l.match(/sha256sum: (.+): Permission denied/);
-          return m1?.[1] ?? m2?.[1] ?? null;
-        })
-        .filter((p): p is string => !!p);
-
-      if (countDeniedPaths.length) {
-        await WorkspaceConfigManager.addToIgnoreList(...countDeniedPaths);
-        logErrorMessage(
-          `Skipped ${countDeniedPaths.length} inaccessible paths at count-stage:\n` +
-            countDeniedPaths.map((p) => `  • ${p}`).join("\n"),
-          LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
-        );
-      }
-
-      if (totalItems === 0) {
-        logErrorMessage(
-          `<listRemoteFiles> No files found in ${remoteDir}`,
-          LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
-        );
-        return undefined;
-      }
 
       // 1) Fetch all directory metadata (path,size,mtime,type) in one stat batch
       const dirStatCmd = `find "${remoteDir}" -type d -exec stat --format="%n,%s,%Y,%F" {} +`;
@@ -220,8 +198,7 @@ export async function listRemoteFiles(
         const size = parseInt(parts[1], 10);
         const mtime = parseInt(parts[2], 10) * 1000;
         dirMap.set(rel, { size, mtime });
-        processedItems++;
-        updateProgress();
+        StatusBarManager.step();
       }
 
       // Parse file stats into a map: relPath → { size, mtime }
@@ -234,8 +211,7 @@ export async function listRemoteFiles(
         }
         const fullPath = parts[0];
         if (shouldIgnore(fullPath)) {
-          processedItems++;
-          updateProgress();
+          StatusBarManager.step();
           continue;
         }
 
@@ -245,8 +221,7 @@ export async function listRemoteFiles(
         const size = parseInt(parts[1], 10);
         const mtime = parseInt(parts[2], 10) * 1000;
         fileStatMap.set(rel, { size, mtime });
-        processedItems++;
-        updateProgress();
+        StatusBarManager.step();
       }
 
       // Parse file hashes into a map: relPath → hash
@@ -260,8 +235,7 @@ export async function listRemoteFiles(
         const rel = parts[1];
         const hash = parts[0];
         fileHashMap.set(rel, hash);
-        processedItems++;
-        updateProgress();
+        StatusBarManager.step();
       }
 
       // Build directory FileNode objects first
@@ -346,7 +320,6 @@ export async function listRemoteFiles(
       // Compute hashes for all folders
       await computeFolderHashes(rootEntry);
 
-      StatusBarManager.showMessage(`Remote files listed`, "", "", 3000, "check");
       return rootEntry;
     },
     `Listing files on ${remoteDir}`
@@ -428,4 +401,55 @@ export async function computeFolderHashes(node: FileNode): Promise<void> {
     .sort()
     .join("");
   node.hash = createHash("sha256").update(combined).digest("hex");
+}
+
+/**
+ * 1) Run `find … | wc -l` on the remote host and return the raw output.
+ */
+export async function fetchRemoteCountOutput(
+  sshClient: any,
+  remoteDir: string
+): Promise<string> {
+  const cmd = `find "${remoteDir}" | wc -l`;
+  return sshClient.executeCommand(cmd);
+}
+
+/**
+ * 2) Parse the raw `find | wc -l` output and return the item count.
+ */
+export function parseRemoteItemCount(rawOutput: string): number {
+  const lines = rawOutput.trim().split('\n');
+  const last = lines[lines.length - 1] || '0';
+  const n = parseInt(last.trim(), 10);
+  return isNaN(n) ? 0 : n;
+}
+
+/**
+ * 3) From the same raw output, extract any “Permission denied” paths,
+ *    add them to the ignore list, log a summary, and return them.
+ */
+export async function syncRemoteDeniedPaths(
+  rawOutput: string
+): Promise<string[]> {
+  const lines = rawOutput.trim().split('\n');
+  const deniedLines = lines.filter(l => l.includes('Permission denied'));
+
+  const paths = deniedLines
+    .map(l => {
+      const m1 = l.match(/find: ‘(.+)’: Permission denied/);
+      const m2 = l.match(/sha256sum: (.+): Permission denied/);
+      return m1?.[1] ?? m2?.[1] ?? null;
+    })
+    .filter((p): p is string => !!p);
+
+  if (paths.length) {
+    await WorkspaceConfigManager.addToIgnoreList(...paths);
+    logErrorMessage(
+      `Skipped ${paths.length} inaccessible remote paths:\n` +
+        paths.map(p => `  • ${p}`).join('\n'),
+      LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+    );
+  }
+
+  return paths;
 }

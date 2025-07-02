@@ -1,9 +1,9 @@
 import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
 import { SFTPClient } from "../services/SFTPClient";
 import { SSHClient } from "../services/SSHClient";
-import { StatusBarManager } from "./StatusBarManager";
 import * as net from "net";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
+import { StatusBarManager } from "./StatusBarManager";
 
 export class ConnectionManager {
   private static instance: ConnectionManager | null = null;
@@ -131,38 +131,38 @@ export class ConnectionManager {
 
   async doSSHOperation<T>(operation: (sshClient: SSHClient) => Promise<T>, operationName?: string): Promise<T> {
     this.sshActiveOperations++;
-    const displayOperationName = operationName ? ` ${operationName}` : "";
-    StatusBarManager.showMessage(`SSH${displayOperationName}`, "", "", 0, "sync~spin", true);
+    if(operationName) {StatusBarManager.showMessage(`${operationName}`, "", "", 0, "sync~spin", true);}
+    
 
     try {
       await this.retryOperation(async () => await this.connectSSH(), 0);
       const result = await this.retryOperation(async () => await operation(this.sshClient));
-      StatusBarManager.showMessage("SSH operation successful", "", "", 3000, "check");
+      if(operationName) {StatusBarManager.showMessage(`${operationName}`, "", "", 5000, "check");}
       return result;
+      
     } catch (err: any) {
-      StatusBarManager.showMessage("SSH operation failed", "", "", 3000, "error");
+      if(operationName) {StatusBarManager.showMessage(`${operationName}`, "", "", 5000, "error");}
       throw err;
+
     } finally {
       this.sshActiveOperations--;
       if (this.sshActiveOperations === 0) {
         this.scheduleSSHDisconnect();
       }
-      // StatusBarManager.hideMessage();
     }
   }
 
   async doSFTPOperation<T>(operation: (sftpClient: SFTPClient) => Promise<T>, operationName?: string): Promise<T> {
     this.sftpActiveOperations++;
-    const displayOperationName = operationName ? ` ${operationName}` : "";
-    StatusBarManager.showMessage(`SFTP${displayOperationName}`, "", "", 0, "sync~spin", true);
+    if(operationName) {StatusBarManager.showMessage(`${operationName}`, "", "", 0, "sync~spin", true);}
 
     try {
       await this.retryOperation(async () => await this.connectSFTP(), 1);
       const result = await this.retryOperation(async () => await operation(this.sftpClient));
-      StatusBarManager.showMessage("SFTP operation successful", "", "", 3000, "check");
+      if(operationName) {StatusBarManager.showMessage(`${operationName}`, "", "", 5000, "check");}
       return result;
     } catch (err: any) {
-      StatusBarManager.showMessage("SFTP operation failed", "", "", 3000, "error");
+      if(operationName) {StatusBarManager.showMessage(`${operationName}`, "", "", 5000, "error");}
       throw err;
     } finally {
       this.sftpActiveOperations--;

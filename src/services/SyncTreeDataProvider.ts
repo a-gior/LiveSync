@@ -8,7 +8,6 @@ import JsonManager, { isComparisonFileNodeMap, JsonType } from "../managers/Json
 import { ComparisonFileNode, ComparisonStatus } from "../utilities/ComparisonFileNode";
 import { BaseNode, BaseNodeType } from "../utilities/BaseNode";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../managers/LogManager";
-import { StatusBarManager } from "../managers/StatusBarManager";
 import { FileNode } from "../utilities/FileNode";
 import path from "path";
 import { Action } from "../utilities/enums";
@@ -207,13 +206,11 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
 
   // Get the whole ComparisonFileNode of the whole tree
   async getComparisonFileNode(localDir: string, remoteDir: string): Promise<ComparisonFileNode> {
-    const startTime = performance.now(); // Start timing
     try {
       const localFiles = await listLocalFiles(localDir);
       const remoteFiles = await listRemoteFiles(remoteDir);
 
       const comparisonFileNode = ComparisonFileNode.compareFileNodes(localFiles, remoteFiles);
-      StatusBarManager.showMessage("Comparing done!", "", "", 3000, "check");
 
       if (remoteFiles) {
         const remoteFilesMap = new Map<string, FileNode>();
@@ -225,12 +222,7 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
 
       return comparisonFileNode;
     } catch (error: any) {
-      StatusBarManager.showMessage("SFTP operation failed", "", "", 3000, "error");
       throw error;
-    } finally {
-      const endTime = performance.now(); // End timing
-      const executionTime = endTime - startTime; // Calculate the elapsed time in milliseconds
-      logInfoMessage(`Comparing directories execution time: ${executionTime.toFixed(2)} ms`); // Log the execution time
     }
   }
 

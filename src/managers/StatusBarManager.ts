@@ -7,16 +7,19 @@ export class StatusBarManager {
   private static currentMessage: string;
   private static currentIcon: string;
 
+  private static totalItems: number = 0;
+  private static currentItem: number = 0;
+
   private static getStatusBarItem(): vscode.StatusBarItem {
     if (!this.statusBarItem) {
-      this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+      this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
     }
     return this.statusBarItem;
   }
 
   private static getProgressItem(): vscode.StatusBarItem {
     if (!this.progressItem) {
-      this.progressItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99); // Slightly lower priority
+      this.progressItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100); // Slightly lower priority
     }
     return this.progressItem;
   }
@@ -66,19 +69,52 @@ export class StatusBarManager {
     }
   }
 
-  static showProgress(progress: number) {
-    const progressItem = this.getProgressItem();
-
-    // Ensure progress is between 0-100
-    const clampedProgress = Math.min(100, Math.max(0, progress));
-
-    progressItem.text = `$(pulse) ${clampedProgress}%`;
-    progressItem.show();
-
-    // Hide when reaching 100%
-    if (clampedProgress >= 100) {
-      setTimeout(() => progressItem.hide(), 2000);
+  /**
+   * Initialize the progress bar with the total number of items.
+   * @param total Total number of items to process.
+   */
+  public static initProgress(total: number) {
+    if (total <= 0) {
+      // nothing to process, so just hide (or skip showing altogether)
+      return;
     }
+
+    this.totalItems = Math.max(1, total);
+    this.currentItem = 0;
+
+    const item = this.getProgressItem();
+    item.text = `$(pulse) 0%`;
+    item.show();
+  }
+
+  /**
+   * Advance the progress by one item.
+   * Optionally, you can pass a count > 1.
+   * @param increment Number of items processed (default is 1).
+   */
+  public static step(increment: number = 1) {
+    this.currentItem = Math.min(this.totalItems, this.currentItem + increment);
+    const percent = Math.floor((this.currentItem / this.totalItems) * 100);
+
+    const item = this.getProgressItem();
+    item.text = `$(pulse) ${percent}%`;
+
+    // Auto-hide when complete
+    if (this.currentItem >= this.totalItems) {
+      setTimeout(() => this.endProgress(), 3000);
+    }
+  }
+
+  /**
+   * Immediately finish and hide the progress bar.
+   */
+  public static endProgress() {
+    const item = this.getProgressItem();
+    item.hide();
+
+    // Reset counters
+    this.totalItems = 0;
+    this.currentItem = 0;
   }
 
   static createPermanentIcon() {

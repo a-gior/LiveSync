@@ -144,4 +144,15 @@ export class SSHClient extends BaseClient {
       throw error;
     }
   }
+
+  async count(
+    remoteDir: string
+  ): Promise<number> {
+    const cmd = `find "${remoteDir}" | wc -l`;
+    const raw = await this.executeCommand(cmd);
+    const lines = raw.trim().split('\n');
+    const last = lines[lines.length - 1] || '0';
+    const n = parseInt(last.trim(), 10);
+    return isNaN(n) ? 0 : n;
+  }
 }

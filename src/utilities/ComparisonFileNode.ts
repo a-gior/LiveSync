@@ -2,8 +2,8 @@ import { BaseNode, BaseNodeData, BaseNodeType } from "./BaseNode";
 import { FileNode } from "./FileNode";
 import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 import { splitParts } from "./fileUtils/filePathUtils";
-import { StatusBarManager } from "../managers/StatusBarManager";
 import JsonManager from "../managers/JsonManager";
+import { StatusBarManager } from "../managers/StatusBarManager";
 
 export enum ComparisonStatus {
   added = "added",
@@ -50,7 +50,7 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     localNode?: FileNode,
     remoteNode?: FileNode
   ): ComparisonFileNode {
-    StatusBarManager.showMessage(`Comparing…`, "", "", 0, "sync~spin", true);
+    StatusBarManager.showMessage(`Building comparison tree…`, "", "", 0, "sync~spin", true);
   
     // Determine base properties
     const name = localNode ? localNode.name : remoteNode!.name;
@@ -61,10 +61,6 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
   
     let status = ComparisonStatus.unchanged;
   
-    if(name === "testfolder2") {
-      console.log("Comparing testfolder2");
-    }
-
     // 1) New or deleted
     if (!localNode && remoteNode) {
       status = ComparisonStatus.removed;

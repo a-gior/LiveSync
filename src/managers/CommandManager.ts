@@ -16,6 +16,8 @@ import { Dialog } from "../services/Dialog";
 import { FileNodeSource } from "../utilities/FileNode";
 import { TreeViewManager } from "./TreeViewManager";
 import { StatusBarManager } from "./StatusBarManager";
+import { countLocalFiles, fetchRemoteCountOutput, parseRemoteItemCount, syncRemoteDeniedPaths } from "../utilities/fileUtils/fileListing";
+import { getFullPaths } from "../utilities/fileUtils/filePathUtils";
 
 export class CommandManager {
   private static runningCommands: Set<string> = new Set();
@@ -70,35 +72,77 @@ export class CommandManager {
       },
 
       "livesync.refreshAll": async () => {
-        await vscode.commands.executeCommand("livesync.refresh");
+        vscode.commands.executeCommand("livesync.refresh");
       },
 
       "livesync.refresh": async (element?: ComparisonFileNode | vscode.Uri) => {
         WorkspaceConfigManager.reload();
 
-        if (!element) {
-          const { localPath, remotePath } = WorkspaceConfigManager.getWorkspaceFullPaths();
-          const comparisonFileNode = await treeDataProvider.getComparisonFileNode(localPath, remotePath);
+        StatusBarManager.showMessage(`Scanning...`, "", "", 0, "sync~spin", true);
+        try {
 
-          // Update the root elements
-          const rootNode = treeDataProvider.rootElements.get(comparisonFileNode.name);
-          if (rootNode) {
-            Object.assign(rootNode, comparisonFileNode); // Update properties while keeping the same reference
+          if (!element) {
+            // Get the number of files and folders to process and init progress bar
+            const { localPath, remotePath } = WorkspaceConfigManager.getWorkspaceFullPaths();
+            const totalLocalFiles = await countLocalFiles(localPath);
+            
+            const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
+            const connectionManager = await ConnectionManager.getInstance(configuration);
+            let totalRemoteFiles = 0;
+            await connectionManager.doSSHOperation(
+              async (sshClient) => {
+                
+                const raw = await fetchRemoteCountOutput(sshClient, remotePath);
+                totalRemoteFiles = parseRemoteItemCount(raw);
+                await syncRemoteDeniedPaths(raw);
+              }
+            ), "Count remote files";
+
+            StatusBarManager.initProgress(totalLocalFiles+totalRemoteFiles);
+  
+            // Update the root elements
+            const comparisonFileNode = await treeDataProvider.getComparisonFileNode(localPath, remotePath);
+            const rootNode = treeDataProvider.rootElements.get(comparisonFileNode.name);
+            if (rootNode) {
+              Object.assign(rootNode, comparisonFileNode); // Update properties while keeping the same reference
+            }
+  
+            await JsonManager.getInstance().updateFullJson(JsonType.COMPARE, treeDataProvider.rootElements);
+            await treeDataProvider.refresh();
+          } else {
+            if (element instanceof vscode.Uri) {
+              const comparisonNode = await JsonManager.findComparisonNodeFromUri(element, treeDataProvider);
+              element = comparisonNode;
+            }
+
+            const { localPath, remotePath } = await getFullPaths(element);
+            const totalLocalFiles = await countLocalFiles(localPath);
+            
+            const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
+            const connectionManager = await ConnectionManager.getInstance(configuration);
+            let totalRemoteFiles = 0;
+            await connectionManager.doSSHOperation(
+              async (sshClient) => {
+                
+                const raw = await fetchRemoteCountOutput(sshClient, remotePath);
+                totalRemoteFiles = parseRemoteItemCount(raw);
+                await syncRemoteDeniedPaths(raw);
+              }
+            ), "Count remote files";
+
+            StatusBarManager.initProgress(totalLocalFiles+totalRemoteFiles);
+  
+            const comparisonFileNode = await compareCorrespondingEntry(element);
+            const updatedElement = await treeDataProvider.updateRootElements(Action.Update, comparisonFileNode);
+  
+            await treeDataProvider.refresh(updatedElement);
           }
+          
+          StatusBarManager.showMessage("Differences loaded", "", "", 5000, "check");
+          
+        } catch (error: any) {
+          StatusBarManager.showMessage("Error while scanning", "", "", 5000, "error");
 
-          await JsonManager.getInstance().updateFullJson(JsonType.COMPARE, treeDataProvider.rootElements);
-          await treeDataProvider.refresh();
-        } else {
-          if (element instanceof vscode.Uri) {
-            const comparisonNode = await JsonManager.findComparisonNodeFromUri(element, treeDataProvider);
-            element = comparisonNode;
-          }
-
-          const comparisonFileNode = await compareCorrespondingEntry(element);
-          StatusBarManager.showMessage("Comparing done!", "", "", 3000, "check");
-          const updatedElement = await treeDataProvider.updateRootElements(Action.Update, comparisonFileNode);
-
-          await treeDataProvider.refresh(updatedElement);
         }
       },
 

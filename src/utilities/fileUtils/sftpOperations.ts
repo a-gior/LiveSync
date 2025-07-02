@@ -217,7 +217,7 @@ export async function compareFileHash(
 export async function remotePathType(remotePath: string) {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = await ConnectionManager.getInstance(configuration);
-
+  
   return await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
     return await sftpClient.pathType(remotePath);
   }, `Checking if ${remotePath} exists`);
