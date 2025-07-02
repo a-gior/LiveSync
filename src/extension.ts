@@ -1,6 +1,5 @@
 // Main entry point for the LiveSync extension
 import * as vscode from "vscode";
-import { CommandManager } from "./managers/CommandManager";
 import { EventManager } from "./managers/EventManager";
 import { TreeViewManager } from "./managers/TreeViewManager";
 import { StatusBarManager } from "./managers/StatusBarManager";
@@ -8,6 +7,7 @@ import { FileStatusDecorationProvider } from "./services/FileDecorationProvider"
 import { WorkspaceConfigManager } from "./managers/WorkspaceConfigManager";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./managers/LogManager";
 import { ConnectionManager } from "./managers/ConnectionManager";
+import { CommandRegistrar } from "./services/CommandRegistrar";
 
 export async function activate(context: vscode.ExtensionContext) {
   logInfoMessage("LiveSync extension activating...");
@@ -27,7 +27,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Initialize managers
   await TreeViewManager.initialize(context);
-  CommandManager.registerCommands(context, TreeViewManager.treeDataProvider);
+  CommandRegistrar.register(context, TreeViewManager.treeDataProvider);
   WorkspaceConfigManager.initialize(context);
   EventManager.initialize(context, TreeViewManager.treeDataProvider);
   StatusBarManager.createPermanentIcon();

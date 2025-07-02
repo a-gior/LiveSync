@@ -18,57 +18,81 @@ import { Action, ActionResult } from "../utilities/enums";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../managers/LogManager";
 import { getFullPaths, getRelativePath } from "../utilities/fileUtils/filePathUtils";
 import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
+import { CommandManager } from "../managers/CommandManager";
 
 export class FileEventHandler {
+  
   static enableFileCreate = true;
   static enableFileDelete = true;
   static enableFileRename = true;
   static enableFileSave = true;
   static enableFileOpen = true;
-  static enableFileUpload = true;
-  static enableFileDownload = true;
 
   /**
    * Initialize file event handlers and register them in the extension context.
    * @param context - The extension context
    * @param treeDataProvider - The tree data provider
    */
-  static initialize(context: vscode.ExtensionContext, treeDataProvider: SyncTreeDataProvider) {
+  static initialize(
+    context: vscode.ExtensionContext,
+    treeDataProvider: SyncTreeDataProvider
+  ) {
     context.subscriptions.push(
-      vscode.workspace.onDidCreateFiles(async (event) => {
-        if (FileEventHandler.enableFileCreate) {
-          await FileEventHandler.handleFileCreate(event, treeDataProvider);
-        }
+      vscode.workspace.onDidCreateFiles(event => {
+        if (!FileEventHandler.enableFileCreate) {return;}
+        CommandManager.queueExecution(
+          'onDidCreateFiles',
+          FileEventHandler.handleFileCreate,
+          [event, treeDataProvider]
+        );
       }),
-
-      vscode.workspace.onDidDeleteFiles(async (event) => {
-        if (FileEventHandler.enableFileDelete) {
-          await FileEventHandler.handleFileDelete(event, treeDataProvider);
-        }
+  
+      vscode.workspace.onDidDeleteFiles(event => {
+        if (!FileEventHandler.enableFileDelete) {return;}
+        CommandManager.queueExecution(
+          'onDidDeleteFiles',
+          FileEventHandler.handleFileDelete,
+          [event, treeDataProvider]
+        );
       }),
-
-      vscode.workspace.onDidRenameFiles(async (event) => {
-        if (FileEventHandler.enableFileRename) {
-          await FileEventHandler.handleFileRename(event, treeDataProvider);
-        }
+  
+      vscode.workspace.onDidRenameFiles(event => {
+        if (!FileEventHandler.enableFileRename) {return;}
+        CommandManager.queueExecution(
+          'onDidRenameFiles',
+          FileEventHandler.handleFileRename,
+          [event, treeDataProvider]
+        );
       }),
-
-      vscode.window.onDidChangeActiveTextEditor(async (editor) => {
-        if (editor && FileEventHandler.enableFileOpen) {
-          await FileEventHandler.handleFileOpen(editor.document, treeDataProvider);
-        }
+  
+      vscode.window.onDidChangeActiveTextEditor(editor => {
+        if (!editor || !FileEventHandler.enableFileOpen) {return;}
+        CommandManager.queueExecution(
+          'onDidChangeActiveTextEditor',
+          FileEventHandler.handleFileOpen,
+          [editor.document, treeDataProvider]
+        );
       }),
-
-      vscode.workspace.onDidSaveTextDocument(async (document) => {
-        if (FileEventHandler.enableFileSave) {
-          await FileEventHandler.handleFileSave(document, treeDataProvider);
-        }
+  
+      vscode.workspace.onDidSaveTextDocument(document => {
+        if (!FileEventHandler.enableFileSave) {return;}
+        CommandManager.queueExecution(
+          'onDidSaveTextDocument',
+          FileEventHandler.handleFileSave,
+          [document, treeDataProvider]
+        );
       }),
-
-      vscode.workspace.onDidChangeConfiguration(async () => {
-        if (WorkspaceConfigManager.isVscodeSettingsValid) {
-          WorkspaceConfigManager.reload();
-        }
+  
+      vscode.workspace.onDidChangeConfiguration(() => {
+        CommandManager.queueExecution(
+          'onDidChangeConfiguration',
+          async () => {
+            if (WorkspaceConfigManager.isVscodeSettingsValid) {
+              WorkspaceConfigManager.reload();
+            }
+          },
+          []
+        );
       })
     );
   }
