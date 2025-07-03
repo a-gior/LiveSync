@@ -2,8 +2,16 @@
 
 **LiveSync** is a Visual Studio Code extension that lets you **instantly sync your local workspace with a remote folder over SSH/SFTP** — with **real-time difference tracking**, **customizable sync events**, and an **intuitive visual interface**.
 
-It’s perfect for developers working with remote servers, staging environments, Raspberry Pis, or any SSH-accessible machine.  
+It’s perfect for developers working with remote servers or any SSH-accessible machine.  
 No more manual uploads, terminal back-and-forth, or wondering if a file is out of sync.
+
+
+---
+
+## ⚠️ Warning
+
+> **Single-folder support only:** LiveSync currently works with a single workspace folder at a time.  
+> Multi-root workspace support (with per-folder configuration) is coming in **v1.1.0**.
 
 ---
 
