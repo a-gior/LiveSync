@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.5] - Stability & UI Improvements 🛡️✨
+
+### Fixed
+- Renaming or moving files and folders now correctly updates their status and synchronizes changes  
+- Creating or deleting a folder now triggers sync as expected  
+- No error was shown on extension startup if configuration was invalid; now a clear message appears when connection details are wrong  
+- Configuration panel now opens properly with prefilled parameters 
+
+### Improvements
+- Sync events and commands are now processed sequentially, preventing conflicts during rapid changes  
+- Status bar now shows clearer messages with progress during sync operations  
+- Faster local scanning
+
 ## [1.0.4] - Performance & Status Fixes 🏎️
 
 ### Improvements
@@ -68,13 +81,6 @@ LiveSync tree now updates file statuses immediately when files are saved or othe
 - Optimized SFTP/SSH connection handling.
 - Improved performance for large folders.
 - Enhanced logging for better debugging.
-
----
-
-## 🗺️ Future Plans
-
-- Fixing potential bugs and improving stability.
-- Listening to user feedback to refine and enhance the extension.
 
 ---
 
