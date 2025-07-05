@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+
+## [1.0.6] - Workspace Warning ⚠️
+
+### Added
+- Warning displayed when opening a multi-root workspace to indicate that only single-root workspaces are currently supported (multi-root support coming in v1.1.0)
+
 ## [1.0.5] - Stability & UI Improvements 🛡️✨
 
 ### Fixed

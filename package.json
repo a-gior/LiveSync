@@ -2,7 +2,7 @@
   "name": "livesync",
   "displayName": "LiveSync",
   "description": "Instant file sync over SSH/SFTP with diff tracking and easy config UI.",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "publisher": "agior",
   "icon": "resources/icons/livesync-logo-gold.png",
   "repository": {
@@ -456,5 +456,8 @@
   },
   "lint-staged": {
     "**/*": "prettier --write --ignore-unknown"
+  },
+  "overrides": {
+    "uri-js": "@clockinit/uri-js@^1.0.0"
   }
 }
