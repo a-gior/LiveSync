@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.7] - File Node Comparison Fix & Enhancements 🛠️
+
+### Fixed
+- Fix file-nodes comparison logic so that children are always included and statuses correctly propagated in recursive comparisons. :contentReference
+- Fix status-bar message output to display accurate sync progress and error indicators. 
 
 ## [1.0.6] - Workspace Warning ⚠️
 
