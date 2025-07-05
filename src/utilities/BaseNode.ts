@@ -10,6 +10,7 @@ export interface BaseNodeData {
   modifiedTime: Date | string;
   relativePath: string;
   children?: { [key: string]: any } | Map<string, BaseNode<any>>;
+  hash: string;
 }
 
 export abstract class BaseNode<T extends BaseNode<any>> {
@@ -19,8 +20,9 @@ export abstract class BaseNode<T extends BaseNode<any>> {
   modifiedTime: Date;
   relativePath: string;
   children: Map<string, T>;
+  hash: string;
 
-  constructor(data: BaseNodeData | string, type?: BaseNodeType, size?: number, modifiedTime?: Date, relativePath?: string) {
+  constructor(data: BaseNodeData | string, type?: BaseNodeType, size?: number, modifiedTime?: Date, relativePath?: string, hash?: string) {
     if (typeof data === "string") {
       // Traditional constructor parameters
       this.name = data;
@@ -28,6 +30,7 @@ export abstract class BaseNode<T extends BaseNode<any>> {
       this.size = size!;
       this.modifiedTime = modifiedTime!;
       this.relativePath = relativePath!;
+      this.hash = hash || "";
       this.children = new Map<string, T>();
     } else {
       // JSON-like object initialization
@@ -36,6 +39,7 @@ export abstract class BaseNode<T extends BaseNode<any>> {
       this.size = data.size;
       this.modifiedTime = new Date(data.modifiedTime);
       this.relativePath = data.relativePath;
+      this.hash = data.hash;
       this.children = new Map<string, T>();
 
       if (data.children) {
@@ -61,6 +65,7 @@ export abstract class BaseNode<T extends BaseNode<any>> {
       size: this.size,
       modifiedTime: this.modifiedTime.toISOString(),
       relativePath: this.relativePath,
+      hash: this.hash,
       children: Object.fromEntries(Array.from(this.children.entries()).map(([key, value]) => [key, value.toJSON()]))
     };
   }

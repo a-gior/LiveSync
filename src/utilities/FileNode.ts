@@ -14,13 +14,11 @@ export enum FileNodeSource {
 export interface FileNodeData extends BaseNodeData {
   source: FileNodeSource;
   fullPath: string;
-  hash?: string;
 }
 
 export class FileNode extends BaseNode<FileNode> {
   source: FileNodeSource;
   fullPath: string;
-  hash?: string;
 
   constructor(
     data: FileNodeData | string,
@@ -47,7 +45,6 @@ export class FileNode extends BaseNode<FileNode> {
       super(data);
       this.source = data.source;
       this.fullPath = data.fullPath;
-      this.hash = data.hash;
       this.relativePath = data.relativePath;
     }
   }
@@ -86,7 +83,8 @@ export class FileNode extends BaseNode<FileNode> {
         modifiedTime: stats.mtime,
         source: FileNodeSource.local,
         relativePath: getRelativePath(localPath),
-        fullPath: localPath
+        fullPath: localPath,
+        hash: ""
       });
 
       fileNode.hash = await generateHash(fileNode.fullPath, FileNodeSource.local, nodeType);
@@ -112,7 +110,8 @@ export class FileNode extends BaseNode<FileNode> {
         modifiedTime: new Date(stats.modifyTime * 1000),
         source: FileNodeSource.remote,
         relativePath: getRelativePath(remotePath),
-        fullPath: remotePath
+        fullPath: remotePath,
+        hash: ""
       });
     } catch (error) {
       logErrorMessage(`Error getting FileNode for path ${remotePath}:`);
