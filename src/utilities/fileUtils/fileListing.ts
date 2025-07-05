@@ -14,10 +14,6 @@ import fg, { Entry } from "fast-glob";
 import pMap from "p-map";
 import { createHash } from "crypto";
 import { Stats } from "fs";
-import { ComparisonFileNode } from "../ComparisonFileNode";
-import { SyncTreeDataProvider } from "../../services/SyncTreeDataProvider";
-import JsonManager from "../../managers/JsonManager";
-import { compareCorrespondingEntry } from "./entriesComparison";
 
 //
 // ─── LOCAL FILE LISTING ─────────────────────────────────────────────────────────
