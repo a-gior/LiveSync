@@ -13,6 +13,7 @@ import path from "path";
 import { Action } from "../utilities/enums";
 import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 import { TreeViewManager } from "../managers/TreeViewManager";
+import { StatusBarManager } from "../managers/StatusBarManager";
 
 export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonFileNode> {
   private _onDidChangeTreeData: vscode.EventEmitter<ComparisonFileNode | undefined | void> = new vscode.EventEmitter<
@@ -210,7 +211,9 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
       const localFiles = await listLocalFiles(localDir);
       const remoteFiles = await listRemoteFiles(remoteDir);
 
-      const comparisonFileNode = ComparisonFileNode.compareFileNodes(localFiles, remoteFiles);
+      
+      const rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
+      const comparisonFileNode = ComparisonFileNode.compareFileNodes(localFiles, remoteFiles, this.rootElements.get(rootFolderName));
 
       if (remoteFiles) {
         const remoteFilesMap = new Map<string, FileNode>();

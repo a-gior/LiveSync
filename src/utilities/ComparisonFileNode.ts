@@ -36,7 +36,7 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
       // Constructor from JSON
       const json = nameOrJson;
       super(json.name, json.type, json.size, new Date(json.modifiedTime), json.relativePath);
-      this.status = json.status;
+      this.status = json.status; 
 
       if (json.children) {
         this.setChildren(new Map(Object.entries(json.children).map(([key, value]) => [key, this.fromJSON(value)])));
@@ -48,72 +48,81 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
 
   static compareFileNodes(
     localNode?: FileNode,
-    remoteNode?: FileNode
+    remoteNode?: FileNode,
+    existingCompNode?: ComparisonFileNode,
+    isRoot: boolean = true
   ): ComparisonFileNode {
-    StatusBarManager.showMessage(`Building comparison tree…`, "", "", 0, "sync~spin", true);
-  
-    // Determine base properties
-    const name = localNode ? localNode.name : remoteNode!.name;
-    const type = (localNode ?? remoteNode)!.type;
-    const size = (localNode ?? remoteNode)!.size;
-    const modifiedTime = (localNode ?? remoteNode)!.modifiedTime;
-    const relativePath = (localNode ?? remoteNode)!.relativePath;
-  
+    // 1) Show spinner only once
+    if (isRoot) {
+      StatusBarManager.showMessage(
+        `Building comparison tree…`, "", "", 0, "sync~spin", true
+      );
+    }
+
+    // 2) Gather some booleans & base props
+    const hasLocal = !!localNode;
+    const hasRemote = !!remoteNode;
+    const base = localNode ?? remoteNode!;  // whichever exists
+    const { name, type, size, modifiedTime, relativePath, hash } = base;
+    const isDir = type === BaseNodeType.directory;
+
+    // 3) Decide status in one place
     let status = ComparisonStatus.unchanged;
-  
-    // 1) New or deleted
-    if (!localNode && remoteNode) {
-      status = ComparisonStatus.removed;
-    } else if (localNode && !remoteNode) {
-      status = ComparisonStatus.added;
-    }
-    // 2) Both exist
-    else if (localNode && remoteNode) {
-      // Type changed?
-      if (localNode.type !== remoteNode.type) {
+    if (!hasLocal)                     status = ComparisonStatus.removed;
+    else if (!hasRemote)               status = ComparisonStatus.added;
+    else if (localNode!.type !== remoteNode!.type) {
+      status = ComparisonStatus.modified;
+    } else if (!isDir) {  // file vs file
+      if (localNode!.hash !== remoteNode!.hash) {
         status = ComparisonStatus.modified;
       }
-      // File vs. file: compare hashes
-      else if (type === BaseNodeType.file) {
-        if (localNode.hash !== remoteNode.hash) {
-          status = ComparisonStatus.modified;
-        }
-      }
-      // Directory vs. directory: if hashes match, nothing changed—early exit
-      else if (type === BaseNodeType.directory) {
-        if (localNode.hash === remoteNode.hash) {
-          // no children have changed
-          return new ComparisonFileNode(
-            name, type, size, modifiedTime, relativePath, ComparisonStatus.unchanged
-          );
-        }
-        // otherwise, we’ll recurse into children
+    } else {              // directory vs directory
+      if (localNode!.hash !== remoteNode!.hash) {
         status = ComparisonStatus.modified;
       }
     }
-  
-    // Build the comparison node
-    const compNode = new ComparisonFileNode(
-      name, type, size, modifiedTime, relativePath, status
-    );
-  
-    // 3) If it’s a directory that may have changes, recurse children
-    if (type === BaseNodeType.directory) {
-      const names = new Set<string>([
-        ...(localNode?.children.keys() || []),
-        ...(remoteNode?.children.keys() || [])
+
+    // 4) FAST-PATH: if unchanged *and* we have an existing node with the same hash
+    if (
+      status === ComparisonStatus.unchanged &&
+      existingCompNode?.status === ComparisonStatus.unchanged &&
+      existingCompNode.hash === hash
+    ) {
+      return existingCompNode;
+    }
+
+    // 5) Build fresh node, and record its hash if unchanged
+    const compNode = new ComparisonFileNode(name, type, size, modifiedTime, relativePath, status);
+    if (status === ComparisonStatus.unchanged) {
+      compNode.hash = hash;
+    }
+
+    // 6) Only recurse into children for directories
+    if (isDir) {
+      const childNames = new Set<string>([
+        ...localNode?.children.keys()  || [],
+        ...remoteNode?.children.keys() || []
       ]);
-  
-      for (const childName of names) {
-        const l = localNode?.getChild(childName);
-        const r = remoteNode?.getChild(childName);
-        const childComp = this.compareFileNodes(l, r);
+
+      for (const childName of childNames) {
+        const lChild = localNode?.getChild(childName);
+        const rChild = remoteNode?.getChild(childName);
+        const existingChild = existingCompNode?.getChild(childName);
+
+        // pass isRoot=false so subcalls don’t re-show the spinner
+        const childComp = this.compareFileNodes(
+          lChild,
+          rChild,
+          existingChild,
+          false
+        );
         compNode.addChild(childComp);
       }
     }
-  
+
     return compNode;
   }
+
 
   /**
    * Recursively sets the status of a ComparisonFileNode and all its children to the specified ComparisonStatus.
