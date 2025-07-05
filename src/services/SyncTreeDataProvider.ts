@@ -220,8 +220,10 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
         await this.jsonManager.updateFullJson(JsonType.REMOTE, remoteFilesMap);
       }
 
+      StatusBarManager.showMessage("Differences loaded", "", "", 5000, "check");
       return comparisonFileNode;
     } catch (error: any) {
+      StatusBarManager.showMessage("Error while comparing files", "", "", 5000, "error");
       throw error;
     }
   }
