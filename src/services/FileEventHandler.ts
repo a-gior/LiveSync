@@ -332,7 +332,6 @@ export class FileEventHandler {
 
         const fileMoveAction = await fileMove(oldUri, newUri);
 
-        nodeToMove.name = newName || nodeToMove.name; // Update name if renaming within the same directory
 
         if (fileMoveAction === ActionResult.ActionPerformed) {
           nodeToMove.setStatus(ComparisonStatus.unchanged); // File/Folder saved remotely
@@ -348,20 +347,23 @@ export class FileEventHandler {
         }
   
         // Update node in rootElements and refresh the tree view
-        const action = newName ? Action.Update : Action.Remove;
-        const movedNode = await treeDataProvider.updateRootElements(action, nodeToMove);
-        await treeDataProvider.refresh(movedNode);
+        const removedNode = await treeDataProvider.updateRootElements(Action.Remove, nodeToMove);
+        await treeDataProvider.refresh(removedNode);
 
-        if(!newName) {
-          const nodeToAdd = nodeToMove.clone();
-          const newFileNodeRelativePath = getRelativePath(newPath);
-          nodeToAdd.relativePath = newFileNodeRelativePath;
-          const addedNode = await treeDataProvider.updateRootElements(Action.Add, nodeToAdd);
-          await treeDataProvider.refresh(addedNode);
-        }
+        const oldFileNodeRelativePath = getRelativePath(oldPath);
+        const newFileNodeRelativePath = getRelativePath(newPath);
         
+        const nodeToAdd = nodeToMove.clone();
+        nodeToAdd.name = newName || nodeToMove.name; // Update name if renaming within the same directory
+
+        // Update the relative path of the node and its children
+        FileEventHandler.rebaseRelativePaths(nodeToAdd, oldFileNodeRelativePath, newFileNodeRelativePath);
+
+        const addedNode = await treeDataProvider.updateRootElements(Action.Add, nodeToAdd);
+        await treeDataProvider.refresh(addedNode);
+
       } catch (err: any) {
-        logErrorMessage("<handleFileRename> Error: ", LOG_FLAGS.CONSOLE_ONLY, err);
+        logErrorMessage(`<handleFileRename> Error: ${err.message}`, LOG_FLAGS.CONSOLE_ONLY);
       }
     }
   }
@@ -488,4 +490,17 @@ export class FileEventHandler {
   // ) {
   //   // NOTHING TO DO WHEN CHANGES OCCURS IN DOCUMENTS
   // }
+
+  private static rebaseRelativePaths(
+    node: ComparisonFileNode,
+    oldBase: string,
+    newBase: string
+  ) {
+    if (node.relativePath.startsWith(oldBase)) {
+      node.relativePath = node.relativePath.replace(oldBase, newBase);
+    }
+    for (const child of node.children.values()) {
+      this.rebaseRelativePaths(child, oldBase, newBase);
+    }
+  }
 }

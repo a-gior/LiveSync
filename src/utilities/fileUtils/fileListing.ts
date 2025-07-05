@@ -381,8 +381,7 @@ export async function listRemoteFile(remoteFilePath: string): Promise<FileNode |
   // Fallback: path wasn’t a file (or didn’t exist) → list its parent directory
   const parentDir = path.dirname(remoteFilePath);
   logInfoMessage(
-    `<listRemoteFile> Path isn’t a file or doesn’t exist, falling back to listRemoteFiles for ${parentDir}`,
-    LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+    `<listRemoteFile> Path isn’t a file or doesn’t exist, falling back to listRemoteFiles for ${parentDir}`
   );
   return listRemoteFiles(parentDir);
 }
