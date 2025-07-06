@@ -155,17 +155,20 @@ export class CommandRegistrar {
           },
           mode: ExecutionMode.Queue,
         },
-        'livesync.deleteLocalFile': {
+        'livesync.deleteLocal': {
           callback: async (node) => {
-            if (!(await Dialog.confirmDelete(FileNodeSource.local, node.relativePath))) {return;}
+            if (!(await Dialog.confirmDelete(FileNodeSource.local, node.relativePath, node.isDirectory()))) {return;}
+
             await performDelete(node, treeDataProvider);
           },
           mode: ExecutionMode.Queue,
         },
-        'livesync.deleteRemoteFile': {
+        'livesync.deleteRemote': {
           callback: async (node) => {
-            if (!(await Dialog.confirmDelete(FileNodeSource.remote, node.relativePath))) {return;}
+            if (!(await Dialog.confirmDelete(FileNodeSource.remote, node.relativePath, node.isDirectory()))) {return;}
+
             await performDelete(node, treeDataProvider);
+            
           },
           mode: ExecutionMode.Queue,
         },

@@ -77,7 +77,7 @@ export function getRootElement(treeDataProvider: SyncTreeDataProvider): Comparis
 }
 
 /**
- * Deletes a file locally or remotely based on the isLocal flag.
+ * Deletes a file or folder locally or remotely
  */
 export async function performDelete(
   node: ComparisonFileNode,
@@ -92,7 +92,7 @@ export async function performDelete(
   // Perform the correct deletion
   let isDeleted = false;
   if (isLocal) {
-    isDeleted = await deleteLocalFile(fileUri);
+    isDeleted = await deleteLocal(fileUri);
 
   } else {
     const fileDeletedAction = await fileDelete(fileUri);
@@ -107,16 +107,16 @@ export async function performDelete(
 }
 
 /**
- * Deletes the file at the given URI on the local filesystem.
+ * Deletes the folder at the given URI locally.
  * @param uri A vscode.Uri pointing to the file to delete
  * @returns true if deletion succeeded, false otherwise
  */
-async function deleteLocalFile(uri: Uri): Promise<boolean> {
+async function deleteLocal(uri: Uri): Promise<boolean> {
   try {
-    await unlink(uri.fsPath);
+    await rm(uri.fsPath, { recursive: true, force: true });
     return true;
   } catch (err: any) {
-    logErrorMessage(`Failed to delete local file ${uri.fsPath}, error: ${err.message || err}`);
+    logErrorMessage(`Failed to delete local file/folder ${uri.fsPath}, error: ${err.message}`);
     return false;
   }
-}
+}}
