@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.9] - Tree Commands & Sync State Update 🛠️
+
+### Fixed
+- Tree view actions now only show the right commands for each file or folder based on its status. 
+- Remote sync state is saved more reliably—no more phantom “changes detected” alerts or unexpected pop-ups.  
+- Status now accurately reflect what happened locally and on the server, eliminating mismatches in the comparison tree.
+
+### Added
+- New “Delete” option for folders that have been added or removed, letting you clean up entire directories right from the tree.  
+
 ## [1.0.8] - Move & Rename Fix 🛠️
 
 ### Fixed
