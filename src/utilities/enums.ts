@@ -1,7 +1,7 @@
 export enum Action {
-  Add = "add",
-  Remove = "remove",
-  Update = "update",
+  Add = "Add",
+  Remove = "Remove",
+  Update = "Update",
   Move = "Move",
   Save = "Save",
   Open = "Open"
