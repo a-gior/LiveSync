@@ -219,63 +219,69 @@ export default class JsonManager {
     return entriesMap[jsonType];
   }
 
-  public async updateRemoteFilesJson(fileNode: FileNode) {
-    // Get the existing remote FileNode from JSON data
-    const jsonType = JsonType.REMOTE;
-    const fileName = this.getJsonFileName(jsonType);
+  public async updateRemoteFilesJson(remoteNode: FileNode) {
+    const jsonType    = JsonType.REMOTE;
+    const fileName    = this.getJsonFileName(jsonType);
     const fileNodeMap = await this.getFileEntriesMap(jsonType);
-
     if (!fileNodeMap) {
-      logErrorMessage(`<updateRemoteFilesJson> Unable to load existing remote files JSON data for ${fileName}`);
+      logErrorMessage(
+        `<updateRemoteFilesJson> Unable to load existing remote files JSON data for ${fileName}`
+      );
       return;
     }
 
-    let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
-    const relativePath = getRelativePath(fileNode.fullPath);
-    const pathParts = splitParts(relativePath);
+    const rootName     = WorkspaceConfigManager.getWorkspaceBasename();
+    const relativePath = getRelativePath(remoteNode.fullPath);
+    const pathParts    = splitParts(relativePath);
 
-    if (pathParts.length === 1 && pathParts[0] === ".") {
-      fileNodeMap.set(rootFolderName, fileNode);
+    // 1) Replace the root node if we're at "."
+    if (pathParts.length === 1 && pathParts[0] === '.') {
+      fileNodeMap.set(rootName, remoteNode);
     } else {
-      if (fileNodeMap.has(rootFolderName)) {
-        let currentNode = fileNodeMap.get(rootFolderName) as FileNode;
-
-        for (const pathPart of pathParts) {
-          if (!currentNode) {
-            logErrorMessage("<updateRemoteFilesJson> Couldnt find current node in remote files JSON");
-            return;
-          }
-
-          if (!currentNode.children) {
-            currentNode.children = new Map();
-          }
-
-          if (!currentNode.children.has(pathPart)) {
-            // Create a new child node if it doesn't exist
-            const fullRemotePath = path.join(currentNode.fullPath, pathPart);
-            const fullLocalPath = getCorrespondingPath(fullRemotePath);
-            const fileNode = await FileNode.createFileNodeFromLocalPath(fullLocalPath);
-            fileNode.fullPath = fullRemotePath;
-            fileNode.source = FileNodeSource.remote;
-
-            currentNode.children.set(pathPart, fileNode);
-          }
-
-          // Move to the next child node
-          currentNode = currentNode.children.get(pathPart)!;
-        }
-
-        if (currentNode) {
-          Object.assign(currentNode, fileNode);
-        }
-      } else {
-        fileNodeMap.set(rootFolderName, fileNode);
+      // 2) Look up the root entry
+      let parent = fileNodeMap.get(rootName) as FileNode;
+      if (!parent) {
+        logErrorMessage(
+          `<updateRemoteFilesJson> Root node "${rootName}" not found in ${fileName}`
+        );
+        return;
       }
+
+      // 3) Descend to the immediate parent of remoteNode
+      for (let i = 0; i < pathParts.length - 1; i++) {
+        const part = pathParts[i];
+
+        if (!parent.children) {
+          logErrorMessage(
+            `<updateRemoteFilesJson> Missing children map on node "${parent.relativePath}" when looking for "${part}"`
+          );
+          return;
+        }
+        if (!parent.children.has(part)) {
+          logErrorMessage(
+            `<updateRemoteFilesJson> Path segment "${part}" not found under "${parent.relativePath}" for ${remoteNode.fullPath}`
+          );
+          return;
+        }
+
+        // non-null because of has()
+        parent = parent.children.get(part)!;
+      }
+
+      // 4) Replace the target branch
+      const branch = pathParts[pathParts.length - 1];
+      parent.children.set(branch, remoteNode);
     }
 
-    // Save the merged data back to the JSON file
-    await this.saveJson(fileName, fileNodeMap);
+    // 5) Persist the updated map
+    try {
+      await this.saveJson(fileName, fileNodeMap);
+      logInfoMessage(`Updated JSON Remote files for ${remoteNode.relativePath}`);
+    } catch (err: any) {
+      logErrorMessage(`Failed saving JSON for ${fileName}: ${err.message}`);
+    }
   }
+
 
   public async updateFullJson(jsonType: JsonType, data: Map<string, FileNode | ComparisonFileNode>): Promise<void> {
     try {
