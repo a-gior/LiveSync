@@ -14,6 +14,7 @@ import { Action } from "../utilities/enums";
 import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 import { TreeViewManager } from "../managers/TreeViewManager";
 import { StatusBarManager } from "../managers/StatusBarManager";
+import { updateRemoteFilesJsonForPaths } from "../utilities/fileUtils/fileEventFunctions";
 
 export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonFileNode> {
   private _onDidChangeTreeData: vscode.EventEmitter<ComparisonFileNode | undefined | void> = new vscode.EventEmitter<
@@ -69,8 +70,8 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
   }
 
   async refresh(element?: ComparisonFileNode): Promise<void> {
-    logInfoMessage("Refreshing Tree: ", LOG_FLAGS.CONSOLE_ONLY, element);
     TreeViewManager.updateMessage(this);
+    logInfoMessage("Refreshing Tree: ", LOG_FLAGS.CONSOLE_ONLY, element);
   
     const rootName = WorkspaceConfigManager.getWorkspaceBasename();
   
@@ -95,6 +96,12 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
         this._onDidChangeTreeData.fire();
       }
       return;
+    } else {
+      const parentRel = path.dirname(element.relativePath);
+
+      if(parentRel === ".") {
+        this._onDidChangeTreeData.fire();
+      }
     }
   
     // 3) Directory => refresh that directory node
@@ -216,11 +223,7 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
       const comparisonFileNode = ComparisonFileNode.compareFileNodes(localFiles, remoteFiles, this.rootElements.get(rootFolderName));
 
       if (remoteFiles) {
-        const remoteFilesMap = new Map<string, FileNode>();
-        let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
-        remoteFilesMap.set(rootFolderName, remoteFiles);
-
-        await this.jsonManager.updateFullJson(JsonType.REMOTE, remoteFilesMap);
+        await JsonManager.getInstance().updateRemoteFilesJson(remoteFiles);
       }
 
       StatusBarManager.showMessage("Differences loaded", "", "", 5000, "check");

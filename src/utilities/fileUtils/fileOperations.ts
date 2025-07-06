@@ -1,16 +1,16 @@
 import * as fs from "fs";
+import { rm } from 'fs/promises';
 import { Uri } from "vscode";
 import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
 import { downloadDirectory, uploadDirectory } from "./directoryOperations";
 import { FileEventHandler } from "../../services/FileEventHandler";
-import { Action, ActionResult } from "../enums";
+import { Action, ActionOn, ActionResult } from "../enums";
 import { SyncTreeDataProvider } from "../../services/SyncTreeDataProvider";
 import { logErrorMessage } from "../../managers/LogManager";
 import JsonManager from "../../managers/JsonManager";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
-import { unlink } from 'fs/promises';
 import { getFullPaths } from "./filePathUtils";
-import { fileDelete } from "./fileEventFunctions";
+import { fileDelete, updateRemoteFilesJsonForPaths } from "./fileEventFunctions";
 
 export function ensureDirectoryExists(dirPath: string): void {
   if (!fs.existsSync(dirPath)) {
@@ -27,12 +27,18 @@ export async function handleAction(
   let element = await resolveElement(input, treeDataProvider);
   if (!element) {return;}
 
-  if (element.isDirectory()) {
-    await (action === "upload" ? uploadDirectory(element) : downloadDirectory(element));
+  const { localPath, remotePath} = await getFullPaths(element);
 
-    const { localPath, remotePath } = WorkspaceConfigManager.getWorkspaceFullPaths();
+  if (element.isDirectory()) {
+    if(action === "upload") {
+      await uploadDirectory(element);
+    } else {
+      await downloadDirectory(element);
+    }
+    
     const comparisonFileNode = await treeDataProvider.getComparisonFileNode(localPath, remotePath);
 
+    FileEventHandler.updateNodeStatus(comparisonFileNode, action === "upload" ? ActionOn.Upload : ActionOn.Download, ActionResult.ActionPerformed);
     const updatedNode = await treeDataProvider.updateRootElements(Action.Update, comparisonFileNode);
     await treeDataProvider.refresh(updatedNode);
 
@@ -119,4 +125,4 @@ async function deleteLocal(uri: Uri): Promise<boolean> {
     logErrorMessage(`Failed to delete local file/folder ${uri.fsPath}, error: ${err.message}`);
     return false;
   }
-}}
+}

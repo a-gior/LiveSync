@@ -4,6 +4,7 @@ import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 import { splitParts } from "./fileUtils/filePathUtils";
 import JsonManager from "../managers/JsonManager";
 import { StatusBarManager } from "../managers/StatusBarManager";
+import { logInfoMessage } from "../managers/LogManager";
 
 export enum ComparisonStatus {
   added = "added",
@@ -95,6 +96,8 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     const compNode = new ComparisonFileNode(name, type, size, modifiedTime, relativePath, status);
     if (status === ComparisonStatus.unchanged) {
       compNode.hash = hash;
+    } else {
+      compNode.hash = "";
     }
 
     // 6) Only recurse into children for directories
@@ -132,6 +135,7 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
   setStatus(status: ComparisonStatus): void {
     // Set the status for the current node
     this.status = status;
+    logInfoMessage(`Setting status of node "${this.relativePath}" to "${status}"`);
 
     // Iterate through the children if the node has any
     if (this.listChildren().length > 0) {

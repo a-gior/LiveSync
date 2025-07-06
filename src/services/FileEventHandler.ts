@@ -14,11 +14,12 @@ import {
 } from "../utilities/fileUtils/fileEventFunctions";
 import { ComparisonFileNode, ComparisonStatus } from "../utilities/ComparisonFileNode";
 import JsonManager from "../managers/JsonManager";
-import { Action, ActionResult } from "../utilities/enums";
+import { Action, ActionOn, ActionResult } from "../utilities/enums";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../managers/LogManager";
 import { getFullPaths, getRelativePath } from "../utilities/fileUtils/filePathUtils";
 import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 import { CommandManager } from "../managers/CommandManager";
+import { TreeViewManager } from "../managers/TreeViewManager";
 
 export class FileEventHandler {
   
@@ -181,17 +182,8 @@ export class FileEventHandler {
           fileNode.relativePath
         );
 
-        // Action done or files have similar hashes
-        if (fileCreatedAction === ActionResult.ActionPerformed || fileCreatedAction === ActionResult.Exists) {
-          // File created on remote
-          comparisonNode.setStatus(ComparisonStatus.unchanged);
-        } else if (fileCreatedAction === ActionResult.IsNotSame) {
-          // File exists remotely and is different
-          comparisonNode.setStatus(ComparisonStatus.modified);
-        } else {
-          // File only local or doesn't exist remotely
-          comparisonNode.setStatus(ComparisonStatus.added);
-        }
+        FileEventHandler.updateNodeStatus(comparisonNode, ActionOn.Create, fileCreatedAction);
+
 
         // Update rootElements and refresh the tree
         const updatedNode = await treeDataProvider.updateRootElements(Action.Add, comparisonNode);
@@ -233,10 +225,7 @@ export class FileEventHandler {
         // Delete file remotely depending on ActionOnDelete parameter
         const fileDeletedAction = await fileDelete(fileUri);
 
-        // Status becomes removed if remote file isn't deleted
-        if (fileDeletedAction !== ActionResult.ActionPerformed) {
-          nodeToDelete.setStatus(ComparisonStatus.removed);
-        }
+        FileEventHandler.updateNodeStatus(nodeToDelete, ActionOn.Delete, fileDeletedAction);
 
         // Remove node from rootElements if also removed remotely, update it otherwise and refresh the tree view
         const action = fileDeletedAction === ActionResult.ActionPerformed ? Action.Remove : Action.Update;
@@ -278,18 +267,7 @@ export class FileEventHandler {
       // Save file remotely depending on ActionOnSave parameter
       const fileSavedAction = await fileSave(document.uri);
 
-      if (fileSavedAction === ActionResult.ActionPerformed) {
-        nodeToSave.setStatus(ComparisonStatus.unchanged); // File saved remotely
-      }
-      if (fileSavedAction === ActionResult.DontExist) {
-        nodeToSave.setStatus(ComparisonStatus.added); // File doesn't exist remotely
-      }
-      if (fileSavedAction === ActionResult.Exists) {
-        nodeToSave.setStatus(ComparisonStatus.unchanged); // File exists remotely and are the same
-      }
-      if (fileSavedAction === ActionResult.IsNotSame) {
-        nodeToSave.setStatus(ComparisonStatus.modified); // File exists remotely and are not the same
-      }
+      FileEventHandler.updateNodeStatus(nodeToSave, ActionOn.Save, fileSavedAction);
 
       // Update node in rootElements and refresh the tree view
       const savedNode = await treeDataProvider.updateRootElements(Action.Update, nodeToSave);
@@ -332,33 +310,22 @@ export class FileEventHandler {
 
         const fileMoveAction = await fileMove(oldUri, newUri);
 
-
-        if (fileMoveAction === ActionResult.ActionPerformed) {
-          nodeToMove.setStatus(ComparisonStatus.unchanged); // File/Folder saved remotely
-        }
-        if (fileMoveAction === ActionResult.DontExist) {
-          nodeToMove.setStatus(ComparisonStatus.added); // File/Folder doesn't exist remotely
-        }
-        if (fileMoveAction === ActionResult.Exists) {
-          nodeToMove.setStatus(ComparisonStatus.unchanged); // File/Folder exists remotely and are the same
-        }
-        if (fileMoveAction === ActionResult.IsNotSame) {
-          nodeToMove.setStatus(ComparisonStatus.modified); // File/Folder exists remotely and are not the same
-        }
+        FileEventHandler.updateNodeStatus(nodeToMove, ActionOn.Move, fileMoveAction);
   
         // Update node in rootElements and refresh the tree view
         const removedNode = await treeDataProvider.updateRootElements(Action.Remove, nodeToMove);
         await treeDataProvider.refresh(removedNode);
 
-        const oldFileNodeRelativePath = getRelativePath(oldPath);
-        const newFileNodeRelativePath = getRelativePath(newPath);
-        
         const nodeToAdd = nodeToMove.clone();
         nodeToAdd.name = newName || nodeToMove.name; // Update name if renaming within the same directory
 
+
         // Update the relative path of the node and its children
+        const oldFileNodeRelativePath = getRelativePath(oldPath);
+        const newFileNodeRelativePath = getRelativePath(newPath);
         FileEventHandler.rebaseRelativePaths(nodeToAdd, oldFileNodeRelativePath, newFileNodeRelativePath);
 
+        FileEventHandler.updateNodeStatus(nodeToAdd, ActionOn.Move, fileMoveAction);
         const addedNode = await treeDataProvider.updateRootElements(Action.Add, nodeToAdd);
         await treeDataProvider.refresh(addedNode);
 
@@ -390,19 +357,8 @@ export class FileEventHandler {
       }
 
       const fileDownloaded = await fileOpen(document.uri);
-
-      if (fileDownloaded === ActionResult.ActionPerformed) {
-        openedNode.setStatus(ComparisonStatus.unchanged); // File saved remotely
-      }
-      if (fileDownloaded === ActionResult.DontExist) {
-        openedNode.setStatus(ComparisonStatus.added); // File doesn't exist remotely
-      }
-      if (fileDownloaded === ActionResult.Exists) {
-        openedNode.setStatus(ComparisonStatus.unchanged); // File exists remotely and are the same
-      }
-      if (fileDownloaded === ActionResult.IsNotSame) {
-        openedNode.setStatus(ComparisonStatus.modified); // File exists remotely and are not the same
-      }
+      
+      FileEventHandler.updateNodeStatus(openedNode, ActionOn.Open, fileDownloaded);
 
       const savedNode = await treeDataProvider.updateRootElements(Action.Update, openedNode);
       await treeDataProvider.refresh(savedNode);
@@ -429,14 +385,8 @@ export class FileEventHandler {
     try {
       const uri = vscode.Uri.file(localPath);
       const downloadResult = await fileDownload(uri);
-
-      if (downloadResult === ActionResult.ActionPerformed) {
-        fileNode.setStatus(ComparisonStatus.unchanged); // File downloaded successfully
-      } else if (downloadResult === ActionResult.Exists) {
-        fileNode.setStatus(ComparisonStatus.unchanged); // File already exists and is the same
-      } else if (downloadResult === ActionResult.IsNotSame) {
-        fileNode.setStatus(ComparisonStatus.modified); // File exists locally but is different
-      }
+      
+      FileEventHandler.updateNodeStatus(fileNode, ActionOn.Download, downloadResult);
 
       const updatedNode = await treeDataProvider.updateRootElements(Action.Update, fileNode);
       await treeDataProvider.refresh(updatedNode);
@@ -464,13 +414,7 @@ export class FileEventHandler {
       const uri = vscode.Uri.file(localPath);
       const uploadResult = await fileUpload(uri);
 
-      if (uploadResult === ActionResult.ActionPerformed) {
-        fileNode.setStatus(ComparisonStatus.unchanged); // File uploaded successfully
-      } else if (uploadResult === ActionResult.Exists) {
-        fileNode.setStatus(ComparisonStatus.unchanged); // File already exists and is the same
-      } else if (uploadResult === ActionResult.IsNotSame) {
-        fileNode.setStatus(ComparisonStatus.modified); // File exists remotely but is different
-      }
+      FileEventHandler.updateNodeStatus(fileNode, ActionOn.Upload, uploadResult);
 
       const updatedNode = await treeDataProvider.updateRootElements(Action.Update, fileNode);
       await treeDataProvider.refresh(updatedNode);
@@ -501,6 +445,125 @@ export class FileEventHandler {
     }
     for (const child of node.children.values()) {
       this.rebaseRelativePaths(child, oldBase, newBase);
+    }
+  }
+
+  /**
+   * Updates the status of a comparison node after a local operation, based on the corresponding
+   * remote action result.
+   *
+   * @param node      The ComparisonFileNode whose status should be updated.
+   * @param actionOn  The local action that was performed (Create, Save, Delete, Move, Open, Download, Upload).
+   * @param result    The outcome of the remote operation (NoAction, DontExist, Exists, IsNotSame, ActionPerformed).
+   */
+  static async updateNodeStatus(
+    node: ComparisonFileNode,
+    actionOn: ActionOn,
+    result: ActionResult
+  ): Promise<void> {
+    // Find the node’s previous state (before we performed the remote action)
+    const rootName = WorkspaceConfigManager.getWorkspaceBasename();
+    const oldNode = await JsonManager.findNodeByPath(
+      node.relativePath,
+      TreeViewManager.treeDataProvider.rootElements,
+      rootName
+    );
+
+    switch (actionOn) {
+      // ——————— CREATE ———————
+      case ActionOn.Create:
+        switch (result) {
+          case ActionResult.NoAction:
+          case ActionResult.DontExist:
+            // nothing done remotely; if it wasn’t in the old tree => added, else modified
+            node.setStatus(!oldNode ? ComparisonStatus.added : ComparisonStatus.modified);
+            break;
+          case ActionResult.Exists:
+          case ActionResult.ActionPerformed:
+            node.setStatus(ComparisonStatus.unchanged);
+            break;
+          case ActionResult.IsNotSame:
+            node.setStatus(ComparisonStatus.modified);
+            break;
+        }
+        break;
+
+      // ——————— SAVE ———————
+      case ActionOn.Save:
+        switch (result) {
+          case ActionResult.NoAction:
+            node.setStatus(!oldNode ? ComparisonStatus.added : ComparisonStatus.modified);
+            break;
+          case ActionResult.DontExist:
+            node.setStatus(ComparisonStatus.added);
+            break;
+          case ActionResult.Exists:
+          case ActionResult.ActionPerformed:
+            node.setStatus(ComparisonStatus.unchanged);
+            break;
+          case ActionResult.IsNotSame:
+            node.setStatus(ComparisonStatus.modified);
+            break;
+        }
+        break;
+
+      // ——————— DELETE ———————
+      case ActionOn.Delete:
+        if (oldNode) {
+          // we always delete locally; only mark “removed” if remote delete failed
+          if (result !== ActionResult.ActionPerformed) {
+            node.setStatus(ComparisonStatus.removed);
+          }
+        }
+        break;
+
+      // ——————— MOVE ———————
+      // we’re called twice: once for the old node (oldNode===true), once for the new (oldNode===false)
+      case ActionOn.Move:
+        if (oldNode) {
+          // old path: same as delete logic
+          if (result !== ActionResult.ActionPerformed) {
+            node.setStatus(ComparisonStatus.removed);
+          }
+        } else {
+          // new path: same as a create
+          switch (result) {
+            case ActionResult.NoAction:
+            case ActionResult.DontExist:
+              node.setStatus(ComparisonStatus.added);
+              break;
+            case ActionResult.Exists:
+            case ActionResult.ActionPerformed:
+              node.setStatus(ComparisonStatus.unchanged);
+              break;
+            case ActionResult.IsNotSame:
+              node.setStatus(ComparisonStatus.modified);
+              break;
+          }
+        }
+        break;
+
+      // ——————— OPEN / DOWNLOAD / UPLOAD ———————
+      case ActionOn.Open:
+      case ActionOn.Download:
+      case ActionOn.Upload:
+        switch (result) {
+          case ActionResult.NoAction:
+            // if nothing changed remotely, preserve old status or treat as added
+            node.setStatus(oldNode ? oldNode.status : ComparisonStatus.added);
+            break;
+          case ActionResult.DontExist:
+            node.setStatus(ComparisonStatus.added);
+            break;
+          case ActionResult.Exists:
+          case ActionResult.ActionPerformed:
+            node.setStatus(ComparisonStatus.unchanged);
+            break;
+          case ActionResult.IsNotSame:
+            node.setStatus(ComparisonStatus.modified);
+            break;
+        }
+        break;
     }
   }
 }
