@@ -87,26 +87,18 @@ async function checkLocalFileExistence(localPath: string) {
 }
 
 // Update the JSON of remote files
-async function updateRemoteFilesJsonForPaths(...filePaths: string[]) {
+export async function updateRemoteFilesJsonForPaths(...filePaths: string[]) {
   const fileNodeManager = JsonManager.getInstance();
 
   for (const filePath of filePaths) {
-    if (filePath) {
-
-      // List the files recursively in the parent directory and update the JSON
-      const remoteFileNode = await listRemoteFile(filePath);
-      if (remoteFileNode) {
-        await fileNodeManager.updateRemoteFilesJson(remoteFileNode);
-        logInfoMessage(`Updated JSON Remote files for ${filePath}`);
-      } else {
-        const dirPath = path.dirname(filePath);
-        const dirRemoteFileNode = await listRemoteFile(dirPath);
-        if(dirRemoteFileNode) {
-          await fileNodeManager.updateRemoteFilesJson(dirRemoteFileNode);
-        } else {
-          logErrorMessage(`Couldnt find remote file node at ${dirPath}`);
-        }
-      }
+    
+    // List the files recursively in the parent directory and update the JSON
+    const remoteFileNode = await listRemoteFile(filePath);
+    if (remoteFileNode) {
+      await fileNodeManager.updateRemoteFilesJson(remoteFileNode);
+      
+    } else {
+      logErrorMessage(`Couldnt find remote file node at ${filePath}`);
     }
   }
 }
