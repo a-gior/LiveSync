@@ -93,13 +93,13 @@
         "icon": "$(arrow-down)"
       },
       {
-        "command": "livesync.deleteLocalFile",
-        "title": "LiveSync: Delete Local File",
+        "command": "livesync.deleteLocal",
+        "title": "LiveSync: Delete Local File or Folder",
         "icon": "$(trash)"
       },
       {
-        "command": "livesync.deleteRemoteFile",
-        "title": "LiveSync: Delete Remote File",
+        "command": "livesync.deleteRemote",
+        "title": "LiveSync: Delete Remote File or Folder",
         "icon": "$(trash)"
       },
       {
@@ -149,17 +149,17 @@
       "view/item/context": [
         {
           "command": "livesync.upload",
-          "when": "viewItem != fileEntry-file-removed",
+          "when": "viewItem =~ /-(file|directory)-(added|modified)$/",
           "group": "inline@1"
         },
         {
           "command": "livesync.download",
-          "when": "viewItem != fileEntry-file-added",
+          "when": "viewItem =~ /-(file|directory)-(removed|modified)$/",
           "group": "inline@2"
         },
         {
           "command": "livesync.showDiff",
-          "when": "viewItem =~ /^fileEntry-file/ && viewItem != fileEntry-file-added && viewItem != fileEntry-file-removed",
+          "when": "viewItem =~ /-file-modified$/",
           "group": "inline@3"
         },
         {
@@ -168,13 +168,13 @@
           "group": "inline@4"
         },
         {
-          "command": "livesync.deleteLocalFile",
-          "when": "viewItem == fileEntry-file-added",
+          "command": "livesync.deleteLocal",
+          "when": "viewItem =~ /-(file|directory)-added$/",
           "group": "inline@5"
         },
         {
-          "command": "livesync.deleteRemoteFile",
-          "when": "viewItem == fileEntry-file-removed",
+          "command": "livesync.deleteRemote",
+          "when": "viewItem =~ /-(file|directory)-removed$/",
           "group": "inline@5"
         }
       ],
@@ -242,7 +242,6 @@
       "explorer/context": [
         {
           "command": "livesync.showDiff",
-          "when": "!explorerResourceIsFolder",
           "group": "LiveSync@1"
         },
         {
