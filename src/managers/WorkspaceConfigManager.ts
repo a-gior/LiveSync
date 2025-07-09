@@ -1,4 +1,4 @@
-import { workspace, ConfigurationTarget, ExtensionContext } from "vscode";
+import { workspace, ConfigurationTarget, ExtensionContext, WorkspaceFolder, Uri } from "vscode";
 import * as crypto from "crypto";
 import { LOG_FLAGS, logConfigError, logErrorMessage, logInfoMessage } from "./LogManager";
 import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
@@ -7,6 +7,33 @@ import { FileEventHandler } from "../services/FileEventHandler";
 import { Minimatch } from "minimatch";
 import { ConfigurationPanel } from "../panels/ConfigurationPanel";
 import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
+
+function describeCurrentWorkspace() {
+  const folders: readonly WorkspaceFolder[] | undefined = workspace.workspaceFolders;
+  const wsFile: Uri | undefined = workspace.workspaceFile;
+
+  if (!folders) {
+    return "No workspace is open at all.";
+  }
+
+  // 1. Single-folder (just one folder, no .code-workspace file)
+  if (folders.length === 1 && !wsFile) {
+    return `Single-folder workspace: ${folders[0].uri.fsPath}`;
+  }
+
+  // 2. Multi-root untitled (you added folders at runtime, VS Code created an in-memory “Untitled” workspace)
+  if (wsFile?.scheme === 'untitled') {
+    return `Untitled multi-root workspace with ${folders.length} folders`;
+  }
+
+  // 3. Multi-root saved (you opened a .code-workspace file from disk)
+  if (wsFile?.scheme === 'file' && wsFile.fsPath.endsWith('.code-workspace')) {
+    return `Saved multi-root workspace (${wsFile.fsPath}) with ${folders.length} folders`;
+  }
+
+  // 4. Edge—unlikely, but covers any other scenario
+  return `Workspace with ${folders.length} folders; file: ${wsFile?.toString()}`;
+}
 
 export class WorkspaceConfigManager {
   private static _workspaceConfig: ConfigurationState | undefined;
@@ -18,11 +45,13 @@ export class WorkspaceConfigManager {
 
   // Check if the workspace is multi-root
   static isMultiRootWorkspace(): boolean {
+    console.log("CURRENT WORKSPACE: "+describeCurrentWorkspace());
     return (workspace.workspaceFolders?.length || 0) > 1;
   }
 
   // Load the configuration for the workspace
   static loadWorkspaceConfiguration() {
+
     if (!WorkspaceConfigManager.isVSCodeConfigValid()) {
       logConfigError(this._context, LOG_FLAGS.ALL, true);
     } else {
