@@ -1,11 +1,10 @@
-import { ConfigurationMessage } from "../messages/ConfigurationMessage";
-import { FileEventActionsMessage } from "../messages/FileEventActionsMessage";
-import { IgnoreListMessage } from "../messages/IgnoreListMessage";
+import { ConnectionSettings } from "../config/ConnectionSettings";
+import { FileEventActions } from "../config/FileEventActions";
+import { WorkspaceConfigFile } from "../config/WorkspaceConfig";
 
-// Represents the state of the full configuration.
 export interface ConfigurationState {
-  configuration?: ConfigurationMessage["configuration"];
-  remotePath?: string;
-  fileEventActions?: FileEventActionsMessage["actions"];
-  ignoreList?: IgnoreListMessage["ignoreList"];
+  configuration?: ConnectionSettings;
+  remotePath?: WorkspaceConfigFile["remotePath"];
+  fileEventActions?: FileEventActions;
+  ignoreList?: WorkspaceConfigFile["ignoreList"];
 }
