@@ -1,4 +1,4 @@
-import { Uri, commands } from "vscode";
+import { Uri, WorkspaceFolder, commands } from "vscode";
 import { Panel } from "./Panel";
 
 import { SFTPClient } from "../services/SFTPClient";
@@ -9,9 +9,11 @@ import { IgnoreListMessage } from "@shared/DTOs/messages/IgnoreListMessage";
 import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../managers/LogManager";
 import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
+import { WorkspaceConfig, WorkspaceConfigManager2 } from "../managers/WorkspaceConfigManager2";
+import { configManager } from "../extension";
 
 export class ConfigurationPanel extends Panel {
-  static render(extensionUri: Uri) {
+  static show(extensionUri: Uri, folder: WorkspaceFolder | null = null) {
     const viewType = "configurationViewType";
     const title = "LiveSync Configuration";
     const localResourceRoots = [
@@ -32,6 +34,17 @@ export class ConfigurationPanel extends Panel {
             } else {
               logErrorMessage("Connection failed. Please check the configuration.", LOG_FLAGS.ALL);
             }
+          }
+          break;
+        case "loadConfig": 
+          if(message.selectedFolder) {
+            const config = configManager?.getConfig(message.selectedFolder.uri);
+            const configMessage: FullConfigurationMessage = {
+              command: "setInitialConfiguration",
+              ...config,
+              workspaceFolders: WorkspaceConfigManager2.getFolders()
+            };
+            this.currentPanel?.getPanel().webview.postMessage(configMessage);
           }
           break;
       }
@@ -55,11 +68,13 @@ export class ConfigurationPanel extends Panel {
       // Additional options if needed
     );
 
-    const allWorkspaceConfig: FullConfigurationMessage = {
+    const configMessage: FullConfigurationMessage = {
       command: "setInitialConfiguration",
-      ...WorkspaceConfigManager.getWorkspaceConfiguration()
+      ...WorkspaceConfigManager.getWorkspaceConfiguration(),
+      workspaceFolders: WorkspaceConfigManager2.getFolders(),
+      ...(folder ? { selectedFolder: folder } : {})
     };
-    this.currentPanel?.getPanel().webview.postMessage(allWorkspaceConfig);
+    this.currentPanel?.getPanel().webview.postMessage(configMessage);
   }
 
   static async saveRemotePath(remotePath: string) {
