@@ -16,11 +16,11 @@ export function getConfigPath(folder: WorkspaceFolder): Uri {
     return Uri.joinPath(folder.uri, '.vscode', CONFIG_FILE_NAME);
 }
 
-export class WorkspaceConfigManager {
+export class WorkspaceConfigManager2 {
 
     private _context: ExtensionContext;
     private _workspaceType: WorkspaceType | null = null;
-    private _workspaceConfigs: Map<string, WorkspaceConfig> = new Map();
+    private _workspaceConfigs: Map<Uri, WorkspaceConfig> = new Map();
     private _events: WorkspaceEventsManager;
 
     constructor(context: ExtensionContext) {
@@ -32,16 +32,16 @@ export class WorkspaceConfigManager {
         this._context.subscriptions.push(this._events);
 
         this._events.onFolderAdded(async folder => {
-            await this.loadConfigForFolder(folder);
+            await this.loadConfig(folder);
         });
         this._events.onFolderRemoved(folder => {
-            this.removeConfigForFolder(folder.uri.toString());
+            this.removeConfig(folder.uri);
         });
         this._events.onConfigCreated(async uri => {
-            await this.loadConfigForUri(uri);
+            await this.loadConfigByUri(uri);
         });
         this._events.onConfigChanged(async uri => {
-            await this.reloadConfigForUri(uri);
+            await this.loadConfigByUri(uri);
         });
         this._events.onConfigDeleted(uri => {
             this.removeConfigForUri(uri);
@@ -52,7 +52,7 @@ export class WorkspaceConfigManager {
     /**
      * Reads and registers a config for exactly one folder.
      */
-    public async loadConfigForFolder(folder: WorkspaceFolder): Promise<void> {
+    public async loadConfig(folder: WorkspaceFolder): Promise<void> {
         const configUri = getConfigPath(folder);
         try {
             await workspace.fs.stat(configUri);
@@ -67,7 +67,7 @@ export class WorkspaceConfigManager {
                 logErrorMessage(`Invalid SFTP config for ${folder.name}`);
                 return;
             }
-            this._workspaceConfigs.set(folder.uri.toString(), instance);
+            this._workspaceConfigs.set(folder.uri, instance);
             logInfoMessage(`Loaded config for ${folder.name}`);
         } catch (err: any) {
             logErrorMessage(`Failed to load config for ${folder.name}: ${err.message || err}`);
@@ -77,45 +77,19 @@ export class WorkspaceConfigManager {
     /**
      * Given a Uri to a config JSON, find its workspace folder and load it.
      */
-    public async loadConfigForUri(uri: Uri): Promise<void> {
-        // uri.fsPath is ".../someFolder/.vscode/<CONFIG_FILE_NAME>"
-        const folderFsPath = path.dirname(path.dirname(uri.fsPath));
-        const folderUri   = Uri.file(folderFsPath);
-        const folder      = workspace.getWorkspaceFolder(folderUri);
+    public async loadConfigByUri(uri: Uri): Promise<void> {
+        const folder      = workspace.getWorkspaceFolder(uri);
         if (!folder) {
             logErrorMessage(`No workspace folder found for config at ${uri.fsPath}`);
             return;
         }
-        await this.loadConfigForFolder(folder);
-    }
-
-    /**
-     * Given a Uri to a config JSON, find its WorkspaceConfig and reload from disk.
-     */
-    public async reloadConfigForUri(uri: Uri): Promise<void> {
-        const folderFsPath = path.dirname(path.dirname(uri.fsPath));
-        const folderUri   = Uri.file(folderFsPath);
-        const key         = folderUri.toString();
-        const instance    = this._workspaceConfigs.get(key);
-        if (!instance) {
-            // if we never had it loaded, load it now
-            await this.loadConfigForUri(uri);
-            return;
-        }
-
-        try {
-            // if reload() is private, make it public in WorkspaceConfig
-            await instance.reload();
-            logInfoMessage(`Reloaded config for ${folderUri.fsPath}`);
-        } catch (err: any) {
-            logErrorMessage(`Failed to reload config at ${uri.fsPath}: ${err.message || err}`);
-        }
+        await this.loadConfig(folder);
     }
 
     /** Remove a folder’s config by its URI string key */
-    public removeConfigForFolder(uriString: string): void {
-        this._workspaceConfigs.delete(uriString);
-        logInfoMessage(`Removed config for folder URI ${uriString}`);
+    public removeConfig(uri: Uri): void {
+        this._workspaceConfigs.delete(uri);
+        logInfoMessage(`Removed config for folder ${uri.fsPath}`);
     }
 
     /**
@@ -123,11 +97,12 @@ export class WorkspaceConfigManager {
      * Derives the folder, then drops its entry.
      */
     public removeConfigForUri(uri: Uri): void {
-        const folderFsPath = path.dirname(path.dirname(uri.fsPath));
-        const folderUri   = Uri.file(folderFsPath);
-        const key         = folderUri.toString();
-        this._workspaceConfigs.delete(key);
-        logInfoMessage(`Removed config for folder ${folderUri.fsPath}`);
+        const folder      = workspace.getWorkspaceFolder(uri);
+        if (!folder) {
+           logErrorMessage(`No workspace folder found for ${uri.fsPath}`);
+           return;
+        }
+        this.removeConfig(folder.uri);
     }
 
     detectWorkspaceType() {
@@ -174,6 +149,7 @@ export class WorkspaceConfigManager {
             try {
                 await workspace.fs.stat(configPath);
             } catch {
+                logInfoMessage(`No config at ${folder.name}`);
                 continue; // no config here
             }
 
@@ -181,7 +157,7 @@ export class WorkspaceConfigManager {
             if (!instance.isValid) {
                 throw new Error(`Invalid SFTP config for ${instance.rootName}`);
             } else {
-                this._workspaceConfigs.set(folder.uri.toString(), instance);
+                this._workspaceConfigs.set(folder.uri, instance);
             }
         }
     }
@@ -194,41 +170,80 @@ export class WorkspaceConfigManager {
      * @param updates     the partial config to merge in
      */
     public async updateConfigForFolder(
-        folderName: string,
+        folderUri: Uri,
         updates: Partial<WorkspaceConfigFile>
     ): Promise<void> {
-        const cfg = this.getConfig(folderName);
+        const cfg = this.getConfig(folderUri);
         await cfg.updateParams(updates);
 
-        this._workspaceConfigs.set(folderName, cfg);
+        this._workspaceConfigs.set(folderUri, cfg);
+    }
+
+    public getConfig(folderUri: Uri): WorkspaceConfig {
+        const config = this._workspaceConfigs.get(folderUri);
+        if (!config) {
+            throw new Error(`No config found for workspace "${folderUri.fsPath}"`);
+        }
+        return config;
     }
 
     /** Pick a folder for multi-root, or return single root */
-    private async pickTargetFolder(): Promise<WorkspaceFolder> {
+     async pickTargetFolder(): Promise<WorkspaceFolder> {
         const workspaceFolders = workspace.workspaceFolders;
 
         if (this._workspaceType === WorkspaceType.SingleRoot && workspaceFolders?.length === 1) {
             return workspaceFolders[0];
         }
-        const pick = await window.showWorkspaceFolderPick({
+        const pickedFolder = await window.showWorkspaceFolderPick({
             placeHolder: `Select the folder to place your ${CONFIG_FILE_NAME} in`,
         });
 
-        if (!pick) {
+        if (!pickedFolder) {
             throw new Error('Folder selection cancelled');
         }
 
-        return pick;
+        return pickedFolder;
     }
 
-    public getConfig(folderUri: string): WorkspaceConfig {
-        const config = this._workspaceConfigs.get(folderUri);
-        if (!config) {
-            throw new Error(`No config found for workspace "${folderUri}"`);
+    static getFolders(): readonly WorkspaceFolder[] {
+        return workspace.workspaceFolders ?? [];
+    }
+
+    async openJsonConfig(folder: WorkspaceFolder): Promise<void> {
+        const configUri = getConfigPath(folder);
+
+        // Ensure the file exists
+        try {
+            await workspace.fs.stat(configUri);
+        } catch {
+            // File doesn’t exist yet → create it with defaults
+            const content = Buffer.from(
+                JSON.stringify(DEFAULT_WORKSPACE_CONFIG, null, 2),
+                'utf8'
+            );
+            try {
+                await workspace.fs.writeFile(configUri, content);
+                logInfoMessage(
+                    `Created default LiveSync config for "${folder.name}".`
+                );
+            } catch (err: any) {
+                logErrorMessage(
+                    `Failed to create config file: ${err.message}`
+                );
+            return;
+            }
         }
-        return config;
-    }
 
+        // Open it in the text editor
+        try {
+            const doc = await workspace.openTextDocument(configUri);
+            await window.showTextDocument(doc, { preview: false });
+        } catch (err: any) {
+            window.showErrorMessage(
+                `Could not open config file: ${err.message || err}`
+            );
+        }
+    }
 }
 
 export class WorkspaceConfig {
