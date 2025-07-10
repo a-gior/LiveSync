@@ -85,13 +85,13 @@ export class WorkspaceConfigManager {
 
   // Get the appropriate configuration object
   static getVSCodeConfiguration() {
-    if (this.isMultiRootWorkspace()) {
-      logErrorMessage(
-        "LiveSync requires a single folder in the workspace to configure correctly. Please ensure only one folder is selected.",
-        LOG_FLAGS.ALL
-      );
-      throw new Error("LiveSync requires a single folder in the workspace to configure correctly.");
-    }
+    // if (this.isMultiRootWorkspace()) {
+    //   logErrorMessage(
+    //     "LiveSync requires a single folder in the workspace to configure correctly. Please ensure only one folder is selected.",
+    //     LOG_FLAGS.ALL
+    //   );
+    //   throw new Error("LiveSync requires a single folder in the workspace to configure correctly.");
+    // }
 
     const targetFolder = workspace.workspaceFolders?.[0];
     return workspace.getConfiguration("LiveSync", targetFolder?.uri);

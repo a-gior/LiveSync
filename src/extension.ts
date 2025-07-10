@@ -13,13 +13,13 @@ export async function activate(context: vscode.ExtensionContext) {
   logInfoMessage("LiveSync extension activating...");
 
   // Only activate Livesync if there is a single folder in the workspace
-  if (WorkspaceConfigManager.isMultiRootWorkspace()) {
-    logErrorMessage(
-      "LiveSync requires a single folder in the workspace to configure correctly. Please ensure only one folder is selected.",
-      LOG_FLAGS.ALL
-    );
-    return;
-  }
+  // if (WorkspaceConfigManager.isMultiRootWorkspace()) {
+  //   logErrorMessage(
+  //     "LiveSync requires a single folder in the workspace to configure correctly. Please ensure only one folder is selected.",
+  //     LOG_FLAGS.ALL
+  //   );
+  //   return;
+  // }
   
   // Register file status decoration provider
   const fileStatusDecorationProvider = new FileStatusDecorationProvider();
