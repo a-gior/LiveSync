@@ -18,6 +18,8 @@ import { StatusBarManager } from "../managers/StatusBarManager";
 import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 import { ConnectionManager } from "../managers/ConnectionManager";
 import { TreeViewManager } from "../managers/TreeViewManager";
+import { WorkspaceConfigManager2 } from "../managers/WorkspaceConfigManager2";
+import { configManager } from "../extension";
 
 export class CommandRegistrar {
     static register(
@@ -30,13 +32,45 @@ export class CommandRegistrar {
           mode: ExecutionMode.Single,
         },
         'livesync.configuration': {
-          callback: () => ConfigurationPanel.render(context.extensionUri),
+          callback: async () => {
+            let mode = vscode.workspace
+              .getConfiguration('livesync')
+              .get<'prompt'|'ui'|'json'>('openMode', 'prompt');
+
+            if (mode === 'prompt') {
+              const items = [
+                { label: '$(gear) UI Panel', id: 'ui' as const },
+                { label: '$(file-code) JSON',    id: 'json' as const }
+              ];
+              const choice = await vscode.window.showQuickPick(items, {
+                placeHolder: 'Edit via UI or JSON?'
+              });
+              if (!choice) {
+                // user hit “Cancel” – nothing to do
+                return;
+              }
+
+              mode = choice.id;  // choice.id is now typed 'ui'|'json'
+            }
+
+            const folder =  await configManager?.pickTargetFolder(); // Returns single workspace or show popup to choose one and return it
+            if (!folder) {
+              // user hit “Cancel” – nothing to do
+              return;
+            }
+
+            if (mode === 'ui') {
+              ConfigurationPanel.show(context.extensionUri, folder);
+            } else {
+              configManager?.openJsonConfig(folder);
+            }
+          },
           mode: ExecutionMode.Single,
         },
         'livesync.refreshConfig': {
           callback: () => {
             ConfigurationPanel.kill();
-            ConfigurationPanel.render(context.extensionUri);
+            ConfigurationPanel.show(context.extensionUri);
             setTimeout(
               () => vscode.commands.executeCommand('workbench.action.webview.openDeveloperTools'),
               500
