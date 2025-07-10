@@ -80,7 +80,7 @@
                 {/if}
             {/each}
             {#if get(formDataStore).canAddFormGroups}
-                <vscode-button type="button" on:click={addNewGroup}>Add</vscode-button>
+                <vscode-button  on:keydown type="button" on:click={addNewGroup}>Add</vscode-button>
             {/if}
             {#if get(formDataStore).hasSubmitButton}
                 <vscode-button type="submit">

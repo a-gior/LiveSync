@@ -239,6 +239,8 @@
 
     let patterns = [];
     let tabs = [];
+    let workspaceFolders = [];
+    let selectedFolder = null;
 
     $: configurationFormStore.setRemoteServerConfigFormData(remoteServerConfigFormData);
     $: configurationFormStore.setFileEventActions(fileEventActions);
@@ -285,6 +287,12 @@
         if (confState.ignoreList) {
             patterns = [...confState.ignoreList];
         }
+
+        if(confState.workspaceFolders) {
+            workspaceFolders = confState.workspaceFolders;
+            selectedFolder = confState.selectedFolder ? confState.selectedFolder : workspaceFolders[0];
+        }
+
     }
 
     // Handle incoming messages from VS Code
@@ -297,6 +305,9 @@
                     remotePath: data.remotePath,
                     fileEventActions: data.fileEventActions,
                     ignoreList: data.ignoreList,
+                    workspaceFolders: data.workspaceFolders,
+                    selectedFolder: data.selectedFolder
+                    
                 };
                 setInitialConfiguration(configState);
                 break;
@@ -329,6 +340,8 @@
         bind:remoteServerConfigFormData
         bind:fileEventActions
         bind:patterns
+        bind:workspaceFolders
+        bind:selectedFolder
     />
 </configuration-container>
 
