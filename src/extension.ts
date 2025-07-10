@@ -8,6 +8,9 @@ import { WorkspaceConfigManager } from "./managers/WorkspaceConfigManager";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./managers/LogManager";
 import { ConnectionManager } from "./managers/ConnectionManager";
 import { CommandRegistrar } from "./services/CommandRegistrar";
+import { WorkspaceConfigManager2 } from "./managers/WorkspaceConfigManager2";
+
+export let configManager: WorkspaceConfigManager2 | null = null;
 
 export async function activate(context: vscode.ExtensionContext) {
   logInfoMessage("LiveSync extension activating...");
@@ -26,6 +29,8 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.window.registerFileDecorationProvider(fileStatusDecorationProvider));
 
   // Initialize managers
+  configManager = new WorkspaceConfigManager2(context);
+  configManager.loadConfigs();
   await TreeViewManager.initialize(context);
   CommandRegistrar.register(context, TreeViewManager.treeDataProvider);
   WorkspaceConfigManager.initialize(context);
