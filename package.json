@@ -61,7 +61,7 @@
     "commands": [
       {
         "command": "livesync.configuration",
-        "title": "LiveSync: Open Configuration Panel"
+        "title": "LiveSync: Configure Workspace"
       },
       {
         "command": "livesync.refreshConfig",
@@ -261,6 +261,12 @@
     "configuration": {
       "title": "LiveSync",
       "properties": {
+        "livesync.openMode": {
+          "type": "string",
+          "enum": ["prompt", "ui", "json"],
+          "default": "prompt",
+          "description": "When running **LiveSync: Configure Workspace**, should LiveSync…\n- **prompt**: ask each time whether to use the UI panel or raw JSON\n- **ui**: open the custom LiveSync UI panel by default\n- **json**: open the `livesync.json` file by default"
+        },
         "LiveSync.hostname": {
           "type": "string",
           "default": "",
