@@ -8,7 +8,7 @@ import { WorkspaceConfigManager } from "./managers/WorkspaceConfigManager";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./managers/LogManager";
 import { ConnectionManager } from "./managers/ConnectionManager";
 import { CommandRegistrar } from "./services/CommandRegistrar";
-import { WorkspaceConfigManager2 } from "./managers/WorkspaceConfigManager2";
+import { updateMultiRootContext, WorkspaceConfigManager2 } from "./managers/WorkspaceConfigManager2";
 
 export let configManager: WorkspaceConfigManager2 | null = null;
 
@@ -32,16 +32,16 @@ export async function activate(context: vscode.ExtensionContext) {
   configManager = new WorkspaceConfigManager2(context);
   configManager.loadConfigs();
   await TreeViewManager.initialize(context);
-  CommandRegistrar.register(context, TreeViewManager.treeDataProvider);
-  WorkspaceConfigManager.initialize(context);
-  EventManager.initialize(context, TreeViewManager.treeDataProvider);
+  CommandRegistrar.register(context, TreeViewManager.diffProvider);
+  // WorkspaceConfigManager.initialize(context);
+  EventManager.initialize(context, TreeViewManager.diffProvider);
   StatusBarManager.createPermanentIcon();
 
-  try {
-    await ConnectionManager.getInstance(WorkspaceConfigManager.getRemoteServerConfigured());
-  } catch(error: any) {
-    logErrorMessage(error.message, LOG_FLAGS.ALL);
-  }
+  // try {
+  //   await ConnectionManager.getInstance(WorkspaceConfigManager.getRemoteServerConfigured());
+  // } catch(error: any) {
+  //   logErrorMessage(error.message, LOG_FLAGS.ALL);
+  // }
 
   logInfoMessage("LiveSync extension activated.");
   

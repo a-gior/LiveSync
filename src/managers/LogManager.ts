@@ -13,7 +13,7 @@ export const LOG_FLAGS = {
 type LogFlags = (typeof LOG_FLAGS)[keyof typeof LOG_FLAGS];
 
 // Define the LogErrorAction type
-export type LogErrorAction = { title: string; command: string }[];
+export type LogErrorAction = { title: string; command: string; args?: any[] }[];
 
 function deepClone<T>(obj: T): T {
   // Handle null or undefined
@@ -91,7 +91,7 @@ export function logErrorMessage(error: string, flags: LogFlags = LOG_FLAGS.CONSO
       // Execute the command associated with the selected action
       const action = actions?.find((action) => action.title === selectedAction);
       if (action && action.command) {
-        vscode.commands.executeCommand(action.command);
+        vscode.commands.executeCommand(action.command, ...(action.args ?? []));
       }
     });
   }
@@ -145,12 +145,11 @@ export class LogManager {
   }
 }
 
-export function logConfigError(ctx: vscode.ExtensionContext, flag: LogFlags = LOG_FLAGS.ALL, shouldThrow: boolean = false) {
-  const errorMessage = "The server is unreachable. Check your configuration.";
-  const isSuppressed = ctx.globalState.get<boolean>(
-    'suppressConfigError',
-    false
-  );
+export function logConfigError(ctx: vscode.ExtensionContext, flag: LogFlags = LOG_FLAGS.ALL, shouldThrow: boolean = false, folder: vscode.WorkspaceFolder, errMessage: string = "") {
+  const errorMessage = errMessage || "The server is unreachable. Check your configuration.";
+  
+  const key = `suppressConfigError:${folder.uri.toString()}`;
+  const isSuppressed = ctx.workspaceState.get<boolean>(key, false);
 
   if (isSuppressed ) {
     // User clicked “Don’t show again” previously → skip showing this error
@@ -162,7 +161,7 @@ export function logConfigError(ctx: vscode.ExtensionContext, flag: LogFlags = LO
   const errorActions: LogErrorAction = [
     { title: "Open Configuration", command: "livesync.configuration" },
     { title: "Retry Connection", command: "livesync.testConnection" },
-    {  title: `Don't show again`, command: 'livesync.dismissConfigError'}
+    {  title: `Don't show again`, command: 'livesync.dismissConfigError', args: [folder]}
   ];
 
   logErrorMessage(errorMessage, flag, undefined, errorActions);

@@ -53,7 +53,7 @@ export class CommandRegistrar {
               mode = choice.id;  // choice.id is now typed 'ui'|'json'
             }
 
-            const folder =  await configManager?.pickTargetFolder(); // Returns single workspace or show popup to choose one and return it
+            const folder =  await configManager!.pickTargetFolder(); // Returns single workspace or show popup to choose one and return it
             if (!folder) {
               // user hit “Cancel” – nothing to do
               return;
@@ -62,15 +62,21 @@ export class CommandRegistrar {
             if (mode === 'ui') {
               ConfigurationPanel.show(context.extensionUri, folder);
             } else {
-              configManager?.openJsonConfig(folder);
+              configManager!.openJsonConfig(folder);
             }
           },
           mode: ExecutionMode.Single,
         },
         'livesync.refreshConfig': {
-          callback: () => {
+          callback: async () => {
+            
+            const folder =  await configManager!.pickTargetFolder(); // Returns single workspace or show popup to choose one and return it
+            if (!folder) {
+              // user hit “Cancel” – nothing to do
+              return;
+            }
             ConfigurationPanel.kill();
-            ConfigurationPanel.show(context.extensionUri);
+            ConfigurationPanel.show(context.extensionUri, folder);
             setTimeout(
               () => vscode.commands.executeCommand('workbench.action.webview.openDeveloperTools'),
               500
@@ -110,7 +116,7 @@ export class CommandRegistrar {
       
                 // Update the root elements
                 const comparisonFileNode = await treeDataProvider.getComparisonFileNode(localPath, remotePath);
-                const rootNode = treeDataProvider.rootElements.get(comparisonFileNode.name);
+                const rootNode = treeDataProvider.rootElements.get(comparisonFileNode.workspaceFolder.uri);
                 if (rootNode) {
                   Object.assign(rootNode, comparisonFileNode); // Update properties while keeping the same reference
                 }
@@ -263,17 +269,16 @@ export class CommandRegistrar {
             // Recompute which folders should be open
             const jsonManager = JsonManager.getInstance();
             await jsonManager.expandChangedFoldersRecursive(treeDataProvider);  // repopulates foldersState
-            const rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
   
             // 2) then actually reveal each "opened" folder
-            const openedKeys = (await jsonManager.getFoldersState()).keys();
-            for (const key of openedKeys) {
-              // key === `${workspaceName}$$${relativePath}`
-              const [, relPath] = key.split('$$');
-              const node = await JsonManager.findNodeByPath(relPath, treeDataProvider.rootElements, rootFolderName);
-              if (node && relPath !== ".") {
+            const workspaceFolder = treeDataProvider.currentWorkspace.uri;
+            const foldersState = (await jsonManager.getFoldersState()).get(workspaceFolder)!;
+            const openedKeys = Object.keys(foldersState);
+            for (const relativePath of openedKeys) {
+              const node = await JsonManager.findNodeByPath(relativePath, treeDataProvider.rootElements, workspaceFolder);
+              if (node && relativePath !== ".") {
                 // reveal with expand: true forces the UI to open it
-                await TreeViewManager.treeView.reveal(node, { expand: true, focus: false, select: false });
+                await TreeViewManager.diffView.reveal(node, { expand: true, focus: false, select: false });
               }
             }
   
@@ -301,9 +306,15 @@ export class CommandRegistrar {
           mode: ExecutionMode.Single,
         },
         'livesync.dismissConfigError': {
-          callback: () => {
-            context.globalState.update('suppressConfigError', true);
-            logInfoMessage( 'Configuration errors will be suppressed until the settings.json becomes valid again.', LOG_FLAGS.ALL);
+          callback: async (folder: vscode.WorkspaceFolder) => {
+
+            // key it by the folder URI
+            const key = `suppressConfigError:${folder.uri.toString()}`;
+            await context.workspaceState.update(key, true);
+            logInfoMessage(
+              `Configuration errors for "${folder.name}" will be suppressed until valid.`,
+              LOG_FLAGS.ALL
+            );
           },
           mode: ExecutionMode.Single,
         },

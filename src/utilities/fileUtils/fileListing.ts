@@ -8,12 +8,13 @@ import { shouldIgnore } from "../shouldIgnore";
 import { generateHash } from "./hashUtils";
 import { StatusBarManager } from "../../managers/StatusBarManager";
 import { BaseNodeType } from "../BaseNode";
-import { getFullPaths, normalizePath, pathType, splitParts } from "./filePathUtils";
+import { normalizePath, pathType, splitParts } from "./filePathUtils";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 import fg, { Entry } from "fast-glob";
 import pMap from "p-map";
 import { createHash } from "crypto";
 import { Stats } from "fs";
+import { configManager } from "../../extension";
 
 //
 // ─── LOCAL FILE LISTING ─────────────────────────────────────────────────────────
@@ -27,6 +28,7 @@ import { Stats } from "fs";
  */
 async function traverseLocalTree(
   localDir: string,
+  workspaceFolder: vscode.WorkspaceFolder,
   onNode: (node: FileNode) => void
 ): Promise<FileNode | undefined> {
   let rootStats: Stats;
@@ -40,6 +42,7 @@ async function traverseLocalTree(
   const rootPath = normalizePath(localDir);
   const root = new FileNode(
     path.basename(rootPath),
+    workspaceFolder,
     BaseNodeType.directory,
     rootStats.size,
     rootStats.mtime,
@@ -72,6 +75,7 @@ async function traverseLocalTree(
       const isDir = e.stats.isDirectory();
       const child = new FileNode(
         e.path,
+        workspaceFolder,
         isDir ? BaseNodeType.directory : BaseNodeType.file,
         e.stats.size,
         new Date(e.stats.mtimeMs),
@@ -89,7 +93,8 @@ async function traverseLocalTree(
 
 export async function countLocalFiles(localDir: string): Promise<number> {
   let count = 0;
-  await traverseLocalTree(localDir, () => {
+  const workspaceFolder = configManager!.getWorkspaceFolderFromPath(localDir, FileNodeSource.local);
+  await traverseLocalTree(localDir, workspaceFolder, () => {
     count++;
   });
   return count;
@@ -99,8 +104,9 @@ export async function listLocalFiles(localDir: string): Promise<FileNode|undefin
   StatusBarManager.showMessage(`Listing files on ${localDir}`, "", "", 0, "sync~spin", true);
 
   const fileNodes: FileNode[] = [];
+  const workspaceFolder = configManager!.getWorkspaceFolderFromPath(localDir, FileNodeSource.local);
 
-  const root = await traverseLocalTree(localDir, node => {
+  const root = await traverseLocalTree(localDir, workspaceFolder, node => {
     if (node.type === BaseNodeType.directory) {
       // count this directory as “processed”
       StatusBarManager.step();
@@ -143,6 +149,8 @@ export async function listRemoteFiles(
     );
     return undefined;
   }
+
+  const folder = configManager!.getWorkspaceFolderFromPath(remoteDir, FileNodeSource.remote);
 
   return connectionManager.doSSHOperation(
     async (sshClient) => {
@@ -243,6 +251,7 @@ export async function listRemoteFiles(
         const fullPath = rel === "." ? remoteDir : `${remoteDir}/${rel}`;
         const node = new FileNode(
           name,
+          folder,
           BaseNodeType.directory,
           meta.size,
           new Date(meta.mtime),
@@ -284,6 +293,7 @@ export async function listRemoteFiles(
         const fullPath = `${remoteDir}/${rel}`;
         const node = new FileNode(
           name,
+          folder,
           BaseNodeType.file,
           meta.size,
           new Date(meta.mtime),
@@ -326,6 +336,8 @@ export async function listRemoteFiles(
 export async function listRemoteFile(remoteFilePath: string): Promise<FileNode | undefined> {
   const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
   const connectionManager = await ConnectionManager.getInstance(configuration);
+  
+  const folder = configManager!.getWorkspaceFolderFromPath(remoteFilePath, FileNodeSource.remote);
 
   // Try to fetch as a single file
   const fileNode = await connectionManager.doSSHOperation(
@@ -348,6 +360,7 @@ export async function listRemoteFile(remoteFilePath: string): Promise<FileNode |
       // 3) build the FileNode
       const node = new FileNode(
         name,
+        folder,
         BaseNodeType.file,
         size,
         mtime,

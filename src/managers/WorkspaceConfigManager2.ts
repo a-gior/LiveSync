@@ -1,11 +1,13 @@
-import { workspace, ExtensionContext, WorkspaceFolder, Uri, window, Event, EventEmitter, FileSystemWatcher } from "vscode";
+import { workspace, ExtensionContext, WorkspaceFolder, Uri, window, Event, EventEmitter, FileSystemWatcher, commands } from "vscode";
 import * as path from 'path';
-import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
+import { LOG_FLAGS, logConfigError, logErrorMessage, logInfoMessage } from "./LogManager";
 import { WorkspaceConfigFile } from "@shared/DTOs/config/WorkspaceConfig";
 import { CONFIG_FILE_NAME, DEFAULT_WORKSPACE_CONFIG } from "../utilities/constants";
 import { ConnectionSettings } from "../DTOs/config/ConnectionSettings";
 import { FileEventActions } from "../DTOs/config/FileEventActions";
 import { Minimatch } from "minimatch";
+import { FileNodeSource } from "../utilities/FileNode";
+import { getCorrespondingPath, normalizePath, PathPair } from "../utilities/fileUtils/filePathUtils";
 
 export enum WorkspaceType {
     SingleRoot,
@@ -16,11 +18,18 @@ export function getConfigPath(folder: WorkspaceFolder): Uri {
     return Uri.joinPath(folder.uri, '.vscode', CONFIG_FILE_NAME);
 }
 
+export function updateMultiRootContext() {
+  const folders = workspace.workspaceFolders || [];
+  const isMulti = folders.length > 1;
+  commands.executeCommand('setContext', 'livesync.multiRoot', isMulti);
+}
+
 export class WorkspaceConfigManager2 {
 
     private _context: ExtensionContext;
     private _workspaceType: WorkspaceType | null = null;
     private _workspaceConfigs: Map<Uri, WorkspaceConfig> = new Map();
+    private _pathsByHost     = new Map<string, Set<string>>();
     private _events: WorkspaceEventsManager;
 
     constructor(context: ExtensionContext) {
@@ -49,10 +58,17 @@ export class WorkspaceConfigManager2 {
 
     }
 
+    private set workspaceType(type: WorkspaceType) {
+        this._workspaceType = type;
+        commands.executeCommand('setContext', 'livesync.multiRoot', type === WorkspaceType.MultiRoot );
+    }
+
     /**
      * Reads and registers a config for exactly one folder.
      */
     public async loadConfig(folder: WorkspaceFolder): Promise<void> {
+        this.detectWorkspaceType();
+        
         const configUri = getConfigPath(folder);
         try {
             await workspace.fs.stat(configUri);
@@ -64,10 +80,9 @@ export class WorkspaceConfigManager2 {
         try {
             const instance = await WorkspaceConfig.create(folder);
             if (!instance.isValid) {
-                logErrorMessage(`Invalid SFTP config for ${folder.name}`);
-                return;
+                logConfigError(this._context, LOG_FLAGS.ALL, true, folder,  `Invalid Config for ${folder.name}`); // Shows popup and throws error
             }
-            this._workspaceConfigs.set(folder.uri, instance);
+            this.registerConfig(folder, instance);
             logInfoMessage(`Loaded config for ${folder.name}`);
         } catch (err: any) {
             logErrorMessage(`Failed to load config for ${folder.name}: ${err.message || err}`);
@@ -85,9 +100,70 @@ export class WorkspaceConfigManager2 {
         }
         await this.loadConfig(folder);
     }
+    
+    /**
+     * Returns true if cfg was added, false if it conflicted and was skipped.
+     * Logs a config‐error on conflict.
+     */
+    private registerConfig(folder: WorkspaceFolder, cfg: WorkspaceConfig) {
+        const host = cfg.connectionSettings!.hostname;
+        const rp   = cfg.remotePath!.trim();
+
+        let set = this._pathsByHost.get(host);
+        if (!set) {
+            set = new Set<string>();
+            this._pathsByHost.set(host, set);
+        }
+
+        for (const existing of set) {
+            if (rp.startsWith(existing + '/')) {
+                logConfigError(
+                this._context,
+                LOG_FLAGS.ALL,
+                false,
+                folder,
+                `Config for "${folder.name}" skipped: "${rp}" is inside existing path "${existing}".`
+                );
+                return false;
+            }
+            if (existing.startsWith(rp + '/')) {
+                logConfigError(
+                this._context,
+                LOG_FLAGS.ALL,
+                false,
+                folder,
+                `Config for "${folder.name}" skipped: existing path "${existing}" is inside "${rp}".`
+                );
+                return false;
+            }
+        }
+
+
+        // no conflicts → register
+        set.add(rp);
+        this._workspaceConfigs.set(folder.uri, cfg);
+        logInfoMessage(`Registered config for "${folder.name}" → host=${host}, remotePath=${rp}`);
+        return true;
+    }
 
     /** Remove a folder’s config by its URI string key */
     public removeConfig(uri: Uri): void {
+        this.detectWorkspaceType();
+
+        const cfg = this._workspaceConfigs.get(uri);
+        if(!cfg) {return;}
+
+        const host = cfg.connectionSettings!.hostname;
+        let rp   = cfg.remotePath!.trim();
+        const set = this._pathsByHost.get(host);
+        if (set) {
+            set.delete(rp);
+            // if no more paths for this host, drop the host entry altogether
+            if (set.size === 0) {
+            this._pathsByHost.delete(host);
+            }
+        }
+
         this._workspaceConfigs.delete(uri);
         logInfoMessage(`Removed config for folder ${uri.fsPath}`);
     }
@@ -115,21 +191,21 @@ export class WorkspaceConfigManager2 {
 
         // 1. Single-folder (just one folder, no .code-workspace file)
         if (folders.length === 1 && !wsFile) {
-            this._workspaceType = WorkspaceType.SingleRoot;
+            this.workspaceType = WorkspaceType.SingleRoot;
             logInfoMessage(`Single-folder workspace: ${folders[0].uri.fsPath}`);
             return;
         }
 
         // 2. Multi-root untitled (you added folders at runtime, VS Code created an in-memory “Untitled” workspace)
         if (wsFile?.scheme === 'untitled') {
-            this._workspaceType = WorkspaceType.MultiRoot;
+            this.workspaceType = WorkspaceType.MultiRoot;
             logInfoMessage(`Untitled multi-root workspace with ${folders.length} folders`);
             return;
         }
 
         // 3. Multi-root saved (you opened a .code-workspace file from disk)
         if (wsFile?.scheme === 'file' && wsFile.fsPath.endsWith('.code-workspace')) {
-            this._workspaceType = WorkspaceType.MultiRoot;
+            this.workspaceType = WorkspaceType.MultiRoot;
             logInfoMessage(`Saved multi-root workspace (${wsFile.fsPath}) with ${folders.length} folders`);
             return;
         }
@@ -155,28 +231,13 @@ export class WorkspaceConfigManager2 {
 
             const instance = await WorkspaceConfig.create(folder);
             if (!instance.isValid) {
-                throw new Error(`Invalid SFTP config for ${instance.rootName}`);
+                logConfigError(this._context, LOG_FLAGS.ALL, false, folder, `Invalid Config for ${instance.folderName}`); // Shows popup
             } else {
-                this._workspaceConfigs.set(folder.uri, instance);
+                const key = `suppressConfigError:${folder.uri.toString()}`;
+                await this._context.workspaceState.update(key, false);
+                this.registerConfig(folder, instance);
             }
         }
-    }
-
-    /**
-     * Update the on-disk config for the given folder, then reload
-     * the in-memory WorkspaceConfig instance.
-     *
-     * @param folderName  the .name of the WorkspaceFolder to update
-     * @param updates     the partial config to merge in
-     */
-    public async updateConfigForFolder(
-        folderUri: Uri,
-        updates: Partial<WorkspaceConfigFile>
-    ): Promise<void> {
-        const cfg = this.getConfig(folderUri);
-        await cfg.updateParams(updates);
-
-        this._workspaceConfigs.set(folderUri, cfg);
     }
 
     public getConfig(folderUri: Uri): WorkspaceConfig {
@@ -205,7 +266,7 @@ export class WorkspaceConfigManager2 {
         return pickedFolder;
     }
 
-    static getFolders(): readonly WorkspaceFolder[] {
+    getFolders(): readonly WorkspaceFolder[] {
         return workspace.workspaceFolders ?? [];
     }
 
@@ -244,6 +305,54 @@ export class WorkspaceConfigManager2 {
             );
         }
     }
+
+    getPathPairs(returnNormalizedPaths: boolean = true): PathPair[] {
+        let pathPairs: PathPair[] = [];
+
+        for(const workspaceConfig of this._workspaceConfigs.values()) {
+            pathPairs.push(workspaceConfig.getPathPair(returnNormalizedPaths));
+        }
+
+        return pathPairs;
+    }
+
+    findCorrespondingLocalPath(remotePath: string) {
+    
+        const normalizedPath = normalizePath(remotePath);
+        const pathPairs = this.getPathPairs();
+
+        for( const pathPair of pathPairs) {
+
+            // Check if the inputPath is a local path
+            if (normalizedPath.startsWith(normalizePath(pathPair.localPath))) {
+                return path.join(remotePath, path.relative(pathPair.localPath, normalizedPath)).replace(/\\/g, "/");
+            }
+
+            // Check if the inputPath is a remote path
+            if (normalizedPath.startsWith(normalizePath(pathPair.remotePath))) {
+                return path.join(pathPair.localPath, path.relative(pathPair.remotePath, normalizedPath)).replace(/\\/g, "/");
+            }
+        }
+
+        throw new Error(`Couldnt find corresponding path of ${remotePath}`);
+    }
+
+    getWorkspaceFolderFromPath(fullPath: string, source: FileNodeSource): WorkspaceFolder {
+        let localPath: string;
+        if(source === FileNodeSource.local) {
+            localPath = fullPath;
+        } else {
+            // remote path
+            localPath = this.findCorrespondingLocalPath(fullPath);
+        }
+
+        const fileUri = Uri.file(localPath);
+        const workspaceFolder = workspace.getWorkspaceFolder(fileUri);
+        if(!workspaceFolder) {
+            throw new Error(`No workspace found for ${localPath}`);
+        }
+        return workspaceFolder;
+    }
 }
 
 export class WorkspaceConfig {
@@ -256,8 +365,12 @@ export class WorkspaceConfig {
         this._workspaceConfig = config;
     }
 
+    public get folder(): WorkspaceFolder {
+        return this._folder;
+    }
+
     /** The folder’s human-readable name */
-    public get rootName(): string {
+    public get folderName(): string {
         return this._folder.name;
     }
 
@@ -294,9 +407,14 @@ export class WorkspaceConfig {
 
         return {actionOnUpload, actionOnDownload, actionOnSave, actionOnCreate, actionOnDelete, actionOnMove, actionOnOpen};
     }
-
+    
     /** The ignore-list of globs/paths */
-    public get ignoreList(): Minimatch[] {
+    public get ignoreList(): string[] {
+        return this._workspaceConfig.ignoreList ?? [];
+    }
+
+    /** The compiled ignore-list of globs/paths */
+    public get compiledIgnoreList(): Minimatch[] {
         if(!this._compiledIgnoreMatchers) {
             
             if (!this._workspaceConfig.ignoreList) {
@@ -430,12 +548,16 @@ export class WorkspaceConfig {
      * Returns the local filesystem path of this workspace root
      * and its configured remotePath (if any).
      */
-    public getPaths(): { localPath: string; remotePath: string } {
+    public getPathPair(returnNormalizedPaths: boolean = true): PathPair {
 
         const localPath = this._folder.uri.fsPath;
         const remotePath = this._workspaceConfig.remotePath;
         if(!remotePath) {
             throw new Error(`Workspace "${this._folder.name}" has no remotePath configured.`);
+        }
+
+        if(returnNormalizedPaths) {
+            return { localPath: normalizePath(localPath), remotePath: normalizePath(remotePath) };
         }
 
         return { localPath, remotePath };

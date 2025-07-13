@@ -7,6 +7,8 @@ import { BaseNodeType } from "../BaseNode";
 import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 import { LINUX_PATH_SEP, RELATIVE_PATH_SEP, WINDOWS_PATH_SEP } from "../constants";
 
+export type PathPair = {localPath: string, remotePath: string};
+
 /**
  * Normalizes a given path and converts it to a specified format (Windows or Linux).
  * @param p - The input path.

@@ -114,6 +114,7 @@ async function createLocalDirectories(node: ComparisonFileNode) {
         const fullLocalPath = normalizePath(path.join(localPath, remoteEntry.name));
         const childEntry = new ComparisonFileNode(
           remoteEntry.name,
+          node.workspaceFolder,
           remoteEntry.type === "d" ? BaseNodeType.directory : BaseNodeType.file,
           remoteEntry.size,
           new Date(remoteEntry.modifyTime * 1000),

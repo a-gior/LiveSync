@@ -176,6 +176,7 @@ export class FileEventHandler {
         // Build comparison file node to add to rootElements
         const comparisonNode = new ComparisonFileNode(
           fileNode.name,
+          fileNode.workspaceFolder,
           fileNode.type,
           fileNode.size,
           fileNode.modifiedTime,
@@ -462,11 +463,10 @@ export class FileEventHandler {
     result: ActionResult
   ): Promise<void> {
     // Find the node’s previous state (before we performed the remote action)
-    const rootName = WorkspaceConfigManager.getWorkspaceBasename();
     const oldNode = await JsonManager.findNodeByPath(
       node.relativePath,
-      TreeViewManager.treeDataProvider.rootElements,
-      rootName
+      TreeViewManager.diffProvider.rootElements,
+      node.workspaceFolder.uri
     );
 
     switch (actionOn) {

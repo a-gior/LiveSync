@@ -1,31 +1,37 @@
+import { Uri, WorkspaceFolder } from "vscode";
+import { ChildrenNodeMap, UriMap } from "../managers/JsonManager";
+
 export enum BaseNodeType {
   file = "file",
   directory = "directory"
 }
 
 export interface BaseNodeData {
+  workspaceFolder: WorkspaceFolder;
   name: string;
   type: BaseNodeType;
   size: number;
   modifiedTime: Date | string;
   relativePath: string;
-  children?: { [key: string]: any } | Map<string, BaseNode<any>>;
+  children?: Map<string, BaseNode<any>>;
   hash: string;
 }
 
 export abstract class BaseNode<T extends BaseNode<any>> {
+  workspaceFolder: WorkspaceFolder;
   name: string;
   type: BaseNodeType;
   size: number;
   modifiedTime: Date;
   relativePath: string;
-  children: Map<string, T>;
+  children: ChildrenNodeMap<T>;
   hash: string;
 
-  constructor(data: BaseNodeData | string, type?: BaseNodeType, size?: number, modifiedTime?: Date, relativePath?: string, hash?: string) {
+  constructor(data: BaseNodeData | string, workspaceFolder?: WorkspaceFolder, type?: BaseNodeType, size?: number, modifiedTime?: Date, relativePath?: string, hash?: string) {
     if (typeof data === "string") {
       // Traditional constructor parameters
       this.name = data;
+      this.workspaceFolder = workspaceFolder!;
       this.type = type!;
       this.size = size!;
       this.modifiedTime = modifiedTime!;
@@ -35,6 +41,7 @@ export abstract class BaseNode<T extends BaseNode<any>> {
     } else {
       // JSON-like object initialization
       this.name = data.name;
+      this.workspaceFolder = data.workspaceFolder;
       this.type = data.type;
       this.size = data.size;
       this.modifiedTime = new Date(data.modifiedTime);
@@ -48,7 +55,7 @@ export abstract class BaseNode<T extends BaseNode<any>> {
     }
   }
 
-  setChildren(children: Map<string, T> | { [key: string]: any }): void {
+  setChildren(children: ChildrenNodeMap<T> | { [key: string]: any }): void {
     if (children instanceof Map) {
       this.children = children;
     } else {
@@ -61,6 +68,7 @@ export abstract class BaseNode<T extends BaseNode<any>> {
   toJSON(): any {
     return {
       name: this.name,
+      workspaceFolder: this.workspaceFolder,
       type: this.type,
       size: this.size,
       modifiedTime: this.modifiedTime.toISOString(),
@@ -91,7 +99,7 @@ export abstract class BaseNode<T extends BaseNode<any>> {
   }
 
   // Static method to convert a Map to an array
-  static toArray<T extends BaseNode<any>>(map: Map<string, T>): T[] {
+  static toArray<T extends BaseNode<any>>(map: ChildrenNodeMap<T>): T[] {
     return Array.from(map.values());
   }
 }

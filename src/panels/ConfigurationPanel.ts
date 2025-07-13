@@ -13,7 +13,7 @@ import { WorkspaceConfig, WorkspaceConfigManager2 } from "../managers/WorkspaceC
 import { configManager } from "../extension";
 
 export class ConfigurationPanel extends Panel {
-  static show(extensionUri: Uri, folder: WorkspaceFolder | null = null) {
+  static show(extensionUri: Uri, folder: WorkspaceFolder) {
     const viewType = "configurationViewType";
     const title = "LiveSync Configuration";
     const localResourceRoots = [
@@ -38,11 +38,11 @@ export class ConfigurationPanel extends Panel {
           break;
         case "loadConfig": 
           if(message.selectedFolder) {
-            const config = configManager?.getConfig(message.selectedFolder.uri);
+            const config = configManager!.getConfig(message.selectedFolder.uri);
             const configMessage: FullConfigurationMessage = {
               command: "setInitialConfiguration",
               ...config,
-              workspaceFolders: WorkspaceConfigManager2.getFolders()
+              workspaceFolders: configManager!.getFolders()
             };
             this.currentPanel?.getPanel().webview.postMessage(configMessage);
           }
@@ -68,11 +68,19 @@ export class ConfigurationPanel extends Panel {
       // Additional options if needed
     );
 
+    const workspaceConfig: WorkspaceConfig = configManager!.getConfig(folder.uri);
+    const configState: ConfigurationState = {
+      remotePath: workspaceConfig.remotePath,
+      configuration: workspaceConfig.connectionSettings,
+      fileEventActions: workspaceConfig.fileEventActions,
+      ignoreList: workspaceConfig.ignoreList,
+      workspaceFolders: configManager!.getFolders(),
+      ...(folder ? { selectedFolder: folder } : {})
+    };
+
     const configMessage: FullConfigurationMessage = {
       command: "setInitialConfiguration",
-      ...WorkspaceConfigManager.getWorkspaceConfiguration(),
-      workspaceFolders: WorkspaceConfigManager2.getFolders(),
-      ...(folder ? { selectedFolder: folder } : {})
+      ...configState,
     };
     this.currentPanel?.getPanel().webview.postMessage(configMessage);
   }

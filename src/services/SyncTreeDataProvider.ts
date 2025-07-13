@@ -4,17 +4,15 @@ import { getFullPaths } from "../utilities/fileUtils/filePathUtils";
 import { listLocalFiles, listRemoteFiles } from "../utilities/fileUtils/fileListing";
 import { IconLoader } from "./IconLoader";
 import { SAVE_DIR } from "../utilities/constants";
-import JsonManager, { isComparisonFileNodeMap, JsonType } from "../managers/JsonManager";
+import JsonManager, { isComparisonFileNodeMap, JsonType, UriMap } from "../managers/JsonManager";
 import { ComparisonFileNode, ComparisonStatus } from "../utilities/ComparisonFileNode";
 import { BaseNode, BaseNodeType } from "../utilities/BaseNode";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../managers/LogManager";
-import { FileNode } from "../utilities/FileNode";
 import path from "path";
 import { Action } from "../utilities/enums";
 import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 import { TreeViewManager } from "../managers/TreeViewManager";
 import { StatusBarManager } from "../managers/StatusBarManager";
-import { updateRemoteFilesJsonForPaths } from "../utilities/fileUtils/fileEventFunctions";
 
 export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonFileNode> {
   private _onDidChangeTreeData: vscode.EventEmitter<ComparisonFileNode | undefined | void> = new vscode.EventEmitter<
@@ -26,7 +24,9 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
   private _showAsTree: boolean;
   private _collapseAll: boolean;
 
-  public rootElements: Map<string, ComparisonFileNode> = new Map<string, ComparisonFileNode>();
+  private _currentWorkspace: vscode.WorkspaceFolder;
+
+  public rootElements: UriMap<ComparisonFileNode> = new Map<vscode.Uri, ComparisonFileNode>();
   private jsonManager: JsonManager;
 
   constructor(showAsTree: boolean = true, showUnchanged: boolean = true, collapseAll: boolean = true) {
@@ -34,6 +34,8 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
     this._showUnchanged = showUnchanged;
     this._collapseAll = collapseAll;
     this.jsonManager = JsonManager.getInstance();
+
+    this._currentWorkspace = vscode.workspace.workspaceFolders![0];
   }
 
   public get settings() {
@@ -42,6 +44,14 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
       showUnchanged: this._showUnchanged,
       collapseAll: this._collapseAll
     };
+  }
+
+  public get currentWorkspace() {
+    return this._currentWorkspace;
+  }
+  
+  public set currentWorkspace(folder: vscode.WorkspaceFolder) {
+    this._currentWorkspace = folder;
   }
 
   toggleViewMode(showAsTree: boolean): void {
@@ -73,8 +83,6 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
     TreeViewManager.updateMessage(this);
     logInfoMessage("Refreshing Tree: ", LOG_FLAGS.CONSOLE_ONLY, element);
   
-    const rootName = WorkspaceConfigManager.getWorkspaceBasename();
-  
     // 1) Lst mode OR No element OR root element => full refresh
     if (!this._showAsTree || !element || element.relativePath === "" || element.relativePath === ".") {
       this._onDidChangeTreeData.fire(undefined);
@@ -89,7 +97,7 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
         const parentNode = await JsonManager.findNodeByPath(
           parentRel,
           this.rootElements,
-          rootName
+          this._currentWorkspace.uri,
         );
         this._onDidChangeTreeData.fire(parentNode);
       } else {
@@ -110,7 +118,8 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
   }
 
   async getTreeItem(element: ComparisonFileNode): Promise<vscode.TreeItem> {
-    const isOpened = (await this.jsonManager.getFoldersState()).has(JsonManager.getMapKey(element));
+    const foldersStateElement = (await this.jsonManager.getFoldersState()).get(element.workspaceFolder.uri)!;
+    const isOpened = element.relativePath in foldersStateElement; // Check for relativePath key in folders state
 
     let label: string;
     if (element.relativePath === "" || this._showAsTree) {
@@ -167,25 +176,24 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
 
           const comparisonFileNode = await this.getComparisonFileNode(localPath, remotePath);
 
-          if (this.rootElements.has(comparisonFileNode.name)) {
+          if (this.rootElements.has(comparisonFileNode.workspaceFolder.uri)) {
             // Update the root elements
-            const rootNode = this.rootElements.get(comparisonFileNode.name);
+            const rootNode = this.rootElements.get(comparisonFileNode.workspaceFolder.uri);
             if (rootNode) {
               Object.assign(rootNode, comparisonFileNode); // Update properties while keeping the same reference
             }
           } else {
-            this.rootElements.set(comparisonFileNode.name, comparisonFileNode);
+            this.rootElements.set(comparisonFileNode.workspaceFolder.uri, comparisonFileNode);
           }
 
           await this.jsonManager.updateFullJson(JsonType.COMPARE, this.rootElements);
 
-          const rootTree = this.rootElements.get(comparisonFileNode.name);
+          const rootTree = this.rootElements.get(comparisonFileNode.workspaceFolder.uri);
           const rootNodes = BaseNode.toArray(rootTree!.children);
           return this.applyViewMode(rootNodes);
         } else if (comparisonEntries && isComparisonFileNodeMap(comparisonEntries)) {
-          const rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
           this.rootElements = comparisonEntries;
-          const rootTree = this.rootElements.get(rootFolderName);
+          const rootTree = this.rootElements.get(this._currentWorkspace.uri);
           const rootNodes = BaseNode.toArray(rootTree!.children);
           return this.applyViewMode(rootNodes);
         } else {
@@ -208,8 +216,7 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
     }
 
     const parentPath = path.dirname(element.relativePath);
-    let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
-    return JsonManager.findNodeByPath(parentPath, this.rootElements, rootFolderName);
+    return JsonManager.findNodeByPath(parentPath, this.rootElements, this._currentWorkspace.uri);
   }
 
   // Get the whole ComparisonFileNode of the whole tree
@@ -220,7 +227,7 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
 
       
       const rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
-      const comparisonFileNode = ComparisonFileNode.compareFileNodes(localFiles, remoteFiles, this.rootElements.get(rootFolderName));
+      const comparisonFileNode = ComparisonFileNode.compareFileNodes(localFiles, remoteFiles, this.rootElements.get(this._currentWorkspace.uri));
 
       if (remoteFiles) {
         await JsonManager.getInstance().updateRemoteFilesJson(remoteFiles);
@@ -268,7 +275,7 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
         // Handle root node specifically in flatten mode
         if (!this._showAsTree && node.relativePath === "") {
           // Create a new root node that will be shown in flatten mode
-          const rootNodeCopy = new ComparisonFileNode(node.name, node.type, node.size, node.modifiedTime, node.relativePath, node.status);
+          const rootNodeCopy = new ComparisonFileNode(node.name, node.workspaceFolder, node.type, node.size, node.modifiedTime, node.relativePath, node.status);
 
           // Add the root node itself to viewNodes
           viewNodes.push(rootNodeCopy);

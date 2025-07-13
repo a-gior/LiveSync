@@ -1,14 +1,22 @@
 import path from "path";
 import * as fs from "fs";
-import { FileNode, FileNodeSource } from "../utilities/FileNode";
+import { FileNode } from "../utilities/FileNode";
 import { COMPARE_FILES_JSON, FOLDERS_STATE_JSON, REMOTE_FILES_JSON, SAVE_DIR } from "../utilities/constants";
 import { ComparisonFileNode, ComparisonStatus } from "../utilities/ComparisonFileNode";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./LogManager";
 import { debounce } from "../utilities/debounce";
 import { WorkspaceConfigManager } from "./WorkspaceConfigManager";
-import { getCorrespondingPath, getRelativePath, splitParts } from "../utilities/fileUtils/filePathUtils";
+import { getRelativePath, splitParts } from "../utilities/fileUtils/filePathUtils";
 import { Uri } from "vscode";
 import { SyncTreeDataProvider } from "../services/SyncTreeDataProvider";
+import { TreeViewManager } from "./TreeViewManager";
+
+export type UriMap<T> = Map<Uri, T>;
+export type ChildrenNodeMap<T> = Map<string, T>;
+export type JsonNodeMap = UriMap<FileNode | ComparisonFileNode>;
+
+export type FoldersStateElement = Record<string, boolean>;
+export type JsonFoldersStateMap = UriMap<FoldersStateElement>;
 
 export enum JsonType {
   REMOTE = "remote",
@@ -17,9 +25,9 @@ export enum JsonType {
 
 export default class JsonManager {
   private static instance: JsonManager;
-  private remoteFileEntries: Map<string, FileNode> | null = null;
-  private comparisonFileEntries: Map<string, ComparisonFileNode> | null = null;
-  private foldersState: Map<string, boolean> | null = null;
+  private remoteFileEntries: UriMap<FileNode> | null = null;
+  private comparisonFileEntries: UriMap<ComparisonFileNode> | null = null;
+  private foldersState: JsonFoldersStateMap | null = null;
   private jsonLoadedPromise: Promise<void>;
 
   private constructor() {
@@ -33,7 +41,7 @@ export default class JsonManager {
     return JsonManager.instance;
   }
 
-  public async getFoldersState(): Promise<Map<string, boolean>> {
+  public async getFoldersState(): Promise<JsonFoldersStateMap> {
     await this.waitForJsonLoad();
 
     if (this.foldersState) {
@@ -43,14 +51,19 @@ export default class JsonManager {
     throw new Error("FoldersState wasn't loaded for some reasons");
   }
 
-  public async reloadFoldersState(): Promise<Map<string, boolean>> {
-    this.foldersState = await this.loadMapFromJson<boolean>(FOLDERS_STATE_JSON);
+  public async reloadFoldersState(): Promise<JsonFoldersStateMap> {
+    this.foldersState = await this.loadMapFromJson<FoldersStateElement>(FOLDERS_STATE_JSON);
     return this.foldersState;
   }
 
   public static getMapKey(element: ComparisonFileNode) {
-    return `${WorkspaceConfigManager.getWorkspaceBasename()}$$${element.relativePath}`;
+    return `${element.workspaceFolder.uri}$$${element.relativePath}`;
   }
+
+  private saveMapToJsonDebounced = debounce(
+    (filename, map) => this.saveMapToJson(filename, map),
+    500
+  );
 
   public async updateFolderState(element: ComparisonFileNode, isExpanded: boolean) {
     await this.waitForJsonLoad();
@@ -59,15 +72,18 @@ export default class JsonManager {
       return;
     }
 
-    const mapKey = JsonManager.getMapKey(element);
+    const foldersStateElement = this.foldersState.get(element.workspaceFolder.uri);
+    if(!foldersStateElement) {
+      throw new Error(`No folder state entry found for workspace "${element.workspaceFolder.name}"`);
+    }
 
     if (isExpanded) {
-      this.foldersState.set(mapKey, isExpanded);
+      foldersStateElement[element.relativePath] = isExpanded;
     } else {
-      this.foldersState.delete(mapKey);
+      delete foldersStateElement[element.relativePath];
     }
-    const saveMapToJsonDebounced = debounce(this.saveMapToJson, 500);
-    saveMapToJsonDebounced(FOLDERS_STATE_JSON, this.foldersState);
+
+    this.saveMapToJsonDebounced(FOLDERS_STATE_JSON, this.foldersState);
   }
 
   /**
@@ -77,8 +93,18 @@ export default class JsonManager {
   public async expandChangedFoldersRecursive(treeDataProvider: SyncTreeDataProvider): Promise<void> {
     await this.waitForJsonLoad();
     
-    const foldersState = new Map<string, boolean>();
-    this.foldersState = foldersState;
+    const wsUri = treeDataProvider.currentWorkspace.uri;
+    if(!this.foldersState) {
+      this.foldersState = new Map<Uri, FoldersStateElement>();
+    }
+
+    let foldersState = this.foldersState.get(wsUri);
+
+    if (!foldersState) {
+      const newState: FoldersStateElement = {};
+      this.foldersState.set(wsUri, newState);
+      foldersState = newState;
+    }
 
     // Recurse bottom-up, returning true if subtree has a change
     const recurse = (node: ComparisonFileNode): boolean => {
@@ -92,8 +118,7 @@ export default class JsonManager {
         }
         // only mark expansion if there was a change somewhere below (or on this folder)
         if (hasChange) {
-          const key = JsonManager.getMapKey(node);
-          foldersState.set(key, true);
+          foldersState[node.relativePath] = true;
         }
       }
 
@@ -127,7 +152,7 @@ export default class JsonManager {
       const [remote, comparison, foldersState] = await Promise.all([
         this.loadMapFromJson<FileNode>(REMOTE_FILES_JSON, FileNode),
         this.loadMapFromJson<ComparisonFileNode>(COMPARE_FILES_JSON, ComparisonFileNode),
-        this.loadMapFromJson<boolean>(FOLDERS_STATE_JSON)
+        this.loadMapFromJson<FoldersStateElement>(FOLDERS_STATE_JSON)
       ]);
 
       this.remoteFileEntries = remote;
@@ -143,9 +168,9 @@ export default class JsonManager {
     return this.jsonLoadedPromise;
   }
 
-  private async loadMapFromJson<T>(fileName: string, NodeConstructor?: new (data: any) => T): Promise<Map<string, T>> {
+  private async loadMapFromJson<T>(fileName: string, NodeConstructor?: new (data: any) => T): Promise<UriMap<T>> {
     const filePath = getJsonPath(fileName);
-    const fileEntryMap = new Map<string, T>();
+    const fileEntryMap = new Map<Uri, T>();
 
     if (!fs.existsSync(filePath)) {
       return fileEntryMap;
@@ -157,11 +182,11 @@ export default class JsonManager {
 
       if (NodeConstructor) {
         Object.entries(json).forEach(([entryName, entryData]) => {
-          fileEntryMap.set(entryName, new NodeConstructor(entryData));
+          fileEntryMap.set(Uri.parse(entryName), new NodeConstructor(entryData));
         });
       } else {
         Object.entries(json).forEach(([name, data]) => {
-          fileEntryMap.set(name, data as T);
+          fileEntryMap.set(Uri.parse(name), data as T);
         });
       }
 
@@ -171,13 +196,13 @@ export default class JsonManager {
     }
   }
 
-  private async saveMapToJson<T>(fileName: string, dataMap: Map<string, T>): Promise<void> {
+  private async saveMapToJson<T>(fileName: string, dataMap: UriMap<T>): Promise<void> {
     const filePath = getJsonPath(fileName);
 
     // Convert the Map to an Object to be saved as JSON
     const jsonObject: { [key: string]: T } = {};
     dataMap.forEach((value, key) => {
-      jsonObject[key] = value;
+      jsonObject[key.toString()] = value;
     });
 
     try {
@@ -189,7 +214,7 @@ export default class JsonManager {
     }
   }
 
-  private async saveJson(fileName: string, data: Map<string, FileNode | ComparisonFileNode>): Promise<void> {
+  private async saveJson(fileName: string, data: JsonNodeMap): Promise<void> {
     const filePath = getJsonPath(fileName);
     const jsonContent = JSON.stringify(Object.fromEntries(data), null, 2);
 
@@ -209,7 +234,7 @@ export default class JsonManager {
     return fileNames[jsonType];
   }
 
-  public async getFileEntriesMap(jsonType: JsonType): Promise<Map<string, FileNode | ComparisonFileNode> | null> {
+  public async getFileEntriesMap(jsonType: JsonType): Promise<JsonNodeMap | null> {
     await this.waitForJsonLoad();
 
     const entriesMap = {
@@ -230,19 +255,19 @@ export default class JsonManager {
       return;
     }
 
-    const rootName     = WorkspaceConfigManager.getWorkspaceBasename();
+    const workspaceFolderUri = remoteNode.workspaceFolder.uri;
     const relativePath = getRelativePath(remoteNode.fullPath);
     const pathParts    = splitParts(relativePath);
 
     // 1) Replace the root node if we're at "."
     if (pathParts.length === 1 && pathParts[0] === '.') {
-      fileNodeMap.set(rootName, remoteNode);
+      fileNodeMap.set(workspaceFolderUri, remoteNode);
     } else {
       // 2) Look up the root entry
-      let parent = fileNodeMap.get(rootName) as FileNode;
+      let parent = fileNodeMap.get(workspaceFolderUri) as FileNode;
       if (!parent) {
         logErrorMessage(
-          `<updateRemoteFilesJson> Root node "${rootName}" not found in ${fileName}`
+          `<updateRemoteFilesJson> Root node "${workspaceFolderUri}" not found in ${fileName}`
         );
         return;
       }
@@ -283,7 +308,7 @@ export default class JsonManager {
   }
 
 
-  public async updateFullJson(jsonType: JsonType, data: Map<string, FileNode | ComparisonFileNode>): Promise<void> {
+  public async updateFullJson(jsonType: JsonType, data: JsonNodeMap): Promise<void> {
     try {
       // Get the existing JSON data
       const fileName = this.getJsonFileName(jsonType);
@@ -334,8 +359,8 @@ export default class JsonManager {
 
   public static async findNodeByPath<T extends FileNode | ComparisonFileNode>(
     filePath: string,
-    rootEntries: Map<string, T>,
-    rootName?: string
+    rootEntries: UriMap<T>,
+    rootName?: Uri
   ): Promise<T | undefined> {
     if (!filePath || filePath === "." || filePath === "") {
       return rootName ? rootEntries.get(rootName) : undefined;
@@ -352,10 +377,9 @@ export default class JsonManager {
         return this.findNodeInHierarchy(filePath, rootNode, pathParts);
       }
 
-      let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
       const relativePath = getRelativePath(filePath);
 
-      return this.findNodeByPath(relativePath, rootEntries, rootFolderName);
+      return this.findNodeByPath(relativePath, rootEntries, TreeViewManager.diffProvider.currentWorkspace.uri);
     } catch (error: any) {
       throw new Error(`Find entry failed: ${filePath}`);
     }
@@ -363,9 +387,8 @@ export default class JsonManager {
 
   public static async findComparisonNodeFromUri(uri: Uri, treeDataProvider: SyncTreeDataProvider): Promise<ComparisonFileNode> {
     const relativePath = getRelativePath(uri.fsPath);
-    const rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
 
-    const comparisonNode = await JsonManager.findNodeByPath(relativePath, treeDataProvider.rootElements, rootFolderName);
+    const comparisonNode = await JsonManager.findNodeByPath(relativePath, treeDataProvider.rootElements, treeDataProvider.currentWorkspace.uri);
 
     if (!comparisonNode) {
       throw new Error(`Could not find file ${relativePath} in the comparison tree.`);
@@ -376,12 +399,11 @@ export default class JsonManager {
 
   public static async addComparisonFileNode(
     element: ComparisonFileNode,
-    rootEntries: Map<string, ComparisonFileNode>
+    rootEntries: UriMap<ComparisonFileNode>
   ): Promise<ComparisonFileNode> {
     try {
-      let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
       const parentPath = path.dirname(element.relativePath);
-      const parentNode = await this.findNodeByPath(parentPath, rootEntries, rootFolderName);
+      const parentNode = await this.findNodeByPath(parentPath, rootEntries, element.workspaceFolder.uri);
 
       if (!parentNode?.isDirectory()) {
         throw new Error(`Invalid parent: ${parentPath}`);
@@ -398,12 +420,11 @@ export default class JsonManager {
 
   public static async deleteComparisonFileNode(
     element: ComparisonFileNode,
-    rootEntries: Map<string, ComparisonFileNode>
+    rootEntries: UriMap<ComparisonFileNode>
   ): Promise<ComparisonFileNode> {
     try {
-      let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
       const parentPath = path.dirname(element.relativePath);
-      const parentNode = await this.findNodeByPath(parentPath, rootEntries, rootFolderName);
+      const parentNode = await this.findNodeByPath(parentPath, rootEntries, element.workspaceFolder.uri);
 
       if (!parentNode) {
         throw new Error(`Parent not found: ${parentPath}`);
@@ -420,11 +441,10 @@ export default class JsonManager {
 
   public static async updateComparisonFileNode(
     element: ComparisonFileNode,
-    rootEntries: Map<string, ComparisonFileNode>
+    rootEntries: UriMap<ComparisonFileNode>
   ): Promise<ComparisonFileNode> {
     try {
-      let rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
-      const foundElement = await this.findNodeByPath(element.relativePath, rootEntries, rootFolderName);
+      const foundElement = await this.findNodeByPath(element.relativePath, rootEntries, element.workspaceFolder.uri);
 
       if (!foundElement) {
         throw new Error("Element not found");
@@ -439,7 +459,7 @@ export default class JsonManager {
   }
 }
 
-export function isFileNodeMap(map: any): map is Map<string, FileNode> {
+export function isFileNodeMap(map: any): map is UriMap<FileNode> {
   if (!(map instanceof Map)) {
     return false;
   }
@@ -447,7 +467,7 @@ export function isFileNodeMap(map: any): map is Map<string, FileNode> {
   return firstValue instanceof FileNode;
 }
 
-export function isComparisonFileNodeMap(map: any): map is Map<string, ComparisonFileNode> {
+export function isComparisonFileNodeMap(map: any): map is UriMap<ComparisonFileNode> {
   if (!(map instanceof Map)) {
     return false;
   }

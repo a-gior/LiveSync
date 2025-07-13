@@ -27,7 +27,7 @@ export async function moveRemoteFile(newLocalPath:string, oldRemotePath: string,
 
     const oldRemoteNodeExists = await pathExists(oldRemotePath, FileNodeSource.remote);
     if(!oldRemoteNodeExists) {
-      const treeDataProvider = TreeViewManager.treeDataProvider;
+      const treeDataProvider = TreeViewManager.diffProvider;
       // If the old remote path does not exist, we need to upload the local directory
       const comparisonFileNode = await treeDataProvider.getComparisonFileNode(newLocalPath, newRemotePath);
       await uploadDirectory(comparisonFileNode);

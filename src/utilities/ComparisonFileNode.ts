@@ -5,6 +5,7 @@ import { splitParts } from "./fileUtils/filePathUtils";
 import JsonManager from "../managers/JsonManager";
 import { StatusBarManager } from "../managers/StatusBarManager";
 import { logInfoMessage } from "../managers/LogManager";
+import { Uri, WorkspaceFolder } from "vscode";
 
 export enum ComparisonStatus {
   added = "added",
@@ -23,6 +24,7 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
 
   constructor(
     nameOrJson: string | ComparisonFileData,
+    workspaceFolder?: WorkspaceFolder,
     type?: BaseNodeType,
     size?: number,
     modifiedTime?: Date,
@@ -31,12 +33,12 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
   ) {
     if (typeof nameOrJson === "string") {
       // Regular constructor logic
-      super(nameOrJson, type, size, modifiedTime, relativePath);
+      super(nameOrJson, workspaceFolder, type, size, modifiedTime, relativePath);
       this.status = status;
     } else {
       // Constructor from JSON
       const json = nameOrJson;
-      super(json.name, json.type, json.size, new Date(json.modifiedTime), json.relativePath);
+      super(json.name, json.workspaceFolder, json.type, json.size, new Date(json.modifiedTime), json.relativePath);
       this.status = json.status; 
 
       if (json.children) {
@@ -64,7 +66,7 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     const hasLocal = !!localNode;
     const hasRemote = !!remoteNode;
     const base = localNode ?? remoteNode!;  // whichever exists
-    const { name, type, size, modifiedTime, relativePath, hash } = base;
+    const { name, workspaceFolder, type, size, modifiedTime, relativePath, hash } = base;
     const isDir = type === BaseNodeType.directory;
 
     // 3) Decide status in one place
@@ -93,7 +95,7 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     }
 
     // 5) Build fresh node, and record its hash if unchanged
-    const compNode = new ComparisonFileNode(name, type, size, modifiedTime, relativePath, status);
+    const compNode = new ComparisonFileNode(name, workspaceFolder, type, size, modifiedTime, relativePath, status);
     if (status === ComparisonStatus.unchanged) {
       compNode.hash = hash;
     } else {
@@ -176,13 +178,12 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
    * @param relativePath The relative path of the modified node.
    */
   static async updateParentDirectoriesStatus(
-    rootEntries: Map<string, ComparisonFileNode>,
+    rootEntries: Map<Uri, ComparisonFileNode>,
     element: ComparisonFileNode
   ): Promise<ComparisonFileNode> {
-    const rootName = WorkspaceConfigManager.getWorkspaceBasename();
-    const rootNode = rootEntries.get(rootName);
+    const rootNode = rootEntries.get(element.workspaceFolder.uri);
     if (!rootNode || !rootNode.isDirectory()) {
-      console.error(`Root "${rootName}" not found or not a directory.`);
+      console.error(`Root "${element.workspaceFolder.uri}" not found or not a directory.`);
       return element;
     }
   
@@ -192,7 +193,7 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     // Fast-path bail for pure add/remove
     if (parents.length > 0) {
       const firstParentRel = parents.join("/");
-      const firstParent = await JsonManager.findNodeByPath(firstParentRel, rootEntries, rootName);
+      const firstParent = await JsonManager.findNodeByPath(firstParentRel, rootEntries, element.workspaceFolder.uri);
       if (
         (element.status === ComparisonStatus.added   && firstParent?.status === ComparisonStatus.added) ||
         (element.status === ComparisonStatus.removed && firstParent?.status === ComparisonStatus.removed)
@@ -206,7 +207,7 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
     // Walk up
     for (let depth = parents.length; depth > 0; depth--) {
       const relPath = parents.slice(0, depth).join("/");
-      const folder = await JsonManager.findNodeByPath(relPath, rootEntries, rootName);
+      const folder = await JsonManager.findNodeByPath(relPath, rootEntries, element.workspaceFolder.uri);
       if (!folder || !folder.isDirectory()) {break;}
   
       // If any child changed, mark modified

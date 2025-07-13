@@ -8,6 +8,6 @@ export interface ConfigurationState {
   remotePath?: WorkspaceConfigFile["remotePath"];
   fileEventActions?: FileEventActions;
   ignoreList?: WorkspaceConfigFile["ignoreList"];
-  workspaceFolders?: WorkspaceFolder[];
+  workspaceFolders?: readonly WorkspaceFolder[];
   selectedFolder?: WorkspaceFolder;
 }

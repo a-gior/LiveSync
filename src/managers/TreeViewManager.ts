@@ -1,92 +1,107 @@
-import * as vscode from "vscode";
-import { SyncTreeDataProvider } from "../services/SyncTreeDataProvider";
-import JsonManager from "./JsonManager";
-import { ComparisonFileNode, ComparisonStatus } from "../utilities/ComparisonFileNode";
+// src/TreeViewManager.ts
+import * as vscode from 'vscode';
+import JsonManager from './JsonManager';
+import { SyncTreeDataProvider } from '../services/SyncTreeDataProvider';
+import { WorkspaceTreeDataProvider } from '../services/WorkspaceTreeDataProvider';
+import { ComparisonFileNode, ComparisonStatus } from '../utilities/ComparisonFileNode';
 
 export class TreeViewManager {
-  
-  private static _treeView: vscode.TreeView<ComparisonFileNode>;
-  private static _treeDataProvider: SyncTreeDataProvider;
+  private static _workspaceView: vscode.TreeView<vscode.WorkspaceFolder>;
+  private static _workspaceProvider: WorkspaceTreeDataProvider;
+  private static _diffView: vscode.TreeView<ComparisonFileNode>;
+  private static _diffProvider: SyncTreeDataProvider;
 
-  public static get treeView() {
-    return this._treeView;
-  }
-  
-  public static get treeDataProvider() {
-    return this._treeDataProvider;
-  }
+  /** Initialize both Workspaces and Diffs views and wire them together */
+  public static async initialize(context: vscode.ExtensionContext): Promise<SyncTreeDataProvider> {
+    // 1) Read persisted settings for diff view
+    const showAsTree    = context.globalState.get<boolean>('showAsTree', false);
+    const showUnchanged = context.globalState.get<boolean>('showUnchanged', false);
+    const collapseAll   = context.globalState.get<boolean>('collapseAll', false);
 
-  static async initialize(context: vscode.ExtensionContext): Promise<SyncTreeDataProvider> {
-    const showAsTree = context.globalState.get<boolean>("showAsTree", false);
-    const showUnchanged = context.globalState.get<boolean>("showUnchanged", false);
-    const collapseAll = context.globalState.get<boolean>("collapseAll", false);
-
-    this._treeDataProvider = new SyncTreeDataProvider(showAsTree, showUnchanged, collapseAll);
-    this._treeView = vscode.window.createTreeView("treeViewId", {
-      treeDataProvider: this._treeDataProvider
+    // 2) Create the Workspaces tree
+    this._workspaceProvider = new WorkspaceTreeDataProvider();
+    this._workspaceView = vscode.window.createTreeView('livesync.workspaces', {
+      treeDataProvider: this._workspaceProvider,
+      showCollapseAll:  false
     });
-    this._treeView.message = "Loading…";
 
-    vscode.commands.executeCommand("setContext", "livesyncViewMode", showAsTree ? "tree" : "list");
-    vscode.commands.executeCommand("setContext", "livesyncShowUnchanged", showUnchanged);
-    vscode.commands.executeCommand("setContext", "livesyncExpandMode", collapseAll ? "collapse" : "expand");
+    // 3) Create the Diffs tree
+    this._diffProvider = new SyncTreeDataProvider(showAsTree, showUnchanged, collapseAll);
+    this._diffView = vscode.window.createTreeView('livesync.diffs', {
+      treeDataProvider: this._diffProvider
+    });
+    this._diffView.message = 'Loading…';
 
-    this._treeView.onDidExpandElement((event) => {
+    // 4) Set contexts for UI contributions
+    vscode.commands.executeCommand('setContext', 'livesyncViewMode',    showAsTree    ? 'tree'   : 'list');
+    vscode.commands.executeCommand('setContext', 'livesyncShowUnchanged', showUnchanged);
+    vscode.commands.executeCommand('setContext', 'livesyncExpandMode', collapseAll   ? 'collapse' : 'expand');
+
+    // 5) Wire expand/collapse events to JsonManager
+    this._diffView.onDidExpandElement(event => {
       JsonManager.getInstance().updateFolderState(event.element, true);
     });
-
-    this._treeView.onDidCollapseElement((event) => {
+    this._diffView.onDidCollapseElement(event => {
       JsonManager.getInstance().updateFolderState(event.element, false);
     });
 
-    await this._treeDataProvider.loadRootElements();
-    this.updateMessage(this._treeDataProvider);
+    // 6) When a workspace folder is selected, reload diffs for that folder
+    this._workspaceView.onDidChangeSelection(async event => {
+      const folder = event.selection[0];
+      if (folder) {
+        this._diffProvider.currentWorkspace = folder;
+        await this._diffProvider.refresh();
+        this.updateMessage(this._diffProvider);
+      }
+    });
 
-    context.subscriptions.push(this._treeView);
+    // 7) Load initial diff tree and update message
+    await this._diffProvider.refresh();
+    this.updateMessage(this._diffProvider);
 
-    return this._treeDataProvider;
+    // 8) Clean up on deactivate
+    context.subscriptions.push(this._workspaceView, this._diffView);
+
+    return this._diffProvider;
   }
 
+  public static get diffProvider() {
+    return this._diffProvider;
+  }
+
+  public static get diffView() {
+    return this._diffView;
+  }
+
+  /** Updates the “No items / No differences” message based on diff data */
   public static updateMessage(provider: SyncTreeDataProvider) {
     if (provider.rootElements.size === 0) {
-      this._treeView.message = "No items to display";
+      this._diffView.message = 'No items to display';
       return;
     }
-
     if (provider.settings.showUnchanged) {
-      this._treeView.message = "";
+      this._diffView.message = '';
       return;
     }
 
     let hasDifference = false;
-
     const dfs = (node: ComparisonFileNode) => {
-      if (hasDifference) {
-        return;
-      }
+      if (hasDifference) return;
       if (node.status !== ComparisonStatus.unchanged) {
         hasDifference = true;
         return;
       }
       for (const child of node.children.values()) {
         dfs(child);
-        if (hasDifference) {
-          return;
-        }
+        if (hasDifference) return;
       }
     };
 
     for (const rootNode of provider.rootElements.values()) {
       dfs(rootNode);
-      if (hasDifference) {
-        break;
-      }
+      if (hasDifference) break;
     }
 
-    if (!hasDifference) {
-      this._treeView.message = "No differences found";
-    } else {
-      this._treeView.message = "";
-    }
+    this._diffView.message = hasDifference ? '' : 'No differences found';
   }
 }

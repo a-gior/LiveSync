@@ -66,11 +66,10 @@ async function resolveElement(
 }
 
 export function getRootElement(treeDataProvider: SyncTreeDataProvider): ComparisonFileNode | null {
-  const rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
-  const rootElement = treeDataProvider.rootElements.get(rootFolderName);
+  const rootElement = treeDataProvider.rootElements.get(treeDataProvider.currentWorkspace.uri);
 
   if (!rootElement) {
-    logErrorMessage(`Root folder "${rootFolderName}" not found in root entries.`);
+    logErrorMessage(`Root folder "${treeDataProvider.currentWorkspace.name}" not found in root entries.`);
     return null;
   }
 

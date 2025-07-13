@@ -16,7 +16,7 @@
     export let remoteServerConfigFormData: Form;
     export let fileEventActions: Form;
     export let patterns: string[];
-    export let workspaceFolders: WorkspaceFolder[];
+    export let workspaceFolders: readonly WorkspaceFolder[];
     export let selectedFolder: WorkspaceFolder;
 
     function saveForms() {

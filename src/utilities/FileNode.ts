@@ -1,10 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
+import { workspace, Uri, WorkspaceFolder } from 'vscode';
 import { getRemoteFileMetadata } from "./fileUtils/sftpOperations";
 import { getRelativePath, pathType } from "./fileUtils/filePathUtils";
 import { BaseNode, BaseNodeData, BaseNodeType } from "./BaseNode";
 import { generateHash } from "./fileUtils/hashUtils";
 import { LOG_FLAGS, logErrorMessage } from "../managers/LogManager";
+import { configManager } from "../extension";
 
 export enum FileNodeSource {
   remote = "remote",
@@ -22,6 +24,7 @@ export class FileNode extends BaseNode<FileNode> {
 
   constructor(
     data: FileNodeData | string,
+    workspaceFolder?: WorkspaceFolder,
     type?: BaseNodeType,
     size?: number,
     modifiedTime?: Date,
@@ -29,14 +32,14 @@ export class FileNode extends BaseNode<FileNode> {
     source?: FileNodeSource
   ) {
     if (typeof data === "string") {
-      if (!data || !type || size === undefined || !modifiedTime || !fullPath || !source) {
+      if (!data ||!workspaceFolder || !type || size === undefined || !modifiedTime || !fullPath || !source) {
         throw new Error(
           `Missing parameters to instantiate FileNode. Required : data: ${data}, type: ${type}, size:  ${size}, modifiedTime:  ${modifiedTime}, fullPath:  ${fullPath}, source:  ${source} `
         );
       }
 
       // Traditional constructor parameters
-      super(data, type, size, modifiedTime, fullPath);
+      super(data, workspaceFolder, type, size, modifiedTime, fullPath);
       this.source = source;
       this.fullPath = fullPath;
       this.relativePath = getRelativePath(fullPath);
@@ -76,8 +79,11 @@ export class FileNode extends BaseNode<FileNode> {
         throw new Error();
       }
 
+      
+
       const fileNode = new FileNode({
         name: path.basename(localPath),
+        workspaceFolder: configManager!.getWorkspaceFolderFromPath(localPath, FileNodeSource.local),
         type: nodeType,
         size: stats.size,
         modifiedTime: stats.mtime,
@@ -92,29 +98,6 @@ export class FileNode extends BaseNode<FileNode> {
       return fileNode;
     } catch (error) {
       logErrorMessage(`Error getting FileNode for path ${localPath}:`);
-      throw error;
-    }
-  }
-
-  static async createFileNodeFromRemotePath(remotePath: string): Promise<FileNode> {
-    try {
-      const stats = await getRemoteFileMetadata(remotePath);
-      if (!stats) {
-        throw new Error(`No metadata found for remote path: ${remotePath}`);
-      }
-
-      return new FileNode({
-        name: path.basename(remotePath),
-        type: stats.isDirectory ? BaseNodeType.directory : BaseNodeType.file,
-        size: stats.size,
-        modifiedTime: new Date(stats.modifyTime * 1000),
-        source: FileNodeSource.remote,
-        relativePath: getRelativePath(remotePath),
-        fullPath: remotePath,
-        hash: ""
-      });
-    } catch (error) {
-      logErrorMessage(`Error getting FileNode for path ${remotePath}:`);
       throw error;
     }
   }

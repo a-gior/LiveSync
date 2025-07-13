@@ -16,6 +16,7 @@
     import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
     
     import { configurationFormStore } from '../utilities/stores/configurationFormStore';
+    import { WorkspaceFolder } from "vscode";
 
     provideVSCodeDesignSystem().register(vsCodeButton(), vsCodeCheckbox());
 
@@ -239,7 +240,7 @@
 
     let patterns = [];
     let tabs = [];
-    let workspaceFolders = [];
+    let workspaceFolders: readonly WorkspaceFolder[] = [];
     let selectedFolder = null;
 
     $: configurationFormStore.setRemoteServerConfigFormData(remoteServerConfigFormData);
