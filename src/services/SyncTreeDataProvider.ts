@@ -1,18 +1,15 @@
 import * as vscode from "vscode";
-import { ensureDirectoryExists } from "../utilities/fileUtils/fileOperations";
 import { getFullPaths } from "../utilities/fileUtils/filePathUtils";
 import { listLocalFiles, listRemoteFiles } from "../utilities/fileUtils/fileListing";
 import { IconLoader } from "./IconLoader";
-import { SAVE_DIR } from "../utilities/constants";
-import JsonManager, { isComparisonFileNodeMap, JsonType, UriMap } from "../managers/JsonManager";
 import { ComparisonFileNode, ComparisonStatus } from "../utilities/ComparisonFileNode";
-import { BaseNode, BaseNodeType } from "../utilities/BaseNode";
-import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../managers/LogManager";
+import { BaseNodeType } from "../utilities/BaseNode";
+import { LOG_FLAGS, logInfoMessage } from "../managers/LogManager";
 import path from "path";
 import { Action } from "../utilities/enums";
-import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 import { TreeViewManager } from "../managers/TreeViewManager";
 import { StatusBarManager } from "../managers/StatusBarManager";
+import { configManager } from "../extension";
 
 export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonFileNode> {
   private _onDidChangeTreeData: vscode.EventEmitter<ComparisonFileNode | undefined | void> = new vscode.EventEmitter<
@@ -26,16 +23,20 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
 
   private _currentWorkspace: vscode.WorkspaceFolder;
 
-  public rootElements: UriMap<ComparisonFileNode> = new Map<vscode.Uri, ComparisonFileNode>();
-  private jsonManager: JsonManager;
+  public displayedComparisonNode!: ComparisonFileNode;
 
   constructor(showAsTree: boolean = true, showUnchanged: boolean = true, collapseAll: boolean = true) {
     this._showAsTree = showAsTree;
     this._showUnchanged = showUnchanged;
     this._collapseAll = collapseAll;
-    this.jsonManager = JsonManager.getInstance();
 
     this._currentWorkspace = vscode.workspace.workspaceFolders![0];
+    
+    this.updateDisplayedComparisonNode();
+  }
+
+  updateDisplayedComparisonNode() {
+    this.displayedComparisonNode = this.currentWorkspaceConfig.jsonStore.comparisonFileRoot;
   }
 
   public get settings() {
@@ -54,6 +55,10 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
     this._currentWorkspace = folder;
   }
 
+  public get currentWorkspaceConfig() {
+    return configManager!.getConfig(this._currentWorkspace.uri);
+  }
+
   toggleViewMode(showAsTree: boolean): void {
     this._showAsTree = showAsTree;
     this.refresh();
@@ -69,56 +74,28 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
     this.refresh();
   }
 
-
-  async loadRootElements(): Promise<void> {
-    // Simulate async loading of root elements (e.g., from a JSON file)
-    const comparisonEntries = await this.jsonManager.getFileEntriesMap(JsonType.COMPARE);
-
-    if (comparisonEntries && isComparisonFileNodeMap(comparisonEntries)) {
-      this.rootElements = comparisonEntries;
-    }
-  }
-
   async refresh(element?: ComparisonFileNode): Promise<void> {
     TreeViewManager.updateMessage(this);
     logInfoMessage("Refreshing Tree: ", LOG_FLAGS.CONSOLE_ONLY, element);
   
-    // 1) Lst mode OR No element OR root element => full refresh
     if (!this._showAsTree || !element || element.relativePath === "" || element.relativePath === ".") {
       this._onDidChangeTreeData.fire(undefined);
       return;
     }
   
-    // 2) File => refresh its parent folder (dirname "foo.ts" → "" → root)
     if (!element.isDirectory()) {
       const parentRel = path.dirname(element.relativePath);
-      
-      if(parentRel !== ".") {
-        const parentNode = await JsonManager.findNodeByPath(
-          parentRel,
-          this.rootElements,
-          this._currentWorkspace.uri,
-        );
-        this._onDidChangeTreeData.fire(parentNode);
-      } else {
-        this._onDidChangeTreeData.fire();
-      }
+      const parentNode = this.currentWorkspaceConfig.jsonStore.findComparisonNode(parentRel);
+      this._onDidChangeTreeData.fire(parentNode);
       return;
-    } else {
-      const parentRel = path.dirname(element.relativePath);
-
-      if(parentRel === ".") {
-        this._onDidChangeTreeData.fire();
-      }
-    }
+    } 
   
-    // 3) Directory => refresh that directory node
     this._onDidChangeTreeData.fire(element);
     
   }
 
   async getTreeItem(element: ComparisonFileNode): Promise<vscode.TreeItem> {
-    const foldersStateElement = (await this.jsonManager.getFoldersState()).get(element.workspaceFolder.uri)!;
+    const foldersStateElement = this.currentWorkspaceConfig.jsonStore.folderStates;
     const isOpened = element.relativePath in foldersStateElement; // Check for relativePath key in folders state
 
     let label: string;
@@ -162,51 +139,23 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
   }
 
   async getChildren(element?: ComparisonFileNode): Promise<ComparisonFileNode[]> {
-    if(!WorkspaceConfigManager.isVSCodeConfigValid()) {
-      return [];
+    // If we’re expanding an existing node, just return its children
+    if (element) {
+      return this.applyViewMode(Array.from(element.children.values()));
     }
-    
-    if (!element) {
-      try {
-        const comparisonEntries = await this.jsonManager.getFileEntriesMap(JsonType.COMPARE);
 
-        if (!comparisonEntries || comparisonEntries.size === 0) {
-          ensureDirectoryExists(SAVE_DIR);
-          const { localPath, remotePath } = WorkspaceConfigManager.getWorkspaceFullPaths();
-
-          const comparisonFileNode = await this.getComparisonFileNode(localPath, remotePath);
-
-          if (this.rootElements.has(comparisonFileNode.workspaceFolder.uri)) {
-            // Update the root elements
-            const rootNode = this.rootElements.get(comparisonFileNode.workspaceFolder.uri);
-            if (rootNode) {
-              Object.assign(rootNode, comparisonFileNode); // Update properties while keeping the same reference
-            }
-          } else {
-            this.rootElements.set(comparisonFileNode.workspaceFolder.uri, comparisonFileNode);
-          }
-
-          await this.jsonManager.updateFullJson(JsonType.COMPARE, this.rootElements);
-
-          const rootTree = this.rootElements.get(comparisonFileNode.workspaceFolder.uri);
-          const rootNodes = BaseNode.toArray(rootTree!.children);
-          return this.applyViewMode(rootNodes);
-        } else if (comparisonEntries && isComparisonFileNodeMap(comparisonEntries)) {
-          this.rootElements = comparisonEntries;
-          const rootTree = this.rootElements.get(this._currentWorkspace.uri);
-          const rootNodes = BaseNode.toArray(rootTree!.children);
-          return this.applyViewMode(rootNodes);
-        } else {
-          throw Error("Comparison JSON data not found. Please run the initial comparison.");
-        }
-      } catch (error: any) {
-        logErrorMessage(`Error fetching comparison data: ${error.message}`, LOG_FLAGS.CONSOLE_ONLY);
-        return [];
-      }
-    } else {
-      const childrenArray = Array.from(element.children.values());
-      return this.applyViewMode(childrenArray);
+    // Ensure we have a comparisonFileRoot in our store
+    const store = this.currentWorkspaceConfig.jsonStore;
+    let root = store.comparisonFileRoot;
+    if (!root) {
+      const { localPath, remotePath } = this.currentWorkspaceConfig.getPathPair();
+      root = await this.getComparisonFileNode(localPath, remotePath);
+      store.comparisonFileRoot = root;
+      this.updateDisplayedComparisonNode();
     }
+
+    // Return the top-level children
+    return this.applyViewMode(Array.from(root.children.values()));
   }
 
   getParent(element: ComparisonFileNode): vscode.ProviderResult<ComparisonFileNode> {
@@ -216,7 +165,7 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
     }
 
     const parentPath = path.dirname(element.relativePath);
-    return JsonManager.findNodeByPath(parentPath, this.rootElements, this._currentWorkspace.uri);
+    return this.currentWorkspaceConfig.jsonStore.findComparisonNode(parentPath);
   }
 
   // Get the whole ComparisonFileNode of the whole tree
@@ -226,11 +175,10 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
       const remoteFiles = await listRemoteFiles(remoteDir);
 
       
-      const rootFolderName = WorkspaceConfigManager.getWorkspaceBasename();
-      const comparisonFileNode = ComparisonFileNode.compareFileNodes(localFiles, remoteFiles, this.rootElements.get(this._currentWorkspace.uri));
+      const comparisonFileNode = ComparisonFileNode.compareFileNodes(localFiles, remoteFiles, this.displayedComparisonNode);
 
       if (remoteFiles) {
-        await JsonManager.getInstance().updateRemoteFilesJson(remoteFiles);
+        this.currentWorkspaceConfig.jsonStore.updateRemote(remoteFiles);
       }
 
       StatusBarManager.showMessage("Differences loaded", "", "", 5000, "check");
@@ -241,30 +189,31 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
     }
   }
 
-  async updateRootElements(action: Action, element: ComparisonFileNode): Promise<ComparisonFileNode> {
-    let updatedElement: ComparisonFileNode;
+  async updateRootElements(
+    action: Action,
+    element: ComparisonFileNode
+  ): Promise<ComparisonFileNode> {
+    const store = this.currentWorkspaceConfig.jsonStore;
 
     switch (action) {
       case Action.Add:
-        updatedElement = await JsonManager.addComparisonFileNode(element, this.rootElements);
+      case Action.Update:
+        // Add and Update both just patch in the new subtree
+        await store.updateComparison(element);
         break;
 
       case Action.Remove:
-        updatedElement = await JsonManager.deleteComparisonFileNode(element, this.rootElements);
-        break;
-
-      case Action.Update:
-        updatedElement = await JsonManager.updateComparisonFileNode(element, this.rootElements);
+        // Remove that branch entirely
+        await store.removeComparisonSubtree(element.relativePath);
         break;
 
       default:
         throw new Error(`Unknown action: ${action}`);
     }
 
-    // Save changes to JSON after rootElements is updated
-    await this.jsonManager.updateFullJson(JsonType.COMPARE, this.rootElements);
+    this.updateDisplayedComparisonNode();
 
-    return updatedElement; // Ensure the function still returns the updated node
+    return element.updateParentDirectoriesStatus();
   }
 
   private applyViewMode(nodes: ComparisonFileNode[]): ComparisonFileNode[] {

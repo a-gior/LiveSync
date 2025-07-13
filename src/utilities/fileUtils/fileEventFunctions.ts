@@ -1,13 +1,12 @@
 import { window, commands, Uri } from "vscode";
-import { getCorrespondingPath, normalizePath, pathType } from "./filePathUtils";
+import { normalizePath, pathType } from "./filePathUtils";
 import { uploadRemoteFile, compareRemoteFileHash, deleteRemoteFile, moveRemoteFile, downloadRemoteFile, compareFileHash } from "./sftpOperations";
 import * as path from "path";
-import JsonManager from "../../managers/JsonManager";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../../managers/LogManager";
 import { FileNodeSource } from "../FileNode";
 import { listRemoteFile } from "./fileListing";
 import { ActionOn, ActionResult, Check } from "../enums";
-import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
+import { configManager } from "../../extension";
 
 function getPromptMessage(check: Check, localPath: string, remotePath: string): string {
   switch (check) {
@@ -88,14 +87,14 @@ async function checkLocalFileExistence(localPath: string) {
 
 // Update the JSON of remote files
 export async function updateRemoteFilesJsonForPaths(...filePaths: string[]) {
-  const fileNodeManager = JsonManager.getInstance();
 
   for (const filePath of filePaths) {
     
     // List the files recursively in the parent directory and update the JSON
     const remoteFileNode = await listRemoteFile(filePath);
     if (remoteFileNode) {
-      await fileNodeManager.updateRemoteFilesJson(remoteFileNode);
+      const workspaceConfig = configManager!.getConfig(remoteFileNode.workspaceFolder.uri);
+      workspaceConfig.jsonStore.updateRemote(remoteFileNode);
       
     } else {
       logErrorMessage(`Couldnt find remote file node at ${filePath}`);
@@ -182,7 +181,9 @@ export async function handleFileCheck(action: ActionOn, actionParameter: string,
           return await showOverwritePrompt(Check.remoteExists, localPath, remotePath);
         }
 
-        const actionOnUpload = WorkspaceConfigManager.getParameter<string>(ActionOn.Upload) ?? "";
+        const workspaceFolder = configManager!.getWorkspaceFolderFromPath(localPath, FileNodeSource.local);
+        const workspaceConfig = configManager!.getConfig(workspaceFolder.uri);
+        const actionOnUpload = workspaceConfig.fileEventActions.actionOnUpload;
         if(actionResult === ActionResult.DontExist &&  !actionOnUpload.includes("upload")) {
           const opName =  action.replace(/^actionOn/, '');
           logInfoMessage( `Skipping ${opName} due to 'none' parameter for uploads.`, LOG_FLAGS.ALL);
@@ -216,7 +217,10 @@ export async function handleFileCheck(action: ActionOn, actionParameter: string,
 // This function orchestrates the different file operations (e.g., move, save, delete).
 // It determines the correct action to perform based on the provided parameters and handles all necessary checks before proceeding.
 async function handleFileOperation(action: ActionOn, uri: Uri, oldUri: Uri | null = null): Promise<ActionResult> {
-  let actionParameter = WorkspaceConfigManager.getParameter<string>(action) ?? "none";
+  
+  const workspaceFolder = configManager!.getWorkspaceFolderFromPath(uri.fsPath, FileNodeSource.local);
+  const workspaceConfig = configManager!.getConfig(workspaceFolder.uri);
+  let actionParameter = workspaceConfig.fileEventActions[action];
   if (actionParameter === "none") {
     const opName =  action.replace(/^actionOn/, '');
     logInfoMessage( `Skipping ${opName} due to 'none' parameter.`, LOG_FLAGS.ALL);
@@ -225,7 +229,7 @@ async function handleFileOperation(action: ActionOn, uri: Uri, oldUri: Uri | nul
 
   // Get local and remote path from Uri
   const localPath = normalizePath(uri.fsPath);
-  const remotePath = getCorrespondingPath(localPath);
+  const remotePath = configManager!.findCorrespondingPath(localPath);
 
   // Handle check based on action parameters
   const actionResult = await handleFileCheck(action, actionParameter, localPath, remotePath);
@@ -235,7 +239,7 @@ async function handleFileOperation(action: ActionOn, uri: Uri, oldUri: Uri | nul
     switch (action) {
       case ActionOn.Move:
         if (oldUri) {
-          const remotePathOld = getCorrespondingPath(oldUri.fsPath);
+          const remotePathOld = configManager!.findCorrespondingPath(oldUri.fsPath);
           await moveRemoteFile(localPath, remotePathOld, remotePath);
           
           await updateRemoteFilesJsonForPaths(remotePathOld, remotePath);

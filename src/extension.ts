@@ -4,25 +4,16 @@ import { EventManager } from "./managers/EventManager";
 import { TreeViewManager } from "./managers/TreeViewManager";
 import { StatusBarManager } from "./managers/StatusBarManager";
 import { FileStatusDecorationProvider } from "./services/FileDecorationProvider";
-import { WorkspaceConfigManager } from "./managers/WorkspaceConfigManager";
-import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "./managers/LogManager";
-import { ConnectionManager } from "./managers/ConnectionManager";
+import { logInfoMessage } from "./managers/LogManager";
 import { CommandRegistrar } from "./services/CommandRegistrar";
-import { updateMultiRootContext, WorkspaceConfigManager2 } from "./managers/WorkspaceConfigManager2";
+import { WorkspaceConfigManager2 } from "./managers/WorkspaceConfigManager2";
+import { migrateStorageSchema } from "./services/WorkspaceJsonStore";
 
 export let configManager: WorkspaceConfigManager2 | null = null;
 
 export async function activate(context: vscode.ExtensionContext) {
   logInfoMessage("LiveSync extension activating...");
-
-  // Only activate Livesync if there is a single folder in the workspace
-  // if (WorkspaceConfigManager.isMultiRootWorkspace()) {
-  //   logErrorMessage(
-  //     "LiveSync requires a single folder in the workspace to configure correctly. Please ensure only one folder is selected.",
-  //     LOG_FLAGS.ALL
-  //   );
-  //   return;
-  // }
+  await migrateStorageSchema(context);
   
   // Register file status decoration provider
   const fileStatusDecorationProvider = new FileStatusDecorationProvider();
@@ -36,12 +27,6 @@ export async function activate(context: vscode.ExtensionContext) {
   // WorkspaceConfigManager.initialize(context);
   EventManager.initialize(context, TreeViewManager.diffProvider);
   StatusBarManager.createPermanentIcon();
-
-  // try {
-  //   await ConnectionManager.getInstance(WorkspaceConfigManager.getRemoteServerConfigured());
-  // } catch(error: any) {
-  //   logErrorMessage(error.message, LOG_FLAGS.ALL);
-  // }
 
   logInfoMessage("LiveSync extension activated.");
   

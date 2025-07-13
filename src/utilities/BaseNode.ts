@@ -1,5 +1,6 @@
 import { Uri, WorkspaceFolder } from "vscode";
-import { ChildrenNodeMap, UriMap } from "../managers/JsonManager";
+
+type ChildrenNodeMap<T> = Map<string, T>;
 
 export enum BaseNodeType {
   file = "file",
@@ -26,6 +27,7 @@ export abstract class BaseNode<T extends BaseNode<any>> {
   relativePath: string;
   children: ChildrenNodeMap<T>;
   hash: string;
+  parent?: T;
 
   constructor(data: BaseNodeData | string, workspaceFolder?: WorkspaceFolder, type?: BaseNodeType, size?: number, modifiedTime?: Date, relativePath?: string, hash?: string) {
     if (typeof data === "string") {
@@ -55,12 +57,18 @@ export abstract class BaseNode<T extends BaseNode<any>> {
     }
   }
 
-  setChildren(children: ChildrenNodeMap<T> | { [key: string]: any }): void {
-    if (children instanceof Map) {
-      this.children = children;
+  setChildren(raw: Map<string, T> | { [key: string]: any }): void {
+    let map: Map<string, T>;
+    if (raw instanceof Map) {
+      map = raw;
     } else {
-      this.children = new Map(Object.entries(children).map(([key, value]) => [key, this.fromJSON(value)]));
+      map = new Map(Object.entries(raw).map(([key, json]) => {
+        const node = this.fromJSON(json);
+        node.parent = this as unknown as T;
+        return [key, node];
+      }));
     }
+    this.children = map;
   }
 
   abstract fromJSON(json: any): T;
@@ -79,6 +87,7 @@ export abstract class BaseNode<T extends BaseNode<any>> {
   }
 
   addChild(child: T): void {
+    child.parent = child.parent ?? (this as unknown as T);
     this.children.set(child.name, child);
   }
 

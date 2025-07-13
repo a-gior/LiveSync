@@ -1,112 +1,115 @@
-const SftpClient = require("ssh2-sftp-client"); // Use CommonJS require
-import { BaseClient } from "./BaseClient";
-import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
-import { BaseNodeType } from "../utilities/BaseNode";
-import { logInfoMessage, LogManager } from "../managers/LogManager";
+// src/services/SFTPClient.ts
+import SftpClient from 'ssh2-sftp-client';
+import { BaseClient } from './BaseClient';
+import { ConfigurationMessage } from '@shared/DTOs/messages/ConfigurationMessage';
+import { BaseNodeType } from '../utilities/BaseNode';
+import { logInfoMessage, logErrorMessage, LOG_FLAGS } from '../managers/LogManager';
 
 export class SFTPClient extends BaseClient {
-  private static instance: SFTPClient;
-  private _client;
+  private client = new SftpClient();
 
-  private constructor() {
+  constructor() {
     super();
-    this._client = new SftpClient();
+    this.isConnected  = false;
+    this.isConnecting = false;
   }
 
-  static getInstance(): SFTPClient {
-    if (!SFTPClient.instance) {
-      SFTPClient.instance = new SFTPClient();
-    }
-    return SFTPClient.instance;
-  }
+  /** Establish an SFTP connection using the given configuration. */
+  public async connect(config: ConfigurationMessage['configuration']): Promise<void> {
+    if (this.isConnected || this.isConnecting) return;
 
-  async connect(config: ConfigurationMessage["configuration"]): Promise<void> {
-    const connectionOptions = {
-      ...this.getConnectionOptions(config),
-      retries: 0
-    };
-
-    await this.waitForConnection();
-
-    if (this.isConnected) {
-      return;
-    }
-
-    logInfoMessage(`Connecting using SFTP to ${config.hostname}:${config.port}`);
+    const options = this.getConnectionOptions(config) as any;
+    logInfoMessage(`SFTP: connecting to ${config.hostname}:${config.port}`);
     this.isConnecting = true;
 
-    return this._client
-      .connect(connectionOptions)
-      .then(() => {
-        this.isConnected = true;
-        this.isConnecting = false;
-        logInfoMessage("SFTP connection is ready");
-      })
-      .catch((err: any) => {
-        this.isConnecting = false;
-        this.isConnected = false;
-        throw err;
-      });
-  }
-
-  async disconnect(): Promise<void> {
-    if (this.isConnected) {
-      await this._client.end();
-      this.isConnected = false;
+    try {
+      await this.waitForConnection();
+      await this.client.connect(options);
+      this.isConnected  = true;
+      this.isConnecting = false;
+      logInfoMessage('SFTP: connection ready');
+    } catch (err: any) {
+      this.isConnected  = false;
+      this.isConnecting = false;
+      logErrorMessage(
+        `SFTP: connection error: ${err.message}`,
+        LOG_FLAGS.CONSOLE_ONLY,
+        err
+      );
+      throw err;
     }
   }
 
-  async uploadFile(localFile: string, remoteFile: string): Promise<void> {
-    await this._client.fastPut(localFile, remoteFile);
-    LogManager.log(`Uploaded ${localFile} to ${remoteFile}`);
+  /** Ends the SFTP connection if connected. */
+  public async disconnect(): Promise<void> {
+    if (!this.isConnected) return;
+    logInfoMessage('SFTP: disconnecting');
+    await this.client.end();
+    this.isConnected = false;
   }
 
-  async downloadFile(remoteFile: string, localFile: string): Promise<void> {
-    await this._client.fastGet(remoteFile, localFile);
-    LogManager.log(`Downloaded ${remoteFile} to ${localFile}`);
+  /** Uploads a local file to the remote path. */
+  public async uploadFile(localPath: string, remotePath: string): Promise<void> {
+    await this.client.fastPut(localPath, remotePath);
+    logInfoMessage(`SFTP: uploaded ${localPath} → ${remotePath}`);
   }
 
-  async createDirectory(remoteDir: string) {
-    await this._client.mkdir(remoteDir, true);
-    LogManager.log(`Created directory ${remoteDir}`);
+  /** Downloads a remote file to a local path. */
+  public async downloadFile(remotePath: string, localPath: string): Promise<void> {
+    await this.client.fastGet(remotePath, localPath);
+    logInfoMessage(`SFTP: downloaded ${remotePath} → ${localPath}`);
   }
 
-  async deleteDirectory(remoteDir: string) {
-    await this._client.rmdir(remoteDir, true);
-    LogManager.log(`Deleted directory ${remoteDir}`);
+  /** Creates a remote directory (including parents). */
+  public async createDirectory(remoteDir: string): Promise<void> {
+    await this.client.mkdir(remoteDir, true);
+    logInfoMessage(`SFTP: created directory ${remoteDir}`);
   }
 
-  async deleteFile(remoteFile: string) {
-    await this._client.delete(remoteFile);
-    LogManager.log(`Deleted ${remoteFile}`);
+  /** Deletes a remote directory (recursive). */
+  public async deleteDirectory(remoteDir: string): Promise<void> {
+    await this.client.rmdir(remoteDir, true);
+    logInfoMessage(`SFTP: deleted directory ${remoteDir}`);
   }
 
-  async listFiles(remoteDir: string, fileGlob?: any) {
-    const ret = await this._client.list(remoteDir, fileGlob);
-    LogManager.log(`Listed ${remoteDir}`);
-    return ret;
+  /** Deletes a remote file. */
+  public async deleteFile(remoteFile: string): Promise<void> {
+    await this.client.delete(remoteFile);
+    logInfoMessage(`SFTP: deleted file ${remoteFile}`);
   }
 
-  async getFileStats(remotePath: string) {
-    const ret = await this._client.stat(remotePath);
-    LogManager.log(`Fetch stats for ${remotePath}`);
-    return ret;
+  /**
+   * Lists files in a remote directory, optionally filtered by a predicate.
+   * @param remoteDir path to list
+   * @param filterFn optional function to filter the returned entries
+   */
+  public async listFiles(
+    remoteDir: string,
+    filterFn?: (info: SftpClient.FileInfo) => boolean
+  ): Promise<SftpClient.FileInfo[]> {
+    const list = await this.client.list(remoteDir);
+    logInfoMessage(`SFTP: listed ${remoteDir}`);
+    return filterFn ? list.filter(filterFn) : list;
   }
 
-  async pathType(remotePath: string): Promise<BaseNodeType | false> {
-    const result = await this._client.exists(remotePath);
-    if (result === false) {
-      return false;
-    } else if (result === "-") {
-      return BaseNodeType.file;
-    } else if (result === "d") {
-      return BaseNodeType.directory;
-    }
+  /** Retrieves stats for a remote path. */
+  public async getFileStats(remotePath: string): Promise<any> {
+    const stats = await this.client.stat(remotePath);
+    logInfoMessage(`SFTP: stats for ${remotePath}`);
+    return stats;
+  }
 
+  /** Determines if a path is a file, directory, or missing. */
+  public async pathType(remotePath: string): Promise<BaseNodeType | false> {
+    const exists = await this.client.exists(remotePath);
+    if (!exists) return false;
+    if (exists === '-') return BaseNodeType.file;
+    if (exists === 'd') return BaseNodeType.directory;
     return false;
   }
 
-  async exists(remotePath: string): Promise<boolean> {
+  /** Returns true if the remote path exists. */
+  public async exists(remotePath: string): Promise<boolean> {
     return (await this.pathType(remotePath)) !== false;
   }
 }

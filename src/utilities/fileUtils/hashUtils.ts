@@ -31,11 +31,11 @@ export async function generateHash(filePath: string, fileSource: FileNodeSource,
     return fileContentHash;
   }
 
-  return generateFolderHash(filePath);
+  return generateFolderHash(filePath, fileSource);
 }
 
-function generateFolderHash(fullPath: string) {
-  const relativePath = getRelativePath(fullPath);
+function generateFolderHash(fullPath: string, fileSource: FileNodeSource) {
+  const relativePath = getRelativePath(fullPath, fileSource);
   const hash = crypto.createHash("sha256");
 
   hash.update(`${relativePath}`);

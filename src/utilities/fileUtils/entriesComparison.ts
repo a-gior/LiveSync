@@ -1,4 +1,4 @@
-import JsonManager from "../../managers/JsonManager";
+import { configManager } from "../../extension";
 import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
 import { listLocalFiles, listRemoteFiles } from "./fileListing";
 import { getFullPaths } from "./filePathUtils";
@@ -10,7 +10,8 @@ export async function compareCorrespondingEntry(comparisonFileNode: ComparisonFi
   const remoteEntry = comparisonFileNode.status !== ComparisonStatus.added ? await listRemoteFiles(remotePath) : undefined;
 
   if (remoteEntry) {
-    JsonManager.getInstance().updateRemoteFilesJson(remoteEntry);
+    const workspaceConfig = configManager!.getConfig(remoteEntry.workspaceFolder.uri);
+    workspaceConfig.jsonStore.updateRemote(remoteEntry);
   }
 
   return ComparisonFileNode.compareFileNodes(localEntry, remoteEntry);

@@ -4,22 +4,20 @@ import { SFTPClient } from "../../services/SFTPClient";
 import { generateHash } from "./hashUtils";
 import { FileNodeSource } from "../FileNode";
 import { SSHClient } from "../../services/SSHClient";
-import { ConnectionManager } from "../../managers/ConnectionManager";
 import sftp from "ssh2-sftp-client";
 import { shouldIgnore } from "../shouldIgnore";
 import { LOG_FLAGS, logErrorMessage } from "../../managers/LogManager";
 import { BaseNodeType } from "../BaseNode";
-import JsonManager, { isFileNodeMap, JsonType } from "../../managers/JsonManager";
-import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 import { pathExists, pathType } from "./filePathUtils";
 import { uploadDirectory } from "./directoryOperations";
 import { TreeViewManager } from "../../managers/TreeViewManager";
+import { configManager } from "../../extension";
 
 export async function moveRemoteFile(newLocalPath:string, oldRemotePath: string, newRemotePath: string): Promise<void> {
-  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = await ConnectionManager.getInstance(configuration);
+  const folder = configManager!.getWorkspaceFolderFromPath(oldRemotePath, FileNodeSource.remote);
+  const connectionService = configManager!.getConfig(folder.uri).connectionService;
 
-  if (shouldIgnore(oldRemotePath)) {
+  if (shouldIgnore(folder, oldRemotePath)) {
     return;
   }
 
@@ -34,7 +32,7 @@ export async function moveRemoteFile(newLocalPath:string, oldRemotePath: string,
 
     } else {
       // oldRemotePath exists, we can move and rename the file or directory
-      await connectionManager.doSSHOperation(async (sshClient: SSHClient) => {
+      await connectionService.withSSH(async (sshClient: SSHClient) => {
         await sshClient.move(oldRemotePath, newRemotePath);
       });
 
@@ -46,15 +44,15 @@ export async function moveRemoteFile(newLocalPath:string, oldRemotePath: string,
 }
 
 export async function deleteRemoteFile(remotePath: string): Promise<void> {
-  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = await ConnectionManager.getInstance(configuration);
+  const folder = configManager!.getWorkspaceFolderFromPath(remotePath, FileNodeSource.remote);
+  const connectionService = configManager!.getConfig(folder.uri).connectionService;
 
-  if (shouldIgnore(remotePath)) {
+  if (shouldIgnore(folder, remotePath)) {
     return;
   }
 
   try {
-    await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+    await connectionService.withSFTP(async (sftpClient: SFTPClient) => {
       const remoteNodeType = await pathType(remotePath, FileNodeSource.remote);
 
       switch(remoteNodeType) {
@@ -79,14 +77,14 @@ export async function deleteRemoteFile(remotePath: string): Promise<void> {
 }
 
 export async function downloadRemoteFile(remotePath: string, localPath: string): Promise<void> {
-  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = await ConnectionManager.getInstance(configuration);
+  const folder = configManager!.getWorkspaceFolderFromPath(remotePath, FileNodeSource.remote);
+  const connectionService = configManager!.getConfig(folder.uri).connectionService;
 
-  if (shouldIgnore(remotePath)) {
+  if (shouldIgnore(folder, remotePath)) {
     return;
   }
 
-  await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+  await connectionService.withSFTP(async (sftpClient: SFTPClient) => {
     const remoteNodeType = await pathType(remotePath, FileNodeSource.remote);
 
     switch(remoteNodeType) {
@@ -113,14 +111,14 @@ export async function downloadRemoteFile(remotePath: string, localPath: string):
 }
 
 export async function uploadRemoteFile(localPath: string, remotePath: string): Promise<void> {
-  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = await ConnectionManager.getInstance(configuration);
+  const folder = configManager!.getWorkspaceFolderFromPath(remotePath, FileNodeSource.remote);
+  const connectionService = configManager!.getConfig(folder.uri).connectionService;
 
-  if (shouldIgnore(localPath)) {
+  if (shouldIgnore(folder, localPath)) {
     return;
   }
 
-  await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+  await connectionService.withSFTP(async (sftpClient: SFTPClient) => {
     const localNodeType = await pathType(localPath, FileNodeSource.local);
 
     switch(localNodeType) {
@@ -147,19 +145,12 @@ export async function uploadRemoteFile(localPath: string, remotePath: string): P
 
 // Compare remote file hash with stored remote hash
 export async function compareRemoteFileHash(remotePath: string): Promise<boolean> {
+  const folder = configManager!.getWorkspaceFolderFromPath(remotePath, FileNodeSource.remote);
+  const workspaceConfig = configManager!.getConfig(folder.uri);
+
   try {
     // Get the remote JSON entries
-    const remoteFileEntriesMap = await JsonManager.getInstance().getFileEntriesMap(JsonType.REMOTE);
-    if (!remoteFileEntriesMap || !isFileNodeMap(remoteFileEntriesMap)) {
-      logErrorMessage(`No remote JSON found`);
-      return false;
-    }
-    const remoteEntry = await JsonManager.findNodeByPath(remotePath, remoteFileEntriesMap);
-    if (!remoteEntry) {
-      logErrorMessage(`No remote FileNode found for ${remotePath}`);
-      return false;
-    }
-
+    const remoteEntry = workspaceConfig.jsonStore.findRemoteNode(remotePath);
     const remoteFileHash = await generateHash(remotePath, FileNodeSource.remote, BaseNodeType.file);
 
     return remoteEntry.hash === remoteFileHash;
@@ -170,14 +161,14 @@ export async function compareRemoteFileHash(remotePath: string): Promise<boolean
 }
 
 export async function getRemoteFileContentHash(remotePath: string): Promise<string | undefined> {
-  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = await ConnectionManager.getInstance(configuration);
+  const folder = configManager!.getWorkspaceFolderFromPath(remotePath, FileNodeSource.remote);
+  const connectionService = configManager!.getConfig(folder.uri).connectionService;
 
   const command = `sha256sum "${remotePath}" | awk '{ print $1 }'`;
   let fileHash: string | undefined;
 
   try {
-    await connectionManager.doSSHOperation(async (sshClient: SSHClient) => {
+    await connectionService.withSSH(async (sshClient: SSHClient) => {
       const hash = await sshClient.executeCommand(command);
       fileHash = hash.trim(); // Ensure any extra whitespace is removed
     }, `Getting hash of ${remotePath}`);
@@ -189,11 +180,11 @@ export async function getRemoteFileContentHash(remotePath: string): Promise<stri
 }
 
 export async function getRemoteFileMetadata(remotePath: string): Promise<sftp.FileStats | undefined> {
-  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = await ConnectionManager.getInstance(configuration);
+  const folder = configManager!.getWorkspaceFolderFromPath(remotePath, FileNodeSource.remote);
+  const connectionService = configManager!.getConfig(folder.uri).connectionService;
 
   try {
-    return await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+    return await connectionService.withSFTP(async (sftpClient: SFTPClient) => {
       return await sftpClient.getFileStats(remotePath);
     }, `Get data from ${remotePath}`);
   } catch (err: any) {
@@ -215,10 +206,10 @@ export async function compareFileHash(
 }
 
 export async function remotePathType(remotePath: string) {
-  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = await ConnectionManager.getInstance(configuration);
+  const folder = configManager!.getWorkspaceFolderFromPath(remotePath, FileNodeSource.remote);
+  const connectionService = configManager!.getConfig(folder.uri).connectionService;
   
-  return await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+  return await connectionService.withSFTP(async (sftpClient: SFTPClient) => {
     return await sftpClient.pathType(remotePath);
   }, `Checking if ${remotePath} exists`);
 }

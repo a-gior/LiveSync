@@ -2,19 +2,18 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import * as vscode from "vscode";
 import { FileNode, FileNodeSource } from "../FileNode";
-import { ConnectionManager } from "../../managers/ConnectionManager";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../../managers/LogManager";
 import { shouldIgnore } from "../shouldIgnore";
 import { generateHash } from "./hashUtils";
 import { StatusBarManager } from "../../managers/StatusBarManager";
 import { BaseNodeType } from "../BaseNode";
 import { normalizePath, pathType, splitParts } from "./filePathUtils";
-import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 import fg, { Entry } from "fast-glob";
 import pMap from "p-map";
 import { createHash } from "crypto";
 import { Stats } from "fs";
 import { configManager } from "../../extension";
+import { WorkspaceConfig } from "../../managers/WorkspaceConfigManager2";
 
 //
 // ─── LOCAL FILE LISTING ─────────────────────────────────────────────────────────
@@ -53,7 +52,7 @@ async function traverseLocalTree(
   const queue: FileNode[] = [root];
   while (queue.length) {
     const cur = queue.shift()!;
-    if (shouldIgnore(cur.fullPath)) {continue;}
+    if (shouldIgnore(workspaceFolder, cur.fullPath)) {continue;}
 
     let entries: Entry[];
     try {
@@ -70,7 +69,7 @@ async function traverseLocalTree(
     for (const e of entries) {
       if (!e.stats) {continue;}
       const fullPath = normalizePath(path.join(cur.fullPath, e.path));
-      if (shouldIgnore(fullPath)) {continue;}
+      if (shouldIgnore(workspaceFolder, fullPath)) {continue;}
 
       const isDir = e.stats.isDirectory();
       const child = new FileNode(
@@ -139,8 +138,6 @@ export async function listLocalFiles(localDir: string): Promise<FileNode|undefin
 export async function listRemoteFiles(
   remoteDir: string
 ): Promise<FileNode | undefined> {
-  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = await ConnectionManager.getInstance(configuration);
 
   if (!(await pathType(remoteDir, FileNodeSource.remote))) {
     logErrorMessage(
@@ -151,8 +148,9 @@ export async function listRemoteFiles(
   }
 
   const folder = configManager!.getWorkspaceFolderFromPath(remoteDir, FileNodeSource.remote);
+  const connectionService = configManager!.getConfig(folder.uri).connectionService;
 
-  return connectionManager.doSSHOperation(
+  return connectionService.withSSH(
     async (sshClient) => {
 
       // 1) Fetch all directory metadata (path,size,mtime,type) in one stat batch
@@ -182,7 +180,7 @@ export async function listRemoteFiles(
           continue;
         }
         const fullPath = parts[0];
-        if (shouldIgnore(fullPath)) {
+        if (shouldIgnore(folder, fullPath)) {
           continue;
         }
 
@@ -214,7 +212,7 @@ export async function listRemoteFiles(
           continue;
         }
         const fullPath = parts[0];
-        if (shouldIgnore(fullPath)) {
+        if (shouldIgnore(folder, fullPath)) {
           StatusBarManager.step();
           continue;
         }
@@ -334,13 +332,12 @@ export async function listRemoteFiles(
 
 
 export async function listRemoteFile(remoteFilePath: string): Promise<FileNode | undefined> {
-  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = await ConnectionManager.getInstance(configuration);
   
   const folder = configManager!.getWorkspaceFolderFromPath(remoteFilePath, FileNodeSource.remote);
+  const connectionService = configManager!.getConfig(folder.uri).connectionService;
 
   // Try to fetch as a single file
-  const fileNode = await connectionManager.doSSHOperation(
+  const fileNode = await connectionService.withSSH(
     async (sshClient) => {
       // 1) is it a regular file?
       const fileCheckCmd = `[ -f "${remoteFilePath}" ] && echo "true" || echo "false"`;
@@ -437,6 +434,7 @@ export function parseRemoteItemCount(rawOutput: string): number {
  *    add them to the ignore list, log a summary, and return them.
  */
 export async function syncRemoteDeniedPaths(
+  workspaceConfig: WorkspaceConfig,
   rawOutput: string
 ): Promise<string[]> {
   const lines = rawOutput.trim().split('\n');
@@ -451,7 +449,7 @@ export async function syncRemoteDeniedPaths(
     .filter((p): p is string => !!p);
 
   if (paths.length) {
-    await WorkspaceConfigManager.addToIgnoreList(...paths);
+    await workspaceConfig.addToIgnoreList(...paths);
     logErrorMessage(
       `Skipped ${paths.length} inaccessible remote paths:\n` +
         paths.map(p => `  • ${p}`).join('\n'),

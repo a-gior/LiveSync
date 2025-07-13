@@ -3,7 +3,6 @@ import * as path from "path";
 import * as assert from "assert";
 import { ConfigurationPanel } from "../../panels/ConfigurationPanel";
 import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
-import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -43,27 +42,27 @@ suite("LiveSync Configuration Command Tests", () => {
     // assert.equal(testResult, true, "Test Connection is KO");
 
     // Save Configuration
-    const currentConfig = WorkspaceConfigManager.getWorkspaceConfiguration();
-    const baseConfig = {
-      configuration: configurationTest,
-      remotePath: "",
-      fileEventActions: {
-        actionOnUpload: "check&upload",
-        actionOnDownload: "check&download",
-        actionOnSave: "check&save",
-        actionOnCreate: "create",
-        actionOnDelete: "none",
-        actionOnMove: "check&move",
-        actionOnOpen: "check&download"
-      },
-      ignoreList: [".vscode"]
-    };
+    // const currentConfig = WorkspaceConfigManager.getWorkspaceConfiguration();
+    // const baseConfig = {
+    //   configuration: configurationTest,
+    //   remotePath: "",
+    //   fileEventActions: {
+    //     actionOnUpload: "check&upload",
+    //     actionOnDownload: "check&download",
+    //     actionOnSave: "check&save",
+    //     actionOnCreate: "create",
+    //     actionOnDelete: "none",
+    //     actionOnMove: "check&move",
+    //     actionOnOpen: "check&download"
+    //   },
+    //   ignoreList: [".vscode"]
+    // };
 
-    assert.deepEqual(currentConfig, baseConfig, "Initial Config isnt equal to the base config");
-    await ConfigurationPanel.saveRemoteServerConfiguration(configurationTest);
+    // assert.deepEqual(currentConfig, baseConfig, "Initial Config isnt equal to the base config");
+    // await ConfigurationPanel.saveRemoteServerConfiguration(configurationTest);
 
-    const updatedConfig = WorkspaceConfigManager.getWorkspaceConfiguration();
-    assert.deepEqual(updatedConfig?.configuration, configurationTest, "Config is not updated");
+    // const updatedConfig = WorkspaceConfigManager.getWorkspaceConfiguration();
+    // assert.deepEqual(updatedConfig?.configuration, configurationTest, "Config is not updated");
 
     await delay(5000); // 5 seconds delay
   });

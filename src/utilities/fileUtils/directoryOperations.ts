@@ -2,14 +2,14 @@ import * as fs from "fs";
 import * as path from "path";
 import { SFTPClient } from "../../services/SFTPClient";
 import { getFullPaths, getRelativePath, normalizePath } from "./filePathUtils";
-import { ConnectionManager } from "../../managers/ConnectionManager";
 import pLimit = require("p-limit");
 import { BaseNodeType } from "../BaseNode";
 import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
-import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 import { SSHClient } from "../../services/SSHClient";
 import { LOG_FLAGS, logErrorMessage } from "../../managers/LogManager";
 import { shouldIgnore } from "../shouldIgnore";
+import { configManager } from "../../extension";
+import { FileNodeSource } from "../FileNode";
 
 // Set a limit for the number of concurrent file operations, from 10 onwards triggers a warning for too much event listeners
 const limit = pLimit(9);
@@ -21,7 +21,7 @@ async function createRemoteDirectories(fileEntry: ComparisonFileNode) {
   const traverseNode = async (node: ComparisonFileNode) => {
     const { localPath, remotePath } = await getFullPaths(node);
     
-    if(shouldIgnore(remotePath)) {
+    if(shouldIgnore(fileEntry.workspaceFolder, remotePath)) {
       return;
     }
 
@@ -55,16 +55,15 @@ async function uploadFilesWithLimit(sftpClient: SFTPClient, filePaths: { localPa
 }
 
 export async function uploadDirectory(rootEntry: ComparisonFileNode) {
-  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = await ConnectionManager.getInstance(configuration);
+  const workspaceConfig = configManager!.getConfig(rootEntry.workspaceFolder.uri);
 
   try {
-    await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+    await workspaceConfig.connectionService.withSFTP(async (sftpClient: SFTPClient) => {
       // Step 1: Collect remote directories and  file paths
       const { directoriesToCreate, filePaths } = await createRemoteDirectories(rootEntry);
 
       // Step 2: Create directories via SSH command
-      await connectionManager.doSSHOperation(async (sshClient: SSHClient) => {
+      await workspaceConfig.connectionService.withSSH(async (sshClient: SSHClient) => {
         await sshClient.createDirectoriesBatch(directoriesToCreate);
       });
 
@@ -77,14 +76,13 @@ export async function uploadDirectory(rootEntry: ComparisonFileNode) {
 }
 
 async function createLocalDirectories(node: ComparisonFileNode) {
-  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = await ConnectionManager.getInstance(configuration);
+  const workspaceConfig = configManager!.getConfig(node.workspaceFolder.uri);
   const filePaths: { remotePath: string; localPath: string }[] = [];
 
   const createDir = async (node: ComparisonFileNode) => {
     const { localPath, remotePath } = await getFullPaths(node);
 
-    if(shouldIgnore(remotePath)) {
+    if(shouldIgnore(node.workspaceFolder, remotePath)) {
       return;
     }
 
@@ -92,7 +90,7 @@ async function createLocalDirectories(node: ComparisonFileNode) {
 
       let remoteEntries: Array<{ name: string; type: string; size: number; modifyTime: number }>;
       try {
-        remoteEntries = await connectionManager.doSFTPOperation(
+        remoteEntries = await workspaceConfig.connectionService.withSFTP(
           async (sftpClient: SFTPClient) =>
             sftpClient.listFiles(remotePath)
         );
@@ -118,7 +116,7 @@ async function createLocalDirectories(node: ComparisonFileNode) {
           remoteEntry.type === "d" ? BaseNodeType.directory : BaseNodeType.file,
           remoteEntry.size,
           new Date(remoteEntry.modifyTime * 1000),
-          getRelativePath(fullLocalPath),
+          getRelativePath(fullLocalPath, FileNodeSource.local),
           ComparisonStatus.unchanged
         );
         await createDir(childEntry);
@@ -138,11 +136,10 @@ async function downloadFilesWithLimit(sftpClient: SFTPClient, filePaths: { remot
 }
 
 export async function downloadDirectory(remoteEntry: ComparisonFileNode) {
-  const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-  const connectionManager = await ConnectionManager.getInstance(configuration);
+  const workspaceConfig = configManager!.getConfig(remoteEntry.workspaceFolder.uri);
 
   try {
-    await connectionManager.doSFTPOperation(async (sftpClient: SFTPClient) => {
+    await workspaceConfig.connectionService.withSFTP(async (sftpClient: SFTPClient) => {
       // Step 1: Create local directories and collect file paths
       const filePaths = await createLocalDirectories(remoteEntry);
 

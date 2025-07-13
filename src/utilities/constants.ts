@@ -44,3 +44,5 @@ export const DEFAULT_WORKSPACE_CONFIG: WorkspaceConfigFile = {
   // Ignore list
   ignoreList: ['.vscode'],
 };
+
+export const JSON_SCHEMA_VERSION = 2;

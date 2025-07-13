@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import { FileNode } from "../utilities/FileNode";
+import { FileNode, FileNodeSource } from "../utilities/FileNode";
 import { SyncTreeDataProvider } from "./SyncTreeDataProvider";
 
 import {
@@ -13,13 +13,11 @@ import {
   fileUpload
 } from "../utilities/fileUtils/fileEventFunctions";
 import { ComparisonFileNode, ComparisonStatus } from "../utilities/ComparisonFileNode";
-import JsonManager from "../managers/JsonManager";
 import { Action, ActionOn, ActionResult } from "../utilities/enums";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../managers/LogManager";
 import { getFullPaths, getRelativePath } from "../utilities/fileUtils/filePathUtils";
-import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 import { CommandManager } from "../managers/CommandManager";
-import { TreeViewManager } from "../managers/TreeViewManager";
+import { configManager } from "../extension";
 
 export class FileEventHandler {
   
@@ -82,18 +80,6 @@ export class FileEventHandler {
           FileEventHandler.handleFileSave,
           [document, treeDataProvider]
         );
-      }),
-  
-      vscode.workspace.onDidChangeConfiguration(() => {
-        CommandManager.queueExecution(
-          'onDidChangeConfiguration',
-          async () => {
-            if (WorkspaceConfigManager.isVscodeSettingsValid) {
-              WorkspaceConfigManager.reload();
-            }
-          },
-          []
-        );
       })
     );
   }
@@ -131,7 +117,7 @@ export class FileEventHandler {
         if (filePath === settingsPath) {
           if (action === Action.Save) {
             logInfoMessage(`<handleFile${action}> Detected configuration file at ${filePath}, reloading workspace configuration.`);
-            WorkspaceConfigManager.reload();
+            
           } else {
             logInfoMessage(`<handleFile${action}> Detected configuration file at ${filePath}, skipping further processing of this event.`);
           }
@@ -217,7 +203,7 @@ export class FileEventHandler {
 
       try {
         // Get node from rootElements
-        const nodeToDelete = await JsonManager.findNodeByPath(filePath, treeDataProvider.rootElements);
+        const nodeToDelete = treeDataProvider.currentWorkspaceConfig.jsonStore.findComparisonNode(filePath);
         if (!nodeToDelete) {
           console.warn(`<handleFileDelete> Node not found for ${filePath}`);
           return;
@@ -259,7 +245,7 @@ export class FileEventHandler {
 
     try {
       // Get node from rootElements
-      const nodeToSave = await JsonManager.findNodeByPath(filePath, treeDataProvider.rootElements);
+      const nodeToSave = treeDataProvider.currentWorkspaceConfig.jsonStore.findComparisonNode(filePath);
       if (!nodeToSave) {
         console.warn(`<handleFileSave> Node not found for ${filePath}`);
         return;
@@ -303,7 +289,7 @@ export class FileEventHandler {
 
       try {
         // Get node from rootElements
-        const nodeToMove = await JsonManager.findNodeByPath(oldPath, treeDataProvider.rootElements);
+        const nodeToMove = treeDataProvider.currentWorkspaceConfig.jsonStore.findComparisonNode(oldPath);
         if (!nodeToMove) {
           logErrorMessage(`<handleFileRename> Node not found for ${oldPath}`);
           continue;
@@ -322,8 +308,8 @@ export class FileEventHandler {
 
 
         // Update the relative path of the node and its children
-        const oldFileNodeRelativePath = getRelativePath(oldPath);
-        const newFileNodeRelativePath = getRelativePath(newPath);
+        const oldFileNodeRelativePath = getRelativePath(oldPath, FileNodeSource.local);
+        const newFileNodeRelativePath = getRelativePath(newPath, FileNodeSource.local);
         FileEventHandler.rebaseRelativePaths(nodeToAdd, oldFileNodeRelativePath, newFileNodeRelativePath);
 
         FileEventHandler.updateNodeStatus(nodeToAdd, ActionOn.Move, fileMoveAction);
@@ -351,7 +337,7 @@ export class FileEventHandler {
     logInfoMessage(`<handleFileOpen> Event opening ${filePath}`);
 
     try {
-      const openedNode = await JsonManager.findNodeByPath(filePath, treeDataProvider.rootElements);
+      const openedNode = treeDataProvider.currentWorkspaceConfig.jsonStore.findComparisonNode(filePath);
       if (!openedNode) {
         logInfoMessage(`<handleFileOpen> Node not found for ${filePath}`);
         return;
@@ -463,11 +449,8 @@ export class FileEventHandler {
     result: ActionResult
   ): Promise<void> {
     // Find the node’s previous state (before we performed the remote action)
-    const oldNode = await JsonManager.findNodeByPath(
-      node.relativePath,
-      TreeViewManager.diffProvider.rootElements,
-      node.workspaceFolder.uri
-    );
+    const workspaceConfig = configManager!.getConfig(node.workspaceFolder.uri);
+    const oldNode = workspaceConfig.jsonStore.findComparisonNode(node.relativePath);
 
     switch (actionOn) {
       // ——————— CREATE ———————

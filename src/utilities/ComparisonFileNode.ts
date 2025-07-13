@@ -1,11 +1,10 @@
 import { BaseNode, BaseNodeData, BaseNodeType } from "./BaseNode";
 import { FileNode } from "./FileNode";
-import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 import { splitParts } from "./fileUtils/filePathUtils";
-import JsonManager from "../managers/JsonManager";
 import { StatusBarManager } from "../managers/StatusBarManager";
 import { logInfoMessage } from "../managers/LogManager";
 import { Uri, WorkspaceFolder } from "vscode";
+import { configManager } from "../extension";
 
 export enum ComparisonStatus {
   added = "added",
@@ -174,59 +173,30 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
   /**
    * Updates the status of parent directories based on the status of their children.
    * If all children are `unchanged`, the parent directory is marked as `unchanged`.
-   * @param rootEntries The root elements map (from TreeDataProvider).
-   * @param relativePath The relative path of the modified node.
+   * @param element The modified node.
+   * @returns the highest‐level folder whose status was updated (or `element` if none)
    */
-  static async updateParentDirectoriesStatus(
-    rootEntries: Map<Uri, ComparisonFileNode>,
-    element: ComparisonFileNode
-  ): Promise<ComparisonFileNode> {
-    const rootNode = rootEntries.get(element.workspaceFolder.uri);
-    if (!rootNode || !rootNode.isDirectory()) {
-      console.error(`Root "${element.workspaceFolder.uri}" not found or not a directory.`);
-      return element;
-    }
-  
-    const parts = splitParts(element.relativePath);
-    const parents = parts.slice(0, -1);
-  
-    // Fast-path bail for pure add/remove
-    if (parents.length > 0) {
-      const firstParentRel = parents.join("/");
-      const firstParent = await JsonManager.findNodeByPath(firstParentRel, rootEntries, element.workspaceFolder.uri);
-      if (
-        (element.status === ComparisonStatus.added   && firstParent?.status === ComparisonStatus.added) ||
-        (element.status === ComparisonStatus.removed && firstParent?.status === ComparisonStatus.removed)
-      ) {
-        return element;
-      }
-    }
-  
-    let topMostUpdated: ComparisonFileNode | null = null;
-  
-    // Walk up
-    for (let depth = parents.length; depth > 0; depth--) {
-      const relPath = parents.slice(0, depth).join("/");
-      const folder = await JsonManager.findNodeByPath(relPath, rootEntries, element.workspaceFolder.uri);
-      if (!folder || !folder.isDirectory()) {break;}
-  
-      // If any child changed, mark modified
-      const anyChanged = Array.from(folder.children.values())
-        .some(c => c.status !== ComparisonStatus.unchanged);
-  
-      if (!anyChanged && folder.status !== ComparisonStatus.unchanged) {
-        folder.status = ComparisonStatus.unchanged;
-        topMostUpdated = folder;
-      } else if(!anyChanged) {
-        break;
-      } else if (folder.status !== ComparisonStatus.modified) {
-        folder.status = ComparisonStatus.modified;
-        topMostUpdated = folder;
+  updateParentDirectoriesStatus(): ComparisonFileNode {
+    let current: ComparisonFileNode = this;
+    let topMost: ComparisonFileNode = this;
+
+    while (current.parent) {
+      const parent = current.parent;
+      const anyChanged = parent.listChildren().some(c => c.status !== ComparisonStatus.unchanged);
+
+      const desired = anyChanged
+        ? ComparisonStatus.modified
+        : ComparisonStatus.unchanged;
+
+      if (parent.status !== desired) {
+        parent.status = desired;
+        topMost = parent;
+        current = parent;
       } else {
         break;
       }
     }
-  
-    return topMostUpdated ?? element;
+
+    return topMost;
   }
 }

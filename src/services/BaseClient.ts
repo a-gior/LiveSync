@@ -13,6 +13,14 @@ export abstract class BaseClient {
   abstract connect(config: ConfigurationMessage["configuration"]): Promise<void>;
   abstract disconnect(): Promise<void>;
 
+  public get connected(): boolean {
+    return this.isConnected;
+  }
+
+  public get connecting(): boolean {
+    return this.isConnecting;
+  }
+
   async waitForConnection(): Promise<void> {
     const timeout = 5000;
     const pause = 1000;

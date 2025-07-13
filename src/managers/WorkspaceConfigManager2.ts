@@ -7,7 +7,11 @@ import { ConnectionSettings } from "../DTOs/config/ConnectionSettings";
 import { FileEventActions } from "../DTOs/config/FileEventActions";
 import { Minimatch } from "minimatch";
 import { FileNodeSource } from "../utilities/FileNode";
-import { getCorrespondingPath, normalizePath, PathPair } from "../utilities/fileUtils/filePathUtils";
+import { normalizePath, PathPair } from "../utilities/fileUtils/filePathUtils";
+import * as crypto from "crypto";
+import { TreeViewManager } from "./TreeViewManager";
+import { WorkspaceJsonStore } from "../services/WorkspaceJsonStore";
+import { ConnectionService } from "../services/ConnectionService";
 
 export enum WorkspaceType {
     SingleRoot,
@@ -316,25 +320,25 @@ export class WorkspaceConfigManager2 {
         return pathPairs;
     }
 
-    findCorrespondingLocalPath(remotePath: string) {
+    findCorrespondingPath(fullPath: string) {
     
-        const normalizedPath = normalizePath(remotePath);
+        const normalizedPath = normalizePath(fullPath);
         const pathPairs = this.getPathPairs();
 
         for( const pathPair of pathPairs) {
 
-            // Check if the inputPath is a local path
+            // If the inputPath is a local path
             if (normalizedPath.startsWith(normalizePath(pathPair.localPath))) {
-                return path.join(remotePath, path.relative(pathPair.localPath, normalizedPath)).replace(/\\/g, "/");
+                return path.join(pathPair.remotePath, path.relative(pathPair.localPath, normalizedPath));
             }
 
-            // Check if the inputPath is a remote path
+            // If the inputPath is a remote path
             if (normalizedPath.startsWith(normalizePath(pathPair.remotePath))) {
-                return path.join(pathPair.localPath, path.relative(pathPair.remotePath, normalizedPath)).replace(/\\/g, "/");
+                return path.join(pathPair.localPath, path.relative(pathPair.remotePath, normalizedPath));
             }
         }
 
-        throw new Error(`Couldnt find corresponding path of ${remotePath}`);
+        throw new Error(`Couldnt find corresponding path of ${fullPath}`);
     }
 
     getWorkspaceFolderFromPath(fullPath: string, source: FileNodeSource): WorkspaceFolder {
@@ -343,7 +347,7 @@ export class WorkspaceConfigManager2 {
             localPath = fullPath;
         } else {
             // remote path
-            localPath = this.findCorrespondingLocalPath(fullPath);
+            localPath = this.findCorrespondingPath(fullPath);
         }
 
         const fileUri = Uri.file(localPath);
@@ -359,23 +363,32 @@ export class WorkspaceConfig {
     private readonly _folder: WorkspaceFolder;
     private _workspaceConfig: WorkspaceConfigFile;
     private _compiledIgnoreMatchers: Minimatch[] | null = null;
+    public readonly jsonStore: WorkspaceJsonStore;
+    public readonly connectionService: ConnectionService;
 
     private constructor(folder: WorkspaceFolder, config: WorkspaceConfigFile) {
         this._folder = folder;
         this._workspaceConfig = config;
+
+        this.jsonStore = new WorkspaceJsonStore(folder.uri);
+        this.connectionService = new ConnectionService(this.connectionSettings);
+    }
+
+    public async initialize() {
+        await this.jsonStore.loadAll();
     }
 
     public get folder(): WorkspaceFolder {
         return this._folder;
     }
 
-    /** The folder’s human-readable name */
+    /** The folder’s  name */
     public get folderName(): string {
         return this._folder.name;
     }
 
     /** The raw configuration block (hostname/port/username/etc) */
-    public get connectionSettings(): ConnectionSettings | undefined {
+    public get connectionSettings(): ConnectionSettings {
         const {
         hostname,
         port,
@@ -527,7 +540,9 @@ export class WorkspaceConfig {
             ...parsed
         };
 
-        return new WorkspaceConfig(folder, fullConfig);
+        const workspaceConfig = new WorkspaceConfig(folder, fullConfig);
+        await workspaceConfig.initialize();
+        return workspaceConfig;
     }
 
     /**

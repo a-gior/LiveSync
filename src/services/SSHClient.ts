@@ -1,158 +1,159 @@
-import { Client, ConnectConfig } from "ssh2";
-import { BaseClient } from "./BaseClient";
-import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
-import { LOG_FLAGS, logErrorMessage, logInfoMessage, LogManager } from "../managers/LogManager";
+// src/services/SSHClient.ts
+import { Client, ConnectConfig } from 'ssh2';
+import { BaseClient } from './BaseClient';
+import { ConfigurationMessage } from '@shared/DTOs/messages/ConfigurationMessage';
+import { LOG_FLAGS, logErrorMessage, logInfoMessage } from '../managers/LogManager';
 
 export class SSHClient extends BaseClient {
-  private static instance: SSHClient;
-  private _client: Client;
+  private readonly client = new Client();
 
-  private constructor() {
+  constructor() {
     super();
-    this._client = new Client();
+    // reset flags in case BaseClient left them set
+    this.isConnecting = false;
+    this.isConnected  = false;
   }
 
-  static getInstance(): SSHClient {
-    if (!SSHClient.instance) {
-      SSHClient.instance = new SSHClient();
-    }
-    return SSHClient.instance;
-  }
-
-  async connect(config: ConfigurationMessage["configuration"]): Promise<void> {
-    const connectionOptions: ConnectConfig = this.getConnectionOptions(config);
-
-    await this.waitForConnection();
-
-    if (this.isConnected) {
+  /**
+   * Opens an SSH connection using the provided settings.
+   */
+  public async connect(config: ConfigurationMessage['configuration']): Promise<void> {
+    if (this.isConnected || this.isConnecting) {
       return;
     }
+    const options: ConnectConfig = this.getConnectionOptions(config);
 
-    logInfoMessage(`Connecting using SSH to ${config.hostname}:${config.port}`);
+    logInfoMessage(`SSH: connecting to ${config.hostname}:${config.port}`);
     this.isConnecting = true;
 
     return new Promise((resolve, reject) => {
-      this._client
-        .on("ready", () => {
+      this.client
+        .on('ready', () => {
           this.isConnecting = false;
-          this.isConnected = true;
-          logInfoMessage("SSH connection is ready");
+          this.isConnected  = true;
+          logInfoMessage('SSH: connection ready');
           resolve();
         })
-        .on("connect", () => {
-          logInfoMessage("SSH connection is connected");
-        })
-        .on("close", () => {
+        .on('error', (err) => {
           this.isConnecting = false;
-          this.isConnected = false;
-          logInfoMessage("SSH connection is closed");
-        })
-        .on("timeout", () => {
-          this.isConnecting = false;
-          this.isConnected = false;
-          logInfoMessage("SSH connection timed out");
-          reject(new Error("Connection timeout"));
-        })
-        .on("error", (err) => {
-          this.isConnecting = false;
-          this.isConnected = false;
-          logErrorMessage("SSH connection error:", LOG_FLAGS.CONSOLE_ONLY, err);
+          this.isConnected  = false;
+          logErrorMessage(
+            `SSH: connection error: ${err.message}`,
+            LOG_FLAGS.CONSOLE_ONLY,
+            err
+          );
           reject(err);
         })
-        .connect(connectionOptions);
+        .on('close', () => {
+          this.isConnecting = false;
+          this.isConnected  = false;
+          logInfoMessage('SSH: connection closed');
+        })
+        .on('timeout', () => {
+          this.isConnecting = false;
+          this.isConnected  = false;
+          logErrorMessage('SSH: connection timed out', LOG_FLAGS.CONSOLE_ONLY);
+          reject(new Error('SSH connection timed out'));
+        })
+        .connect(options);
     });
   }
 
-  async disconnect(): Promise<void> {
-    logInfoMessage(`Disconnecting SSH. isConnected: ${this.isConnected}`);
+  /**
+   * Closes the SSH connection, if open.
+   */
+  public async disconnect(): Promise<void> {
     if (this.isConnected) {
-      this._client.end();
+      logInfoMessage('SSH: disconnecting');
+      this.client.end();
       this.isConnected = false;
     }
   }
 
-  async executeCommand(command: string, dataCallback?: (data: string) => void): Promise<string> {
+  /**
+   * Executes a shell command over SSH, collecting stdout/stderr.
+   */
+  public async executeCommand(
+    command: string,
+    dataCallback?: (chunk: string) => void
+  ): Promise<string> {
+    if (!this.isConnected) {
+      throw new Error('SSHClient: not connected');
+    }
+
     return new Promise((resolve, reject) => {
-      this._client.exec(command, (err, stream) => {
-        if (err) {return reject(err);}
-        let output = "";
-        let lineBuf = "";
+      let output = '';
+      let buffer = '';
 
-        const onData = (data: string) => {
-          lineBuf += data;
-          const parts = lineBuf.split("\n");
-          lineBuf = parts.pop()!;         // last piece is partial
-          for (const line of parts) {
-            if (dataCallback) {dataCallback(line + "\n");}
-          }
-        };
-        
+      const onData = (chunk: string) => {
+        buffer += chunk;
+        const parts = buffer.split('\n');
+        buffer = parts.pop()!;
+        for (const line of parts) {
+          dataCallback?.(line + '\n');
+        }
+      };
+
+      this.client.exec(command, (err, stream) => {
+        if (err) {
+          return reject(err);
+        }
         stream
-          .on("close", (code: number, signal: string) => {
-            // 1) Flush any leftover
-            if (lineBuf && dataCallback) {
-              dataCallback(lineBuf);
+          .on('data',   (b: Buffer) => { const s = b.toString(); output += s; onData(s); })
+          .stderr.on('data', (b: Buffer) => { const s = b.toString(); output += s; onData(s); })
+          .on('close', (code: number, signal: string) => {
+            if (buffer && dataCallback) {
+              dataCallback(buffer);
             }
-
-            // 2) Treat code=0 or code=1 as “OK” (1 == permission-denied)
             if (code !== 0 && code !== 1) {
-              return reject(new Error(`Command exited with code ${code} and signal ${signal}`));
-            }
-
-            // 3) If it *was* a 1, emit a warning so we know something was skipped
-            if (code === 1) {
-              logErrorMessage(
-                `Command finished with exit code 1 (some files or dirs may have been skipped due to permissions)`,
-                LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+              return reject(
+                new Error(`SSH: command exited with code ${code}, signal ${signal}`)
               );
             }
-
-            // 4) Resolve normally
+            if (code === 1) {
+              logErrorMessage(
+                'SSH: command returned exit code 1 (permissions issues?)',
+                LOG_FLAGS.CONSOLE_ONLY
+              );
+            }
             resolve(output);
-          })
-          .on("data",   (buf: Buffer) => { const s = buf.toString(); output += s; onData(s);           })
-          .stderr.on("data", (buf: Buffer) => { const s = buf.toString(); output += s; onData(s); });
+          });
       });
     });
   }
 
-  async createDirectoriesBatch(directories: string[]) {
-    if (directories.length === 0) {
-      return;
-    }
-
-    // Only create the deepest directories, relying on `mkdir -p` to handle parent directories
-    const mkdirCommand = `mkdir -p ${directories.map((dir) => `'${dir}'`).join(" ")}`;
-
-    try {
-      await this.executeCommand(mkdirCommand);
-      LogManager.log(`SFTP Created directories: ${directories.map((dir) => `'${dir}'`).join(" ")}`);
-    } catch (error) {
-      LogManager.log("Error creating directories in batch");
-      throw error;
-    }
+  /**
+   * Creates all directories in one batch via `mkdir -p`.
+   */
+  public async createDirectoriesBatch(dirs: string[]): Promise<void> {
+    if (dirs.length === 0) return;
+    const cmd = `mkdir -p ${dirs.map(d => `'${d}'`).join(' ')}`;
+    await this.executeCommand(cmd);
   }
 
-  async move(oldRemotePath: string, newRemotePath: string) {
-    const mvCommand = `mv "${oldRemotePath}" "${newRemotePath}"`;
-          
-    try {
-      await this.executeCommand(mvCommand);
-      LogManager.log(`Moved file from ${oldRemotePath} to ${newRemotePath}`);
-    } catch (error) {
-      LogManager.log("Error moving file");
-      throw error;
-    }
+  /**
+   * Moves/renames a remote path via `mv`.
+   */
+  public async move(oldPath: string, newPath: string): Promise<void> {
+    const cmd = `mv "${oldPath}" "${newPath}"`;
+    await this.executeCommand(cmd);
   }
 
-  async count(
-    remoteDir: string
-  ): Promise<number> {
-    const cmd = `find "${remoteDir}" | wc -l`;
-    const raw = await this.executeCommand(cmd);
+  /**
+   * Counts files under a directory via `find | wc -l`.
+   */
+  public async count(remoteDir: string): Promise<number> {
+    const raw = await this.executeCommand(`find "${remoteDir}" | wc -l`);
     const lines = raw.trim().split('\n');
-    const last = lines[lines.length - 1] || '0';
-    const n = parseInt(last.trim(), 10);
+    const n = parseInt(lines.pop() || '0', 10);
     return isNaN(n) ? 0 : n;
+  }
+
+  /** Helper from BaseClient to turn your config into `ssh2` options */
+  protected getConnectionOptions(
+    cfg: ConfigurationMessage['configuration']
+  ): ConnectConfig {
+    // implement in BaseClient or override here
+    return super.getConnectionOptions(cfg);
   }
 }

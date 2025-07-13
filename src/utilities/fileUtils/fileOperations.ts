@@ -7,10 +7,10 @@ import { FileEventHandler } from "../../services/FileEventHandler";
 import { Action, ActionOn, ActionResult } from "../enums";
 import { SyncTreeDataProvider } from "../../services/SyncTreeDataProvider";
 import { logErrorMessage } from "../../managers/LogManager";
-import JsonManager from "../../managers/JsonManager";
-import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 import { getFullPaths } from "./filePathUtils";
-import { fileDelete, updateRemoteFilesJsonForPaths } from "./fileEventFunctions";
+import { fileDelete } from "./fileEventFunctions";
+import { configManager } from "../../extension";
+import { FileNodeSource } from "../FileNode";
 
 export function ensureDirectoryExists(dirPath: string): void {
   if (!fs.existsSync(dirPath)) {
@@ -19,12 +19,11 @@ export function ensureDirectoryExists(dirPath: string): void {
 }
 
 export async function handleAction(
-  input: ComparisonFileNode | Uri | undefined | null,
+  element: ComparisonFileNode | undefined | null,
   action: "upload" | "download",
   treeDataProvider: SyncTreeDataProvider
 ) {
   // Get the element (root folder or a specific file)
-  let element = await resolveElement(input, treeDataProvider);
   if (!element) {return;}
 
   const { localPath, remotePath} = await getFullPaths(element);
@@ -47,38 +46,6 @@ export async function handleAction(
       ? FileEventHandler.handleFileUpload(element, treeDataProvider)
       : FileEventHandler.handleFileDownload(element, treeDataProvider));
   }
-}
-
-async function resolveElement(
-  input: ComparisonFileNode | Uri | undefined | null,
-  treeDataProvider: SyncTreeDataProvider
-): Promise<ComparisonFileNode | null> {
-  if (!input) {
-    logErrorMessage("No valid element provided.");
-    return null;
-  }
-
-  if (input instanceof Uri) {
-    return await JsonManager.findComparisonNodeFromUri(input, treeDataProvider);
-  }
-
-  return input;
-}
-
-export function getRootElement(treeDataProvider: SyncTreeDataProvider): ComparisonFileNode | null {
-  const rootElement = treeDataProvider.rootElements.get(treeDataProvider.currentWorkspace.uri);
-
-  if (!rootElement) {
-    logErrorMessage(`Root folder "${treeDataProvider.currentWorkspace.name}" not found in root entries.`);
-    return null;
-  }
-
-  if (!rootElement.isDirectory()) {
-    logErrorMessage("Root folder is not a directory.");
-    return null;
-  }
-
-  return rootElement;
 }
 
 /**

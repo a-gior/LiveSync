@@ -4,8 +4,8 @@ import { FileNodeSource } from "../FileNode";
 import { remotePathType } from "./sftpOperations";
 import { ComparisonFileNode } from "../ComparisonFileNode";
 import { BaseNodeType } from "../BaseNode";
-import { WorkspaceConfigManager } from "../../managers/WorkspaceConfigManager";
 import { LINUX_PATH_SEP, RELATIVE_PATH_SEP, WINDOWS_PATH_SEP } from "../constants";
+import { configManager } from "../../extension";
 
 export type PathPair = {localPath: string, remotePath: string};
 
@@ -57,7 +57,7 @@ export function joinParts(parts: string[]): string {
  */
 export async function getFullPaths(comparisonNode: ComparisonFileNode): Promise<{ localPath: string; remotePath: string }> {
   const relativePath = normalizePath(comparisonNode.relativePath);
-  const { localPath, remotePath } = WorkspaceConfigManager.getWorkspaceFullPaths();
+  const { localPath, remotePath } = configManager!.getConfig(comparisonNode.workspaceFolder.uri).getPathPair();
 
   let { normalizedLocalPath, normalizedRemotePath } = {
     normalizedLocalPath: normalizePath(path.join(localPath, relativePath)),
@@ -67,26 +67,12 @@ export async function getFullPaths(comparisonNode: ComparisonFileNode): Promise<
   return { localPath: normalizedLocalPath, remotePath: normalizedRemotePath };
 }
 
-export function getCorrespondingPath(inputPath: string): string {
-  const normalizedInputPath = normalizePath(inputPath);
-  const { localPath, remotePath } = WorkspaceConfigManager.getWorkspaceFullPaths();
-
-  // Check if the inputPath is a local path
-  if (normalizedInputPath.startsWith(normalizePath(localPath))) {
-    return path.join(remotePath, path.relative(localPath, inputPath)).replace(/\\/g, "/");
-  }
-
-  // Check if the inputPath is a remote path
-  if (normalizedInputPath.startsWith(normalizePath(remotePath))) {
-    return path.join(localPath, path.relative(remotePath, inputPath)).replace(/\\/g, "/");
-  }
-
-  throw new Error(`Couldnt find corresponding path of ${inputPath}`);
-}
-
-export function getRelativePath(fullPath: string) {
+export function getRelativePath(fullPath: string, source: FileNodeSource) {
+  const folder = configManager!.getWorkspaceFolderFromPath(fullPath, source);
+  const workspaceConfig = configManager!.getConfig(folder.uri);
   const normalizedFullPath = normalizePath(fullPath);
-  const { localPath, remotePath } = WorkspaceConfigManager.getWorkspaceFullPaths();
+
+  const { localPath, remotePath } = workspaceConfig.getPathPair();
   if (normalizedFullPath.startsWith(localPath)) {
     return normalizePath(path.relative(localPath, fullPath));
   } else if (normalizedFullPath.startsWith(remotePath)) {

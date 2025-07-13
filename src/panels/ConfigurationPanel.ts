@@ -4,9 +4,7 @@ import { Panel } from "./Panel";
 import { SFTPClient } from "../services/SFTPClient";
 import { FullConfigurationMessage } from "@shared/DTOs/messages/FullConfigurationMessage";
 import { FileEventActionsMessage } from "@shared/DTOs/messages/FileEventActionsMessage";
-import { ConnectionManager } from "../managers/ConnectionManager";
 import { IgnoreListMessage } from "@shared/DTOs/messages/IgnoreListMessage";
-import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../managers/LogManager";
 import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
 import { WorkspaceConfig, WorkspaceConfigManager2 } from "../managers/WorkspaceConfigManager2";
@@ -85,25 +83,23 @@ export class ConfigurationPanel extends Panel {
     this.currentPanel?.getPanel().webview.postMessage(configMessage);
   }
 
-  static async saveRemotePath(remotePath: string) {
-    const configuration = WorkspaceConfigManager.getRemoteServerConfigured();
-
-    const connectionManager = await ConnectionManager.getInstance(configuration);
-    connectionManager
-      .doSFTPOperation(async (sftpClient: SFTPClient) => {
-        if (!(await sftpClient.exists(remotePath))) {
-          logErrorMessage(`Remote path ${remotePath} does not exist`, LOG_FLAGS.ALL);
-        }
-      }, "Saving Remote path")
-      .then(async () => {
-        // All good so we update the remote path config
-        await WorkspaceConfigManager.update("remotePath", remotePath);
-      });
+  static async saveRemotePath(selectedFolder: WorkspaceFolder, remotePath: string) {
+    const workspaceConfig = configManager!.getConfig(selectedFolder.uri);
+    workspaceConfig.connectionService.withSFTP(async (sftpClient: SFTPClient) => {
+      if (!(await sftpClient.exists(remotePath))) {
+        logErrorMessage(`Remote path ${remotePath} does not exist`, LOG_FLAGS.ALL);
+      }
+    }, "Saving Remote path")
+    .then(async () => {
+      // All good so we update the remote path config
+      await workspaceConfig.updateParams({remotePath});
+    });
   }
 
-  static async saveFileEventActions(actions: FileEventActionsMessage["actions"]) {
+  static async saveFileEventActions(selectedFolder: WorkspaceFolder, actions: FileEventActionsMessage["actions"]) {
     try {
-      await WorkspaceConfigManager.batchUpdate({
+      const workspaceConfig = configManager!.getConfig(selectedFolder.uri);
+      await workspaceConfig.updateParams({
         actionOnUpload: actions.actionOnUpload,
         actionOnDownload: actions.actionOnDownload,
         actionOnSave: actions.actionOnSave,
@@ -117,17 +113,17 @@ export class ConfigurationPanel extends Panel {
     }
   }
 
-  static async saveRemoteServerConfiguration(configuration: ConfigurationState["configuration"]): Promise<void> {
+  static async saveRemoteServerConfiguration(selectedFolder: WorkspaceFolder, configuration: ConfigurationState["configuration"]): Promise<void> {
     try {
-      if (configuration) {
-        const testResult = await commands.executeCommand("livesync.testConnection", configuration);
+      const testResult = await commands.executeCommand("livesync.testConnection", configuration);
         if (!testResult) {
           throw new Error("Connection test failed. Please check the configuration.");
         }
 
-        const { hostname, port, username, password, privateKeyPath, passphrase } = configuration;
+        const workspaceConfig = configManager!.getConfig(selectedFolder.uri);
+        const { hostname, port, username, password, privateKeyPath, passphrase } = configuration!;
 
-        await WorkspaceConfigManager.batchUpdate({
+        await workspaceConfig.updateParams({
           hostname,
           port,
           username,
@@ -135,34 +131,36 @@ export class ConfigurationPanel extends Panel {
           privateKeyPath,
           passphrase
         });
-      } else {
-        throw new Error("Invalid configuration");
-      }
     } catch (error: any) {
       logErrorMessage(`Couldn't save configuration: ${error.message}`, LOG_FLAGS.ALL);
     }
   }
 
-  static async saveIgnoreList(ignoreList: IgnoreListMessage["ignoreList"]) {
+  static async saveIgnoreList(selectedFolder: WorkspaceFolder, ignoreList: IgnoreListMessage["ignoreList"]) {
     try {
-      await WorkspaceConfigManager.update("ignoreList", ignoreList);
+      const workspaceConfig = configManager!.getConfig(selectedFolder.uri);
+      await workspaceConfig.updateParams({ignoreList});
     } catch (error) {
       logErrorMessage("Error saving ignore list", LOG_FLAGS.ALL, error);
     }
   }
 
   static async updateConfiguration(configuration: FullConfigurationMessage) {
+    if(!configuration.selectedFolder) {
+      throw new Error(`No selected folder found in configuration`);
+    }
+
     if (configuration.configuration) {
-      await this.saveRemoteServerConfiguration(configuration.configuration);
+      await this.saveRemoteServerConfiguration(configuration.selectedFolder, configuration.configuration);
     }
     if (configuration.remotePath) {
-      await this.saveRemotePath(configuration.remotePath);
+      await this.saveRemotePath(configuration.selectedFolder, configuration.remotePath);
     }
     if (configuration.fileEventActions) {
-      await this.saveFileEventActions(configuration.fileEventActions);
+      await this.saveFileEventActions(configuration.selectedFolder, configuration.fileEventActions);
     }
     if (configuration.ignoreList) {
-      await this.saveIgnoreList(configuration.ignoreList);
+      await this.saveIgnoreList(configuration.selectedFolder, configuration.ignoreList);
     }
   }
 }

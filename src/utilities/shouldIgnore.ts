@@ -1,10 +1,11 @@
 import path from "path";
 import { LOG_FLAGS, logInfoMessage } from "../managers/LogManager";
-import { WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
+import { WorkspaceFolder } from "vscode";
+import { configManager } from "../extension";
 
-export function shouldIgnore(filePath: string): boolean {
+export function shouldIgnore(workspaceFolder: WorkspaceFolder, filePath: string): boolean {
   const normalized = path.normalize(filePath);
-  const matchers  = WorkspaceConfigManager.getIgnoreMatchers();
+  const matchers  = configManager!.getConfig(workspaceFolder.uri).compiledIgnoreList;
 
   for (const m of matchers) {
     if (m.match(normalized)) {

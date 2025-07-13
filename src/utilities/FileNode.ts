@@ -42,7 +42,7 @@ export class FileNode extends BaseNode<FileNode> {
       super(data, workspaceFolder, type, size, modifiedTime, fullPath);
       this.source = source;
       this.fullPath = fullPath;
-      this.relativePath = getRelativePath(fullPath);
+      this.relativePath = getRelativePath(fullPath, source);
     } else {
       // JSON-like object initialization
       super(data);
@@ -88,7 +88,7 @@ export class FileNode extends BaseNode<FileNode> {
         size: stats.size,
         modifiedTime: stats.mtime,
         source: FileNodeSource.local,
-        relativePath: getRelativePath(localPath),
+        relativePath: getRelativePath(localPath, FileNodeSource.local),
         fullPath: localPath,
         hash: ""
       });
