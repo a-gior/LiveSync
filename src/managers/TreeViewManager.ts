@@ -53,13 +53,15 @@ export class TreeViewManager {
       if (folder) {
         this._diffProvider.currentWorkspace = folder;
         await this._diffProvider.refresh();
-        this.updateMessage(this._diffProvider);
+
+        this._diffView.title = `Diffs — ${folder.name ?? "No Workspace"}`;
       }
     });
 
-    // 7) Load initial diff tree and update message
+    // 7) Load initial diff tree
+    this._diffView.title = `Diffs — ${this._diffProvider.currentWorkspace.name ?? "No Workspace"}`;
     await this._diffProvider.refresh();
-    this.updateMessage(this._diffProvider);
+    
 
     // 8) Clean up on deactivate
     context.subscriptions.push(this._workspaceView, this._diffView);
@@ -80,6 +82,8 @@ export class TreeViewManager {
    */
   public static updateMessage(provider: SyncTreeDataProvider): void {
     const root = provider.displayedComparisonNode;
+
+    if(!root) {return;}
 
     // 1. No items under the root?
     if (root.listChildren().length === 0) {

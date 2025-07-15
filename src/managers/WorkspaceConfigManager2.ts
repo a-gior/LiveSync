@@ -8,8 +8,6 @@ import { FileEventActions } from "../DTOs/config/FileEventActions";
 import { Minimatch } from "minimatch";
 import { FileNodeSource } from "../utilities/FileNode";
 import { normalizePath, PathPair } from "../utilities/fileUtils/filePathUtils";
-import * as crypto from "crypto";
-import { TreeViewManager } from "./TreeViewManager";
 import { WorkspaceJsonStore } from "../services/WorkspaceJsonStore";
 import { ConnectionService } from "../services/ConnectionService";
 
@@ -32,7 +30,7 @@ export class WorkspaceConfigManager2 {
 
     private _context: ExtensionContext;
     private _workspaceType: WorkspaceType | null = null;
-    private _workspaceConfigs: Map<Uri, WorkspaceConfig> = new Map();
+    private _workspaceConfigs: Map<string, WorkspaceConfig> = new Map();
     private _pathsByHost     = new Map<string, Set<string>>();
     private _events: WorkspaceEventsManager;
 
@@ -128,7 +126,7 @@ export class WorkspaceConfigManager2 {
                 folder,
                 `Config for "${folder.name}" skipped: "${rp}" is inside existing path "${existing}".`
                 );
-                return false;
+                return;
             }
             if (existing.startsWith(rp + '/')) {
                 logConfigError(
@@ -138,23 +136,21 @@ export class WorkspaceConfigManager2 {
                 folder,
                 `Config for "${folder.name}" skipped: existing path "${existing}" is inside "${rp}".`
                 );
-                return false;
+                return;
             }
         }
 
-
         // no conflicts → register
         set.add(rp);
-        this._workspaceConfigs.set(folder.uri, cfg);
-        logInfoMessage(`Registered config for "${folder.name}" → host=${host}, remotePath=${rp}`);
-        return true;
+        this._workspaceConfigs.set(folder.uri.fsPath, cfg);
+        logInfoMessage(`Registered config for "URI: ${folder.uri}, ${folder.name}" → host=${host}, remotePath=${rp}`);
     }
 
     /** Remove a folder’s config by its URI string key */
     public removeConfig(uri: Uri): void {
         this.detectWorkspaceType();
 
-        const cfg = this._workspaceConfigs.get(uri);
+        const cfg = this._workspaceConfigs.get(uri.fsPath);
         if(!cfg) {return;}
 
         const host = cfg.connectionSettings!.hostname;
@@ -168,7 +164,7 @@ export class WorkspaceConfigManager2 {
             }
         }
 
-        this._workspaceConfigs.delete(uri);
+        this._workspaceConfigs.delete(uri.fsPath);
         logInfoMessage(`Removed config for folder ${uri.fsPath}`);
     }
 
@@ -245,7 +241,7 @@ export class WorkspaceConfigManager2 {
     }
 
     public getConfig(folderUri: Uri): WorkspaceConfig {
-        const config = this._workspaceConfigs.get(folderUri);
+        const config = this._workspaceConfigs.get(folderUri.fsPath);
         if (!config) {
             throw new Error(`No config found for workspace "${folderUri.fsPath}"`);
         }
@@ -329,7 +325,7 @@ export class WorkspaceConfigManager2 {
 
             // If the inputPath is a local path
             if (normalizedPath.startsWith(normalizePath(pathPair.localPath))) {
-                return path.join(pathPair.remotePath, path.relative(pathPair.localPath, normalizedPath));
+                return path.posix.join(pathPair.remotePath, path.posix.relative(pathPair.localPath, normalizedPath));
             }
 
             // If the inputPath is a remote path

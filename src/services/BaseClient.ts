@@ -1,16 +1,42 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
-import * as ssh2 from "ssh2";
-import { normalizePath } from "../utilities/fileUtils/filePathUtils";
 import { logInfoMessage } from "../managers/LogManager";
+import { ConnectConfig } from "ssh2";
+import { ConnectionSettings } from "@shared/DTOs/config/ConnectionSettings";
 
 export abstract class BaseClient {
-  protected isConnected: boolean = false;
-  protected isConnecting: boolean = false;
+  protected isConnected = false;
+  protected isConnecting = false;
+  private connectPromise: Promise<void> | null = null;
 
-  abstract connect(config: ConfigurationMessage["configuration"]): Promise<void>;
+  /** 
+   * Prevent concurrent connect() calls by sharing a single in-flight promise 
+   */
+  protected async guardedConnect(
+    fn: () => Promise<void>
+  ): Promise<void> {
+    if (this.isConnected) return;
+    if (this.connectPromise) return this.connectPromise;
+
+    this.isConnecting = true;
+    this.connectPromise = fn()
+      .then(() => {
+        this.isConnected = true;
+      })
+      .catch(err => {
+        this.isConnected = false;
+        throw err;
+      })
+      .finally(() => {
+        this.isConnecting = false;
+        this.connectPromise = null;
+      });
+
+    return this.connectPromise;
+  }
+
+  abstract connect(config: ConnectionSettings): Promise<void>;
   abstract disconnect(): Promise<void>;
 
   public get connected(): boolean {
@@ -21,63 +47,60 @@ export abstract class BaseClient {
     return this.isConnecting;
   }
 
-  async waitForConnection(): Promise<void> {
-    const timeout = 5000;
-    const pause = 1000;
-    let currentTime = 0;
-    let retries = 0;
-    const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
-
-    while (this.isConnecting && currentTime <= timeout) {
-      await delay(pause);
-      currentTime += pause;
-      logInfoMessage(`Waiting for connection ${currentTime}. Retries ${retries++}/${timeout / pause}`);
+  /** 
+   * Wait up to `timeoutMs`, polling until either `isConnected` or timeout. 
+   */
+  async waitForConnection(timeoutMs = 5000, pollInterval = 1000): Promise<void> {
+    const start = Date.now();
+    while (!this.isConnected && this.isConnecting && Date.now() - start < timeoutMs) {
+      logInfoMessage(
+        `Waiting for connection: ${Date.now() - start}ms elapsed`
+      );
+      await new Promise(r => setTimeout(r, pollInterval));
+    }
+    if (!this.isConnected) {
+      throw new Error('Timeout waiting for connection');
     }
   }
 
   protected getConnectionOptions(
-    config: ConfigurationMessage["configuration"],
-    timeout: number = 5000 // Default timeout in milliseconds
-  ): ssh2.ConnectConfig {
-    if (!config.privateKeyPath && !config.password) {
-      throw new Error("Either a password or a private key must be provided.");
+    cfg: ConnectionSettings,
+    handshakeTimeout = 1000
+  ): ConnectConfig {
+    if (!cfg.password && !cfg.privateKeyPath) {
+      throw new Error('Either a password or a privateKeyPath must be provided');
     }
 
-    const connectionOptions: ssh2.ConnectConfig = {
-      host: config.hostname,
-      port: config.port,
-      username: config.username,
-      readyTimeout: timeout, // Handshake timeout
-      timeout, // Socket-level timeout
-      password: config.password || undefined,
-      privateKey: config.privateKeyPath ? this.getPrivateKeyContent(config.privateKeyPath) : undefined,
-      passphrase: config.passphrase || undefined
-    };
+    let privateKey: Buffer | undefined;
+    if (cfg.privateKeyPath) {
+      privateKey = Buffer.from(
+        this.getPrivateKeyContent(cfg.privateKeyPath),
+        'utf8'
+      );
+    }
 
-    return connectionOptions;
+    return {
+      host: cfg.hostname,
+      port: cfg.port,
+      username: cfg.username,
+      password: cfg.password || undefined,
+      privateKey,
+      passphrase: cfg.passphrase,
+      readyTimeout: handshakeTimeout,
+      // timeout: handshakeTimeout,
+    };
   }
 
-  private getPrivateKeyContent(privateKeyPath: string): string {
-    if (!privateKeyPath) {
-      return "";
+  private getPrivateKeyContent(pKeyPath: string): string {
+    // Expand '~'
+    if (pKeyPath.startsWith('~')) {
+      pKeyPath = path.join(os.homedir(), pKeyPath.slice(1));
     }
-
-    // Handle '~' (home directory) expansion on both Windows & Linux/macOS
-    if (privateKeyPath.startsWith("~")) {
-      privateKeyPath = normalizePath(path.join(os.homedir(), privateKeyPath.slice(1)));
+    // Resolve relative and normalize
+    pKeyPath = path.resolve(pKeyPath);
+    if (!fs.existsSync(pKeyPath)) {
+      throw new Error(`Private key file not found at ${pKeyPath}`);
     }
-
-    // Convert Windows-style backslashes to forward slashes for SSH compatibility
-    if (process.platform === "win32") {
-      privateKeyPath = privateKeyPath.replace(/\\/g, "/");
-    }
-
-    // Ensure the private key file exists
-    if (!fs.existsSync(privateKeyPath)) {
-      throw new Error(`Private key file not found at ${privateKeyPath}`);
-    }
-
-    // Read the private key content
-    return fs.readFileSync(privateKeyPath, "utf8");
+    return fs.readFileSync(pKeyPath, 'utf8');
   }
 }

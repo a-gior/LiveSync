@@ -4,41 +4,42 @@ import { FileNodeSource } from "../FileNode";
 import { remotePathType } from "./sftpOperations";
 import { ComparisonFileNode } from "../ComparisonFileNode";
 import { BaseNodeType } from "../BaseNode";
-import { LINUX_PATH_SEP, RELATIVE_PATH_SEP, WINDOWS_PATH_SEP } from "../constants";
 import { configManager } from "../../extension";
+import { RELATIVE_PATH_SEP } from "../constants";
 
 export type PathPair = {localPath: string, remotePath: string};
 
 /**
- * Normalizes a given path and converts it to a specified format (Windows or Linux).
- * @param p - The input path.
- * @param targetFormat - The desired format ("windows" or "linux").
- * @returns The normalized path in the specified format.
+ * Collapse dots, resolve segments, unify on forward-slashes,
+ * lowercase Windows drives, strip redundant slashes.
+ *
+ * Works for:
+ * - Windows absolutes: "C:\\Foo\\Bar"  → "c:/Foo/Bar"
+ * - Linux absolutes:   "/foo//bar/../baz" → "/foo/baz"
+ * - Relative paths:    "./foo\\bar"      → "foo/bar"
  */
 export function normalizePath(p: string): string {
-  // Normalize the path first
-  let normalizedPath = path.normalize(p);
+  // 1. Let node collapse ., .. and mixed separators
+  let normalized = path.normalize(p);
 
-  // Detect path type
-  const isFullWindowsPath = /^[a-zA-Z]:[\\/]/.test(p); // Matches "C:\" or "C:/"
-  const isFullLinuxPath = /^\//.test(p); // Matches "/"
-  const isRelativePath = !isFullWindowsPath && !isFullLinuxPath;
+  // 2. Replace ALL backslashes with forward-slash
+  normalized = normalized.replace(/\\/g, "/");
 
-  if (isFullWindowsPath) {
-    // Ensure drive letter is lowercase
-    normalizedPath = normalizedPath.charAt(0).toLowerCase() + normalizedPath.slice(1);
-    normalizedPath = normalizedPath.replace(/\//g, WINDOWS_PATH_SEP);
+  // 3. Lowercase drive letter on Windows absolutes (e.g. "C:/")
+  normalized = normalized.replace(
+    /^([A-Za-z]):\//,
+    (_match, drive) => drive.toLowerCase() + ":/"
+  );
+
+  // 4. Collapse multiple forward-slashes → single
+  normalized = normalized.replace(/\/+/g, "/");
+
+  // 5. Strip trailing slash, unless it’s the only character (root)
+  if (normalized.length > 1 && normalized.endsWith("/")) {
+    normalized = normalized.slice(0, -1);
   }
 
-  if (isFullLinuxPath) {
-    normalizedPath = normalizedPath.replace(/\\/g, LINUX_PATH_SEP);
-  }
-
-  if (isRelativePath) {
-    normalizedPath = normalizedPath.replace(/\\/g, RELATIVE_PATH_SEP);
-  }
-
-  return normalizedPath;
+  return normalized;
 }
 
 export function splitParts(relativePath: string): string[] {

@@ -7,7 +7,7 @@ import { FileEventHandler } from "../../services/FileEventHandler";
 import { Action, ActionOn, ActionResult } from "../enums";
 import { SyncTreeDataProvider } from "../../services/SyncTreeDataProvider";
 import { logErrorMessage } from "../../managers/LogManager";
-import { getFullPaths } from "./filePathUtils";
+import { getFullPaths, getRelativePath } from "./filePathUtils";
 import { fileDelete } from "./fileEventFunctions";
 import { configManager } from "../../extension";
 import { FileNodeSource } from "../FileNode";
@@ -19,12 +19,20 @@ export function ensureDirectoryExists(dirPath: string): void {
 }
 
 export async function handleAction(
-  element: ComparisonFileNode | undefined | null,
+  element: ComparisonFileNode | Uri | undefined | null,
   action: "upload" | "download",
   treeDataProvider: SyncTreeDataProvider
 ) {
   // Get the element (root folder or a specific file)
   if (!element) {return;}
+
+  
+  if(element instanceof Uri) {
+    const workspaceConfig = treeDataProvider.currentWorkspaceConfig;
+    const relativePath = getRelativePath(element.fsPath, FileNodeSource.local);
+    const comparisonNode = workspaceConfig.jsonStore.findComparisonNode(relativePath);
+    element = comparisonNode;
+  }
 
   const { localPath, remotePath} = await getFullPaths(element);
 

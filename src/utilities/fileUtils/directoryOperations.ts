@@ -64,7 +64,7 @@ export async function uploadDirectory(rootEntry: ComparisonFileNode) {
 
       // Step 2: Create directories via SSH command
       await workspaceConfig.connectionService.withSSH(async (sshClient: SSHClient) => {
-        await sshClient.createDirectoriesBatch(directoriesToCreate);
+        await sshClient.mkdirs(directoriesToCreate);
       });
 
       // Step 3: Upload files with concurrency limits

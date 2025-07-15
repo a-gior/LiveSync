@@ -203,7 +203,10 @@ export class FileEventHandler {
 
       try {
         // Get node from rootElements
-        const nodeToDelete = treeDataProvider.currentWorkspaceConfig.jsonStore.findComparisonNode(filePath);
+        const workspaceConfig = configManager!.getWorkspaceFolderFromPath(filePath, FileNodeSource.local);
+        const relativePath = getRelativePath(filePath, FileNodeSource.local);
+        const nodeToDelete = configManager!.getConfig(workspaceConfig.uri).jsonStore.findComparisonNode(relativePath);
+
         if (!nodeToDelete) {
           console.warn(`<handleFileDelete> Node not found for ${filePath}`);
           return;
@@ -245,7 +248,9 @@ export class FileEventHandler {
 
     try {
       // Get node from rootElements
-      const nodeToSave = treeDataProvider.currentWorkspaceConfig.jsonStore.findComparisonNode(filePath);
+      const workspaceConfig = configManager!.getWorkspaceFolderFromPath(filePath, FileNodeSource.local);
+      const relativePath = getRelativePath(filePath, FileNodeSource.local);
+      const nodeToSave = configManager!.getConfig(workspaceConfig.uri).jsonStore.findComparisonNode(relativePath);
       if (!nodeToSave) {
         console.warn(`<handleFileSave> Node not found for ${filePath}`);
         return;
@@ -289,7 +294,9 @@ export class FileEventHandler {
 
       try {
         // Get node from rootElements
-        const nodeToMove = treeDataProvider.currentWorkspaceConfig.jsonStore.findComparisonNode(oldPath);
+      const workspaceConfig = configManager!.getWorkspaceFolderFromPath(oldPath, FileNodeSource.local);
+      const relativePath = getRelativePath(oldPath, FileNodeSource.local);
+      const nodeToMove = configManager!.getConfig(workspaceConfig.uri).jsonStore.findComparisonNode(relativePath);
         if (!nodeToMove) {
           logErrorMessage(`<handleFileRename> Node not found for ${oldPath}`);
           continue;
@@ -337,7 +344,9 @@ export class FileEventHandler {
     logInfoMessage(`<handleFileOpen> Event opening ${filePath}`);
 
     try {
-      const openedNode = treeDataProvider.currentWorkspaceConfig.jsonStore.findComparisonNode(filePath);
+      const workspaceConfig = configManager!.getWorkspaceFolderFromPath(filePath, FileNodeSource.local);
+      const relativePath = getRelativePath(filePath, FileNodeSource.local);
+      const openedNode = configManager!.getConfig(workspaceConfig.uri).jsonStore.findComparisonNode(relativePath);
       if (!openedNode) {
         logInfoMessage(`<handleFileOpen> Node not found for ${filePath}`);
         return;
@@ -350,7 +359,7 @@ export class FileEventHandler {
       const savedNode = await treeDataProvider.updateRootElements(Action.Update, openedNode);
       await treeDataProvider.refresh(savedNode);
     } catch (err: any) {
-      logErrorMessage("<handleFileOpen> Error: ", LOG_FLAGS.CONSOLE_ONLY, err);
+      logErrorMessage(`<handleFileOpen> Error: ${err.message}`, LOG_FLAGS.CONSOLE_ONLY);
     }
   }
 

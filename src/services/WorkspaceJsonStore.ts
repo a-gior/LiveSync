@@ -198,8 +198,8 @@ export class WorkspaceJsonStore {
                 throw new Error('comparisonFileRoot not loaded');
             }
             this._patchSubtree(this._comparisonFileRoot, newNode.relativePath, newNode);
-            await this._saveJson(COMPARE_FILES_JSON, this._comparisonFileRoot);
         }
+        await this._saveJson(COMPARE_FILES_JSON, this._comparisonFileRoot);
     }
 
     /**
@@ -281,7 +281,7 @@ export class WorkspaceJsonStore {
     private _lookupNode<T extends FileNode | ComparisonFileNode>(
         node: T,
         parts: string[]
-        ): T {
+    ): T {
         // base case: no more segments, this is our node
         if (parts.length === 0) {
             return node;

@@ -8,7 +8,7 @@ import sftp from "ssh2-sftp-client";
 import { shouldIgnore } from "../shouldIgnore";
 import { LOG_FLAGS, logErrorMessage } from "../../managers/LogManager";
 import { BaseNodeType } from "../BaseNode";
-import { pathExists, pathType } from "./filePathUtils";
+import { getRelativePath, pathExists, pathType } from "./filePathUtils";
 import { uploadDirectory } from "./directoryOperations";
 import { TreeViewManager } from "../../managers/TreeViewManager";
 import { configManager } from "../../extension";
@@ -57,11 +57,11 @@ export async function deleteRemoteFile(remotePath: string): Promise<void> {
 
       switch(remoteNodeType) {
         case BaseNodeType.directory:
-          await sftpClient.deleteDirectory(remotePath);
+          await sftpClient.rmdir(remotePath);
           break;
   
         case BaseNodeType.file:
-          await sftpClient.deleteFile(remotePath);
+          await sftpClient.delete(remotePath);
           break;
   
         case false:
@@ -123,14 +123,14 @@ export async function uploadRemoteFile(localPath: string, remotePath: string): P
 
     switch(localNodeType) {
       case BaseNodeType.directory:
-        await sftpClient.createDirectory(remotePath);
+        await sftpClient.mkdir(remotePath);
         break;
 
       case BaseNodeType.file:
         const remoteDir = path.dirname(remotePath);
         const dirExists = await sftpClient.exists(remoteDir);
         if (!dirExists) {
-          await sftpClient.createDirectory(remoteDir);
+          await sftpClient.mkdir(remoteDir);
         }
         await sftpClient.uploadFile(localPath, remotePath);
         break;
@@ -150,7 +150,8 @@ export async function compareRemoteFileHash(remotePath: string): Promise<boolean
 
   try {
     // Get the remote JSON entries
-    const remoteEntry = workspaceConfig.jsonStore.findRemoteNode(remotePath);
+    const relativePath = getRelativePath(remotePath, FileNodeSource.remote);
+    const remoteEntry = workspaceConfig.jsonStore.findRemoteNode(relativePath);
     const remoteFileHash = await generateHash(remotePath, FileNodeSource.remote, BaseNodeType.file);
 
     return remoteEntry.hash === remoteFileHash;

@@ -15,10 +15,15 @@ type LogFlags = (typeof LOG_FLAGS)[keyof typeof LOG_FLAGS];
 // Define the LogErrorAction type
 export type LogErrorAction = { title: string; command: string; args?: any[] }[];
 
-function deepClone<T>(obj: T): T {
-  // Handle null or undefined
+function deepClone<T>(obj: T, seen = new WeakMap<any, any>()): T {
+  // Primitives & functions just pass through
   if (obj === null || typeof obj !== "object") {
     return obj;
+  }
+
+  // If we’ve already cloned this exact object, return the existing clone
+  if (seen.has(obj)) {
+    return seen.get(obj);
   }
 
   // Handle Date
@@ -28,40 +33,42 @@ function deepClone<T>(obj: T): T {
 
   // Handle Array
   if (Array.isArray(obj)) {
-    return obj.map((item) => deepClone(item)) as any;
+    const arr: any[] = [];
+    seen.set(obj, arr);
+    for (const item of obj) {
+      arr.push(deepClone(item, seen));
+    }
+    return arr as any;
   }
 
   // Handle Map
   if (obj instanceof Map) {
     const clonedMap = new Map();
-    obj.forEach((value, key) => {
-      clonedMap.set(key, deepClone(value));
-    });
+    seen.set(obj, clonedMap);
+    for (const [key, value] of obj.entries()) {
+      clonedMap.set(key, deepClone(value, seen));
+    }
     return clonedMap as any;
   }
 
   // Handle Set
   if (obj instanceof Set) {
     const clonedSet = new Set();
-    obj.forEach((value) => {
-      clonedSet.add(deepClone(value));
-    });
+    seen.set(obj, clonedSet);
+    for (const value of obj.values()) {
+      clonedSet.add(deepClone(value, seen));
+    }
     return clonedSet as any;
   }
 
-  // Handle Object
-  if (obj instanceof Object) {
-    const clonedObj: any = {};
-    for (const key in obj) {
-      if (obj.hasOwnProperty(key)) {
-        clonedObj[key] = deepClone(obj[key]);
-      }
-    }
-    return clonedObj as T;
+  // Handle plain Object (and subclassed plain objects)
+  const proto = Object.getPrototypeOf(obj);
+  const clonedObj = Object.create(proto);
+  seen.set(obj, clonedObj);
+  for (const key of Object.keys(obj as any)) {
+    clonedObj[key] = deepClone((obj as any)[key], seen);
   }
-
-  // Handle any other types (e.g., functions, etc.)
-  return obj;
+  return clonedObj;
 }
 
 export function logErrorMessage(error: string, flags: LogFlags = LOG_FLAGS.CONSOLE_ONLY, details?: any, actions?: LogErrorAction) {

@@ -11,7 +11,7 @@ import { handleAction, performDelete } from "../utilities/fileUtils/fileOperatio
 import { Dialog } from "../services/Dialog";
 import { FileNodeSource } from "../utilities/FileNode";
 import { countLocalFiles, fetchRemoteCountOutput, parseRemoteItemCount, syncRemoteDeniedPaths } from "../utilities/fileUtils/fileListing";
-import { getFullPaths } from "../utilities/fileUtils/filePathUtils";
+import { getFullPaths, getRelativePath } from "../utilities/fileUtils/filePathUtils";
 import { CommandEntry, CommandManager, ExecutionMode } from "../managers/CommandManager";
 import { StatusBarManager } from "../managers/StatusBarManager";
 import { TreeViewManager } from "../managers/TreeViewManager";
@@ -102,10 +102,12 @@ export class CommandRegistrar {
               let compNode: ComparisonFileNode;
               if (element) {
                 compNode = await compareCorrespondingEntry(element);
+                console.log("##### COMP NODE ######", compNode);
                 const updated = await treeDataProvider.updateRootElements(Action.Update, compNode);
                 await treeDataProvider.refresh(updated);
               } else {
                 compNode = await treeDataProvider.getComparisonFileNode(localPath, remotePath);
+                console.log("##### COMP NODE ######", compNode);
                 workspaceConfig.jsonStore.comparisonFileRoot = compNode;
                 await treeDataProvider.refresh();
               }
@@ -119,7 +121,13 @@ export class CommandRegistrar {
           mode: ExecutionMode.Single,
         },
         'livesync.showDiff': {
-          callback: async (input: ComparisonFileNode) => {
+          callback: async (input: ComparisonFileNode | vscode.Uri) => {
+            if(input instanceof vscode.Uri) {
+              const workspaceConfig = treeDataProvider.currentWorkspaceConfig;
+              const relativePath = getRelativePath(input.fsPath, FileNodeSource.local);
+              const comparisonNode = workspaceConfig.jsonStore.findComparisonNode(relativePath);
+              input = comparisonNode;
+            }
             showDiff(input);
           },
           mode: ExecutionMode.Single,
@@ -220,10 +228,9 @@ export class CommandRegistrar {
   
             // Recompute which folders should be open
             const workspaceConfig = treeDataProvider.currentWorkspaceConfig;
-            await workspaceConfig.jsonStore.expandChangedFoldersRecursive(treeDataProvider.displayedComparisonNode);  // repopulates foldersState
+            await workspaceConfig.jsonStore.expandChangedFoldersRecursive(workspaceConfig.jsonStore.comparisonFileRoot);  // repopulates foldersState
   
             // 2) then actually reveal each "opened" folder
-            const workspaceFolder = treeDataProvider.currentWorkspace.uri;
             const foldersState = workspaceConfig.jsonStore.folderStates;
             const openedKeys = Object.keys(foldersState);
             for (const relativePath of openedKeys) {
@@ -248,7 +255,6 @@ export class CommandRegistrar {
             const connectionService = workspaceConfig.connectionService;
             try {
               await connectionService.withSSH(async (sshClient: SSHClient) => {
-                await sshClient.waitForConnection();
               }, "Test Connection");
     
               return true;

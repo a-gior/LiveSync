@@ -4,8 +4,6 @@ import { WorkspaceConfigFile } from "@shared/DTOs/config/WorkspaceConfig";
 export const CONFIG_FILE_NAME = "livesync.json";
 
 export const RELATIVE_PATH_SEP = "/";
-export const LINUX_PATH_SEP = "/";
-export const WINDOWS_PATH_SEP = "\\";
 
 export const SAVE_DIR = path.join(__dirname, "..", "saved_data");
 

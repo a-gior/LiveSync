@@ -21,7 +21,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Initialize managers
   configManager = new WorkspaceConfigManager2(context);
-  configManager.loadConfigs();
+  await configManager.loadConfigs();
   await TreeViewManager.initialize(context);
   CommandRegistrar.register(context, TreeViewManager.diffProvider);
   // WorkspaceConfigManager.initialize(context);

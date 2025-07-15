@@ -1,9 +1,7 @@
 import * as net from 'net';
-import { Uri } from 'vscode';
 import { ConfigurationMessage } from '@shared/DTOs/messages/ConfigurationMessage';
 import { SFTPClient } from './SFTPClient';
 import { SSHClient } from './SSHClient';
-import { debounce } from '../utilities/debounce';
 import { StatusBarManager } from '../managers/StatusBarManager';
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from '../managers/LogManager';
 
@@ -11,36 +9,31 @@ import { LOG_FLAGS, logErrorMessage, logInfoMessage } from '../managers/LogManag
  * Manages SSH and SFTP connections for a specific workspace/config.
  */
 export class ConnectionService {
-  private sftpClient: SFTPClient;
-  private sshClient: SSHClient;
-  private sftpActive = 0;
+  private sshClient = new SSHClient();
+  private sftpClient = new SFTPClient();
   private sshActive = 0;
-  private sftpDisconnectTimer: NodeJS.Timeout | null = null;
+  private sftpActive = 0;
   private sshDisconnectTimer: NodeJS.Timeout | null = null;
+  private sftpDisconnectTimer: NodeJS.Timeout | null = null;
   private readonly maxRetries = 3;
+  private readonly backoffBaseMs = 500;
 
-  constructor(
-    private readonly config: ConfigurationMessage['configuration']
-  ) {
-    // instantiate separate clients per workspace
-    this.sshClient = new SSHClient();
-    this.sftpClient = new SFTPClient();
-  }
+  constructor(private readonly cfg: ConfigurationMessage['configuration']) {}
 
-  /** Ensure the SSH connection is open, then run the operation. */
   public async withSSH<T>(
-    op: (client: SSHClient) => Promise<T>,
-    statusLabel?: string
+    op: (c: SSHClient) => Promise<T>,
+    label?: string
   ): Promise<T> {
     this.sshActive++;
-    if (statusLabel) StatusBarManager.showMessage(statusLabel, '', '', 0, 'sync~spin', true);
+    if (label) StatusBarManager.showMessage(label, '', '', 0, 'sync~spin', true);
     try {
-      await this.ensureSSH();
+      await this.ensureReachable();
+      await this.sshClient.connect(this.cfg);
       const result = await this.retry(() => op(this.sshClient));
-      if (statusLabel) StatusBarManager.showMessage(statusLabel, '', '', 3000, 'check');
+      if (label) StatusBarManager.showMessage(label, '', '', 3000, 'check');
       return result;
-    } catch (err: any) {
-      if (statusLabel) StatusBarManager.showMessage(statusLabel, '', '', 3000, 'error');
+    } catch (err) {
+      if (label) StatusBarManager.showMessage(label, '', '', 3000, 'error');
       throw err;
     } finally {
       this.sshActive--;
@@ -48,20 +41,20 @@ export class ConnectionService {
     }
   }
 
-  /** Ensure the SFTP connection is open, then run the operation. */
   public async withSFTP<T>(
-    op: (client: SFTPClient) => Promise<T>,
-    statusLabel?: string
+    op: (c: SFTPClient) => Promise<T>,
+    label?: string
   ): Promise<T> {
     this.sftpActive++;
-    if (statusLabel) StatusBarManager.showMessage(statusLabel, '', '', 0, 'sync~spin', true);
+    if (label) StatusBarManager.showMessage(label, '', '', 0, 'sync~spin', true);
     try {
-      await this.ensureSFTP();
+      await this.ensureReachable();
+      await this.sftpClient.connect(this.cfg);
       const result = await this.retry(() => op(this.sftpClient));
-      if (statusLabel) StatusBarManager.showMessage(statusLabel, '', '', 3000, 'check');
+      if (label) StatusBarManager.showMessage(label, '', '', 3000, 'check');
       return result;
-    } catch (err: any) {
-      if (statusLabel) StatusBarManager.showMessage(statusLabel, '', '', 3000, 'error');
+    } catch (err) {
+      if (label) StatusBarManager.showMessage(label, '', '', 3000, 'error');
       throw err;
     } finally {
       this.sftpActive--;
@@ -69,69 +62,47 @@ export class ConnectionService {
     }
   }
 
-  /** Ping server before initial connect */
-  public static async isReachable(host: string, port: number): Promise<boolean> {
-    return new Promise(resolve => {
-      const socket = new net.Socket();
-      const timeout = 2000;
-      socket.setTimeout(timeout);
-      socket.once('connect', () => (socket.destroy(), resolve(true)));
-      socket.once('timeout', () => (socket.destroy(), resolve(false)));
-      socket.once('error', () => (socket.destroy(), resolve(false)));
-      socket.connect(port, host);
-    });
-  }
-
-  /** Close both connections immediately */
   public async dispose(): Promise<void> {
     clearTimeout(this.sshDisconnectTimer!);
     clearTimeout(this.sftpDisconnectTimer!);
-    await this.disconnectSSH();
-    await this.disconnectSFTP();
+    await this.sshClient.disconnect();
+    await this.sftpClient.disconnect();
   }
 
-  // ---- private helpers ----
-
-  private async ensureSSH(): Promise<void> {
-    if (!this.sshClient.connected) {
-      if (!(await ConnectionService.isReachable(this.config.hostname, this.config.port))) {
-        throw new Error(`SSH host unreachable: ${this.config.hostname}:${this.config.port}`);
-      }
-      await this.sshClient.connect(this.config);
+  private async ensureReachable(): Promise<void> {
+    const ok = await ConnectionService.isReachable(
+      this.cfg.hostname,
+      this.cfg.port
+    );
+    if (!ok) {
+      throw new Error(`Host unreachable: ${this.cfg.hostname}:${this.cfg.port}`);
     }
-  }
-
-  private async ensureSFTP(): Promise<void> {
-    if (!this.sftpClient.connected) {
-      await this.ensureSSH(); // usually SSH must be up first
-      await this.sftpClient.connect(this.config);
-    }
-  }
-
-  private async disconnectSSH(): Promise<void> {
-    if (this.sshClient.connected) await this.sshClient.disconnect();
-  }
-
-  private async disconnectSFTP(): Promise<void> {
-    if (this.sftpClient.connected) await this.sftpClient.disconnect();
   }
 
   private scheduleDisconnect(type: 'ssh' | 'sftp') {
-    const active = type === 'ssh' ? this.sshActive : this.sftpActive;
-    const timerField = type === 'ssh' ? 'sshDisconnectTimer' : 'sftpDisconnectTimer';
-    const disconnectFn = type === 'ssh' ? this.disconnectSSH.bind(this) : this.disconnectSFTP.bind(this);
-    if ((this as any)[timerField]) clearTimeout((this as any)[timerField]);
-    (this as any)[timerField] = setTimeout(async () => {
-      if (active === 0) await disconnectFn();
+    const activeCount = type === 'ssh' ? this.sshActive : this.sftpActive;
+    const timerRef = type === 'ssh' ? 'sshDisconnectTimer' : 'sftpDisconnectTimer';
+    const disconnectFn = type === 'ssh' ? this.sshClient.disconnect.bind(this.sshClient) : this.sftpClient.disconnect.bind(this.sftpClient);
+
+    if (this[timerRef]) clearTimeout(this[timerRef]!);
+    this[timerRef] = setTimeout(async () => {
+      if (activeCount === 0) {
+        await disconnectFn();
+      }
     }, 5000);
   }
 
-  private async retry<T>(fn: () => Promise<T>, retries: number = this.maxRetries): Promise<T> {
+  private async retry<T>(
+    fn: () => Promise<T>,
+    retries = this.maxRetries
+  ): Promise<T> {
     try {
       return await fn();
     } catch (err: any) {
       if (retries > 0 && this.isRetryable(err)) {
-        logInfoMessage(`Retrying due to ${err.code || err.message}...`);
+        const backoff = this.backoffBaseMs * (this.maxRetries - retries + 1);
+        logInfoMessage(`Retrying in ${backoff}ms: ${err.message}`);
+        await new Promise(r => setTimeout(r, backoff));
         return this.retry(fn, retries - 1);
       }
       logErrorMessage(err.message, LOG_FLAGS.VSCODE_ONLY);
@@ -139,8 +110,19 @@ export class ConnectionService {
     }
   }
 
-  private isRetryable(error: any): boolean {
-    const codes = ['ECONNRESET','ETIMEDOUT','ERR_GENERIC_CLIENT'];
-    return codes.includes(error.code) || /Instance unusable/.test(error.message);
+  private isRetryable(err: any): boolean {
+    return ['ECONNRESET', 'ETIMEDOUT', 'ERR_GENERIC_CLIENT'].includes(err.code) ||
+      /Instance unusable/.test(err.message);
+  }
+
+  public static isReachable(host: string, port: number): Promise<boolean> {
+    return new Promise(resolve => {
+      const sock = new net.Socket();
+      sock.setTimeout(2000);
+      sock.once('connect', () => { sock.destroy(); resolve(true); });
+      sock.once('timeout', () => { sock.destroy(); resolve(false); });
+      sock.once('error', () => { sock.destroy(); resolve(false); });
+      sock.connect(port, host);
+    });
   }
 }
