@@ -1,0 +1,19 @@
+{
+  "hostname": "",
+  "port": 22,
+  "username": "",
+  "password": "",
+  "privateKeyPath": "",
+  "passphrase": "",
+  "remotePath": "",
+  "actionOnUpload": "check&upload",
+  "actionOnDownload": "check&download",
+  "actionOnSave": "check&save",
+  "actionOnCreate": "check&create",
+  "actionOnDelete": "none",
+  "actionOnMove": "check&move",
+  "actionOnOpen": "check&download",
+  "ignoreList": [
+    ".vscode"
+  ]
+}

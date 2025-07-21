@@ -50,8 +50,15 @@
     },
     "views": {
       "livesync": [
-        { "id": "livesync.workspaces", "name": "Workspaces", "when": "livesync.multiRoot" },
-        { "id": "livesync.diffs",      "name": "Diffs"      }
+        {
+          "id": "livesync.workspaces",
+          "name": "Workspaces",
+          "when": "livesync.multiRoot"
+        },
+        {
+          "id": "livesync.diffs",
+          "name": "Diffs"
+        }
       ]
     },
     "commands": [
@@ -259,7 +266,11 @@
       "properties": {
         "livesync.openMode": {
           "type": "string",
-          "enum": ["prompt", "ui", "json"],
+          "enum": [
+            "prompt",
+            "ui",
+            "json"
+          ],
           "default": "prompt",
           "description": "When running **LiveSync: Configure Workspace**, should LiveSync…\n- **prompt**: ask each time whether to use the UI panel or raw JSON\n- **ui**: open the custom LiveSync UI panel by default\n- **json**: open the `livesync.json` file by default"
         }
@@ -277,14 +288,15 @@
     "generate-deps-vscodeignore": "node scripts/generateVscodeIgnore.js",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint",
-    "lint": "eslint src --ext ts",
-    "custom-test": "node ./out/src/test/runTest.js",
-    "custom-build-and-test": "npm run compile && node ./out/src/test/runTest.js",
-    "vscode-test": "vscode-test",
-    "vscode-build-and-test": "npm run compile && vscode-test"
+    "pretest": "npm run compile && npm run lint:fix && npm run setup:test-env",
+    "lint:fix": "eslint src --ext ts --fix",
+    "setup:test-env": "npx ts-node scripts/setup-test-env.ts",
+    "test": "vscode-test",
+    "test:single": "vscode-test --label single",
+    "test:multi": "vscode-test --label multi"
   },
   "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
     "@types/mocha": "^10.0.1",
     "@types/node": "18.x",
     "@types/ssh2": "^1.15.0",
@@ -295,10 +307,12 @@
     "@typescript-eslint/eslint-plugin": "^7.4.0",
     "@typescript-eslint/parser": "^7.4.0",
     "@vscode/test-cli": "^0.0.8",
-    "@vscode/test-electron": "^2.4.1",
+    "@vscode/test-electron": "^2.5.2",
     "esbuild": "^0.25.0",
     "esbuild-node-externals": "^1.18.0",
     "eslint": "^8.57.0",
+    "eslint-plugin-unused-imports": "^4.1.4",
+    "fs-extra": "^11.3.0",
     "glob": "^10.3.12",
     "husky": "^9.0.11",
     "jsonc-parser": "^3.2.1",
@@ -306,7 +320,8 @@
     "mocha": "^10.2.0",
     "prettier": "3.2.5",
     "rimraf": "^5.0.5",
-    "typescript": "^4.2.3"
+    "ts-node": "^10.9.2",
+    "typescript": "^4.9.5"
   },
   "dependencies": {
     "fast-glob": "^3.3.3",
