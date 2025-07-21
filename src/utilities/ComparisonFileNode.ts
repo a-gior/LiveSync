@@ -1,10 +1,8 @@
 import { BaseNode, BaseNodeData, BaseNodeType } from "./BaseNode";
 import { FileNode } from "./FileNode";
-import { splitParts } from "./fileUtils/filePathUtils";
 import { StatusBarManager } from "../managers/StatusBarManager";
 import { logInfoMessage } from "../managers/LogManager";
-import { Uri, WorkspaceFolder } from "vscode";
-import { configManager } from "../extension";
+import { WorkspaceFolder } from "vscode";
 
 export enum ComparisonStatus {
   added = "added",
@@ -70,8 +68,8 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
 
     // 3) Decide status in one place
     let status = ComparisonStatus.unchanged;
-    if (!hasLocal)                     status = ComparisonStatus.removed;
-    else if (!hasRemote)               status = ComparisonStatus.added;
+    if (!hasLocal)                     {status = ComparisonStatus.removed;}
+    else if (!hasRemote)               {status = ComparisonStatus.added;}
     else if (localNode!.type !== remoteNode!.type) {
       status = ComparisonStatus.modified;
     } else if (!isDir) {  // file vs file

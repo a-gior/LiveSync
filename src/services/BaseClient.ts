@@ -16,8 +16,8 @@ export abstract class BaseClient {
   protected async guardedConnect(
     fn: () => Promise<void>
   ): Promise<void> {
-    if (this.isConnected) return;
-    if (this.connectPromise) return this.connectPromise;
+    if (this.isConnected) {return;}
+    if (this.connectPromise) {return this.connectPromise;}
 
     this.isConnecting = true;
     this.connectPromise = fn()
@@ -87,7 +87,6 @@ export abstract class BaseClient {
       privateKey,
       passphrase: cfg.passphrase,
       readyTimeout: handshakeTimeout,
-      // timeout: handshakeTimeout,
     };
   }
 

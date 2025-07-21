@@ -25,15 +25,15 @@ export class ConnectionService {
     label?: string
   ): Promise<T> {
     this.sshActive++;
-    if (label) StatusBarManager.showMessage(label, '', '', 0, 'sync~spin', true);
+    if (label) {StatusBarManager.showMessage(label, '', '', 0, 'sync~spin', true);}
     try {
       await this.ensureReachable();
       await this.sshClient.connect(this.cfg);
       const result = await this.retry(() => op(this.sshClient));
-      if (label) StatusBarManager.showMessage(label, '', '', 3000, 'check');
+      if (label) {StatusBarManager.showMessage(label, '', '', 3000, 'check');}
       return result;
     } catch (err) {
-      if (label) StatusBarManager.showMessage(label, '', '', 3000, 'error');
+      if (label) {StatusBarManager.showMessage(label, '', '', 3000, 'error');}
       throw err;
     } finally {
       this.sshActive--;
@@ -46,15 +46,15 @@ export class ConnectionService {
     label?: string
   ): Promise<T> {
     this.sftpActive++;
-    if (label) StatusBarManager.showMessage(label, '', '', 0, 'sync~spin', true);
+    if (label) {StatusBarManager.showMessage(label, '', '', 0, 'sync~spin', true);}
     try {
       await this.ensureReachable();
       await this.sftpClient.connect(this.cfg);
       const result = await this.retry(() => op(this.sftpClient));
-      if (label) StatusBarManager.showMessage(label, '', '', 3000, 'check');
+      if (label) {StatusBarManager.showMessage(label, '', '', 3000, 'check');}
       return result;
     } catch (err) {
-      if (label) StatusBarManager.showMessage(label, '', '', 3000, 'error');
+      if (label) {StatusBarManager.showMessage(label, '', '', 3000, 'error');}
       throw err;
     } finally {
       this.sftpActive--;
@@ -84,7 +84,7 @@ export class ConnectionService {
     const timerRef = type === 'ssh' ? 'sshDisconnectTimer' : 'sftpDisconnectTimer';
     const disconnectFn = type === 'ssh' ? this.sshClient.disconnect.bind(this.sshClient) : this.sftpClient.disconnect.bind(this.sftpClient);
 
-    if (this[timerRef]) clearTimeout(this[timerRef]!);
+    if (this[timerRef]) {clearTimeout(this[timerRef]!);}
     this[timerRef] = setTimeout(async () => {
       if (activeCount === 0) {
         await disconnectFn();

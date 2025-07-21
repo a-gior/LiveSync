@@ -9,7 +9,6 @@ import { SyncTreeDataProvider } from "../../services/SyncTreeDataProvider";
 import { logErrorMessage } from "../../managers/LogManager";
 import { getFullPaths, getRelativePath } from "./filePathUtils";
 import { fileDelete } from "./fileEventFunctions";
-import { configManager } from "../../extension";
 import { FileNodeSource } from "../FileNode";
 
 export function ensureDirectoryExists(dirPath: string): void {

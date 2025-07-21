@@ -1,4 +1,3 @@
-import { Uri } from "vscode";
 
 /**
  * Generic URI-keyed map type.

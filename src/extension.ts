@@ -6,10 +6,10 @@ import { StatusBarManager } from "./managers/StatusBarManager";
 import { FileStatusDecorationProvider } from "./services/FileDecorationProvider";
 import { logInfoMessage } from "./managers/LogManager";
 import { CommandRegistrar } from "./services/CommandRegistrar";
-import { WorkspaceConfigManager2 } from "./managers/WorkspaceConfigManager2";
+import { WorkspaceConfigManager } from "./managers/WorkspaceConfigManager";
 import { migrateStorageSchema } from "./services/WorkspaceJsonStore";
 
-export let configManager: WorkspaceConfigManager2 | null = null;
+export let configManager: WorkspaceConfigManager | null = null;
 
 export async function activate(context: vscode.ExtensionContext) {
   logInfoMessage("LiveSync extension activating...");
@@ -20,7 +20,7 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(vscode.window.registerFileDecorationProvider(fileStatusDecorationProvider));
 
   // Initialize managers
-  configManager = new WorkspaceConfigManager2(context);
+  configManager = new WorkspaceConfigManager(context);
   await configManager.loadConfigs();
   await TreeViewManager.initialize(context);
   CommandRegistrar.register(context, TreeViewManager.diffProvider);
@@ -30,6 +30,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   logInfoMessage("LiveSync extension activated.");
   
+  return { context };
 }
 
 export function deactivate() {

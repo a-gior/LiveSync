@@ -1,7 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { workspace, Uri, WorkspaceFolder } from 'vscode';
-import { getRemoteFileMetadata } from "./fileUtils/sftpOperations";
+import { WorkspaceFolder } from 'vscode';
 import { getRelativePath, pathType } from "./fileUtils/filePathUtils";
 import { BaseNode, BaseNodeData, BaseNodeType } from "./BaseNode";
 import { generateHash } from "./fileUtils/hashUtils";

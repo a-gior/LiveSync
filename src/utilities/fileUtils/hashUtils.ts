@@ -1,5 +1,5 @@
 import * as crypto from "crypto";
-import { stat, createReadStream } from "fs";
+import { createReadStream } from "fs";
 import { FileNodeSource } from "../FileNode";
 import { getRemoteFileContentHash } from "./sftpOperations";
 import { BaseNodeType } from "../BaseNode";

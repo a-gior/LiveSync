@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { ExtensionContext, Uri, workspace } from 'vscode';
+import { ExtensionContext, Uri } from 'vscode';
 import { FileNode } from '../utilities/FileNode';
 import { ComparisonFileNode, ComparisonStatus } from '../utilities/ComparisonFileNode';
 import {
@@ -152,13 +152,13 @@ export class WorkspaceJsonStore {
             let changed = node.status !== ComparisonStatus.unchanged;
             if (node.isDirectory()) {
                 for (const child of node.children.values()) {
-                    if (markChanged(child)) changed = true;
+                    if (markChanged(child)) {changed = true;}
                 }
-                if (changed) state[node.relativePath] = true;
+                if (changed) {state[node.relativePath] = true;}
             }
             return changed;
         };
-        for (const root of rootNodes.children.values()) markChanged(root);
+        for (const root of rootNodes.children.values()) {markChanged(root);}
         await this.saveFolderStates();
     }
 

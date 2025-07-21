@@ -5,7 +5,6 @@ import { SyncTreeDataProvider } from "../services/SyncTreeDataProvider";
 import { ComparisonFileNode } from "../utilities/ComparisonFileNode";
 import { Action } from "../utilities/enums";
 import { showDiff } from "../utilities/fileUtils/fileDiff";
-import { SSHClient } from "../services/SSHClient";
 import { compareCorrespondingEntry } from "../utilities/fileUtils/entriesComparison";
 import { handleAction, performDelete } from "../utilities/fileUtils/fileOperations";
 import { Dialog } from "../services/Dialog";
@@ -16,7 +15,7 @@ import { CommandEntry, CommandManager, ExecutionMode } from "../managers/Command
 import { StatusBarManager } from "../managers/StatusBarManager";
 import { TreeViewManager } from "../managers/TreeViewManager";
 import { configManager } from "../extension";
-import { WorkspaceConfig } from "../managers/WorkspaceConfigManager2";
+import { WorkspaceConfig } from "../managers/WorkspaceConfigManager";
 import { ConnectionSettings } from "../DTOs/config/ConnectionSettings";
 
 export class CommandRegistrar {
@@ -102,12 +101,10 @@ export class CommandRegistrar {
               let compNode: ComparisonFileNode;
               if (element) {
                 compNode = await compareCorrespondingEntry(element);
-                console.log("##### COMP NODE ######", compNode);
                 const updated = await treeDataProvider.updateRootElements(Action.Update, compNode);
                 await treeDataProvider.refresh(updated);
               } else {
                 compNode = await treeDataProvider.getComparisonFileNode(localPath, remotePath);
-                console.log("##### COMP NODE ######", compNode);
                 workspaceConfig.jsonStore.comparisonFileRoot = compNode;
                 await treeDataProvider.refresh();
               }
@@ -254,8 +251,7 @@ export class CommandRegistrar {
     
             const connectionService = workspaceConfig.connectionService;
             try {
-              await connectionService.withSSH(async (sshClient: SSHClient) => {
-              }, "Test Connection");
+              await connectionService.withSSH(async () => {}, "Test Connection");
     
               return true;
             } catch (error: any) {

@@ -1,4 +1,4 @@
-import { Uri, WorkspaceFolder } from "vscode";
+import { WorkspaceFolder } from "vscode";
 
 type ChildrenNodeMap<T> = Map<string, T>;
 

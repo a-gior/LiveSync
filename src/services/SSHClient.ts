@@ -1,5 +1,5 @@
 // src/services/SSHClient.ts
-import { Client, ConnectConfig } from 'ssh2';
+import { Client } from 'ssh2';
 import { BaseClient } from './BaseClient';
 import { ConfigurationMessage } from '@shared/DTOs/messages/ConfigurationMessage';
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from '../managers/LogManager';
@@ -35,7 +35,7 @@ export class SSHClient extends BaseClient {
   }
 
   public async disconnect(): Promise<void> {
-    if (!this.isConnected) return;
+    if (!this.isConnected) {return;}
     logInfoMessage('SSH: disconnecting');
     this.client.end();
     this.isConnected = false;
@@ -48,7 +48,7 @@ export class SSHClient extends BaseClient {
     let output = '';
     return new Promise<string>((resolve, reject) => {
       this.client.exec(command, (err, stream) => {
-        if (err) return reject(err);
+        if (err) {return reject(err);}
         let buffer = '';
 
         const flush = (chunk: string) => {
@@ -65,14 +65,14 @@ export class SSHClient extends BaseClient {
           .stderr.on('data', (b: Buffer) => { flush(b.toString()); output += b.toString(); })
           .on('close', (code: any, signal: any) => {
             // flush any remainder
-            if (buffer && dataCb) dataCb(buffer);
+            if (buffer && dataCb) {dataCb(buffer);}
 
             // normalize for logging
-            const exitCode   = code   != null ? code   : -1;
-            const exitSignal = signal != null ? signal : 'none';
+            const exitCode   = code   !== null ? code   : -1;
+            const exitSignal = signal !== null ? signal : 'none';
 
             // 0 and 1 are “ok” for our use-case
-            if (code != null && ![0, 1].includes(code)) {
+            if (code !== null && ![0, 1].includes(code)) {
               return reject(new Error(
                 `Command "${command}" failed: code=${exitCode}, signal=${exitSignal}`
               ));
@@ -92,7 +92,7 @@ export class SSHClient extends BaseClient {
   }
 
   public async mkdirs(dirs: string[]): Promise<void> {
-    if (dirs.length === 0) return;
+    if (dirs.length === 0) {return;}
     const cmd = `mkdir -p ${dirs.map(d => `'${d}'`).join(' ')}`;
     await this.executeCommand(cmd);
   }

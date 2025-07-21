@@ -26,7 +26,7 @@ export function updateMultiRootContext() {
   commands.executeCommand('setContext', 'livesync.multiRoot', isMulti);
 }
 
-export class WorkspaceConfigManager2 {
+export class WorkspaceConfigManager {
 
     private _context: ExtensionContext;
     private _workspaceType: WorkspaceType | null = null;
@@ -549,9 +549,9 @@ export class WorkspaceConfig {
         const cfg = this._workspaceConfig;
         const isSet = (s?: string) => !!(s && s.trim());
 
-        if (!cfg || !isSet(cfg.hostname) || !isSet(cfg.username)) return false;
-        if (!isSet(cfg.password) && !isSet(cfg.privateKeyPath)) return false;
-        if (!isSet(cfg.remotePath)) return false;
+        if (!cfg || !isSet(cfg.hostname) || !isSet(cfg.username)) {return false;}
+        if (!isSet(cfg.password) && !isSet(cfg.privateKeyPath)) {return false;}
+        if (!isSet(cfg.remotePath)) {return false;}
         return true;
     }
 

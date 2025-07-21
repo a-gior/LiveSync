@@ -18,7 +18,7 @@ export class SFTPClient extends BaseClient {
   }
 
   public async disconnect(): Promise<void> {
-    if (!this.isConnected) return;
+    if (!this.isConnected) {return;}
     logInfoMessage('SFTP: disconnecting');
     await this.client.end();
     this.isConnected = false;
@@ -66,9 +66,9 @@ export class SFTPClient extends BaseClient {
 
   public async pathType(remotePath: string): Promise<BaseNodeType | false> {
     const exists = await this.client.exists(remotePath);
-    if (!exists) return false;
-    if (exists === '-') return BaseNodeType.file;
-    if (exists === 'd') return BaseNodeType.directory;
+    if (!exists) {return false;}
+    if (exists === '-') {return BaseNodeType.file;}
+    if (exists === 'd') {return BaseNodeType.directory;}
     return false;
   }
 

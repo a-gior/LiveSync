@@ -7,7 +7,7 @@ import { FileEventActionsMessage } from "@shared/DTOs/messages/FileEventActionsM
 import { IgnoreListMessage } from "@shared/DTOs/messages/IgnoreListMessage";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../managers/LogManager";
 import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
-import { WorkspaceConfig, WorkspaceConfigManager2 } from "../managers/WorkspaceConfigManager2";
+import { WorkspaceConfig } from "../managers/WorkspaceConfigManager";
 import { configManager } from "../extension";
 
 export class ConfigurationPanel extends Panel {
