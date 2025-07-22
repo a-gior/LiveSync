@@ -40,7 +40,7 @@ export const DEFAULT_WORKSPACE_CONFIG: WorkspaceConfigFile = {
   actionOnOpen:     'check&download', 
 
   // Ignore list
-  ignoreList: ['.vscode'],
+  ignoreList: ['.vscode', '.git', '.svn'],
 };
 
 export const JSON_SCHEMA_VERSION = 2;
