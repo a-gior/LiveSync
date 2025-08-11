@@ -49,8 +49,18 @@ export class SSHClient extends BaseClient {
     return new Promise<string>((resolve, reject) => {
       this.client.exec(command, (err, stream) => {
         if (err) {return reject(err);}
+
+        let exitCode: number | null = null;
+        let exitSignal: string | null = null;
         let buffer = '';
 
+        // 1️⃣ Listen for the real exit event
+        stream.on('exit', (code: number | null, signal: string | null) => {
+          exitCode   = code;
+          exitSignal = signal;
+        });
+
+        // 2️⃣ Data handler (unchanged)
         const flush = (chunk: string) => {
           buffer += chunk;
           const parts = buffer.split('\n');
@@ -59,34 +69,31 @@ export class SSHClient extends BaseClient {
             dataCb?.(line + '\n');
           }
         };
-
         stream
-          .on('data', (b: Buffer) => { flush(b.toString()); output += b.toString(); })
-          .stderr.on('data', (b: Buffer) => { flush(b.toString()); output += b.toString(); })
-          .on('close', (code: any, signal: any) => {
-            // flush any remainder
-            if (buffer && dataCb) {dataCb(buffer);}
+          .on('data',    (b: Buffer) => { flush(b.toString()); output += b; })
+          .stderr.on('data', (b: Buffer) => { flush(b.toString()); output += b; });
 
-            // normalize for logging
-            const exitCode   = code   !== null ? code   : -1;
-            const exitSignal = signal !== null ? signal : 'none';
+        // 3️⃣ Close handler––now exitCode & exitSignal are set
+        stream.on('close', () => {
+          if (buffer && dataCb) {dataCb(buffer);}
 
-            // 0 and 1 are “ok” for our use-case
-            if (code !== null && ![0, 1].includes(code)) {
-              return reject(new Error(
-                `Command "${command}" failed: code=${exitCode}, signal=${exitSignal}`
-              ));
-            }
+          // treat undefined (never set) same as null
+          const code   = exitCode   !== null ? exitCode   : -1;
+          const signal = exitSignal !== null ? exitSignal : 'none';
 
-            if (code === 1) {
-              logErrorMessage(
-                `Command "${command}" exited with code 1 (permissions?)`,
-                LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
-              );
-            }
-
-            resolve(output);
-          });
+          if (![0, 1].includes(code)) {
+            return reject(new Error(
+              `Command "${command}" failed: code=${code}, signal=${signal}`
+            ));
+          }
+          if (code === 1) {
+            logErrorMessage(
+              `Command "${command}" exited with code 1 (permissions?)`,
+              LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+            );
+          }
+          resolve(output);
+        });
       });
     });
   }
