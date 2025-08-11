@@ -83,7 +83,10 @@ export class TreeViewManager {
   public static updateMessage(provider: SyncTreeDataProvider): void {
     const root = provider.displayedComparisonNode;
 
-    if(!root) {return;}
+    if(!root) {
+      this._diffView.message = '';
+      return;
+    }
 
     // 1. No items under the root?
     if (root.listChildren().length === 0) {
