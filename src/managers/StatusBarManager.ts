@@ -1,14 +1,18 @@
 import * as vscode from "vscode";
+import { basename } from "path";
 
 export class StatusBarManager {
   private static statusBarItem: vscode.StatusBarItem;
   private static permanentItem: vscode.StatusBarItem;
   private static progressItem: vscode.StatusBarItem;
+  private static errorItem: vscode.StatusBarItem;
   private static currentMessage: string;
   private static currentIcon: string;
 
   private static totalItems: number = 0;
   private static currentItem: number = 0;
+  
+  private static _errored = new Map<string, string>();
 
   private static getStatusBarItem(): vscode.StatusBarItem {
     if (!this.statusBarItem) {
@@ -125,5 +129,44 @@ export class StatusBarManager {
       this.permanentItem.command = "livesync.configuration";
       this.permanentItem.show();
     }
+  }
+
+  static createErrorIcon() {
+    if (!this.errorItem) {
+      this.errorItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 101);
+      this.errorItem.command = 'livesync.showLogs';   // or open Problems
+      this.errorItem.show();
+    }
+  }
+
+  public static refreshErrorIcon(nbErrors: number = 0) {
+    StatusBarManager.createErrorIcon();
+
+    if (nbErrors === 0) {
+      this.errorItem.hide();
+      return;
+    }
+
+    // text = icon + count
+    this.errorItem.text = `$(error) ${nbErrors}`;
+
+    // tooltip = one line per workspace
+    const lines = Array.from(this._errored.entries()).map(([id, msg]) => {
+      const name = basename(vscode.Uri.parse(id).fsPath);
+      return `${name}: ${msg}`;
+    });
+
+    this.errorItem.tooltip = lines.join('\n');
+    this.errorItem.show();
+  }
+  
+  public static markErrored(id: string, errorMessage: string) {
+      this._errored.set(id, errorMessage);
+      StatusBarManager.refreshErrorIcon(this._errored.size);
+  }
+
+  public static clearErrored(id: string) {
+      this._errored.delete(id);
+      StatusBarManager.refreshErrorIcon(this._errored.size);
   }
 }

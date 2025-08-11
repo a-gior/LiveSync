@@ -10,6 +10,7 @@ import { FileNodeSource } from "../utilities/FileNode";
 import { normalizePath, PathPair } from "../utilities/fileUtils/filePathUtils";
 import { WorkspaceJsonStore } from "../services/WorkspaceJsonStore";
 import { ConnectionService } from "../services/ConnectionService";
+import { StatusBarManager } from "./StatusBarManager";
 
 export enum WorkspaceType {
     SingleRoot,
@@ -33,7 +34,7 @@ export class WorkspaceConfigManager {
     private _workspaceConfigs: Map<string, WorkspaceConfig> = new Map();
     private _pathsByHost     = new Map<string, Set<string>>();
     private _events: WorkspaceEventsManager;
-
+    
     constructor(context: ExtensionContext) {
         this._context = context;
         this.detectWorkspaceType();
@@ -65,29 +66,54 @@ export class WorkspaceConfigManager {
         commands.executeCommand('setContext', 'livesync.multiRoot', type === WorkspaceType.MultiRoot );
     }
 
-    /**
-     * Reads and registers a config for exactly one folder.
-     */
-    public async loadConfig(folder: WorkspaceFolder): Promise<void> {
+    public get workspaceConfigs(): Map<string, WorkspaceConfig> {
+        return this._workspaceConfigs;
+    }
+
+    private async processFolder(folder: WorkspaceFolder): Promise<void> {
         this.detectWorkspaceType();
-        
+
         const configUri = getConfigPath(folder);
         try {
             await workspace.fs.stat(configUri);
         } catch {
-            // no config file here
+            StatusBarManager.markErrored(folder.uri.fsPath.toString(), 'No config found');
+            return;
+        }
+
+        // As long as the config exists, we create and register it
+        let instance: WorkspaceConfig;
+        try {
+            instance = await WorkspaceConfig.create(this, folder);
+        } catch (err: any) {
+            logErrorMessage(`Failed to read/parse config for ${folder.name}: ${err.message || err}`);
+            return;
+        }
+        this.registerConfig(folder, instance);
+
+        if (!instance.isValid) {
+            console.warn(`Invalid config for ${folder.name}:`, instance);
+            StatusBarManager.markErrored(instance.id, 'Invalid Config');
+            logConfigError(this._context, LOG_FLAGS.ALL, true, folder, `Invalid Config for ${folder.name}`);
             return;
         }
 
         try {
-            const instance = await WorkspaceConfig.create(folder);
-            if (!instance.isValid) {
-                logConfigError(this._context, LOG_FLAGS.ALL, true, folder,  `Invalid Config for ${folder.name}`); // Shows popup and throws error
-            }
-            this.registerConfig(folder, instance);
-            logInfoMessage(`Loaded config for ${folder.name}`);
+            await instance.connectionService.ensureReachable();
         } catch (err: any) {
-            logErrorMessage(`Failed to load config for ${folder.name}: ${err.message || err}`);
+            const errorMessage = String(err?.message ?? err);
+            StatusBarManager.markErrored(instance.id, errorMessage);
+            logErrorMessage(`${folder.name}: ${errorMessage}`, LOG_FLAGS.CONSOLE_AND_VSCODE);
+        }
+    }
+
+    public async loadConfig(folder: WorkspaceFolder): Promise<void> {
+        await this.processFolder(folder);
+    }
+
+    public async loadConfigs(): Promise<void> {
+        for (const folder of workspace.workspaceFolders ?? []) {
+            await this.loadConfig(folder);
         }
     }
 
@@ -120,21 +146,21 @@ export class WorkspaceConfigManager {
         for (const existing of set) {
             if (rp.startsWith(existing + '/')) {
                 logConfigError(
-                this._context,
-                LOG_FLAGS.ALL,
-                false,
-                folder,
-                `Config for "${folder.name}" skipped: "${rp}" is inside existing path "${existing}".`
+                    this._context,
+                    LOG_FLAGS.ALL,
+                    false,
+                    folder,
+                    `Config for "${folder.name}" skipped: "${rp}" is inside existing path "${existing}".`
                 );
                 return;
             }
             if (existing.startsWith(rp + '/')) {
                 logConfigError(
-                this._context,
-                LOG_FLAGS.ALL,
-                false,
-                folder,
-                `Config for "${folder.name}" skipped: existing path "${existing}" is inside "${rp}".`
+                    this._context,
+                    LOG_FLAGS.ALL,
+                    false,
+                    folder,
+                    `Config for "${folder.name}" skipped: existing path "${existing}" is inside "${rp}".`
                 );
                 return;
             }
@@ -214,36 +240,10 @@ export class WorkspaceConfigManager {
         throw new Error(`Workspace with ${folders.length} folders; file: ${wsFile?.toString()}`);
     }
 
-    /**
-     * Scan for `.vscode/custom-config.json` in the appropriate folders,
-     * parse any you find, and create a WorkspaceConfig for each.
-     */
-    public async loadConfigs(): Promise<void> {
-        const folders = workspace.workspaceFolders || [];
-        for (const folder of folders) {
-            const configPath = getConfigPath(folder);
-            try {
-                await workspace.fs.stat(configPath);
-            } catch {
-                logInfoMessage(`No config at ${folder.name}`);
-                continue; // no config here
-            }
-
-            const instance = await WorkspaceConfig.create(folder);
-            if (!instance.isValid) {
-                logConfigError(this._context, LOG_FLAGS.ALL, false, folder, `Invalid Config for ${instance.folderName}`); // Shows popup
-            } else {
-                const key = `suppressConfigError:${folder.uri.toString()}`;
-                await this._context.workspaceState.update(key, false);
-                this.registerConfig(folder, instance);
-            }
-        }
-    }
-
     public getConfig(folderUri: Uri): WorkspaceConfig {
         const config = this._workspaceConfigs.get(folderUri.fsPath);
         if (!config) {
-            throw new Error(`No config found for workspace "${folderUri.fsPath}"`);
+            throw new Error(`No config found for workspace "${path.basename(folderUri.fsPath)}"`);
         }
         return config;
     }
@@ -362,12 +362,12 @@ export class WorkspaceConfig {
     public readonly jsonStore: WorkspaceJsonStore;
     public readonly connectionService: ConnectionService;
 
-    private constructor(folder: WorkspaceFolder, config: WorkspaceConfigFile) {
+    private constructor(public readonly id: string, private readonly _configManager: WorkspaceConfigManager, folder: WorkspaceFolder, config: WorkspaceConfigFile, connectionService: ConnectionService) {
         this._folder = folder;
         this._workspaceConfig = config;
 
         this.jsonStore = new WorkspaceJsonStore(folder.uri);
-        this.connectionService = new ConnectionService(this.connectionSettings);
+        this.connectionService = connectionService;
     }
 
     public async initialize() {
@@ -513,7 +513,7 @@ export class WorkspaceConfig {
      * Async factory method: reads & parses the config, 
      * then returns a fully-initialized instance.
      */
-    public static async create(folder: WorkspaceFolder): Promise<WorkspaceConfig> {
+    public static async create(configManager: WorkspaceConfigManager, folder: WorkspaceFolder): Promise<WorkspaceConfig> {
         const configFile = getConfigPath(folder);
         let raw: Uint8Array;
         try {
@@ -536,7 +536,8 @@ export class WorkspaceConfig {
             ...parsed
         };
 
-        const workspaceConfig = new WorkspaceConfig(folder, fullConfig);
+        const connSvc = new ConnectionService(fullConfig);
+        const workspaceConfig = new WorkspaceConfig(folder.uri.fsPath, configManager, folder, fullConfig, connSvc);
         await workspaceConfig.initialize();
         return workspaceConfig;
     }
