@@ -86,10 +86,16 @@ export class CommandRegistrar {
           mode: ExecutionMode.Single,
         },
         'livesync.refresh': {
-          callback: async (element?: ComparisonFileNode) => {
+          callback: async (element?: ComparisonFileNode | vscode.Uri) => {
             StatusBarManager.showMessage(`Scanning…`, "", "", 0, "sync~spin", true);
-
+            
             const workspaceConfig = treeDataProvider.currentWorkspaceConfig;
+            if(element instanceof vscode.Uri) {
+              const relativePath = getRelativePath(element.fsPath, FileNodeSource.local);
+              const comparisonNode = workspaceConfig.jsonStore.findComparisonNode(relativePath);
+              element = comparisonNode;
+            }
+
             // pick root vs subtree
             const { localPath, remotePath } = element ? await getFullPaths(element) : workspaceConfig.getPathPair();
 
