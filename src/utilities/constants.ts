@@ -44,3 +44,5 @@ export const DEFAULT_WORKSPACE_CONFIG: WorkspaceConfigFile = {
 };
 
 export const JSON_SCHEMA_VERSION = 2;
+
+export const KEY = "suppressConfigErrorList";

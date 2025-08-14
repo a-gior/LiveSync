@@ -150,13 +150,22 @@ export class StatusBarManager {
     // text = icon + count
     this.errorItem.text = `$(error) ${nbErrors}`;
 
-    // tooltip = one line per workspace
-    const lines = Array.from(this._errored.entries()).map(([id, msg]) => {
+    // Build a Markdown tooltip
+    const md = new vscode.MarkdownString(undefined, true);
+    md.supportThemeIcons = true; // allow $(folder) icon
+    md.isTrusted = false; // no links needed here
+
+    md.appendMarkdown(`$(error) **LiveSync — Failed to Load Workspaces**\n\n`);
+
+    // one line per workspace
+    Array.from(this._errored.entries()).forEach(([id, msg]) => {
       const name = basename(vscode.Uri.parse(id).fsPath);
-      return `${name}: ${msg}`;
+      md.appendMarkdown(`$(folder) **${name}**: ${msg}  \n`);
     });
 
-    this.errorItem.tooltip = lines.join('\n');
+    this.errorItem.backgroundColor = new vscode.ThemeColor("statusBarItem.errorBackground");
+    this.errorItem.color = new vscode.ThemeColor("statusBarItem.errorForeground");
+    this.errorItem.tooltip = md;
     this.errorItem.show();
   }
   
@@ -168,5 +177,9 @@ export class StatusBarManager {
   public static clearErrored(id: string) {
       this._errored.delete(id);
       StatusBarManager.refreshErrorIcon(this._errored.size);
+  }
+
+  public static getError(id: string) {
+    return this._errored.get(id) || "";
   }
 }

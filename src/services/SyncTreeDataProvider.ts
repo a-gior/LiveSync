@@ -11,6 +11,7 @@ import { TreeViewManager } from "../managers/TreeViewManager";
 import { StatusBarManager } from "../managers/StatusBarManager";
 import { configManager } from "../extension";
 import { FileNodeSource } from "../utilities/FileNode";
+import { handleConfigError, WorkspaceConfigError } from "../managers/WorkspaceConfigManager";
 
 export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonFileNode> {
   private _onDidChangeTreeData: vscode.EventEmitter<ComparisonFileNode | undefined | void> = new vscode.EventEmitter<
@@ -26,12 +27,12 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
 
   public displayedComparisonNode?: ComparisonFileNode;
 
-  constructor(showAsTree: boolean = true, showUnchanged: boolean = true, collapseAll: boolean = true) {
+  constructor(folder: vscode.WorkspaceFolder, showAsTree: boolean = true, showUnchanged: boolean = true, collapseAll: boolean = true) {
     this._showAsTree = showAsTree;
     this._showUnchanged = showUnchanged;
     this._collapseAll = collapseAll;
 
-    this._currentWorkspace = vscode.workspace.workspaceFolders![0];
+    this._currentWorkspace = folder;
   }
 
   updateDisplayedComparisonNode() {
@@ -146,6 +147,11 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
     // If we’re expanding an existing node, just return its children
     if (element) {
       return this.applyViewMode(Array.from(element.children.values()));
+    }
+
+    if(!this.currentWorkspaceConfig.isValid) {
+      handleConfigError(new WorkspaceConfigError(this.currentWorkspace, "Invalid Config"), this.currentWorkspace);
+      return [];
     }
 
     // Ensure we have a comparisonFileRoot in our store

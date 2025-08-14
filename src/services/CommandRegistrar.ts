@@ -17,6 +17,7 @@ import { TreeViewManager } from "../managers/TreeViewManager";
 import { configManager } from "../extension";
 import { WorkspaceConfig } from "../managers/WorkspaceConfigManager";
 import { ConnectionSettings } from "../DTOs/config/ConnectionSettings";
+import { suppressConfigError } from "../storage/ConfigErrorSuppressor";
 
 export class CommandRegistrar {
     static register(
@@ -268,10 +269,7 @@ export class CommandRegistrar {
         },
         'livesync.dismissConfigError': {
           callback: async (folder: vscode.WorkspaceFolder) => {
-
-            // key it by the folder URI
-            const key = `suppressConfigError:${folder.uri.toString()}`;
-            await context.workspaceState.update(key, true);
+            await suppressConfigError(folder);
             logInfoMessage(
               `Configuration errors for "${folder.name}" will be suppressed until valid.`,
               LOG_FLAGS.ALL

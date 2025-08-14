@@ -14,10 +14,12 @@ import {
 } from "../utilities/fileUtils/fileEventFunctions";
 import { ComparisonFileNode, ComparisonStatus } from "../utilities/ComparisonFileNode";
 import { Action, ActionOn, ActionResult } from "../utilities/enums";
-import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../managers/LogManager";
+import { logErrorMessage, logInfoMessage } from "../managers/LogManager";
 import { getFullPaths, getRelativePath } from "../utilities/fileUtils/filePathUtils";
 import { CommandManager } from "../managers/CommandManager";
 import { configManager } from "../extension";
+import { CONFIG_FILE_NAME } from "../utilities/constants";
+import { handleConfigError } from "../managers/WorkspaceConfigManager";
 
 export class FileEventHandler {
   
@@ -113,13 +115,12 @@ export class FileEventHandler {
     if (workspaceFolders) {
       // Iterate over all workspace folders and check for the settings file path
       for (const workspaceFolder of workspaceFolders) {
-        const settingsPath = path.join(workspaceFolder.uri.fsPath, ".vscode", "settings.json");
+        const settingsPath = path.join(workspaceFolder.uri.fsPath, ".vscode", CONFIG_FILE_NAME);
         if (filePath === settingsPath) {
           if (action === Action.Save) {
             logInfoMessage(`<handleFile${action}> Detected configuration file at ${filePath}, reloading workspace configuration.`);
-            
           } else {
-            logInfoMessage(`<handleFile${action}> Detected configuration file at ${filePath}, skipping further processing of this event.`);
+            logInfoMessage(`<handleFile${action}> Detected configuration file at ${filePath}, skipping...`);
           }
           return true;
         }
@@ -155,7 +156,7 @@ export class FileEventHandler {
 
         const fileNode = await FileNode.createFileNodeFromLocalPath(filePath);
         if (!fileNode) {
-          console.warn(`<handleFileCreate> File node for ${filePath} could not be created`);
+          logErrorMessage(`<handleFileCreate> File node for ${filePath} could not be created`);
           continue;
         }
 
@@ -176,7 +177,8 @@ export class FileEventHandler {
         const updatedNode = await treeDataProvider.updateRootElements(Action.Add, comparisonNode);
         await treeDataProvider.refresh(updatedNode);
       } catch (err: any) {
-        logErrorMessage("<handleFileCreate> Error: ", LOG_FLAGS.CONSOLE_ONLY, err);
+        const workspaceFolder = configManager!.getWorkspaceFolderFromPath(filePath, FileNodeSource.local);
+        handleConfigError(err, workspaceFolder.uri.fsPath);
       }
     }
   }
@@ -208,7 +210,7 @@ export class FileEventHandler {
         const nodeToDelete = configManager!.getConfig(workspaceConfig.uri).jsonStore.findComparisonNode(relativePath);
 
         if (!nodeToDelete) {
-          console.warn(`<handleFileDelete> Node not found for ${filePath}`);
+          logErrorMessage(`<handleFileDelete> Node not found for ${filePath}`);
           return;
         }
 
@@ -222,7 +224,8 @@ export class FileEventHandler {
         const deletedNode = await treeDataProvider.updateRootElements(action, nodeToDelete);
         await treeDataProvider.refresh(deletedNode);
       } catch (err: any) {
-        logErrorMessage("<handleFileDelete> Error: ", LOG_FLAGS.CONSOLE_ONLY, err);
+        const workspaceFolder = configManager!.getWorkspaceFolderFromPath(filePath, FileNodeSource.local);
+        handleConfigError(err, workspaceFolder.uri.fsPath);
       }
     }
   }
@@ -246,13 +249,14 @@ export class FileEventHandler {
 
     logInfoMessage(`<handleFileSave> Event saving ${filePath}`);
 
+
     try {
       // Get node from rootElements
-      const workspaceConfig = configManager!.getWorkspaceFolderFromPath(filePath, FileNodeSource.local);
+      const workspaceFolder = configManager!.getWorkspaceFolderFromPath(filePath, FileNodeSource.local);
       const relativePath = getRelativePath(filePath, FileNodeSource.local);
-      const nodeToSave = configManager!.getConfig(workspaceConfig.uri).jsonStore.findComparisonNode(relativePath);
+      const nodeToSave = configManager!.getConfig(workspaceFolder.uri).jsonStore.findComparisonNode(relativePath);
       if (!nodeToSave) {
-        console.warn(`<handleFileSave> Node not found for ${filePath}`);
+        logErrorMessage(`<handleFileSave> Node not found for ${filePath}`);
         return;
       }
 
@@ -265,7 +269,8 @@ export class FileEventHandler {
       const savedNode = await treeDataProvider.updateRootElements(Action.Update, nodeToSave);
       await treeDataProvider.refresh(savedNode);
     } catch (err: any) {
-      logErrorMessage("<handleFileSave> Error: ", LOG_FLAGS.CONSOLE_ONLY, err);
+      const workspaceFolder = configManager!.getWorkspaceFolderFromPath(filePath, FileNodeSource.local);
+      handleConfigError(err, workspaceFolder.uri.fsPath);
     }
   }
 
@@ -324,7 +329,9 @@ export class FileEventHandler {
         await treeDataProvider.refresh(addedNode);
 
       } catch (err: any) {
-        logErrorMessage(`<handleFileRename> Error: ${err.message}`, LOG_FLAGS.CONSOLE_ONLY);
+      
+        const workspaceFolder = configManager!.getWorkspaceFolderFromPath(oldPath, FileNodeSource.local);
+        handleConfigError(err, workspaceFolder.uri.fsPath);
       }
     }
   }
@@ -359,7 +366,9 @@ export class FileEventHandler {
       const savedNode = await treeDataProvider.updateRootElements(Action.Update, openedNode);
       await treeDataProvider.refresh(savedNode);
     } catch (err: any) {
-      logErrorMessage(`<handleFileOpen> Error: ${err.message}`, LOG_FLAGS.CONSOLE_ONLY);
+      
+      const workspaceFolder = configManager!.getWorkspaceFolderFromPath(filePath, FileNodeSource.local);
+      handleConfigError(err, workspaceFolder.uri.fsPath);
     }
   }
 
@@ -387,7 +396,9 @@ export class FileEventHandler {
       const updatedNode = await treeDataProvider.updateRootElements(Action.Update, fileNode);
       await treeDataProvider.refresh(updatedNode);
     } catch (err: any) {
-      logErrorMessage("<handleFileDownload> Error: ", LOG_FLAGS.CONSOLE_ONLY, err);
+      
+      const workspaceFolder = configManager!.getWorkspaceFolderFromPath(localPath, FileNodeSource.local);
+      handleConfigError(err, workspaceFolder.uri.fsPath);
     }
   }
 
@@ -415,7 +426,9 @@ export class FileEventHandler {
       const updatedNode = await treeDataProvider.updateRootElements(Action.Update, fileNode);
       await treeDataProvider.refresh(updatedNode);
     } catch (err: any) {
-      logErrorMessage("<handleFileUpload> Error: ", LOG_FLAGS.CONSOLE_ONLY, err);
+      
+      const workspaceFolder = configManager!.getWorkspaceFolderFromPath(localPath, FileNodeSource.local);
+      handleConfigError(err, workspaceFolder.uri.fsPath);
     }
   }
 

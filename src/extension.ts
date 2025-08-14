@@ -8,12 +8,15 @@ import { logInfoMessage } from "./managers/LogManager";
 import { CommandRegistrar } from "./services/CommandRegistrar";
 import { WorkspaceConfigManager } from "./managers/WorkspaceConfigManager";
 import { migrateStorageSchema } from "./services/WorkspaceJsonStore";
+import { initConfigErrorSuppressor } from "./storage/ConfigErrorSuppressor";
 
 export let configManager: WorkspaceConfigManager | null = null;
 
 export async function activate(context: vscode.ExtensionContext) {
   logInfoMessage("LiveSync extension activating...");
   await migrateStorageSchema(context);
+  
+  initConfigErrorSuppressor(context);
   
   // Register file status decoration provider
   const fileStatusDecorationProvider = new FileStatusDecorationProvider();

@@ -26,7 +26,8 @@ export class TreeViewManager {
     });
 
     // 3) Create the Diffs tree
-    this._diffProvider = new SyncTreeDataProvider(showAsTree, showUnchanged, collapseAll);
+    const initialFolder = vscode.workspace.workspaceFolders![0];
+    this._diffProvider = new SyncTreeDataProvider(initialFolder, showAsTree, showUnchanged, collapseAll);
     this._diffView = vscode.window.createTreeView('livesync.diffs', {
       treeDataProvider: this._diffProvider
     });
@@ -54,19 +55,26 @@ export class TreeViewManager {
         this._diffProvider.currentWorkspace = folder;
         await this._diffProvider.refresh();
 
-        this._diffView.title = `Diffs — ${folder.name ?? "No Workspace"}`;
+        TreeViewManager.setDiffViewTitle();
       }
     });
 
     // 7) Load initial diff tree
-    this._diffView.title = `Diffs — ${this._diffProvider.currentWorkspace.name ?? "No Workspace"}`;
+    TreeViewManager.setDiffViewTitle();
     await this._diffProvider.refresh();
-    
 
     // 8) Clean up on deactivate
     context.subscriptions.push(this._workspaceView, this._diffView);
 
     return this._diffProvider;
+  }
+
+  private static setDiffViewTitle() {
+    if(this._diffProvider.currentWorkspaceConfig.isValid) {
+      this._diffView.title = `Diffs — ${this._diffProvider.currentWorkspace.name ?? "No Workspace"}`;
+    } else {
+      this._diffView.title = `Diffs — ${this._diffProvider.currentWorkspace.name ?? "No Workspace"} (Invalid Config)`;
+    }
   }
 
   public static get diffProvider() {

@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { isConfigErrorSuppressed } from "../storage/ConfigErrorSuppressor";
 
 // Define constants for the logging flags
 export const LOG_FLAGS = {
@@ -152,18 +153,13 @@ export class LogManager {
   }
 }
 
-export function logConfigError(ctx: vscode.ExtensionContext, flag: LogFlags = LOG_FLAGS.ALL, shouldThrow: boolean = false, folder: vscode.WorkspaceFolder, errMessage: string = "") {
+export function logConfigError(flag: LogFlags = LOG_FLAGS.ALL, folder: vscode.WorkspaceFolder, errMessage: string = "") {
+  if (isConfigErrorSuppressed(folder)) {
+    return; // user chose "Don't show again" for this workspace
+  }
+  
   const errorMessage = errMessage || "The server is unreachable. Check your configuration.";
   
-  const key = `suppressConfigError:${folder.uri.toString()}`;
-  const isSuppressed = ctx.workspaceState.get<boolean>(key, false);
-
-  if (isSuppressed ) {
-    // User clicked “Don’t show again” previously → skip showing this error
-    return;
-  }
-
-
   // Default actions for this error
   const errorActions: LogErrorAction = [
     { title: "Open Configuration", command: "livesync.configuration" },
@@ -172,8 +168,4 @@ export function logConfigError(ctx: vscode.ExtensionContext, flag: LogFlags = LO
   ];
 
   logErrorMessage(errorMessage, flag, undefined, errorActions);
-  
-  if (shouldThrow) {
-    throw new Error(errorMessage);
-  }
 }
