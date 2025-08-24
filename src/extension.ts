@@ -9,6 +9,7 @@ import { CommandRegistrar } from "./services/CommandRegistrar";
 import { WorkspaceConfigManager } from "./managers/WorkspaceConfigManager";
 import { migrateStorageSchema } from "./services/WorkspaceJsonStore";
 import { initConfigErrorSuppressor } from "./storage/ConfigErrorSuppressor";
+import { initLastSelectedWorkspace } from "./storage/LastSelectedWorkspace";
 
 export let configManager: WorkspaceConfigManager | null = null;
 
@@ -17,6 +18,7 @@ export async function activate(context: vscode.ExtensionContext) {
   await migrateStorageSchema(context);
   
   initConfigErrorSuppressor(context);
+  initLastSelectedWorkspace(context);
   
   // Register file status decoration provider
   const fileStatusDecorationProvider = new FileStatusDecorationProvider();

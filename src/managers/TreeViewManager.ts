@@ -4,6 +4,7 @@ import { SyncTreeDataProvider } from '../services/SyncTreeDataProvider';
 import { WorkspaceTreeDataProvider } from '../services/WorkspaceTreeDataProvider';
 import { ComparisonFileNode, ComparisonStatus } from '../utilities/ComparisonFileNode';
 import { configManager } from '../extension';
+import { getLastSelectedWorkspace, setLastSelectedWorkspace } from '../storage/LastSelectedWorkspace';
 
 export class TreeViewManager {
   private static _workspaceView: vscode.TreeView<vscode.WorkspaceFolder>;
@@ -26,7 +27,7 @@ export class TreeViewManager {
     });
 
     // 3) Create the Diffs tree
-    const initialFolder = vscode.workspace.workspaceFolders![0];
+    const initialFolder = getLastSelectedWorkspace();
     this._diffProvider = new SyncTreeDataProvider(initialFolder, showAsTree, showUnchanged, collapseAll);
     this._diffView = vscode.window.createTreeView('livesync.diffs', {
       treeDataProvider: this._diffProvider
@@ -52,6 +53,7 @@ export class TreeViewManager {
     this._workspaceView.onDidChangeSelection(async event => {
       const folder = event.selection[0];
       if (folder) {
+        setLastSelectedWorkspace(folder);
         this._diffProvider.currentWorkspace = folder;
         await this._diffProvider.refresh();
 
