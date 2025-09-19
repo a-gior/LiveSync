@@ -139,6 +139,9 @@
         "command": "livesync.expandChangedFolders",
         "title": "Expand Changed Folders",
         "icon": "$(expand-all)"
+      },
+      { "command": "livesync.toggleRefreshOnConfigSave", 
+        "title": "LiveSync: Toggle Refresh on Config Save" 
       }
     ],
     "menus": {
@@ -262,6 +265,12 @@
           "enum": ["prompt", "ui", "json"],
           "default": "prompt",
           "description": "When running **LiveSync: Configure Workspace**, should LiveSync…\n- **prompt**: ask each time whether to use the UI panel or raw JSON\n- **ui**: open the custom LiveSync UI panel by default\n- **json**: open the `livesync.json` file by default"
+        },
+        "livesync.refreshOnConfigSave": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Refresh differences after saving a LiveSync config file."
         }
       }
     }

@@ -277,6 +277,21 @@ export class CommandRegistrar {
           },
           mode: ExecutionMode.Single,
         },
+        'livesync.toggleRefreshOnConfigSave': {
+          callback: async (uri?: vscode.Uri) => {
+            const folder = uri ? vscode.workspace.getWorkspaceFolder(uri) : vscode.workspace.workspaceFolders?.[0];
+            if (!folder) {return;}
+
+            const config = vscode.workspace.getConfiguration('livesync', folder.uri);
+            const current = config.get<boolean>('refreshOnConfigSave', true);
+            await config.update('refreshOnConfigSave', !current, vscode.ConfigurationTarget.WorkspaceFolder);
+
+            vscode.window.showInformationMessage(
+              `Refresh on config save: ${!current ? 'ON' : 'OFF'} for “${folder.name}”.`
+            );
+          },
+          mode: ExecutionMode.Single,
+        },
       };
   
       for (const [id, entry] of Object.entries(commands)) {
