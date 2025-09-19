@@ -122,6 +122,10 @@ export class ComparisonFileNode extends BaseNode<ComparisonFileNode> {
       }
     }
 
+    if (isRoot) {
+      StatusBarManager.showMessage(`Comparison tree built!`, "", "", 4000, "check");
+    }
+
     return compNode;
   }
 

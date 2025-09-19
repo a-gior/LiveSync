@@ -1,4 +1,4 @@
-import { workspace, ExtensionContext, WorkspaceFolder, Uri, window, Event, EventEmitter, FileSystemWatcher, commands } from "vscode";
+import { workspace, ExtensionContext, WorkspaceFolder, Uri, window, EventEmitter, FileSystemWatcher, commands } from "vscode";
 import * as path from 'path';
 import { LOG_FLAGS, logConfigError, logErrorMessage, logInfoMessage } from "./LogManager";
 import { WorkspaceConfigFile } from "@shared/DTOs/config/WorkspaceConfig";
@@ -13,6 +13,7 @@ import { ConnectionService } from "../services/ConnectionService";
 import { StatusBarManager } from "./StatusBarManager";
 import { configManager } from "../extension";
 import { clearSuppressedConfigError } from "../storage/ConfigErrorSuppressor";
+import { refreshDifferences } from "../utilities/fileUtils/fileDiff";
 
 export enum WorkspaceType {
     SingleRoot,
@@ -41,53 +42,67 @@ export class WorkspaceConfigManager {
         this._context = context;
         this.detectWorkspaceType();
 
-        // instantiate and subscribe to all workspace events here
         this._events = new WorkspaceEventsManager();
         this._context.subscriptions.push(this._events);
 
-        this._events.onFolderAdded(folder =>
-            this.safeLoadConfigAction(() => this.loadConfig(folder), folder)
-        );
+        // Folder added
+        this._events.onFolderAdded(folder => {
+            this.safeLoadConfigAction(folder, async () => {
+                await this.loadConfig(folder);
+                refreshDifferences(folder);
+            });
+        });
 
+        // Folder removed
         this._events.onFolderRemoved(folder => {
             this.removeConfig(folder.uri);
         });
 
-        this._events.onConfigCreated(uri =>
-            this.safeLoadConfigAction(() => this.loadConfigByUri(uri), uri)
-        );
-
-        this._events.onConfigChanged(uri =>
-            this.safeLoadConfigAction(() => this.loadConfigByUri(uri), uri)
-        );
-
-        this._events.onConfigDeleted(uri => {
-            this.removeConfigForUri(uri);
+        // Config created
+        this._events.onConfigCreated(uri => {
+            console.log("CONFIG CREATED");
+            this.safeLoadConfigAction(uri, async folder => {
+                await this.loadConfigByUri(folder.uri);
+                refreshDifferences(folder);
+            });
         });
 
+        // Config changed
+        this._events.onConfigChanged(uri => {
+            this.safeLoadConfigAction(uri, async folder => {
+                console.log("CONFIG CHANGED");
+                this.removeConfig(folder.uri);
+                await this.loadConfigByUri(folder.uri);
+                await refreshDifferences(folder);
+            });
+        });
+
+        // Config deleted
+        this._events.onConfigDeleted(uri => {
+        this.removeConfigForUri(uri);
+        });
     }
 
     private async safeLoadConfigAction(
-        action: () => Promise<void>,
-        uriOrFolder: Uri | WorkspaceFolder
+        target: Uri | WorkspaceFolder,
+        action: (folder: WorkspaceFolder) => Promise<void>
     ) {
-        try {
-            await action();
-        } catch (err) {
-            let folder: WorkspaceFolder | undefined;
-
-            if (uriOrFolder instanceof Uri) {
-                folder = workspace.getWorkspaceFolder(uriOrFolder);
-            } else {
-                folder = uriOrFolder;
-            }
-
-            if(folder) {
-                handleConfigError(err, folder.uri.fsPath, true);
-            } else {
-                throw err;
-            }
+        const folder = target instanceof Uri ? workspace.getWorkspaceFolder(target) : target;
+        if(!folder) {
+            logErrorMessage(`No workspace folder found for ${target instanceof Uri ? target.fsPath : 'no uri'}`);
+            return;
         }
+
+        await action(folder).catch(err => {
+            const where = folder?.uri.fsPath ?? folder?.uri.toString() ?? 'no workspace folder';
+            // Last arg 'true' preserved from your original
+            try {
+                handleConfigError(err, where, true);
+            } catch (e) {
+                // Fall back to console to avoid unhandled rejection
+                console.error('WorkspaceConfigManager error:', err);
+            }
+        });
     }
 
     private set workspaceType(type: WorkspaceType) {
@@ -171,9 +186,11 @@ export class WorkspaceConfigManager {
             this._pathsByHost.set(host, set);
         }
 
+        console.log("DEBUUUUG pathsByHost", this._pathsByHost);
         for (const existing of set) {
             if( existing === "") {continue;}
             
+            console.log(`DEBUUUUUUUUUUUUUUG : Comparing new remotePath "${remotePath}" against existing "${existing}"`);
             if(existing === remotePath || remotePath.startsWith(existing + '/') || existing.startsWith(remotePath + '/')) {
                 throw new WorkspaceConfigError(folder, 
                     `Conflict - "${folder.name}" remote path conflicts with an existing config`);
@@ -200,7 +217,7 @@ export class WorkspaceConfigManager {
             set.delete(rp);
             // if no more paths for this host, drop the host entry altogether
             if (set.size === 0) {
-            this._pathsByHost.delete(host);
+                this._pathsByHost.delete(host);
             }
         }
 
@@ -232,25 +249,25 @@ export class WorkspaceConfigManager {
         // 1. Single-folder (just one folder, no .code-workspace file)
         if (folders.length === 1 && !wsFile) {
             this.workspaceType = WorkspaceType.SingleRoot;
-            logInfoMessage(`Single-folder workspace: ${folders[0].uri.fsPath}`);
+            logInfoMessage(`Detected single-folder workspace: ${folders[0].uri.fsPath}`);
             return;
         }
 
         // 2. Multi-root untitled (you added folders at runtime, VS Code created an in-memory “Untitled” workspace)
         if (wsFile?.scheme === 'untitled') {
             this.workspaceType = WorkspaceType.MultiRoot;
-            logInfoMessage(`Untitled multi-root workspace with ${folders.length} folders`);
+            logInfoMessage(`Detected untitled multi-root workspace with ${folders.length} folders`);
             return;
         }
 
         // 3. Multi-root saved (you opened a .code-workspace file from disk)
         if (wsFile?.scheme === 'file' && wsFile.fsPath.endsWith('.code-workspace')) {
             this.workspaceType = WorkspaceType.MultiRoot;
-            logInfoMessage(`Saved multi-root workspace (${wsFile.fsPath}) with ${folders.length} folders`);
+            logInfoMessage(`Detected multi-root workspace (${wsFile.fsPath}) with ${folders.length} folders`);
             return;
         }
 
-        // 4. Edge—unlikely, but covers any other scenario
+        // 4. Edge—unlikely
         throw new Error(`Workspace with ${folders.length} folders; file: ${wsFile?.fsPath.toString()}`);
     }
 
@@ -383,7 +400,7 @@ export class WorkspaceConfig {
 
     private _error: string | null = null;
     
-    private constructor(public readonly id: string, private readonly _configManager: WorkspaceConfigManager, folder: WorkspaceFolder, config: WorkspaceConfigFile, connectionService: ConnectionService) {
+    private constructor(public readonly id: string, folder: WorkspaceFolder, config: WorkspaceConfigFile, connectionService: ConnectionService) {
         this._folder = folder;
         this._workspaceConfig = config;
 
@@ -562,7 +579,7 @@ export class WorkspaceConfig {
         };
 
         const connSvc = new ConnectionService(fullConfig);
-        const workspaceConfig = new WorkspaceConfig(folder.uri.fsPath, configManager, folder, fullConfig, connSvc);
+        const workspaceConfig = new WorkspaceConfig(folder.uri.fsPath, folder, fullConfig, connSvc);
         await workspaceConfig.initialize();
         return workspaceConfig;
     }
@@ -627,40 +644,91 @@ export class WorkspaceConfig {
     }
 }
 
-export class WorkspaceEventsManager {
+export class WorkspaceEventsManager implements Disposable {
     private readonly _onFolderAdded = new EventEmitter<WorkspaceFolder>();
-    public readonly onFolderAdded: Event<WorkspaceFolder> = this._onFolderAdded.event;
+    public readonly onFolderAdded = this._onFolderAdded.event;
 
     private readonly _onFolderRemoved = new EventEmitter<WorkspaceFolder>();
-    public readonly onFolderRemoved: Event<WorkspaceFolder> = this._onFolderRemoved.event;
+    public readonly onFolderRemoved = this._onFolderRemoved.event;
 
     private readonly _onConfigCreated = new EventEmitter<Uri>();
-    public readonly onConfigCreated: Event<Uri> = this._onConfigCreated.event;
+    public readonly onConfigCreated = this._onConfigCreated.event;
 
     private readonly _onConfigChanged = new EventEmitter<Uri>();
-    public readonly onConfigChanged: Event<Uri> = this._onConfigChanged.event;
+    public readonly onConfigChanged = this._onConfigChanged.event;
 
     private readonly _onConfigDeleted = new EventEmitter<Uri>();
-    public readonly onConfigDeleted: Event<Uri> = this._onConfigDeleted.event;
+    public readonly onConfigDeleted = this._onConfigDeleted.event;
 
-    private watcher: FileSystemWatcher;
+    private watcherChange: FileSystemWatcher;
+    private watcherCreate: FileSystemWatcher;
+    private watcherDelete: FileSystemWatcher;
+
+    // remember recent events to squash dupes (multi-root overlap + Windows double-fire)
+    private debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    private readonly dedupeWindowMs = 200; // tweak if needed
 
     constructor() {
-        // Watch for workspace folder adds/removals
         workspace.onDidChangeWorkspaceFolders(evt => {
-            evt.added.forEach(folder => this._onFolderAdded.fire(folder));
-            evt.removed.forEach(folder => this._onFolderRemoved.fire(folder));
+            evt.added.forEach(f => this._onFolderAdded.fire(f));
+            evt.removed.forEach(f => this._onFolderRemoved.fire(f));
         });
 
-        // Watch for config file create/change/delete in any .vscode folder
-        this.watcher = workspace.createFileSystemWatcher(`**/.vscode/${CONFIG_FILE_NAME}`);
-        this.watcher.onDidCreate(uri => this._onConfigCreated.fire(uri));
-        this.watcher.onDidChange(uri => this._onConfigChanged.fire(uri));
-        this.watcher.onDidDelete(uri => this._onConfigDeleted.fire(uri));
+        const glob = `**/.vscode/${CONFIG_FILE_NAME}`;
+
+        // Separate watchers so each event has a single source
+        this.watcherChange = workspace.createFileSystemWatcher(
+            glob,
+            /* ignoreCreate */ true,
+            /* ignoreChange */ false,
+            /* ignoreDelete */ true
+        );
+        this.watcherCreate = workspace.createFileSystemWatcher(
+            glob,
+            /* ignoreCreate */ false,
+            /* ignoreChange */ true,
+            /* ignoreDelete */ true
+        );
+        this.watcherDelete = workspace.createFileSystemWatcher(
+            glob,
+            /* ignoreCreate */ true,
+            /* ignoreChange */ true,
+            /* ignoreDelete */ false
+        );
+
+        this.watcherCreate.onDidCreate((uri: Uri) => this.fireOnce('create', uri, this._onConfigCreated));
+        this.watcherChange.onDidChange((uri: Uri) => this.fireOnce('change', uri, this._onConfigChanged));
+        this.watcherDelete.onDidDelete((uri: Uri) => this.fireOnce('delete', uri, this._onConfigDeleted));
     }
 
-    public dispose() {
-        this.watcher.dispose();
+    [Symbol.dispose](): void {
+        throw new Error("Method not implemented.");
+    }
+
+    private fireOnce(
+        kind: 'create' | 'change' | 'delete',
+        uri: Uri,
+        emitter: EventEmitter<Uri>
+    ): void {
+        const key = `${kind}|${uri.toString().toLowerCase()}`;
+
+        // reset existing timer for this key
+        const prev = this.debounceTimers.get(key);
+        if (prev) {clearTimeout(prev);}
+
+        // schedule a new trailing call
+        const timer = setTimeout(() => {
+            this.debounceTimers.delete(key);     // cleanup first
+            emitter.fire(uri);                   // fire the last event seen
+        }, this.dedupeWindowMs);
+
+        this.debounceTimers.set(key, timer);
+    }
+
+    dispose(): void {
+        this.watcherChange.dispose();
+        this.watcherCreate.dispose();
+        this.watcherDelete.dispose();
         this._onFolderAdded.dispose();
         this._onFolderRemoved.dispose();
         this._onConfigCreated.dispose();
