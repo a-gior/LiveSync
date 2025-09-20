@@ -271,6 +271,23 @@
           "default": true,
           "scope": "resource",
           "description": "Refresh differences after saving a LiveSync config file."
+        },
+        "livesync.statusBar.visibleItems": {
+          "type": "array",
+          "scope": "window",
+          "description": "Choose which LiveSync status bar items may be shown.",
+          "default": ["messages", "permanent", "progress", "errors"],
+          "items": {
+            "type": "string",
+            "enum": ["messages", "permanent", "progress", "errors"],
+            "markdownEnumDescriptions": [
+              "Informational messages",
+              "Gear button (Livesync) to open configuration settings",
+              "The percentage/progress indicator.",
+              "The indicator showing the number of fatal configuration error of workspace folders"
+            ]
+          },
+          "uniqueItems": true
         }
       }
     }

@@ -31,6 +31,7 @@ export async function activate(context: vscode.ExtensionContext) {
   CommandRegistrar.register(context, TreeViewManager.diffProvider);
   // WorkspaceConfigManager.initialize(context);
   EventManager.initialize(context, TreeViewManager.diffProvider);
+  StatusBarManager.init(context);
   StatusBarManager.createPermanentIcon();
 
   logInfoMessage("LiveSync extension activated.");
