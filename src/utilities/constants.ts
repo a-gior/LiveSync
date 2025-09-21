@@ -27,7 +27,7 @@ export const DEFAULT_WORKSPACE_CONFIG: WorkspaceConfigFile = {
   privateKeyPath:'', 
   passphrase:    '',  
 
-  // Remote path root
+  // Remote path root (required)
   remotePath:    '',
 
   // FileEventActions (optional)
