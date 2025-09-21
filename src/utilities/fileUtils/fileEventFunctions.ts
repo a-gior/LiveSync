@@ -221,7 +221,8 @@ async function handleFileOperation(action: ActionOn, uri: Uri, oldUri: Uri | nul
   const workspaceFolder = configManager!.getWorkspaceFolderFromPath(uri.fsPath, FileNodeSource.local);
   const workspaceConfig = configManager!.getConfig(workspaceFolder.uri);
   let actionParameter = workspaceConfig.fileEventActions[action];
-  if (actionParameter === "none") {
+  const isValid = /^(check|upload|download|save|create|delete|move|open|check&(upload|download|save|create|delete|move|open))$/i.test(actionParameter);
+  if (!isValid) {
     const opName =  action.replace(/^actionOn/, '');
     logInfoMessage( `Skipping ${opName} due to 'none' parameter.`, LOG_FLAGS.ALL);
     return ActionResult.NoAction;

@@ -29,7 +29,7 @@ export async function activate(context: vscode.ExtensionContext) {
   await configManager.loadConfigs();
   await TreeViewManager.initialize(context);
   CommandRegistrar.register(context, TreeViewManager.diffProvider);
-  // WorkspaceConfigManager.initialize(context);
+  
   EventManager.initialize(context, TreeViewManager.diffProvider);
   StatusBarManager.init(context);
   StatusBarManager.createPermanentIcon();

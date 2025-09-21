@@ -60,7 +60,6 @@ export class WorkspaceConfigManager {
 
         // Config created
         this._events.onConfigCreated(uri => {
-            console.log("CONFIG CREATED");
             this.safeLoadConfigAction(uri, async folder => {
                 await this.loadConfigByUri(folder.uri);
                 refreshDifferences(folder);
@@ -70,7 +69,6 @@ export class WorkspaceConfigManager {
         // Config changed
         this._events.onConfigChanged(uri => {
             this.safeLoadConfigAction(uri, async folder => {
-                console.log("CONFIG CHANGED");
                 this.removeConfig(folder.uri);
                 await this.loadConfigByUri(folder.uri);
                 await refreshDifferences(folder);
@@ -428,12 +426,12 @@ export class WorkspaceConfig {
     /** The raw configuration block (hostname/port/username/etc) */
     public get connectionSettings(): ConnectionSettings {
         const {
-        hostname,
-        port,
-        username,
-        password,
-        privateKeyPath,
-        passphrase,
+            hostname,
+            port,
+            username,
+            password,
+            privateKeyPath,
+            passphrase,
         } = this._workspaceConfig;
 
         return { hostname, port, username, password, privateKeyPath, passphrase };
