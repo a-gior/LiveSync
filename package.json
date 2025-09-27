@@ -146,6 +146,9 @@
         "command": "livesync.expandChangedFolders",
         "title": "Expand Changed Folders",
         "icon": "$(expand-all)"
+      },
+      { "command": "livesync.toggleRefreshOnConfigSave", 
+        "title": "LiveSync: Toggle Refresh on Config Save" 
       }
     ],
     "menus": {
@@ -273,6 +276,29 @@
           ],
           "default": "prompt",
           "description": "When running **LiveSync: Configure Workspace**, should LiveSync…\n- **prompt**: ask each time whether to use the UI panel or raw JSON\n- **ui**: open the custom LiveSync UI panel by default\n- **json**: open the `livesync.json` file by default"
+        },
+        "livesync.refreshOnConfigSave": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Refresh differences after saving a LiveSync config file."
+        },
+        "livesync.statusBar.visibleItems": {
+          "type": "array",
+          "scope": "window",
+          "description": "Choose which LiveSync status bar items may be shown.",
+          "default": ["messages", "permanent", "progress", "errors"],
+          "items": {
+            "type": "string",
+            "enum": ["messages", "permanent", "progress", "errors"],
+            "markdownEnumDescriptions": [
+              "Informational messages",
+              "Gear button (Livesync) to open configuration settings",
+              "The percentage/progress indicator.",
+              "The indicator showing the number of fatal configuration error of workspace folders"
+            ]
+          },
+          "uniqueItems": true
         }
       }
     }

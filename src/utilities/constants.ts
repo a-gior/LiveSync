@@ -27,7 +27,7 @@ export const DEFAULT_WORKSPACE_CONFIG: WorkspaceConfigFile = {
   privateKeyPath:'', 
   passphrase:    '',  
 
-  // Remote path root
+  // Remote path root (required)
   remotePath:    '',
 
   // FileEventActions (optional)
@@ -40,7 +40,10 @@ export const DEFAULT_WORKSPACE_CONFIG: WorkspaceConfigFile = {
   actionOnOpen:     'check&download', 
 
   // Ignore list
-  ignoreList: ['.vscode'],
+  ignoreList: ['.vscode', '.git', '.svn'],
 };
 
 export const JSON_SCHEMA_VERSION = 2;
+
+export const SUPPRESS_CONFIG_ERROR_KEY = "suppressConfigErrorList";
+export const LAST_SELECTED_WORKSPACE_KEY = "livesync.lastSelectedWorkspaceFolder";

@@ -1,9 +1,9 @@
 import * as net from 'net';
-import { ConfigurationMessage } from '@shared/DTOs/messages/ConfigurationMessage';
 import { SFTPClient } from './SFTPClient';
 import { SSHClient } from './SSHClient';
 import { StatusBarManager } from '../managers/StatusBarManager';
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from '../managers/LogManager';
+import { ConnectionSettings } from '../DTOs/config/ConnectionSettings';
 
 /**
  * Manages SSH and SFTP connections for a specific workspace/config.
@@ -18,7 +18,7 @@ export class ConnectionService {
   private readonly maxRetries = 3;
   private readonly backoffBaseMs = 500;
 
-  constructor(private readonly cfg: ConfigurationMessage['configuration']) {}
+  constructor(private readonly cfg: ConnectionSettings) {}
 
   public async withSSH<T>(
     op: (c: SSHClient) => Promise<T>,
@@ -69,7 +69,7 @@ export class ConnectionService {
     await this.sftpClient.disconnect();
   }
 
-  private async ensureReachable(): Promise<void> {
+  public async ensureReachable(): Promise<void> {
     const ok = await ConnectionService.isReachable(
       this.cfg.hostname,
       this.cfg.port

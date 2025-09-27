@@ -1,8 +1,12 @@
 import * as path from "path";
-import { window, Uri, commands } from "vscode";
+import { workspace } from "vscode";
+import { window, Uri, commands, WorkspaceFolder } from "vscode";
 import { downloadRemoteFile } from "./sftpOperations";
 import { getFullPaths } from "./filePathUtils";
 import { ComparisonFileNode } from "../ComparisonFileNode";
+import { configManager } from "../../extension";
+import { listLocalFiles, listRemoteFiles } from "./fileListing";
+import { TreeViewManager } from "../../managers/TreeViewManager";
 
 export async function showDiff(input: ComparisonFileNode | { localPath: string; remotePath: string }) {
   let localPath: string;
@@ -34,4 +38,21 @@ export async function showDiff(input: ComparisonFileNode | { localPath: string; 
   const remoteUri = Uri.file(localTmpPath);
 
   await commands.executeCommand("vscode.diff", localUri, remoteUri, `${path.basename(localPath)} : Local ↔ Remote`);
+}
+
+export async function refreshDifferences(workspaceFolder: WorkspaceFolder) {
+  
+  const enabled = workspace
+      .getConfiguration('livesync', workspaceFolder.uri)
+      .get<boolean>('refreshOnConfigSave', true);
+  if(!enabled)  {return;}
+
+  const workspaceConfig = configManager!.getConfig(workspaceFolder.uri);
+  const { localPath, remotePath } = workspaceConfig.getPathPair();
+  const localFiles = await listLocalFiles(localPath);
+  const remoteFiles = await listRemoteFiles(remotePath);
+  
+  const comparisonFileNode = ComparisonFileNode.compareFileNodes(localFiles, remoteFiles, workspaceConfig.jsonStore.comparisonFileRoot);
+  workspaceConfig.jsonStore.comparisonFileRoot = comparisonFileNode;
+  await TreeViewManager.diffProvider.refresh();
 }

@@ -17,6 +17,7 @@ import { TreeViewManager } from "../managers/TreeViewManager";
 import { configManager } from "../extension";
 import { WorkspaceConfig } from "../managers/WorkspaceConfigManager";
 import { ConnectionSettings } from "../DTOs/config/ConnectionSettings";
+import { suppressConfigError } from "../storage/ConfigErrorSuppressor";
 
 export class CommandRegistrar {
     static register(
@@ -86,10 +87,16 @@ export class CommandRegistrar {
           mode: ExecutionMode.Single,
         },
         'livesync.refresh': {
-          callback: async (element?: ComparisonFileNode) => {
+          callback: async (element?: ComparisonFileNode | vscode.Uri) => {
             StatusBarManager.showMessage(`Scanning…`, "", "", 0, "sync~spin", true);
-
+            
             const workspaceConfig = treeDataProvider.currentWorkspaceConfig;
+            if(element instanceof vscode.Uri) {
+              const relativePath = getRelativePath(element.fsPath, FileNodeSource.local);
+              const comparisonNode = workspaceConfig.jsonStore.findComparisonNode(relativePath);
+              element = comparisonNode;
+            }
+
             // pick root vs subtree
             const { localPath, remotePath } = element ? await getFullPaths(element) : workspaceConfig.getPathPair();
 
@@ -262,13 +269,25 @@ export class CommandRegistrar {
         },
         'livesync.dismissConfigError': {
           callback: async (folder: vscode.WorkspaceFolder) => {
-
-            // key it by the folder URI
-            const key = `suppressConfigError:${folder.uri.toString()}`;
-            await context.workspaceState.update(key, true);
+            await suppressConfigError(folder);
             logInfoMessage(
               `Configuration errors for "${folder.name}" will be suppressed until valid.`,
               LOG_FLAGS.ALL
+            );
+          },
+          mode: ExecutionMode.Single,
+        },
+        'livesync.toggleRefreshOnConfigSave': {
+          callback: async (uri?: vscode.Uri) => {
+            const folder = uri ? vscode.workspace.getWorkspaceFolder(uri) : vscode.workspace.workspaceFolders?.[0];
+            if (!folder) {return;}
+
+            const config = vscode.workspace.getConfiguration('livesync', folder.uri);
+            const current = config.get<boolean>('refreshOnConfigSave', true);
+            await config.update('refreshOnConfigSave', !current, vscode.ConfigurationTarget.WorkspaceFolder);
+
+            vscode.window.showInformationMessage(
+              `Refresh on config save: ${!current ? 'ON' : 'OFF'} for “${folder.name}”.`
             );
           },
           mode: ExecutionMode.Single,

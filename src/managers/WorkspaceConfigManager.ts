@@ -1,4 +1,4 @@
-import { workspace, ExtensionContext, WorkspaceFolder, Uri, window, Event, EventEmitter, FileSystemWatcher, commands } from "vscode";
+import { workspace, ExtensionContext, WorkspaceFolder, Uri, window, EventEmitter, FileSystemWatcher, commands } from "vscode";
 import * as path from 'path';
 import { LOG_FLAGS, logConfigError, logErrorMessage, logInfoMessage } from "./LogManager";
 import { WorkspaceConfigFile } from "@shared/DTOs/config/WorkspaceConfig";
@@ -10,6 +10,10 @@ import { FileNodeSource } from "../utilities/FileNode";
 import { normalizePath, PathPair } from "../utilities/fileUtils/filePathUtils";
 import { WorkspaceJsonStore } from "../services/WorkspaceJsonStore";
 import { ConnectionService } from "../services/ConnectionService";
+import { StatusBarManager } from "./StatusBarManager";
+import { configManager } from "../extension";
+import { clearSuppressedConfigError } from "../storage/ConfigErrorSuppressor";
+import { refreshDifferences } from "../utilities/fileUtils/fileDiff";
 
 export enum WorkspaceType {
     SingleRoot,
@@ -33,31 +37,70 @@ export class WorkspaceConfigManager {
     private _workspaceConfigs: Map<string, WorkspaceConfig> = new Map();
     private _pathsByHost     = new Map<string, Set<string>>();
     private _events: WorkspaceEventsManager;
-
+    
     constructor(context: ExtensionContext) {
         this._context = context;
         this.detectWorkspaceType();
 
-        // instantiate and subscribe to all workspace events here
         this._events = new WorkspaceEventsManager();
         this._context.subscriptions.push(this._events);
 
-        this._events.onFolderAdded(async folder => {
-            await this.loadConfig(folder);
+        // Folder added
+        this._events.onFolderAdded(folder => {
+            this.safeLoadConfigAction(folder, async () => {
+                await this.loadConfig(folder);
+                refreshDifferences(folder);
+            });
         });
+
+        // Folder removed
         this._events.onFolderRemoved(folder => {
             this.removeConfig(folder.uri);
         });
-        this._events.onConfigCreated(async uri => {
-            await this.loadConfigByUri(uri);
-        });
-        this._events.onConfigChanged(async uri => {
-            await this.loadConfigByUri(uri);
-        });
-        this._events.onConfigDeleted(uri => {
-            this.removeConfigForUri(uri);
+
+        // Config created
+        this._events.onConfigCreated(uri => {
+            this.safeLoadConfigAction(uri, async folder => {
+                await this.loadConfigByUri(folder.uri);
+                refreshDifferences(folder);
+            });
         });
 
+        // Config changed
+        this._events.onConfigChanged(uri => {
+            this.safeLoadConfigAction(uri, async folder => {
+                this.removeConfig(folder.uri);
+                await this.loadConfigByUri(folder.uri);
+                await refreshDifferences(folder);
+            });
+        });
+
+        // Config deleted
+        this._events.onConfigDeleted(uri => {
+        this.removeConfigForUri(uri);
+        });
+    }
+
+    private async safeLoadConfigAction(
+        target: Uri | WorkspaceFolder,
+        action: (folder: WorkspaceFolder) => Promise<void>
+    ) {
+        const folder = target instanceof Uri ? workspace.getWorkspaceFolder(target) : target;
+        if(!folder) {
+            logErrorMessage(`No workspace folder found for ${target instanceof Uri ? target.fsPath : 'no uri'}`);
+            return;
+        }
+
+        await action(folder).catch(err => {
+            const where = folder?.uri.fsPath ?? folder?.uri.toString() ?? 'no workspace folder';
+            // Last arg 'true' preserved from your original
+            try {
+                handleConfigError(err, where, true);
+            } catch (e) {
+                // Fall back to console to avoid unhandled rejection
+                console.error('WorkspaceConfigManager error:', err);
+            }
+        });
     }
 
     private set workspaceType(type: WorkspaceType) {
@@ -65,29 +108,53 @@ export class WorkspaceConfigManager {
         commands.executeCommand('setContext', 'livesync.multiRoot', type === WorkspaceType.MultiRoot );
     }
 
-    /**
-     * Reads and registers a config for exactly one folder.
-     */
-    public async loadConfig(folder: WorkspaceFolder): Promise<void> {
+    public get workspaceConfigs(): Map<string, WorkspaceConfig> {
+        return this._workspaceConfigs;
+    }
+
+    private async _processFolder(folder: WorkspaceFolder): Promise<void> {
         this.detectWorkspaceType();
-        
+
         const configUri = getConfigPath(folder);
         try {
             await workspace.fs.stat(configUri);
         } catch {
-            // no config file here
+            StatusBarManager.markErrored(folder.uri.fsPath.toString(), 'No config found');
             return;
         }
 
+        // As long as the config exists, we create and register it
+        let instance: WorkspaceConfig;
         try {
-            const instance = await WorkspaceConfig.create(folder);
-            if (!instance.isValid) {
-                logConfigError(this._context, LOG_FLAGS.ALL, true, folder,  `Invalid Config for ${folder.name}`); // Shows popup and throws error
-            }
-            this.registerConfig(folder, instance);
-            logInfoMessage(`Loaded config for ${folder.name}`);
+            instance = await WorkspaceConfig.create(this, folder);
         } catch (err: any) {
-            logErrorMessage(`Failed to load config for ${folder.name}: ${err.message || err}`);
+            logErrorMessage(`Failed to read/parse config for ${folder.name}: ${err.message || err}`);
+            return;
+        }
+        this._registerConfig(folder, instance);
+
+        if (!instance.isValid) {
+            throw new WorkspaceConfigError(folder, `Invalid Config - ${instance.error}`);
+        }
+
+        try {
+            await instance.connectionService.ensureReachable();
+        } catch (err: any) {
+            throw new WorkspaceConfigError(folder, `${err.message}`);
+        }
+    }
+
+    public async loadConfig(folder: WorkspaceFolder): Promise<void> {
+        await this._processFolder(folder);
+    }
+
+    public async loadConfigs(): Promise<void> {
+        for (const folder of workspace.workspaceFolders ?? []) {
+            try {
+                await this.loadConfig(folder);
+            } catch (err: any) {
+                StatusBarManager.markErrored(folder.uri.fsPath.toString(), err.message);
+            }
         }
     }
 
@@ -107,9 +174,9 @@ export class WorkspaceConfigManager {
      * Returns true if cfg was added, false if it conflicted and was skipped.
      * Logs a config‐error on conflict.
      */
-    private registerConfig(folder: WorkspaceFolder, cfg: WorkspaceConfig) {
+    private _registerConfig(folder: WorkspaceFolder, cfg: WorkspaceConfig) {
         const host = cfg.connectionSettings!.hostname;
-        const rp   = cfg.remotePath!.trim();
+        const remotePath   = cfg.remotePath!.trim();
 
         let set = this._pathsByHost.get(host);
         if (!set) {
@@ -117,33 +184,21 @@ export class WorkspaceConfigManager {
             this._pathsByHost.set(host, set);
         }
 
+        console.log("DEBUUUUG pathsByHost", this._pathsByHost);
         for (const existing of set) {
-            if (rp.startsWith(existing + '/')) {
-                logConfigError(
-                this._context,
-                LOG_FLAGS.ALL,
-                false,
-                folder,
-                `Config for "${folder.name}" skipped: "${rp}" is inside existing path "${existing}".`
-                );
-                return;
-            }
-            if (existing.startsWith(rp + '/')) {
-                logConfigError(
-                this._context,
-                LOG_FLAGS.ALL,
-                false,
-                folder,
-                `Config for "${folder.name}" skipped: existing path "${existing}" is inside "${rp}".`
-                );
-                return;
+            if( existing === "") {continue;}
+            
+            console.log(`DEBUUUUUUUUUUUUUUG : Comparing new remotePath "${remotePath}" against existing "${existing}"`);
+            if(existing === remotePath || remotePath.startsWith(existing + '/') || existing.startsWith(remotePath + '/')) {
+                throw new WorkspaceConfigError(folder, 
+                    `Conflict - "${folder.name}" remote path conflicts with an existing config`);
             }
         }
 
         // no conflicts → register
-        set.add(rp);
+        set.add(remotePath);
         this._workspaceConfigs.set(folder.uri.fsPath, cfg);
-        logInfoMessage(`Registered config for "URI: ${folder.uri}, ${folder.name}" → host=${host}, remotePath=${rp}`);
+        logInfoMessage(`Registered config for "URI: ${folder.uri}, ${folder.name}" → host=${host}, remotePath=${remotePath}`);
     }
 
     /** Remove a folder’s config by its URI string key */
@@ -160,7 +215,7 @@ export class WorkspaceConfigManager {
             set.delete(rp);
             // if no more paths for this host, drop the host entry altogether
             if (set.size === 0) {
-            this._pathsByHost.delete(host);
+                this._pathsByHost.delete(host);
             }
         }
 
@@ -192,58 +247,37 @@ export class WorkspaceConfigManager {
         // 1. Single-folder (just one folder, no .code-workspace file)
         if (folders.length === 1 && !wsFile) {
             this.workspaceType = WorkspaceType.SingleRoot;
-            logInfoMessage(`Single-folder workspace: ${folders[0].uri.fsPath}`);
+            logInfoMessage(`Detected single-folder workspace: ${folders[0].uri.fsPath}`);
             return;
         }
 
         // 2. Multi-root untitled (you added folders at runtime, VS Code created an in-memory “Untitled” workspace)
         if (wsFile?.scheme === 'untitled') {
             this.workspaceType = WorkspaceType.MultiRoot;
-            logInfoMessage(`Untitled multi-root workspace with ${folders.length} folders`);
+            logInfoMessage(`Detected untitled multi-root workspace with ${folders.length} folders`);
             return;
         }
 
         // 3. Multi-root saved (you opened a .code-workspace file from disk)
         if (wsFile?.scheme === 'file' && wsFile.fsPath.endsWith('.code-workspace')) {
             this.workspaceType = WorkspaceType.MultiRoot;
-            logInfoMessage(`Saved multi-root workspace (${wsFile.fsPath}) with ${folders.length} folders`);
+            logInfoMessage(`Detected multi-root workspace (${wsFile.fsPath}) with ${folders.length} folders`);
             return;
         }
 
-        // 4. Edge—unlikely, but covers any other scenario
-        throw new Error(`Workspace with ${folders.length} folders; file: ${wsFile?.toString()}`);
-    }
-
-    /**
-     * Scan for `.vscode/custom-config.json` in the appropriate folders,
-     * parse any you find, and create a WorkspaceConfig for each.
-     */
-    public async loadConfigs(): Promise<void> {
-        const folders = workspace.workspaceFolders || [];
-        for (const folder of folders) {
-            const configPath = getConfigPath(folder);
-            try {
-                await workspace.fs.stat(configPath);
-            } catch {
-                logInfoMessage(`No config at ${folder.name}`);
-                continue; // no config here
-            }
-
-            const instance = await WorkspaceConfig.create(folder);
-            if (!instance.isValid) {
-                logConfigError(this._context, LOG_FLAGS.ALL, false, folder, `Invalid Config for ${instance.folderName}`); // Shows popup
-            } else {
-                const key = `suppressConfigError:${folder.uri.toString()}`;
-                await this._context.workspaceState.update(key, false);
-                this.registerConfig(folder, instance);
-            }
-        }
+        // 4. Edge—unlikely
+        throw new Error(`Workspace with ${folders.length} folders; file: ${wsFile?.fsPath.toString()}`);
     }
 
     public getConfig(folderUri: Uri): WorkspaceConfig {
         const config = this._workspaceConfigs.get(folderUri.fsPath);
         if (!config) {
-            throw new Error(`No config found for workspace "${folderUri.fsPath}"`);
+            const folder = workspace.getWorkspaceFolder(folderUri);
+            if (!folder) {
+                throw new Error(`No workspace folder found for URI: ${folderUri.fsPath}`);
+            }
+            const errorMsg = StatusBarManager.getError(folder.uri.fsPath.toString());
+            throw new Error(errorMsg);
         }
         return config;
     }
@@ -362,16 +396,22 @@ export class WorkspaceConfig {
     public readonly jsonStore: WorkspaceJsonStore;
     public readonly connectionService: ConnectionService;
 
-    private constructor(folder: WorkspaceFolder, config: WorkspaceConfigFile) {
+    private _error: string | null = null;
+    
+    private constructor(public readonly id: string, folder: WorkspaceFolder, config: WorkspaceConfigFile, connectionService: ConnectionService) {
         this._folder = folder;
         this._workspaceConfig = config;
 
         this.jsonStore = new WorkspaceJsonStore(folder.uri);
-        this.connectionService = new ConnectionService(this.connectionSettings);
+        this.connectionService = connectionService;
     }
 
     public async initialize() {
         await this.jsonStore.loadAll();
+    }
+
+    public get error(): string | null {
+        return this._error;
     }
 
     public get folder(): WorkspaceFolder {
@@ -386,12 +426,12 @@ export class WorkspaceConfig {
     /** The raw configuration block (hostname/port/username/etc) */
     public get connectionSettings(): ConnectionSettings {
         const {
-        hostname,
-        port,
-        username,
-        password,
-        privateKeyPath,
-        passphrase,
+            hostname,
+            port,
+            username,
+            password,
+            privateKeyPath,
+            passphrase,
         } = this._workspaceConfig;
 
         return { hostname, port, username, password, privateKeyPath, passphrase };
@@ -427,7 +467,7 @@ export class WorkspaceConfig {
         if(!this._compiledIgnoreMatchers) {
             
             if (!this._workspaceConfig.ignoreList) {
-                throw new Error("Ignore List not configured");
+                throw new WorkspaceConfigError(this._folder, "Invalid Config - Missing ignore list");
             }
 
             const raw = this._workspaceConfig.ignoreList;
@@ -513,20 +553,20 @@ export class WorkspaceConfig {
      * Async factory method: reads & parses the config, 
      * then returns a fully-initialized instance.
      */
-    public static async create(folder: WorkspaceFolder): Promise<WorkspaceConfig> {
+    public static async create(configManager: WorkspaceConfigManager, folder: WorkspaceFolder): Promise<WorkspaceConfig> {
         const configFile = getConfigPath(folder);
         let raw: Uint8Array;
         try {
             raw = await workspace.fs.readFile(configFile);
         } catch (err: any) {
-            throw new Error(`Could not read config at ${configFile.fsPath}: ${err.message}`);
+            throw new WorkspaceConfigError(folder, "No config found");
         }
 
         let parsed: WorkspaceConfigFile;
         try {
             parsed = JSON.parse(raw.toString());
         } catch (err: any) {
-            throw new Error(`Invalid JSON in ${configFile.fsPath}: ${err.message}`);
+            throw new WorkspaceConfigError(folder, "Configuration file is not valid JSON");
         }
 
         
@@ -536,7 +576,8 @@ export class WorkspaceConfig {
             ...parsed
         };
 
-        const workspaceConfig = new WorkspaceConfig(folder, fullConfig);
+        const connSvc = new ConnectionService(fullConfig);
+        const workspaceConfig = new WorkspaceConfig(folder.uri.fsPath, folder, fullConfig, connSvc);
         await workspaceConfig.initialize();
         return workspaceConfig;
     }
@@ -549,11 +590,37 @@ export class WorkspaceConfig {
         const cfg = this._workspaceConfig;
         const isSet = (s?: string) => !!(s && s.trim());
 
-        if (!cfg || !isSet(cfg.hostname) || !isSet(cfg.username)) {return false;}
-        if (!isSet(cfg.password) && !isSet(cfg.privateKeyPath)) {return false;}
-        if (!isSet(cfg.remotePath)) {return false;}
+        if (!cfg) { 
+            return false;
+        }
+
+        if (!isSet(cfg.hostname)) {
+            this._error = "Missing hostname";
+            return false;
+        }
+
+        if (!isSet(cfg.username)) {
+            this._error = "Missing username";
+            return false;
+        }
+
+        if (!isSet(cfg.password) && !isSet(cfg.privateKeyPath)) {
+            this._error = "Missing authentication: password or private key path required";
+            return false;
+        }
+
+        if (!isSet(cfg.remotePath)) {
+            this._error = "Missing remote path";
+            return false;
+        }
+
+        // Clear any previous error if valid
+        this._error = null;
+        clearSuppressedConfigError(this._folder);
+        StatusBarManager.clearErrored(this._folder.uri.fsPath.toString());
         return true;
     }
+
 
     /**
      * Returns the local filesystem path of this workspace root
@@ -564,7 +631,7 @@ export class WorkspaceConfig {
         const localPath = this._folder.uri.fsPath;
         const remotePath = this._workspaceConfig.remotePath;
         if(!remotePath) {
-            throw new Error(`Workspace "${this._folder.name}" has no remotePath configured.`);
+            throw new WorkspaceConfigError(this._folder, `Invalid Config - Missing remote path`);
         }
 
         if(returnNormalizedPaths) {
@@ -575,44 +642,122 @@ export class WorkspaceConfig {
     }
 }
 
-export class WorkspaceEventsManager {
+export class WorkspaceEventsManager implements Disposable {
     private readonly _onFolderAdded = new EventEmitter<WorkspaceFolder>();
-    public readonly onFolderAdded: Event<WorkspaceFolder> = this._onFolderAdded.event;
+    public readonly onFolderAdded = this._onFolderAdded.event;
 
     private readonly _onFolderRemoved = new EventEmitter<WorkspaceFolder>();
-    public readonly onFolderRemoved: Event<WorkspaceFolder> = this._onFolderRemoved.event;
+    public readonly onFolderRemoved = this._onFolderRemoved.event;
 
     private readonly _onConfigCreated = new EventEmitter<Uri>();
-    public readonly onConfigCreated: Event<Uri> = this._onConfigCreated.event;
+    public readonly onConfigCreated = this._onConfigCreated.event;
 
     private readonly _onConfigChanged = new EventEmitter<Uri>();
-    public readonly onConfigChanged: Event<Uri> = this._onConfigChanged.event;
+    public readonly onConfigChanged = this._onConfigChanged.event;
 
     private readonly _onConfigDeleted = new EventEmitter<Uri>();
-    public readonly onConfigDeleted: Event<Uri> = this._onConfigDeleted.event;
+    public readonly onConfigDeleted = this._onConfigDeleted.event;
 
-    private watcher: FileSystemWatcher;
+    private watcherChange: FileSystemWatcher;
+    private watcherCreate: FileSystemWatcher;
+    private watcherDelete: FileSystemWatcher;
+
+    // remember recent events to squash dupes (multi-root overlap + Windows double-fire)
+    private debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    private readonly dedupeWindowMs = 200; // tweak if needed
 
     constructor() {
-        // Watch for workspace folder adds/removals
         workspace.onDidChangeWorkspaceFolders(evt => {
-            evt.added.forEach(folder => this._onFolderAdded.fire(folder));
-            evt.removed.forEach(folder => this._onFolderRemoved.fire(folder));
+            evt.added.forEach(f => this._onFolderAdded.fire(f));
+            evt.removed.forEach(f => this._onFolderRemoved.fire(f));
         });
 
-        // Watch for config file create/change/delete in any .vscode folder
-        this.watcher = workspace.createFileSystemWatcher(`**/.vscode/${CONFIG_FILE_NAME}`);
-        this.watcher.onDidCreate(uri => this._onConfigCreated.fire(uri));
-        this.watcher.onDidChange(uri => this._onConfigChanged.fire(uri));
-        this.watcher.onDidDelete(uri => this._onConfigDeleted.fire(uri));
+        const glob = `**/.vscode/${CONFIG_FILE_NAME}`;
+
+        // Separate watchers so each event has a single source
+        this.watcherChange = workspace.createFileSystemWatcher(
+            glob,
+            /* ignoreCreate */ true,
+            /* ignoreChange */ false,
+            /* ignoreDelete */ true
+        );
+        this.watcherCreate = workspace.createFileSystemWatcher(
+            glob,
+            /* ignoreCreate */ false,
+            /* ignoreChange */ true,
+            /* ignoreDelete */ true
+        );
+        this.watcherDelete = workspace.createFileSystemWatcher(
+            glob,
+            /* ignoreCreate */ true,
+            /* ignoreChange */ true,
+            /* ignoreDelete */ false
+        );
+
+        this.watcherCreate.onDidCreate((uri: Uri) => this.fireOnce('create', uri, this._onConfigCreated));
+        this.watcherChange.onDidChange((uri: Uri) => this.fireOnce('change', uri, this._onConfigChanged));
+        this.watcherDelete.onDidDelete((uri: Uri) => this.fireOnce('delete', uri, this._onConfigDeleted));
     }
 
-    public dispose() {
-        this.watcher.dispose();
+    [Symbol.dispose](): void {
+        throw new Error("Method not implemented.");
+    }
+
+    private fireOnce(
+        kind: 'create' | 'change' | 'delete',
+        uri: Uri,
+        emitter: EventEmitter<Uri>
+    ): void {
+        const key = `${kind}|${uri.toString().toLowerCase()}`;
+
+        // reset existing timer for this key
+        const prev = this.debounceTimers.get(key);
+        if (prev) {clearTimeout(prev);}
+
+        // schedule a new trailing call
+        const timer = setTimeout(() => {
+            this.debounceTimers.delete(key);     // cleanup first
+            emitter.fire(uri);                   // fire the last event seen
+        }, this.dedupeWindowMs);
+
+        this.debounceTimers.set(key, timer);
+    }
+
+    dispose(): void {
+        this.watcherChange.dispose();
+        this.watcherCreate.dispose();
+        this.watcherDelete.dispose();
         this._onFolderAdded.dispose();
         this._onFolderRemoved.dispose();
         this._onConfigCreated.dispose();
         this._onConfigChanged.dispose();
         this._onConfigDeleted.dispose();
+    }
+}
+
+export class WorkspaceConfigError extends Error {
+  constructor(public readonly folder: WorkspaceFolder, message: string) {
+    super(message);
+    Object.setPrototypeOf(this, new.target.prototype);
+    this.name = "WorkspaceConfigError";
+    
+    StatusBarManager.markErrored(folder.uri.fsPath.toString(), message);
+  }
+}
+
+export function handleConfigError(err: any, localPathOrFolder: string | WorkspaceFolder, shouldThrow: boolean = false): void {
+    let workspaceFolder: WorkspaceFolder;
+    if(typeof localPathOrFolder === 'string') {
+        workspaceFolder = configManager!.getWorkspaceFolderFromPath(localPathOrFolder, FileNodeSource.local);
+    } else {
+        workspaceFolder = localPathOrFolder;
+    }
+
+    if (err instanceof WorkspaceConfigError) {
+        logConfigError(LOG_FLAGS.ALL, workspaceFolder, `[${workspaceFolder.name}] ${err.message}`);
+    } else if(shouldThrow) {
+        throw err;
+    } else {
+        logErrorMessage(err.message, LOG_FLAGS.CONSOLE_ONLY);
     }
 }

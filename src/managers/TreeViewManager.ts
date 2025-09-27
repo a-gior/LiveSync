@@ -4,6 +4,7 @@ import { SyncTreeDataProvider } from '../services/SyncTreeDataProvider';
 import { WorkspaceTreeDataProvider } from '../services/WorkspaceTreeDataProvider';
 import { ComparisonFileNode, ComparisonStatus } from '../utilities/ComparisonFileNode';
 import { configManager } from '../extension';
+import { getLastSelectedWorkspace, setLastSelectedWorkspace } from '../storage/LastSelectedWorkspace';
 
 export class TreeViewManager {
   private static _workspaceView: vscode.TreeView<vscode.WorkspaceFolder>;
@@ -26,7 +27,8 @@ export class TreeViewManager {
     });
 
     // 3) Create the Diffs tree
-    this._diffProvider = new SyncTreeDataProvider(showAsTree, showUnchanged, collapseAll);
+    const initialFolder = getLastSelectedWorkspace();
+    this._diffProvider = new SyncTreeDataProvider(initialFolder, showAsTree, showUnchanged, collapseAll);
     this._diffView = vscode.window.createTreeView('livesync.diffs', {
       treeDataProvider: this._diffProvider
     });
@@ -51,22 +53,30 @@ export class TreeViewManager {
     this._workspaceView.onDidChangeSelection(async event => {
       const folder = event.selection[0];
       if (folder) {
+        setLastSelectedWorkspace(folder);
         this._diffProvider.currentWorkspace = folder;
         await this._diffProvider.refresh();
 
-        this._diffView.title = `Diffs — ${folder.name ?? "No Workspace"}`;
+        TreeViewManager.setDiffViewTitle();
       }
     });
 
     // 7) Load initial diff tree
-    this._diffView.title = `Diffs — ${this._diffProvider.currentWorkspace.name ?? "No Workspace"}`;
+    TreeViewManager.setDiffViewTitle();
     await this._diffProvider.refresh();
-    
 
     // 8) Clean up on deactivate
     context.subscriptions.push(this._workspaceView, this._diffView);
 
     return this._diffProvider;
+  }
+
+  private static setDiffViewTitle() {
+    if(this._diffProvider.currentWorkspaceConfig.isValid) {
+      this._diffView.title = `Diffs — ${this._diffProvider.currentWorkspace.name ?? "No Workspace"}`;
+    } else {
+      this._diffView.title = `Diffs — ${this._diffProvider.currentWorkspace.name ?? "No Workspace"} (Invalid Config)`;
+    }
   }
 
   public static get diffProvider() {
@@ -83,7 +93,10 @@ export class TreeViewManager {
   public static updateMessage(provider: SyncTreeDataProvider): void {
     const root = provider.displayedComparisonNode;
 
-    if(!root) {return;}
+    if(!root) {
+      this._diffView.message = '';
+      return;
+    }
 
     // 1. No items under the root?
     if (root.listChildren().length === 0) {
