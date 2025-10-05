@@ -115,7 +115,7 @@ export class WorkspaceConfigManager {
         // As long as the config exists, we create and register it
         let instance: WorkspaceConfig;
         try {
-            instance = await WorkspaceConfig.create(this, folder);
+            instance = await WorkspaceConfig.create(folder);
         } catch (err: any) {
             logErrorMessage(`Failed to read/parse config for ${folder.name}: ${err.message || err}`);
             return;
@@ -129,8 +129,10 @@ export class WorkspaceConfigManager {
         try {
             await instance.connectionService.ensureReachable();
         } catch (err: any) {
+            instance.error = `${err.message}`;
             throw new WorkspaceConfigError(folder, `${err.message}`);
         }
+        
     }
 
     public async loadConfig(folder: WorkspaceFolder): Promise<void> {
@@ -173,11 +175,9 @@ export class WorkspaceConfigManager {
             this._pathsByHost.set(host, set);
         }
 
-        console.log("DEBUUUUG pathsByHost", this._pathsByHost);
         for (const existing of set) {
             if( existing === "") {continue;}
             
-            console.log(`DEBUUUUUUUUUUUUUUG : Comparing new remotePath "${remotePath}" against existing "${existing}"`);
             if(existing === remotePath || remotePath.startsWith(existing + '/') || existing.startsWith(remotePath + '/')) {
                 throw new WorkspaceConfigError(folder, 
                     `Conflict - "${folder.name}" remote path conflicts with an existing config`);

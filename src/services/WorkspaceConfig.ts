@@ -9,7 +9,7 @@ import { WorkspaceJsonStore } from "../services/WorkspaceJsonStore";
 import { ConnectionService } from "../services/ConnectionService";
 import { clearSuppressedConfigError } from "../storage/ConfigErrorSuppressor";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../managers/LogManager";
-import { getConfigPath, WorkspaceConfigManager } from "../managers/WorkspaceConfigManager";
+import { getConfigPath } from "../managers/WorkspaceConfigManager";
 import { StatusBarManager } from "../managers/StatusBarManager";
 import { WorkspaceConfigError } from "../errors/WorkspaceConfigError";
 
@@ -37,6 +37,10 @@ export class WorkspaceConfig {
 
     public get error(): string | null {
         return this._error;
+    }
+
+    public set error(err: string) {
+        this._error = err;
     }
 
     public get folder(): WorkspaceFolder {
@@ -178,7 +182,7 @@ export class WorkspaceConfig {
      * Async factory method: reads & parses the config, 
      * then returns a fully-initialized instance.
      */
-    public static async create(configManager: WorkspaceConfigManager, folder: WorkspaceFolder): Promise<WorkspaceConfig> {
+    public static async create(folder: WorkspaceFolder): Promise<WorkspaceConfig> {
         const configFile = getConfigPath(folder);
         let raw: Uint8Array;
         try {
@@ -237,6 +241,10 @@ export class WorkspaceConfig {
         if (!isSet(cfg.remotePath)) {
             this._error = "Missing remote path";
             return false;
+        }
+
+        if(this.error && this.error.includes("unreachable")) {
+            return true; // keep unreachable errors
         }
 
         // Clear any previous error if valid
