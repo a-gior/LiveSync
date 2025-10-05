@@ -13,7 +13,6 @@ import { countLocalFiles, fetchRemoteCountOutput, parseRemoteItemCount, syncRemo
 import { getFullPaths, getRelativePath } from "../utilities/fileUtils/filePathUtils";
 import { CommandEntry, CommandManager, ExecutionMode } from "../managers/CommandManager";
 import { StatusBarManager } from "../managers/StatusBarManager";
-import { TreeViewManager } from "../managers/TreeViewManager";
 import { configManager } from "../extension";
 import { ConnectionSettings } from "../DTOs/config/ConnectionSettings";
 import { suppressConfigError } from "../storage/ConfigErrorSuppressor";
@@ -210,41 +209,38 @@ export class CommandRegistrar {
         },
         'livesync.collapseAll': {
           callback: async () => {
-            treeDataProvider.toggleViewExpansion(true);
-            context.globalState.update("collapseAll", true);
-            vscode.commands.executeCommand("setContext", "livesyncExpandMode", "collapse");
-    
-            const workspaceConfig = treeDataProvider.currentWorkspaceConfig;
-            workspaceConfig.jsonStore.clearFolderStates();
-            await vscode.commands.executeCommand("treeViewId.focus");
-            await vscode.commands.executeCommand("list.collapseAll");
-            logInfoMessage("All folders collapsed.");
+            treeDataProvider.toggleViewExpansion(true); // sets _collapseAll = true
+              context.globalState.update("collapseAll", true);
+              await vscode.commands.executeCommand("setContext", "livesyncExpandMode", "collapse");
+
+              // optional: clear saved folder states to keep things tidy
+              const wc = treeDataProvider.currentWorkspaceConfig;
+              wc.jsonStore.clearFolderStates();
+
+              // Optionally also collapse the VS Code list widget:
+              await vscode.commands.executeCommand("treeViewId.focus");
+              await vscode.commands.executeCommand("list.collapseAll");
+
+              // Re-render once—no per-node reveals
+              await treeDataProvider.refresh();
+              logInfoMessage("All folders collapsed.");
           },
           mode: ExecutionMode.Single,
         },
-        // ...etc. for all your toggle/collapse/expand/testConnection/dismiss commands...
         'livesync.expandChangedFolders': {
           callback: async () => {
             
-            treeDataProvider.toggleViewExpansion(false);
+            treeDataProvider.toggleViewExpansion(false); // sets _collapseAll = false
             context.globalState.update("collapseAll", false);
-            vscode.commands.executeCommand("setContext", "livesyncExpandMode", "expand");
-  
-            // Recompute which folders should be open
-            const workspaceConfig = treeDataProvider.currentWorkspaceConfig;
-            await workspaceConfig.jsonStore.expandChangedFoldersRecursive(workspaceConfig.jsonStore.comparisonFileRoot);  // repopulates foldersState
-  
-            // 2) then actually reveal each "opened" folder
-            const foldersState = workspaceConfig.jsonStore.folderStates;
-            const openedKeys = Object.keys(foldersState);
-            for (const relativePath of openedKeys) {
-              const node = workspaceConfig.jsonStore.findComparisonNode(relativePath);
-              if (node && relativePath !== ".") {
-                // reveal with expand: true forces the UI to open it
-                await TreeViewManager.diffView.reveal(node, { expand: true, focus: false, select: false });
-              }
-            }
-  
+            await vscode.commands.executeCommand("setContext", "livesyncExpandMode", "expand");
+
+            const wc = treeDataProvider.currentWorkspaceConfig;
+            // Recompute which folders should be open (fills folderStates)
+            await wc.jsonStore.expandChangedFoldersRecursive(wc.jsonStore.comparisonFileRoot);
+
+            // Single refresh — VS Code opens those folders based on collapsibleState
+            await treeDataProvider.refresh();
+
             logInfoMessage("All changed folders expanded.");
           },
           mode: ExecutionMode.Single,

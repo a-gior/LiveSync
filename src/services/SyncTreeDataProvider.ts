@@ -22,6 +22,7 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
   private _showUnchanged: boolean;
   private _showAsTree: boolean;
   private _collapseAll: boolean;
+  private _expandEpoch = 0;
 
   private _currentWorkspace: vscode.WorkspaceFolder;
 
@@ -71,6 +72,7 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
 
   toggleViewExpansion(collapseAll: boolean): void {
     this._collapseAll = collapseAll;
+    this._expandEpoch++;          // << bump identity epoch
     this.refresh();
   }
 
@@ -100,24 +102,26 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
   }
 
   async getTreeItem(element: ComparisonFileNode): Promise<vscode.TreeItem> {
-    const foldersStateElement = this.currentWorkspaceConfig.jsonStore.folderStates;
-    const isOpened = element.relativePath in foldersStateElement; // Check for relativePath key in folders state
+    const foldersState = this.currentWorkspaceConfig.jsonStore.folderStates;
+    const isMarkedOpen = !!foldersState[element.relativePath]; // Check for relativePath key in folders state
 
-    let label: string;
-    if (element.relativePath === "" || this._showAsTree) {
-      label = element.name;
-    } else {
-      label = element.relativePath;
-    }
+    const label = (element.relativePath === "" || this._showAsTree)
+      ? element.name
+      : element.relativePath;
 
     let collapsibleState: vscode.TreeItemCollapsibleState;
     if (element.type === BaseNodeType.directory && (this._showAsTree || element.relativePath === "")) {
-      collapsibleState = isOpened ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed;
+      const shouldBeOpen = !this._collapseAll && isMarkedOpen;
+      collapsibleState = shouldBeOpen
+        ? vscode.TreeItemCollapsibleState.Expanded
+        : vscode.TreeItemCollapsibleState.Collapsed;
     } else {
       collapsibleState = vscode.TreeItemCollapsibleState.None;
     }
 
     const treeItem = new vscode.TreeItem(label, collapsibleState);
+    const rel = element.relativePath || ".";
+    treeItem.id = `${element.workspaceFolder.uri.fsPath}::${rel}::${this._expandEpoch}`; // Unique ID with epoch to refresh tree on expansion mode change
 
     if (element.status && element.type) {
       treeItem.iconPath =
