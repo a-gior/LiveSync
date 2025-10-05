@@ -15,9 +15,9 @@ import { CommandEntry, CommandManager, ExecutionMode } from "../managers/Command
 import { StatusBarManager } from "../managers/StatusBarManager";
 import { TreeViewManager } from "../managers/TreeViewManager";
 import { configManager } from "../extension";
-import { WorkspaceConfig } from "../managers/WorkspaceConfigManager";
 import { ConnectionSettings } from "../DTOs/config/ConnectionSettings";
 import { suppressConfigError } from "../storage/ConfigErrorSuppressor";
+import { WorkspaceConfig } from "./WorkspaceConfig";
 
 export class CommandRegistrar {
     static register(

@@ -19,7 +19,7 @@ import { getFullPaths, getRelativePath } from "../utilities/fileUtils/filePathUt
 import { CommandManager } from "../managers/CommandManager";
 import { configManager } from "../extension";
 import { CONFIG_FILE_NAME } from "../utilities/constants";
-import { handleConfigError } from "../managers/WorkspaceConfigManager";
+import { handleConfigError } from "../errors/WorkspaceConfigError";
 
 export class FileEventHandler {
   

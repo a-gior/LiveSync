@@ -11,7 +11,7 @@ import { TreeViewManager } from "../managers/TreeViewManager";
 import { StatusBarManager } from "../managers/StatusBarManager";
 import { configManager } from "../extension";
 import { FileNodeSource } from "../utilities/FileNode";
-import { handleConfigError, WorkspaceConfigError } from "../managers/WorkspaceConfigManager";
+import { handleConfigError, WorkspaceConfigError } from "../errors/WorkspaceConfigError";
 
 export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonFileNode> {
   private _onDidChangeTreeData: vscode.EventEmitter<ComparisonFileNode | undefined | void> = new vscode.EventEmitter<

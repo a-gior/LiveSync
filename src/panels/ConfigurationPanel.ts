@@ -6,9 +6,9 @@ import { FullConfigurationMessage } from "@shared/DTOs/messages/FullConfiguratio
 import { FileEventActionsMessage } from "@shared/DTOs/messages/FileEventActionsMessage";
 import { IgnoreListMessage } from "@shared/DTOs/messages/IgnoreListMessage";
 import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../managers/LogManager";
-import { ConfigurationState } from "@shared/DTOs/states/ConfigurationState";
-import { WorkspaceConfig } from "../managers/WorkspaceConfigManager";
 import { configManager } from "../extension";
+import { WorkspaceConfig } from "../services/WorkspaceConfig";
+import { ConfigurationState } from "../DTOs/states/configurationState";
 
 export class ConfigurationPanel extends Panel {
   static show(extensionUri: Uri, folder: WorkspaceFolder) {

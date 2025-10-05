@@ -13,7 +13,7 @@ import pMap from "p-map";
 import { createHash } from "crypto";
 import { Stats } from "fs";
 import { configManager } from "../../extension";
-import { WorkspaceConfig } from "../../managers/WorkspaceConfigManager";
+import { WorkspaceConfig } from "../../services/WorkspaceConfig";
 
 //
 // ─── LOCAL FILE LISTING ─────────────────────────────────────────────────────────
