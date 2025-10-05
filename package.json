@@ -147,8 +147,9 @@
         "title": "Expand Changed Folders",
         "icon": "$(expand-all)"
       },
-      { "command": "livesync.toggleRefreshOnConfigSave", 
-        "title": "LiveSync: Toggle Refresh on Config Save" 
+      {
+        "command": "livesync.toggleRefreshOnConfigSave",
+        "title": "LiveSync: Toggle Refresh on Config Save"
       }
     ],
     "menus": {
@@ -287,10 +288,20 @@
           "type": "array",
           "scope": "window",
           "description": "Choose which LiveSync status bar items may be shown.",
-          "default": ["messages", "permanent", "progress", "errors"],
+          "default": [
+            "messages",
+            "permanent",
+            "progress",
+            "errors"
+          ],
           "items": {
             "type": "string",
-            "enum": ["messages", "permanent", "progress", "errors"],
+            "enum": [
+              "messages",
+              "permanent",
+              "progress",
+              "errors"
+            ],
             "markdownEnumDescriptions": [
               "Informational messages",
               "Gear button (Livesync) to open configuration settings",
@@ -314,12 +325,12 @@
     "generate-deps-vscodeignore": "node scripts/generateVscodeIgnore.js",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint:fix && npm run setup:test-env",
     "lint:fix": "eslint src --ext ts --fix",
     "setup:test-env": "npx ts-node scripts/setup-test-env.ts",
-    "test": "vscode-test",
-    "test:single": "vscode-test --label single",
-    "test:multi": "vscode-test --label multi"
+    "test": "npm run compile && node ./out/src/test/runTest.js",
+    "test:single": "cross-env LS_WS=single npm test",
+    "test:multi": "cross-env LS_WS=multi npm test",
+    "test:broken": "cross-env LS_WS=broken npm test"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
@@ -334,6 +345,7 @@
     "@typescript-eslint/parser": "^7.4.0",
     "@vscode/test-cli": "^0.0.8",
     "@vscode/test-electron": "^2.5.2",
+    "cross-env": "^10.0.0",
     "esbuild": "^0.25.0",
     "esbuild-node-externals": "^1.18.0",
     "eslint": "^8.57.0",

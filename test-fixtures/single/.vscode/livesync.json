@@ -1,0 +1,8 @@
+{
+  "hostname": "example.com",
+  "username": "user",
+  "port": 22,
+  "remotePath": "/var/www/project",
+  "privateKeyPath": "",
+  "password": ""
+}
