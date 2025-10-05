@@ -1,90 +1,126 @@
 // src/services/SSHClient.ts
-import { Client } from 'ssh2';
-import { BaseClient } from './BaseClient';
-import { ConfigurationMessage } from '@shared/DTOs/messages/ConfigurationMessage';
-import { LOG_FLAGS, logErrorMessage, logInfoMessage } from '../managers/LogManager';
+import { Client } from "ssh2";
+import { BaseClient } from "./BaseClient";
+import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
+import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../managers/LogManager";
 
 export class SSHClient extends BaseClient {
-  private client = new Client();
+  private client: Client | null = null;
 
-  public async connect(cfg: ConfigurationMessage['configuration']): Promise<void> {
-    await this.guardedConnect(() => {
-      const opts = this.getConnectionOptions(cfg);
-      return new Promise<void>((resolve, reject) => {
-        logInfoMessage(`SSH: connecting to ${cfg.hostname}:${cfg.port}`, LOG_FLAGS.CONSOLE_ONLY);
-        this.client
-          .on('ready', () => {
-            logInfoMessage('SSH: connection ready');
-            resolve();
-          })
-          .on('error', err => {
-            logErrorMessage(`SSH: connection error: ${err.message}`, LOG_FLAGS.CONSOLE_ONLY, err);
-            reject(err);
-          })
-          .on('close', () => {
-            this.isConnected = false;
-            logInfoMessage('SSH: connection closed');
-          })
-          .on('timeout', () => {
-            logErrorMessage('SSH: connection timed out', LOG_FLAGS.CONSOLE_ONLY);
-            reject(new Error('SSH connection timed out'));
-          })
-          .connect(opts);
+  /** Create a fresh ssh2 Client and drop old listeners safely */
+  private newClient(): Client {
+    if (this.client) {
+      try { this.client.removeAllListeners(); } catch {}
+      try { this.client.end(); } catch {}
+    }
+    this.client = new Client();
+    return this.client;
+  }
+
+  public async connect(cfg: ConfigurationMessage["configuration"]): Promise<void> {
+    await this.guardedConnect(async () => {
+      const opts: any = this.getSSH2Options(cfg); // base ssh2 opts
+      const endpoint = `${cfg.hostname}:${cfg.port}`;
+
+      const c = this.newClient();
+
+      await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        const settle = (fn: () => void) => { if (!settled) { settled = true; fn(); } };
+
+        const onReady = () => settle(() => {
+          this.isConnected = true;
+          this.onReadyHandlers.forEach(h => h());
+          logInfoMessage("SSH: connection ready");
+          cleanup();
+          resolve();
+        });
+
+        const onError = (err: any) => settle(() => {
+          this.isConnected = false;
+          const newErr = new Error(`${err.message} (${endpoint})`);
+          this.onErrorHandlers.forEach(h => h(newErr));
+          logErrorMessage(`SSH: connection error: ${newErr?.message}`, LOG_FLAGS.CONSOLE_ONLY, newErr);
+          cleanup();
+          reject(newErr);
+        });
+
+        const onClose = (hadErr?: boolean) => {
+          this.isConnected = false;
+          this.onCloseHandlers.forEach(h => h());
+          logInfoMessage(`SSH: connection closed (hadErr=${!!hadErr})`);
+          if (!settled) {onError(new Error("SSH closed during handshake"));}
+        };
+
+        const cleanup = () => {
+          c.removeListener("ready", onReady);
+          c.removeListener("error", onError);
+          c.removeListener("close", onClose);
+          clearTimeout(safety);
+        };
+
+        const safety = setTimeout(() => onError(new Error("SSH connect safety timeout")),
+                                  (opts.readyTimeout ?? 6000) + 2000);
+
+        c.on("ready", onReady);
+        c.on("error", onError);
+        c.on("close", onClose);
+
+        logInfoMessage(`SSH: connecting to ${opts.host}:${opts.port}`, LOG_FLAGS.CONSOLE_ONLY);
+        c.connect(opts);
       });
     });
   }
 
   public async disconnect(): Promise<void> {
-    if (!this.isConnected) {return;}
-    logInfoMessage('SSH: disconnecting');
-    this.client.end();
-    this.isConnected = false;
+    if (!this.isConnected && !this.client) {return;}
+    logInfoMessage("SSH: disconnecting");
+    try { this.client?.end(); } finally {
+      this.isConnected = false;
+      this.client = null;
+    }
   }
 
   public async executeCommand(
     command: string,
     dataCb?: (line: string) => void
   ): Promise<string> {
-    let output = '';
+    let output = "";
     return new Promise<string>((resolve, reject) => {
-      this.client.exec(command, (err, stream) => {
+      const cli = this.client;
+      if (!cli) {return reject(new Error("SSH not connected"));}
+
+      cli.exec(command, (err, stream) => {
         if (err) {return reject(err);}
 
         let exitCode: number | null = null;
         let exitSignal: string | null = null;
-        let buffer = '';
+        let buffer = "";
 
-        // 1️⃣ Listen for the real exit event
-        stream.on('exit', (code: number | null, signal: string | null) => {
-          exitCode   = code;
+        stream.on("exit", (code: number | null, signal: string | null) => {
+          exitCode = code;
           exitSignal = signal;
         });
 
-        // 2️⃣ Data handler (unchanged)
         const flush = (chunk: string) => {
           buffer += chunk;
-          const parts = buffer.split('\n');
-          buffer = parts.pop() || '';
-          for (const line of parts) {
-            dataCb?.(line + '\n');
-          }
+          const parts = buffer.split("\n");
+          buffer = parts.pop() || "";
+          for (const line of parts) {dataCb?.(line + "\n");}
         };
-        stream
-          .on('data',    (b: Buffer) => { flush(b.toString()); output += b; })
-          .stderr.on('data', (b: Buffer) => { flush(b.toString()); output += b; });
 
-        // 3️⃣ Close handler––now exitCode & exitSignal are set
-        stream.on('close', () => {
+        stream
+          .on("data", (b: Buffer) => { flush(b.toString()); output += b; })
+          .stderr.on("data", (b: Buffer) => { flush(b.toString()); output += b; });
+
+        stream.on("close", () => {
           if (buffer && dataCb) {dataCb(buffer);}
 
-          // treat undefined (never set) same as null
-          const code   = exitCode   !== null ? exitCode   : -1;
-          const signal = exitSignal !== null ? exitSignal : 'none';
+          const code = exitCode !== null ? exitCode : -1;
+          const signal = exitSignal !== null ? exitSignal : "none";
 
           if (![0, 1].includes(code)) {
-            return reject(new Error(
-              `Command "${command}" failed: code=${code}, signal=${signal}`
-            ));
+            return reject(new Error(`Command "${command}" failed: code=${code}, signal=${signal}`));
           }
           if (code === 1) {
             logErrorMessage(
@@ -100,7 +136,7 @@ export class SSHClient extends BaseClient {
 
   public async mkdirs(dirs: string[]): Promise<void> {
     if (dirs.length === 0) {return;}
-    const cmd = `mkdir -p ${dirs.map(d => `'${d}'`).join(' ')}`;
+    const cmd = `mkdir -p ${dirs.map(d => `'${d}'`).join(" ")}`;
     await this.executeCommand(cmd);
   }
 
@@ -110,8 +146,7 @@ export class SSHClient extends BaseClient {
 
   public async count(remoteDir: string): Promise<number> {
     const raw = await this.executeCommand(`find "${remoteDir}" | wc -l`);
-    const lastLine = raw.trim().split('\n').pop() || '0';
+    const lastLine = raw.trim().split("\n").pop() || "0";
     return parseInt(lastLine, 10) || 0;
-  }
+    }
 }
-

@@ -1,27 +1,69 @@
 // src/services/SFTPClient.ts
-import SftpClient from 'ssh2-sftp-client';
-import { BaseClient } from './BaseClient';
-import { ConfigurationMessage } from '@shared/DTOs/messages/ConfigurationMessage';
-import { BaseNodeType } from '../utilities/BaseNode';
-import { logInfoMessage } from '../managers/LogManager';
+import SftpClient from "ssh2-sftp-client";
+import { BaseClient } from "./BaseClient";
+import { ConfigurationMessage } from "@shared/DTOs/messages/ConfigurationMessage";
+import { BaseNodeType } from "../utilities/BaseNode";
+import { LOG_FLAGS, logErrorMessage, logInfoMessage } from "../managers/LogManager";
 
 export class SFTPClient extends BaseClient {
   private client = new SftpClient();
+  private listenersBound = false;
 
-  public async connect(cfg: ConfigurationMessage['configuration']): Promise<void> {
+  private bindOnce(endpoint: string) {
+    if (this.listenersBound) {return;}
+    this.listenersBound = true;
+
+    this.client.on("end", () => {
+      this.isConnected = false;
+      this.onCloseHandlers.forEach(h => h());
+      logInfoMessage("SFTP: connection end");
+    });
+
+    this.client.on("close", (hadErr: boolean) => {
+      this.isConnected = false;
+      this.onCloseHandlers.forEach(h => h());
+      logInfoMessage(`SFTP: connection closed (hadErr=${!!hadErr})`);
+    });
+
+    this.client.on("error", (e: any) => {
+      this.isConnected = false;
+      const newErr = new Error(`${e.message} (${endpoint})`);
+      this.onErrorHandlers.forEach(h => h(newErr));
+      logErrorMessage(`SFTP: connection error: ${newErr?.message}`, LOG_FLAGS.CONSOLE_ONLY, newErr);
+    });
+  }
+
+  public async connect(cfg: ConfigurationMessage["configuration"]): Promise<void> {
     await this.guardedConnect(async () => {
-      const opts = this.getConnectionOptions(cfg) as any;
+
+      const opts = {
+        ...this.getSSH2Options(cfg),    // ssh2 options
+        ...this.getSftpRetryOptions()   // retries: 0
+      } as any;
+      const endpoint = `${cfg.hostname}:${cfg.port}`;
+      this.bindOnce(endpoint);
+
       logInfoMessage(`SFTP: connecting to ${cfg.hostname}:${cfg.port}`);
-      await this.client.connect(opts);
-      logInfoMessage('SFTP: connection ready');
+      try {
+        await this.client.connect(opts);   // rejects on handshake/transport failure
+        this.isConnected = true;
+        this.onReadyHandlers.forEach(h => h());
+        logInfoMessage("SFTP: connection ready");
+      } catch (e: any) {
+        this.isConnected = false;
+        throw e;
+      }
     });
   }
 
   public async disconnect(): Promise<void> {
     if (!this.isConnected) {return;}
-    logInfoMessage('SFTP: disconnecting');
-    await this.client.end();
-    this.isConnected = false;
+    logInfoMessage("SFTP: disconnecting");
+    try {
+      await this.client.end(); // will trigger end/close
+    } finally {
+      this.isConnected = false;
+    }
   }
 
   public async uploadFile(local: string, remote: string): Promise<void> {
@@ -67,8 +109,8 @@ export class SFTPClient extends BaseClient {
   public async pathType(remotePath: string): Promise<BaseNodeType | false> {
     const exists = await this.client.exists(remotePath);
     if (!exists) {return false;}
-    if (exists === '-') {return BaseNodeType.file;}
-    if (exists === 'd') {return BaseNodeType.directory;}
+    if (exists === "-") {return BaseNodeType.file;}
+    if (exists === "d") {return BaseNodeType.directory;}
     return false;
   }
 

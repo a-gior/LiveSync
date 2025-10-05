@@ -207,6 +207,7 @@ export class WorkspaceConfig {
 
         const connSvc = new ConnectionService(fullConfig);
         const workspaceConfig = new WorkspaceConfig(folder.uri.fsPath, folder, fullConfig, connSvc);
+        connSvc.link(workspaceConfig);
         await workspaceConfig.initialize();
         return workspaceConfig;
     }

@@ -27,6 +27,6 @@ export function handleConfigError(err: any, localPathOrFolder: string | Workspac
     } else if(shouldThrow) {
         throw err;
     } else {
-        logErrorMessage(err.message, LOG_FLAGS.CONSOLE_ONLY);
+        logErrorMessage(`<handleConfigError> ${err.message}`, LOG_FLAGS.CONSOLE_ONLY);
     }
 }
