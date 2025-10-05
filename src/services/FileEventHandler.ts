@@ -91,12 +91,8 @@ export class FileEventHandler {
    * @param filePath - The file path to check
    * @returns True if the file is in the workspace, false otherwise
    */
-  static isFileInWorkspace(filePath: string): boolean {
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) {
-      return false;
-    }
-    return workspaceFolders.some((folder) => filePath.startsWith(folder.uri.fsPath));
+  static isFileInWorkspace(fileUri: vscode.Uri): boolean {
+    return vscode.workspace.getWorkspaceFolder(fileUri) !== undefined;
   }
 
   /**
@@ -139,7 +135,7 @@ export class FileEventHandler {
     for (const fileUri of event.files) {
       const filePath = fileUri.fsPath;
 
-      if (!FileEventHandler.isFileInWorkspace(filePath)) {
+      if (!FileEventHandler.isFileInWorkspace(fileUri)) {
         FileEventHandler.logFileNotInWorkspace("Create", filePath);
         continue;
       }
@@ -192,7 +188,7 @@ export class FileEventHandler {
     for (const fileUri of event.files) {
       const filePath = fileUri.fsPath;
 
-      if (!FileEventHandler.isFileInWorkspace(filePath)) {
+      if (!FileEventHandler.isFileInWorkspace(fileUri)) {
         FileEventHandler.logFileNotInWorkspace("Delete", filePath);
         continue;
       }
@@ -238,7 +234,7 @@ export class FileEventHandler {
   static async handleFileSave(document: vscode.TextDocument, treeDataProvider: SyncTreeDataProvider) {
     const filePath = document.uri.fsPath;
 
-    if (!FileEventHandler.isFileInWorkspace(filePath)) {
+    if (!FileEventHandler.isFileInWorkspace(document.uri)) {
       FileEventHandler.logFileNotInWorkspace("Save", filePath);
       return;
     }
@@ -286,7 +282,7 @@ export class FileEventHandler {
       // Check if the file is being renamed within the same directory
       const newName = path.dirname(oldPath) === path.dirname(newPath) ? path.basename(newPath) : null;
 
-      if (!FileEventHandler.isFileInWorkspace(oldPath) || !FileEventHandler.isFileInWorkspace(newPath)) {
+      if (!FileEventHandler.isFileInWorkspace(oldUri) || !FileEventHandler.isFileInWorkspace(newUri)) {
         FileEventHandler.logFileNotInWorkspace("Rename", oldPath);
         continue;
       }
@@ -339,7 +335,7 @@ export class FileEventHandler {
   static async handleFileOpen(document: vscode.TextDocument, treeDataProvider: SyncTreeDataProvider) {
     const filePath = document.uri.fsPath;
 
-    if (!FileEventHandler.isFileInWorkspace(filePath)) {
+    if (!FileEventHandler.isFileInWorkspace(document.uri)) {
       FileEventHandler.logFileNotInWorkspace(Action.Open, filePath);
       return;
     }
@@ -379,8 +375,9 @@ export class FileEventHandler {
    */
   static async handleFileDownload(fileNode: ComparisonFileNode, treeDataProvider: SyncTreeDataProvider) {
     const { localPath, remotePath } = await getFullPaths(fileNode);
+    const uri = vscode.Uri.file(localPath);
 
-    if (!FileEventHandler.isFileInWorkspace(localPath)) {
+    if (!FileEventHandler.isFileInWorkspace(uri)) {
       FileEventHandler.logFileNotInWorkspace("Download", localPath);
       return;
     }
@@ -388,7 +385,6 @@ export class FileEventHandler {
     logInfoMessage(`<handleFileDownload> Downloading file from ${remotePath} to ${localPath}`);
 
     try {
-      const uri = vscode.Uri.file(localPath);
       const downloadResult = await fileDownload(uri);
       
       FileEventHandler.updateNodeStatus(fileNode, ActionOn.Download, downloadResult);
@@ -409,8 +405,9 @@ export class FileEventHandler {
    */
   static async handleFileUpload(fileNode: ComparisonFileNode, treeDataProvider: SyncTreeDataProvider) {
     const { localPath, remotePath } = await getFullPaths(fileNode);
+    const uri = vscode.Uri.file(localPath);
 
-    if (!FileEventHandler.isFileInWorkspace(localPath)) {
+    if (!FileEventHandler.isFileInWorkspace(uri)) {
       FileEventHandler.logFileNotInWorkspace("Upload", localPath);
       return;
     }
@@ -418,7 +415,6 @@ export class FileEventHandler {
     logInfoMessage(`<handleFileUpload> Uploading file from ${localPath} to ${remotePath}`);
 
     try {
-      const uri = vscode.Uri.file(localPath);
       const uploadResult = await fileUpload(uri);
 
       FileEventHandler.updateNodeStatus(fileNode, ActionOn.Upload, uploadResult);
