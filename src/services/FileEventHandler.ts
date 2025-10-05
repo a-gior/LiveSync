@@ -170,7 +170,7 @@ export class FileEventHandler {
 
 
         // Update rootElements and refresh the tree
-        const updatedNode = await treeDataProvider.updateRootElements(Action.Add, comparisonNode);
+        const updatedNode = await treeDataProvider.updateStore(Action.Add, comparisonNode);
         await treeDataProvider.refresh(updatedNode);
       } catch (err: any) {
         const workspaceFolder = configManager!.getWorkspaceFolderFromPath(filePath, FileNodeSource.local);
@@ -217,7 +217,7 @@ export class FileEventHandler {
 
         // Remove node from rootElements if also removed remotely, update it otherwise and refresh the tree view
         const action = fileDeletedAction === ActionResult.ActionPerformed ? Action.Remove : Action.Update;
-        const deletedNode = await treeDataProvider.updateRootElements(action, nodeToDelete);
+        const deletedNode = await treeDataProvider.updateStore(action, nodeToDelete);
         await treeDataProvider.refresh(deletedNode);
       } catch (err: any) {
         const workspaceFolder = configManager!.getWorkspaceFolderFromPath(filePath, FileNodeSource.local);
@@ -262,7 +262,7 @@ export class FileEventHandler {
       FileEventHandler.updateNodeStatus(nodeToSave, ActionOn.Save, fileSavedAction);
 
       // Update node in rootElements and refresh the tree view
-      const savedNode = await treeDataProvider.updateRootElements(Action.Update, nodeToSave);
+      const savedNode = await treeDataProvider.updateStore(Action.Update, nodeToSave);
       await treeDataProvider.refresh(savedNode);
     } catch (err: any) {
       const workspaceFolder = configManager!.getWorkspaceFolderFromPath(filePath, FileNodeSource.local);
@@ -308,7 +308,7 @@ export class FileEventHandler {
         FileEventHandler.updateNodeStatus(nodeToMove, ActionOn.Move, fileMoveAction);
   
         // Update node in rootElements and refresh the tree view
-        const removedNode = await treeDataProvider.updateRootElements(Action.Remove, nodeToMove);
+        const removedNode = await treeDataProvider.updateStore(Action.Remove, nodeToMove);
         await treeDataProvider.refresh(removedNode);
 
         const nodeToAdd = nodeToMove.clone();
@@ -321,7 +321,7 @@ export class FileEventHandler {
         FileEventHandler.rebaseRelativePaths(nodeToAdd, oldFileNodeRelativePath, newFileNodeRelativePath);
 
         FileEventHandler.updateNodeStatus(nodeToAdd, ActionOn.Move, fileMoveAction);
-        const addedNode = await treeDataProvider.updateRootElements(Action.Add, nodeToAdd);
+        const addedNode = await treeDataProvider.updateStore(Action.Add, nodeToAdd);
         await treeDataProvider.refresh(addedNode);
 
       } catch (err: any) {
@@ -359,7 +359,7 @@ export class FileEventHandler {
       
       FileEventHandler.updateNodeStatus(openedNode, ActionOn.Open, fileDownloaded);
 
-      const savedNode = await treeDataProvider.updateRootElements(Action.Update, openedNode);
+      const savedNode = await treeDataProvider.updateStore(Action.Update, openedNode);
       await treeDataProvider.refresh(savedNode);
     } catch (err: any) {
       
@@ -389,7 +389,7 @@ export class FileEventHandler {
       
       FileEventHandler.updateNodeStatus(fileNode, ActionOn.Download, downloadResult);
 
-      const updatedNode = await treeDataProvider.updateRootElements(Action.Update, fileNode);
+      const updatedNode = await treeDataProvider.updateStore(Action.Update, fileNode);
       await treeDataProvider.refresh(updatedNode);
     } catch (err: any) {
       
@@ -419,7 +419,7 @@ export class FileEventHandler {
 
       FileEventHandler.updateNodeStatus(fileNode, ActionOn.Upload, uploadResult);
 
-      const updatedNode = await treeDataProvider.updateRootElements(Action.Update, fileNode);
+      const updatedNode = await treeDataProvider.updateStore(Action.Update, fileNode);
       await treeDataProvider.refresh(updatedNode);
     } catch (err: any) {
       

@@ -207,7 +207,7 @@ export class SyncTreeDataProvider implements vscode.TreeDataProvider<ComparisonF
     }
   }
 
-  async updateRootElements(
+  async updateStore(
     action: Action,
     element: ComparisonFileNode
   ): Promise<ComparisonFileNode> {

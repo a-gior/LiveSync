@@ -107,7 +107,7 @@ export class CommandRegistrar {
               let compNode: ComparisonFileNode;
               if (element) {
                 compNode = await compareCorrespondingEntry(element);
-                const updated = await treeDataProvider.updateRootElements(Action.Update, compNode);
+                const updated = await treeDataProvider.updateStore(Action.Update, compNode);
                 await treeDataProvider.refresh(updated);
               } else {
                 compNode = await treeDataProvider.getComparisonFileNode(localPath, remotePath);

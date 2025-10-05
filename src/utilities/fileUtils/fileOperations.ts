@@ -45,7 +45,7 @@ export async function handleAction(
     const comparisonFileNode = await treeDataProvider.getComparisonFileNode(localPath, remotePath);
 
     FileEventHandler.updateNodeStatus(comparisonFileNode, action === "upload" ? ActionOn.Upload : ActionOn.Download, ActionResult.ActionPerformed);
-    const updatedNode = await treeDataProvider.updateRootElements(Action.Update, comparisonFileNode);
+    const updatedNode = await treeDataProvider.updateStore(Action.Update, comparisonFileNode);
     await treeDataProvider.refresh(updatedNode);
 
   } else {
@@ -80,7 +80,7 @@ export async function performDelete(
  
   if (isDeleted) {
     // Remove node from rootElements
-    const deletedNode = await treeDataProvider.updateRootElements(Action.Remove, node);
+    const deletedNode = await treeDataProvider.updateStore(Action.Remove, node);
     await treeDataProvider.refresh(deletedNode);
   }
 }
