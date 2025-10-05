@@ -21,7 +21,7 @@ export class WorkspaceConfig {
     public readonly jsonStore: WorkspaceJsonStore;
     public readonly connectionService: ConnectionService;
 
-    private _error: string | null = null;
+    private _error: string = "";
     
     private constructor(public readonly id: string, folder: WorkspaceFolder, config: WorkspaceConfigFile, connectionService: ConnectionService) {
         this._folder = folder;
@@ -35,7 +35,7 @@ export class WorkspaceConfig {
         await this.jsonStore.loadAll();
     }
 
-    public get error(): string | null {
+    public get error(): string {
         return this._error;
     }
 
@@ -249,7 +249,7 @@ export class WorkspaceConfig {
         }
 
         // Clear any previous error if valid
-        this._error = null;
+        this._error = "";
         clearSuppressedConfigError(this._folder);
         StatusBarManager.clearErrored(this._folder.uri.fsPath.toString());
         return true;
