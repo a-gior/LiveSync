@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { SFTPClient } from "../../services/SFTPClient";
 import { getFullPaths, getRelativePath, normalizePath } from "./filePathUtils";
-import pLimit = require("p-limit");
+import pLimit from "p-limit";
 import { BaseNodeType } from "../BaseNode";
 import { ComparisonFileNode, ComparisonStatus } from "../ComparisonFileNode";
 import { SSHClient } from "../../services/SSHClient";

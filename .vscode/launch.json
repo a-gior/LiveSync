@@ -9,9 +9,10 @@
       "name": "Run Extension",
       "type": "extensionHost",
       "request": "launch",
+      "runtimeExecutable": "${execPath}",
       "args": ["--trace-warnings", "--extensionDevelopmentPath=${workspaceFolder}"],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
-      "preLaunchTask": "${defaultBuildTask}"
+      "preLaunchTask": "npm: watch"
     }
   ]
 }

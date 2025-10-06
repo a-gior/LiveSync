@@ -2,15 +2,21 @@
   "compilerOptions": {
     "module": "commonjs",
     "esModuleInterop": true,
-    "target": "es6",
+    "target": "es2020",
     "outDir": "out",
-    "lib": ["es6", "dom"],
+    "lib": ["es2020"],
     "sourceMap": true,
+    "types": ["node", "mocha"],
     "rootDirs": ["src", "shared", "resources"],
-    "baseUrl": "./",
+    "baseUrl": ".",
     "paths": {
       "@shared/*": ["shared/*"],
-      "@resources/*": ["resources/*"]
+      "@resources/*": ["resources/*"],
+      
+      "@domain/*": ["src/domain/*"],
+      "@app/*": ["src/application/*"],
+      "@infra/*": ["src/infrastructure/*"],
+      "@presentation/*": ["src/presentation/*"]
     },
     // "rootDir": "src",
     "strict": true /* enable all strict type-checking options */
@@ -20,5 +26,5 @@
     // "noUnusedParameters": true,  /* Report errors on unused parameters. */
   },
   "include": ["src/**/*", "shared/**/*", "resources/**/*"],
-  "exclude": ["node_modules", ".vscode-test", "webview-ui"]
+  "exclude": ["test/**/*", "out", "node_modules", ".vscode-test", "webview-ui"]
 }

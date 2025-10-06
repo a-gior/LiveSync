@@ -116,7 +116,7 @@ export async function listLocalFiles(localDir: string): Promise<FileNode|undefin
   if (!root) {return undefined;}
 
   // now hash files in parallel, updating progress per file
-  await pMap(fileNodes, async node => {
+  await pMap(fileNodes, async (node: any) => {
     node.hash = await generateHash(node.fullPath, node.source, node.type);
     StatusBarManager.step();
   }, { concurrency: 16 });

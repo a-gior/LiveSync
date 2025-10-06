@@ -50,11 +50,28 @@
     },
     "views": {
       "livesync": [
-        { "id": "livesync.workspaces", "name": "Workspaces", "when": "livesync.multiRoot" },
-        { "id": "livesync.diffs",      "name": "Diffs"      }
+        {
+          "id": "livesync.workspaces",
+          "name": "Workspaces",
+          "when": "livesync.multiRoot"
+        },
+        {
+          "id": "livesync.diffs",
+          "name": "Diffs"
+        },
+        {
+          "id": "livesyncExperimental",
+          "name": "LiveSync (Experimental)"
+        }
       ]
     },
     "commands": [
+      { "command": "livesync.experimental.indexLocal", "title": "LiveSync: Build Local Index (Experimental)" },
+      { "command": "livesync.experimental.remote.load", "title": "LiveSync: Load Remote Snapshot (Experimental)" },
+      { "command": "livesync.experimental.remote.saveFromLocal", "title": "LiveSync: Save Remote Snapshot from Local (Experimental)" },
+      { "command": "livesync.focusExperimentalView", "title": "LiveSync: Focus Experimental View" },
+      { "command": "livesync.experimental.node.applyToRemote", "title": "LiveSync: Apply to Remote" },
+
       {
         "command": "livesync.configuration",
         "title": "LiveSync: Configure Workspace"
@@ -140,12 +157,31 @@
         "title": "Expand Changed Folders",
         "icon": "$(expand-all)"
       },
-      { "command": "livesync.toggleRefreshOnConfigSave", 
-        "title": "LiveSync: Toggle Refresh on Config Save" 
+      {
+        "command": "livesync.toggleRefreshOnConfigSave",
+        "title": "LiveSync: Toggle Refresh on Config Save"
       }
     ],
     "menus": {
       "view/item/context": [
+        {
+          "command": "livesync.experimental.node.applyToRemote",
+          "when": "view == livesyncExperimental && viewItem == fileEntry-file-added",
+          "group": "inline@1"
+        },
+        {
+          "command": "livesync.experimental.node.applyToRemote",
+          "when": "view == livesyncExperimental && viewItem == fileEntry-file-modified",
+          "group": "inline@1"
+        },
+        {
+          "command": "livesync.experimental.node.applyToRemote",
+          "when": "view == livesyncExperimental && viewItem == fileEntry-file-removed",
+          "group": "inline@1"
+        },
+
+
+
         {
           "command": "livesync.upload",
           "when": "viewItem =~ /-(file|directory)-(added|modified)$/",
@@ -262,7 +298,11 @@
       "properties": {
         "livesync.openMode": {
           "type": "string",
-          "enum": ["prompt", "ui", "json"],
+          "enum": [
+            "prompt",
+            "ui",
+            "json"
+          ],
           "default": "prompt",
           "description": "When running **LiveSync: Configure Workspace**, should LiveSync…\n- **prompt**: ask each time whether to use the UI panel or raw JSON\n- **ui**: open the custom LiveSync UI panel by default\n- **json**: open the `livesync.json` file by default"
         },
@@ -276,10 +316,20 @@
           "type": "array",
           "scope": "window",
           "description": "Choose which LiveSync status bar items may be shown.",
-          "default": ["messages", "permanent", "progress", "errors"],
+          "default": [
+            "messages",
+            "permanent",
+            "progress",
+            "errors"
+          ],
           "items": {
             "type": "string",
-            "enum": ["messages", "permanent", "progress", "errors"],
+            "enum": [
+              "messages",
+              "permanent",
+              "progress",
+              "errors"
+            ],
             "markdownEnumDescriptions": [
               "Informational messages",
               "Gear button (Livesync) to open configuration settings",
@@ -302,17 +352,20 @@
     "prepare-package": "npm run generate-deps-vscodeignore && rm -rf node_modules package-lock.json && npm install && npm run compile && cd webview-ui && rm -rf node_modules package-lock.json && npm install && npm run build",
     "generate-deps-vscodeignore": "node scripts/generateVscodeIgnore.js",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "custom-test": "node ./out/src/test/runTest.js",
-    "custom-build-and-test": "npm run compile && node ./out/src/test/runTest.js",
-    "vscode-test": "vscode-test",
-    "vscode-build-and-test": "npm run compile && vscode-test"
+    "build": "tsc -p . && tsc-alias -p tsconfig.json",
+    "watch": "run-p watch:ts watch:alias",
+    "watch:ts": "tsc -w -p .",
+    "watch:alias": "tsc-alias -p tsconfig.json -w",
+    "pretest": "npm run build",
+    "test": "npm run test:unit && npm run test:ext",
+    "test:unit": "mocha",
+    "test:ext": "node ./out/test/runTest.js",
+    "clean": "rimraf out coverage"
   },
   "devDependencies": {
-    "@types/mocha": "^10.0.1",
-    "@types/node": "18.x",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^18.19.129",
     "@types/ssh2": "^1.15.0",
     "@types/ssh2-sftp-client": "^9.0.3",
     "@types/tmp": "^0.2.6",
@@ -321,7 +374,8 @@
     "@typescript-eslint/eslint-plugin": "^7.4.0",
     "@typescript-eslint/parser": "^7.4.0",
     "@vscode/test-cli": "^0.0.8",
-    "@vscode/test-electron": "^2.4.1",
+    "@vscode/test-electron": "^2.5.2",
+    "c8": "^10.1.3",
     "esbuild": "^0.25.0",
     "esbuild-node-externals": "^1.18.0",
     "eslint": "^8.57.0",
@@ -329,9 +383,14 @@
     "husky": "^9.0.11",
     "jsonc-parser": "^3.2.1",
     "lint-staged": "^15.2.2",
-    "mocha": "^10.2.0",
+    "mocha": "^10.8.2",
+    "npm-run-all": "^4.1.5",
     "prettier": "3.2.5",
-    "rimraf": "^5.0.5",
+    "rimraf": "^5.0.10",
+    "source-map-support": "^0.5.21",
+    "ts-node": "^10.9.2",
+    "tsc-alias": "^1.8.16",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^4.2.3"
   },
   "dependencies": {

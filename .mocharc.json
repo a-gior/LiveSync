@@ -1,0 +1,11 @@
+{
+  "extension": ["ts"],
+  "spec": "test/unit/**/*.spec.ts",
+  "require": [
+    "ts-node/register",
+    "tsconfig-paths/register",
+    "source-map-support/register"
+  ],
+  "timeout": 8000,
+  "recursive": true
+}
