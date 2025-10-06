@@ -21,6 +21,7 @@ export class SyncStateManager {
   private localIndexByWorkspace = new Map<string, Map<string, FileMeta>>();
   private remoteIndexByWorkspace = new Map<string, Map<string, FileMeta>>();
   private diffByWorkspace = new Map<string, Map<string, DiffEntry>>();
+  private batchingWorkspaces = new Set<string>();
 
   private diffListeners = new Set<Listener>();
 
@@ -113,10 +114,20 @@ export class SyncStateManager {
   }
 
   private recompute(workspaceId: string, touchedPath?: string): void {
+    if (this.batchingWorkspaces?.has && this.batchingWorkspaces.has(workspaceId)) {
+      return;
+    }
+
     const localIndex = this.ensureWorkspaceMap(this.localIndexByWorkspace, workspaceId);
     const remoteIndex = this.ensureWorkspaceMap(this.remoteIndexByWorkspace, workspaceId);
 
-    const newDiff = this.diffEngine.computeFull(localIndex, remoteIndex);
+    // use folder-aware diff if available
+    const newDiff = (this.diffEngine.computeWithFolders ?? this.diffEngine.computeFull).call(
+      this.diffEngine,
+      localIndex,
+      remoteIndex
+    );
+
     this.diffByWorkspace.set(workspaceId, newDiff);
 
     const parentPath = touchedPath ? this.dirnameRelative(touchedPath) || undefined : undefined;
@@ -148,23 +159,39 @@ export class SyncStateManager {
   }
   
   public getLocalIndex(workspaceId: string): Map<string, FileMeta> {
-    const idx = this.ensureWorkspaceMap(this.localIndexByWorkspace, workspaceId);
-    return new Map(idx);
+    const index = this.ensureWorkspaceMap(this.localIndexByWorkspace, workspaceId);
+    return new Map(index);
   }
 
   public getRemoteIndex(workspaceId: string): Map<string, FileMeta> {
-    const idx = this.ensureWorkspaceMap(this.remoteIndexByWorkspace, workspaceId);
-    return new Map(idx);
+    const index = this.ensureWorkspaceMap(this.remoteIndexByWorkspace, workspaceId);
+    return new Map(index);
   }
 
   public getLocalMeta(workspaceId: string, path: string): FileMeta | undefined {
-    const idx = this.ensureWorkspaceMap(this.localIndexByWorkspace, workspaceId);
-    return idx.get(path);
+    const index = this.ensureWorkspaceMap(this.localIndexByWorkspace, workspaceId);
+    return index.get(path);
   }
 
   public getRemoteMeta(workspaceId: string, path: string): FileMeta | undefined {
-    const idx = this.ensureWorkspaceMap(this.remoteIndexByWorkspace, workspaceId);
-    return idx.get(path);
+    const index = this.ensureWorkspaceMap(this.remoteIndexByWorkspace, workspaceId);
+    return index.get(path);
+  }
+
+  // Return a shallow copy of the whole diff map (read-only for callers)
+  public getDiffEntries(workspaceId: string): Map<string, DiffEntry> {
+    const index = this.ensureWorkspaceMap(this.diffByWorkspace, workspaceId);
+    return new Map(index);
+  }
+
+  public runBatch(workspaceId: string, hintPath: string | undefined, fn: () => void): void {
+    this.batchingWorkspaces.add(workspaceId);
+    try {
+      fn();
+    } finally {
+      this.batchingWorkspaces.delete(workspaceId);
+      this.recompute(workspaceId, hintPath);
+    }
   }
 
 }

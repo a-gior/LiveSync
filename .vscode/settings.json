@@ -30,5 +30,6 @@
     "terminal.ansiWhite": "#A5A2A2",
     "terminal.ansiYellow": "#FDED02"
   },
-  "svg.preview.background": "editor"
+  "svg.preview.background": "editor",
+  "typescript.tsdk": "node_modules\\typescript\\lib"
 }

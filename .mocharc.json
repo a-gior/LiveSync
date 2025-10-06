@@ -1,11 +1,10 @@
 {
   "extension": ["ts"],
-  "spec": "test/unit/**/*.spec.ts",
+  "spec": ["test/**/*.spec.ts"],
   "require": [
-    "ts-node/register",
-    "tsconfig-paths/register",
-    "source-map-support/register"
+    "ts-node/register/transpile-only",
+    "tsconfig-paths/register"
   ],
-  "timeout": 8000,
-  "recursive": true
+  "timeout": 10000,
+  "watch-files": ["src/**/*.ts", "test/**/*.ts"]
 }

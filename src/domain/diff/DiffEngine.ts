@@ -1,37 +1,29 @@
-import { DiffEntry, FileMeta, NodeType } from '../types';
+import { DiffEntry, FileMeta, NodeType } from '@domain/types';
 
 export interface DiffEngine {
   computeFull(
     localIndex: Map<string, FileMeta>,
     remoteIndex: Map<string, FileMeta>
   ): Map<string, DiffEntry>;
-}
 
-/**
- * Hash-only diff engine.
- * Rules:
- * - Exists only locally  -> added
- * - Exists only remotely -> removed
- * - Both exist:
- *    - type differs                -> modified
- *    - both hashes present & equal -> unchanged
- *    - hashes differ or missing    -> modified
- */
-export class DefaultDiffEngine implements DiffEngine {
-  computeFull(
+  /**
+   * Same as computeFull, but also adds synthetic folder entries with aggregated status.
+   * Folder existence is inferred from children (no empty-dir tracking yet).
+   */
+  computeWithFolders?(
     localIndex: Map<string, FileMeta>,
     remoteIndex: Map<string, FileMeta>
-  ): Map<string, DiffEntry> {
+  ): Map<string, DiffEntry>;
+}
+
+export class DefaultDiffEngine implements DiffEngine {
+  computeFull(localIndex: Map<string, FileMeta>, remoteIndex: Map<string, FileMeta>): Map<string, DiffEntry> {
     const diffMap = new Map<string, DiffEntry>();
-    const allPaths = new Set<string>([
-      ...localIndex.keys(),
-      ...remoteIndex.keys()
-    ]);
+    const allPaths = new Set<string>([...localIndex.keys(), ...remoteIndex.keys()]);
 
     for (const path of allPaths) {
       const localMeta = localIndex.get(path);
       const remoteMeta = remoteIndex.get(path);
-
       if (!localMeta && !remoteMeta) {
         continue;
       }
@@ -44,7 +36,6 @@ export class DefaultDiffEngine implements DiffEngine {
       } else if (!localMeta && remoteMeta) {
         status = 'removed';
       } else {
-        // Both exist
         const typeChanged = localMeta!.type !== remoteMeta!.type;
 
         let contentChanged = false;
@@ -55,7 +46,6 @@ export class DefaultDiffEngine implements DiffEngine {
           if (localHash !== undefined && remoteHash !== undefined) {
             contentChanged = localHash !== remoteHash;
           } else {
-            // Missing hash on either side → conservative choice
             contentChanged = true;
           }
         }
@@ -63,15 +53,108 @@ export class DefaultDiffEngine implements DiffEngine {
         status = (typeChanged || contentChanged) ? 'modified' : 'unchanged';
       }
 
-      diffMap.set(path, {
-        path,
-        type: combinedType,
-        status,
-        left: localMeta,
-        right: remoteMeta
-      });
+      diffMap.set(path, { path, type: combinedType, status, left: localMeta, right: remoteMeta });
     }
 
     return diffMap;
   }
+
+  computeWithFolders(
+    localIndex: Map<string, FileMeta>,
+    remoteIndex: Map<string, FileMeta>
+  ): Map<string, DiffEntry> {
+    const leafDiff = this.computeFull(localIndex, remoteIndex);
+
+    // 1) collect all folder paths from both indexes
+    const folderPaths = new Set<string>();
+    const addParents = (filePath: string): void => {
+      const segments = filePath.split('/');
+      let prefix = '';
+      for (let i = 0; i < segments.length - 1; i += 1) {
+        prefix = prefix ? `${prefix}/${segments[i]}` : segments[i];
+        folderPaths.add(prefix);
+      }
+    };
+    for (const path of localIndex.keys()) {
+      if (path.includes('/')) { addParents(path); }
+    }
+    for (const path of remoteIndex.keys()) {
+      if (path.includes('/')) { addParents(path); }
+    }
+
+    // 2) derive existence on each side purely from descendants
+    const localHasDescendants = buildPrefixIndex(localIndex);
+    const remoteHasDescendants = buildPrefixIndex(remoteIndex);
+
+    // 3) aggregate status per folder
+    for (const folderPath of folderPaths) {
+      const existsLocal = localHasDescendants.has(folderPath);
+      const existsRemote = remoteHasDescendants.has(folderPath);
+
+      let status: DiffEntry['status'];
+      if (existsLocal && !existsRemote) {
+        status = 'added';
+      } else if (!existsLocal && existsRemote) {
+        status = 'removed';
+      } else if (existsLocal && existsRemote) {
+        // modified if any descendant under this folder is not unchanged
+        const hasChange = anyChangeUnder(leafDiff, folderPath);
+        status = hasChange ? 'modified' : 'unchanged';
+      } else {
+        // No descendants on either side; skip emitting a meaningless folder.
+        continue;
+      }
+
+      leafDiff.set(folderPath, {
+        path: folderPath,
+        type: 'folder',
+        status,
+        left: existsLocal ? { type: 'folder' } : undefined,
+        right: existsRemote ? { type: 'folder' } : undefined
+      });
+    }
+
+    // 4) handle type-change (file↔folder) edge-case if present in indexes:
+    // If a file exists at "a" on one side and "a/..." exists on the other, mark "a" as modified.
+    for (const path of leafDiff.keys()) {
+      // Only consider non-folder entries that are files.
+      const entry = leafDiff.get(path)!;
+      if (entry.type !== 'file') {
+        continue;
+      }
+      // If there are descendants "path/..." on the other side, flip this entry to modified.
+      const hasLocalDesc = localHasDescendants.has(path);
+      const hasRemoteDesc = remoteHasDescendants.has(path);
+      if ((hasLocalDesc || hasRemoteDesc)) {
+        entry.status = 'modified';
+      }
+    }
+
+    return leafDiff;
+  }
+}
+
+/** Build a set of all folder prefixes that have at least one descendant. */
+function buildPrefixIndex(index: Map<string, FileMeta>): Set<string> {
+  const set = new Set<string>();
+  for (const filePath of index.keys()) {
+    const segments = filePath.split('/');
+    let prefix = '';
+    for (let i = 0; i < segments.length - 1; i += 1) {
+      prefix = prefix ? `${prefix}/${segments[i]}` : segments[i];
+      set.add(prefix);
+    }
+  }
+  return set;
+}
+
+/** True if any descendant diff under folderPath has status != 'unchanged'. */
+function anyChangeUnder(diff: Map<string, DiffEntry>, folderPath: string): boolean {
+  const prefix = `${folderPath}/`;
+  for (const [path, entry] of diff) {
+    if (path.startsWith(prefix) && entry.status !== 'unchanged') {
+      return true;
+    }
+  }
+  return false;
 }

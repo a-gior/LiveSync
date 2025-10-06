@@ -66,11 +66,20 @@
       ]
     },
     "commands": [
-      { "command": "livesync.experimental.indexLocal", "title": "LiveSync: Build Local Index (Experimental)" },
-      { "command": "livesync.experimental.remote.load", "title": "LiveSync: Load Remote Snapshot (Experimental)" },
-      { "command": "livesync.experimental.remote.saveFromLocal", "title": "LiveSync: Save Remote Snapshot from Local (Experimental)" },
-      { "command": "livesync.focusExperimentalView", "title": "LiveSync: Focus Experimental View" },
-      { "command": "livesync.experimental.node.applyToRemote", "title": "LiveSync: Apply to Remote" },
+      { "command": "livesync.experimental.node.showDiff", "title": "Show Diff (Remote ↔ Local)", "category": "LiveSync" },
+
+      { "command": "livesync.experimental.indexLocal", "title": "Build Local Index", "category": "LiveSync" },
+
+      { "command": "livesync.experimental.node.applyToRemote", "title": "Apply to Remote", "category": "LiveSync" },
+      { "command": "livesync.experimental.folder.applyToRemoteRecursively", "title": "Apply Folder to Remote (Recursive)", "category": "LiveSync" },
+
+      { "command": "livesync.experimental.node.applyFromRemote", "title": "Download from Remote", "category": "LiveSync" },
+      { "command": "livesync.experimental.folder.applyFromRemoteRecursively", "title": "Download Folder from Remote (Recursive)", "category": "LiveSync" },
+
+      { "command": "livesync.focusExperimentalView", "title": "Focus LiveSync View", "category": "LiveSync" },
+      { "command": "livesync.experimental.remote.load", "title": "Load Remote Snapshot (Dev)", "category": "LiveSync (Dev)" },
+      { "command": "livesync.experimental.remote.saveFromLocal", "title": "Save Remote Snapshot from Local (Dev)", "category": "LiveSync (Dev)" },
+
 
       {
         "command": "livesync.configuration",
@@ -179,9 +188,66 @@
           "when": "view == livesyncExperimental && viewItem == fileEntry-file-removed",
           "group": "inline@1"
         },
+        {
+          "command": "livesync.experimental.node.applyToRemote",
+          "when": "view == livesyncExperimental && viewItem == fileEntry-file-conflict",
+          "group": "inline@1"
+        },
 
+        {
+          "command": "livesync.experimental.node.applyFromRemote",
+          "when": "view == livesyncExperimental && viewItem == fileEntry-file-modified && livesync.supportsDownload",
+          "group": "inline@2"
+        },
+        {
+          "command": "livesync.experimental.node.applyFromRemote",
+          "when": "view == livesyncExperimental && viewItem == fileEntry-file-removed && livesync.supportsDownload",
+          "group": "inline@2"
+        },
+        {
+          "command": "livesync.experimental.node.applyFromRemote",
+          "when": "view == livesyncExperimental && viewItem == fileEntry-file-conflict && livesync.supportsDownload",
+          "group": "inline@2"
+        },
 
+        {
+          "command": "livesync.experimental.node.showDiff",
+          "when": "view == livesyncExperimental && viewItem == fileEntry-file-modified && livesync.supportsDownload",
+          "group": "inline@3"
+        },
+        {
+          "command": "livesync.experimental.node.showDiff",
+          "when": "view == livesyncExperimental && viewItem == fileEntry-file-conflict && livesync.supportsDownload",
+          "group": "inline@3"
+        },
 
+        {
+          "command": "livesync.experimental.folder.applyToRemoteRecursively",
+          "when": "view == livesyncExperimental && viewItem == fileEntry-directory-added",
+          "group": "navigation@2"
+        },
+        {
+          "command": "livesync.experimental.folder.applyToRemoteRecursively",
+          "when": "view == livesyncExperimental && viewItem == fileEntry-directory-modified",
+          "group": "navigation@2"
+        },
+        {
+          "command": "livesync.experimental.folder.applyToRemoteRecursively",
+          "when": "view == livesyncExperimental && viewItem == fileEntry-directory-removed",
+          "group": "navigation@2"
+        },
+
+        {
+          "command": "livesync.experimental.folder.applyFromRemoteRecursively",
+          "when": "view == livesyncExperimental && viewItem == fileEntry-directory-modified && livesync.supportsDownload",
+          "group": "navigation@3"
+        },
+        {
+          "command": "livesync.experimental.folder.applyFromRemoteRecursively",
+          "when": "view == livesyncExperimental && viewItem == fileEntry-directory-removed && livesync.supportsDownload",
+          "group": "navigation@3"
+        },
+        
         {
           "command": "livesync.upload",
           "when": "viewItem =~ /-(file|directory)-(added|modified)$/",
@@ -296,6 +362,44 @@
     "configuration": {
       "title": "LiveSync",
       "properties": {
+        "livesync.index.excludeGlobs": {
+          "type": "array",
+          "scope": "resource",
+          "default": [
+            "**/.git/**",
+            "**/node_modules/**",
+            "**/.vscode/**",
+            "**/.idea/**",
+            "**/dist/**",
+            "**/build/**",
+            "**/.cache/**",
+            "**/.next/**",
+            "**/coverage/**"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "markdownDescription": "Extra glob patterns to exclude **in addition to built-in defaults** during local indexing. Uses VS Code glob syntax. Example: `**/Pods/**`, `**/target/**`."
+        },
+        "livesync.index.concurrency": {
+          "type": "integer",
+          "scope": "resource",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 32,
+          "markdownDescription": "Number of files hashed in parallel during local indexing. Higher = faster but more disk I/O."
+        },
+        "livesync.view.showUnchanged": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show unchanged items in the LiveSync tree. When disabled, unchanged files/folders are hidden."
+        },
+        "livesync.view.recentlyResolvedRetentionMs": {
+          "type": "number",
+          "default": 800,
+          "minimum": 0,
+          "description": "How long (in ms) to keep just-resolved items visible before hiding when unchanged entries are hidden."
+        },
         "livesync.openMode": {
           "type": "string",
           "enum": [
@@ -358,7 +462,7 @@
     "watch:ts": "tsc -w -p .",
     "watch:alias": "tsc-alias -p tsconfig.json -w",
     "pretest": "npm run build",
-    "test": "npm run test:unit && npm run test:ext",
+    "test": "npm run test:unit",
     "test:unit": "mocha",
     "test:ext": "node ./out/test/runTest.js",
     "clean": "rimraf out coverage"

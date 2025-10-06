@@ -1,22 +1,21 @@
 import * as vscode from 'vscode';
 
-/**
- * Lightweight status bar progress manager.
- * - Ref-counted tasks
- * - Spinner while any task is running
- * - Optional short messages (e.g., "123/2137")
- */
 export class ProgressService {
   private item: vscode.StatusBarItem;
   private active = new Map<string, { label: string; message?: string }>();
 
+  // Remote hint (e.g., "user@host:/path" or "local snapshot")
+  private remoteHint?: string;
+
   constructor() {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-    this.item.name = 'LiveSync Progress';
-    this.item.command = 'livesync.focusExperimentalView'; // optional command
+    this.item.name = 'LiveSync Status';
+    this.item.command = 'livesync.focusExperimentalView'; // keep your existing behavior
     this.refresh();
-    this.item.show(); // keep visible but empty; hide if you prefer
+    this.item.show();
   }
+
+  // --- public API ---
 
   start(taskId: string, label: string): void {
     this.active.set(taskId, { label });
@@ -36,17 +35,23 @@ export class ProgressService {
     this.refresh();
   }
 
+  /** Show "user@host:/remotePath" (or "local snapshot") when idle. */
+  setRemoteHint(hint: string | undefined): void {
+    const trimmed = hint?.trim();
+    this.remoteHint = trimmed ? trimmed : undefined;
+    this.refresh();
+  }
+
   async withTask<T>(
     label: string,
     task: (report: (msg: string) => void) => Promise<T>
   ): Promise<T> {
-    const taskId = `${label}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
-    this.start(taskId, label);
+    const id = `${label}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+    this.start(id, label);
     try {
-      const result = await task((msg) => this.report(taskId, msg));
-      return result;
+      return await task((msg) => this.report(id, msg));
     } finally {
-      this.done(taskId);
+      this.done(id);
     }
   }
 
@@ -55,17 +60,26 @@ export class ProgressService {
     this.active.clear();
   }
 
+  // --- internals ---
+
   private refresh(): void {
     if (this.active.size === 0) {
-      this.item.text = 'LiveSync';
-      this.item.tooltip = 'LiveSync ready';
+      if (this.remoteHint) {
+        this.item.text = `$(cloud) LiveSync: ${this.remoteHint}`;
+        this.item.tooltip = `Remote: ${this.remoteHint}`;
+      } else {
+        this.item.text = 'LiveSync';
+        this.item.tooltip = 'LiveSync ready';
+      }
       return;
     }
-    // If multiple tasks, show the first’s label + count
-    const [firstId, first] = this.active.entries().next().value as [string, { label: string; message?: string }];
+
+    const [, first] = this.active.entries().next().value as [string, { label: string; message?: string }];
     const suffix = this.active.size > 1 ? ` (+${this.active.size - 1})` : '';
     const msg = first.message ? ` — ${first.message}` : '';
     this.item.text = `$(sync~spin) LiveSync: ${first.label}${suffix}${msg}`;
-    this.item.tooltip = `${first.label}${msg}`;
+    this.item.tooltip = this.remoteHint
+      ? `Remote: ${this.remoteHint}\n${first.label}${msg}`
+      : `${first.label}${msg}`;
   }
 }

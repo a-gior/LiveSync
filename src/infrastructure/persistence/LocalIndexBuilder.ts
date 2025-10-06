@@ -120,3 +120,10 @@ export function toRelativeFsPath(workspace: vscode.WorkspaceFolder, fsPath: stri
 function normalizeSlashes(inputPath: string): string {
   return path.resolve(inputPath).replace(/\\/g, '/');
 }
+
+export function getIndexingSettings() {
+  const cfg = vscode.workspace.getConfiguration('livesync');
+  const userExcludes = cfg.get<string[]>('index.excludeGlobs') ?? [];
+  const concurrency = cfg.get<number>('index.concurrency') ?? 4;
+  return { userExcludes, concurrency };
+}
