@@ -11,6 +11,8 @@ import { registerApplyFromRemote } from './extension/commands/applyFromRemote';
 import { registerShowDiff } from './extension/commands/showDiff';
 import { FileEventBridge } from './presentation/events/FileEventBridge';
 import { registerRemotePresence } from './extension/remotePresence';
+import { registerViewToolbar } from './extension/commands/viewToolbar';
+import { registerConflictResolver } from './extension/commands/conflictResolver';
 
 export let configManager: WorkspaceConfigManager | null = null;
 
@@ -30,6 +32,8 @@ export async function activate(context: vscode.ExtensionContext) {
   bridge.register(context.subscriptions);
 
   // Commands
+  registerConflictResolver(services);
+  registerViewToolbar(services);
   registerViewCommands(services);
   registerIndexLocal(services);
   registerApplyToRemote(services);

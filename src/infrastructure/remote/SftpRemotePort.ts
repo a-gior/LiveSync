@@ -1,12 +1,14 @@
 import * as fsp from 'fs/promises';
 import * as path from 'path';
-import { createHash } from 'crypto';
 import SftpClient from 'ssh2-sftp-client';
 import { Minimatch } from 'minimatch';
 import type { RemotePort } from '../../application/ports/RemotePort';
 import type { FileMeta } from '../../domain/types';
 import { WorkspaceConfigService } from '../config/WorkspaceConfigService';
 import { logInfoMessage } from '../../managers/LogManager';
+import { sha1FromSftpGetResult } from './SftpHashCore';
+
+const p = path.posix;
 
 export class SftpRemotePort implements RemotePort {
   constructor(
@@ -52,37 +54,68 @@ export class SftpRemotePort implements RemotePort {
     }
   }
 
-  async uploadFile(workspaceId: string, relativePath: string, absoluteLocalPath: string): Promise<void> {
+  async uploadFile(workspaceId: string, relPath: string, absLocal: string): Promise<void> {
     const cfg = await this.configService.getById(workspaceId);
-    if (!cfg.hasRemote || !cfg.data.remotePath) { throw new Error('Remote is not configured.'); }
-
+    if (!cfg.hasRemote || !cfg.data.remotePath) {
+      throw new Error('No remote configured');
+    }
     const client = await this.connect(cfg);
     try {
-      const target = joinRemote(cfg.data.remotePath, relativePath);
-      await ensureRemoteDir(client, path.posix.dirname(normalize(target)));
-      await client.fastPut(absoluteLocalPath, normalize(target));
+      const root = cfg.data.remotePath.replace(/\\/g, '/');
+      const remoteAbs = joinRemote(root, relPath);
+      const parent = p.dirname(remoteAbs);
+      await ensureRemoteDir(client, parent);              // <-- ensure parents exist
+      await client.fastPut(absLocal, remoteAbs);
     } finally {
-      await client.end().catch(() => {});
+      await client.end().catch(() => undefined);
     }
   }
 
-  async deletePath(workspaceId: string, relativePath: string): Promise<void> {
+  async deletePath(workspaceId: string, relPath: string): Promise<void> {
     const cfg = await this.configService.getById(workspaceId);
-    if (!cfg.hasRemote || !cfg.data.remotePath) { throw new Error('Remote is not configured.'); }
-
+    if (!cfg.hasRemote || !cfg.data.remotePath) {
+      throw new Error('No remote configured');
+    }
     const client = await this.connect(cfg);
     try {
-      const target = joinRemote(cfg.data.remotePath, relativePath);
-      // We delete file paths (folder recursion already expands to files).
-      await client.delete(normalize(target)).catch(async (e: any) => {
-        // if it’s a dir, try removing recursive
-        if (String(e?.message || '').includes('No such file')) { return; }
-        try { await client.rmdir(normalize(target), true); } catch { /* ignore */ }
-      });
+      const root = cfg.data.remotePath.replace(/\\/g, '/');
+      const abs = joinRemote(root, relPath);
+
+      // Guard: never delete the configured root
+      if (abs === root || abs === p.normalize(root + '/')) {
+        throw new Error('Refusing to delete remote root');
+      }
+
+      const plan = await collectRecursive(client, abs);
+      if (plan.length === 0) {
+        return; // nothing there
+      }
+
+      // Delete files before directories (we already pushed dirs after their children)
+      // But just in case, sort by depth desc so children come first.
+      plan.sort((a, b) => depth(b.path) - depth(a.path));
+
+      let files = 0;
+      let dirs = 0;
+      for (const node of plan) {
+        try {
+          if (node.type === 'd') {
+            await client.rmdir(node.path, false as any);
+            dirs += 1;
+          } else {
+            await client.delete(node.path);
+            files += 1;
+          }
+        } catch (e) {
+          logInfoMessage(`[LiveSync][SFTP] WARN: skip deleting ${node.path} — ${(e as any)?.message ?? e}`);
+        }
+      }
+      logInfoMessage(`[LiveSync][SFTP] Deleted ${files} file(s), ${dirs} folder(s) under ${relPath}`);
     } finally {
-      await client.end().catch(() => {});
+      await client.end().catch(() => undefined);
     }
   }
+
 
   async downloadFile(workspaceId: string, relativePath: string, absoluteLocalPath: string): Promise<void> {
     const cfg = await this.configService.getById(workspaceId);
@@ -136,12 +169,6 @@ export class SftpRemotePort implements RemotePort {
 
 function normalize(p: string): string { return p.replace(/\\/g, '/'); }
 
-function joinRemote(root: string, rel: string): string {
-  const r = normalize(root).replace(/\/+$/, '');
-  const rr = normalize(rel).replace(/^\/+/, '');
-  return `${r}/${rr}`;
-}
-
 function compileIgnores(globs: string[]): Minimatch[] {
   return globs.map((g) => new Minimatch(g, { dot: true, nocase: true, nocomment: true }));
 }
@@ -150,50 +177,57 @@ function shouldIgnore(rel: string, rules: Minimatch[]): boolean {
   return rules.some((mm) => mm.match(rel));
 }
 
-async function ensureRemoteDir(client: SftpClient, dirAbs: string): Promise<void> {
-  const parts = dirAbs.split('/').filter(Boolean);
-  let cur = dirAbs.startsWith('/') ? '/' : '';
-  for (const part of parts) {
-    cur = cur ? `${cur.replace(/\/$/, '')}/${part}` : part;
-    try { await client.mkdir(cur); } catch {}
-  }
-}
-
 async function sha1OfRemote(client: SftpClient, remoteAbs: string): Promise<string> {
-  const hash = createHash('sha1');
-  // Do NOT pass a destination; we want the data back.
-  const res: unknown = await client.get(normalize(remoteAbs));
-
-  // Buffer?
-  if (Buffer.isBuffer(res)) {
-    hash.update(res);
-    return hash.digest('hex');
-  }
-
-  // String?
-  if (typeof res === 'string') {
-    hash.update(Buffer.from(res));
-    return hash.digest('hex');
-  }
-
-  // Uint8Array (some versions return a typed array)
-  if (res instanceof Uint8Array) {
-    hash.update(Buffer.from(res));
-    return hash.digest('hex');
-  }
-
-  // Readable stream?
-  const maybe: any = res as any;
-  if (maybe && typeof maybe.on === 'function') {
-    return new Promise<string>((resolve, reject) => {
-      maybe.on('data', (chunk: Buffer | string | Uint8Array) => hash.update(chunk as any));
-      maybe.on('error', reject);
-      maybe.on('end', () => resolve(hash.digest('hex')));
-    });
-  }
-
-  // Last resort: stringify the value (prevents crash)
-  hash.update(Buffer.from(String(res ?? '')));
-  return hash.digest('hex');
+  // IMPORTANT: do NOT pass a 'dst' argument; we want the data back
+  // Signature is get(remotePath, [dst], [options])
+  const result = await client.get(normalize(remoteAbs));
+  return sha1FromSftpGetResult(result);
 }
 
+function joinRemote(root: string, rel: string): string {
+  const clean = rel.replace(/^[\\/]+/, '').replace(/\\/g, '/');
+  return p.join(root, clean);
+}
+
+async function ensureRemoteDir(client: SftpClient, remoteDir: string): Promise<void> {
+  try {
+    // ssh2-sftp-client: mkdir(dir, recursive=true)
+    await client.mkdir(remoteDir, true as any);
+  } catch (e) {
+    // mkdir on an existing dir may throw on some servers—ignore “already exists”
+    const msg = (e as any)?.message ?? String(e);
+    if (!/exists|already/i.test(msg)) {
+      throw e;
+    }
+  }
+}
+
+function depth(remoteAbs: string): number {
+  return remoteAbs.split('/').filter(Boolean).length;
+}
+
+async function collectRecursive(client: SftpClient, remoteAbs: string): Promise<Array<{ path: string; type: 'd' | '-' | 'l' }>> {
+  const kind = await client.exists(remoteAbs); // 'd' | '-' | 'l' | false
+  if (!kind) { return []; }
+
+  if (kind !== 'd') {
+    return [{ path: remoteAbs, type: kind as any }];
+  }
+
+  const out: Array<{ path: string; type: 'd' | '-' | 'l' }> = [];
+  async function walk(dir: string): Promise<void> {
+    const items = await client.list(dir);
+    for (const it of items) {
+      const child = p.join(dir, it.name);
+      if (it.type === 'd') {
+        await walk(child);
+        out.push({ path: child, type: 'd' });
+      } else {
+        out.push({ path: child, type: '-' });
+      }
+    }
+  }
+  await walk(remoteAbs);
+  out.push({ path: remoteAbs, type: 'd' }); // include the directory itself last
+  return out;
+}

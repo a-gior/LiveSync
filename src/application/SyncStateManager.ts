@@ -194,4 +194,53 @@ export class SyncStateManager {
     }
   }
 
+  /** Returns true if local index has an exact file entry at relPath. */
+  public hasLocalEntry(workspaceId: string, relPath: string): boolean {
+    const idx = this.localIndexByWorkspace.get(workspaceId);
+    return !!idx && idx.has(relPath);
+  }
+
+  /** Returns true if local index has any entries under relPath/<...>. */
+  public hasLocalChildren(workspaceId: string, relPath: string): boolean {
+    const idx = this.localIndexByWorkspace.get(workspaceId);
+    if (!idx) { return false; }
+    const prefix = relPath.endsWith('/') ? relPath : relPath + '/';
+    for (const key of idx.keys()) {
+      if (key.startsWith(prefix)) { return true; }
+    }
+    return false;
+  }
+
+  /** Remove every local file entry at relPath and below. Batches notifications. */
+  public removeLocalSubtree(workspaceId: string, relPath: string): void {
+    const idx = this.localIndexByWorkspace.get(workspaceId);
+    if (!idx) { return; }
+
+    const toDelete: string[] = [];
+    const prefix = relPath.endsWith('/') ? relPath : relPath + '/';
+
+    // delete exact file if present
+    if (idx.has(relPath)) {
+      toDelete.push(relPath);
+    }
+    // delete all children
+    for (const key of idx.keys()) {
+      if (key.startsWith(prefix)) {
+        toDelete.push(key);
+      }
+    }
+
+    if (toDelete.length === 0) { return; }
+
+    this.runBatch(workspaceId, relPath, () => {
+      for (const path of toDelete) {
+        this.applyLocal({ workspaceId, type: 'delete', path });
+      }
+    });
+  }
+
+  public getLocalIndexSnapshot(workspaceId: string): Map<string, FileMeta> {
+    const index = this.localIndexByWorkspace.get(workspaceId);
+    return new Map(index ?? []);
+  }
 }

@@ -28,9 +28,8 @@ export function registerIndexLocal(services: Services) {
 
           const eff = await config.get(folder);
           const settings = vscode.workspace.getConfiguration('livesync');
-          const extraExcludes = settings.get<string[]>('index.excludeGlobs') ?? [];
           const concurrency = settings.get<number>('index.concurrency') ?? 4;
-          const excludes = [...eff.ignoreGlobs, ...extraExcludes];
+          const excludes = eff.ignoreGlobs;
 
           const localIndex = await buildLocalIndex(folder, {
             excludeGlobs: excludes,

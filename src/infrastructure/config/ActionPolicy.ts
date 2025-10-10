@@ -1,51 +1,84 @@
-import { DiffStatus } from "../../domain/types";
+import type { DiffStatus } from '../../domain/types';
 
-export type Direction = 'upload' | 'download';
-export type Extra = 'delete' | 'rename';
-
-export interface ActionPolicy {
-  check: boolean;                  // recompute / look at diff before acting
-  direction?: Direction;           // upload (push) or download (pull)
-  extras: Set<Extra>;              // delete / rename intent (delete remote, remote rename)
-}
-
-const TOKEN_MAP: Record<string, Direction | Extra | 'check'> = {
-  check: 'check',
-  save: 'upload', push: 'upload', upload: 'upload',
-  pull: 'download', download: 'download',
-  delete: 'delete', remove: 'delete',
-  rename: 'rename', move: 'rename'
+export type ActionPolicy = {
+  check: boolean;
+  direction?: 'upload' | 'download';
+  extras: Set<'delete' | 'rename'>;
 };
 
-export function parseActionPolicy(raw: string | undefined): ActionPolicy {
+/**
+ * Accepts strings like:
+ *  - "check"
+ *  - "save", "upload", "create"
+ *  - "download"
+ *  - "delete", "check&delete"
+ *  - "move", "rename", "check&move"
+ *  - "check&save", "check&upload", "check&download"
+ *  - "none", "", undefined
+ *
+ * Rules:
+ *  - "check" alone => info popup only, no action.
+ *  - "check&<action>" => confirmation popup + perform action on Proceed.
+ *  - <action> without check => perform action directly.
+ *  - Actions:
+ *      upload-dir:  "save" | "upload" | "create"
+ *      download-dir:"download"
+ *      extras:      "delete", "move"/"rename"
+ */
+export function parseActionPolicy(input?: string | null): ActionPolicy {
   const policy: ActionPolicy = { check: false, direction: undefined, extras: new Set() };
-  if (!raw) { return policy; }
+
+  if (!input) {
+    return policy;
+  }
+  const raw = String(input).trim().toLowerCase();
+  if (!raw || raw === 'none' || raw === 'off') {
+    return policy;
+  }
+
+  // Split by & and whitespace, ignore empties
   const tokens = raw
-    .toLowerCase()
-    .split(/[^a-z]+/g)
+    .split('&')
+    .flatMap((t) => t.split(/\s+/))
+    .map((t) => t.trim())
     .filter(Boolean);
 
-  for (const t of tokens) {
-    const mapped = TOKEN_MAP[t];
-    if (!mapped) { continue; }
-    if (mapped === 'check') {
+  for (const token of tokens) {
+    if (token === 'check') {
       policy.check = true;
-    } else if (mapped === 'upload' || mapped === 'download') {
-      policy.direction = mapped; // last one wins if both present
-    } else {
-      policy.extras.add(mapped); // delete / rename
+      continue;
     }
+    // upload-ish synonyms
+    if (token === 'save' || token === 'upload' || token === 'create') {
+      policy.direction = 'upload';
+      continue;
+    }
+    // download-ish synonyms
+    if (token === 'download' || token === 'pull' || token === 'get') {
+      policy.direction = 'download';
+      continue;
+    }
+    // destructive / structural extras
+    if (token === 'delete' || token === 'remove' || token === 'rm') {
+      policy.extras.add('delete');
+      continue;
+    }
+    if (token === 'move' || token === 'rename' || token === 'mv') {
+      policy.extras.add('rename');
+      continue;
+    }
+    // Unknown tokens are ignored on purpose (for forward-compat)
   }
+
   return policy;
 }
 
-// Guards based on our directional rules
+/** Upload is meaningful for: local-only added, locally changed, or conflict. */
 export function canUpload(status: DiffStatus): boolean {
-  // added & modified, plus conflict treated like modified
   return status === 'added' || status === 'modified' || status === 'conflict';
 }
 
+/** Download is meaningful for: remote-only removed, remotely changed, or conflict. */
 export function canDownload(status: DiffStatus): boolean {
-  // removed & modified, plus conflict treated like modified
   return status === 'removed' || status === 'modified' || status === 'conflict';
 }

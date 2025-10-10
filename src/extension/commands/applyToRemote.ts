@@ -13,13 +13,14 @@ export function registerApplyToRemote(services: Services) {
     const entry = state.getDiffEntry(workspaceId, relPath);
     if (!entry || entry.type !== 'file') { return; }
 
-    if (entry.status === 'removed') {
+    if (entry.status === 'added' || entry.status === 'modified') {
+      await remote.uploadFile(workspaceId, relPath, joinFs(workspaceId, relPath));
+      const newRemote = await remote.list(workspaceId);
+      state.setRemoteIndex(workspaceId, newRemote);
+    } else if (entry.status === 'removed') {
       await remote.deletePath(workspaceId, relPath);
-    } else if (entry.status === 'added' || entry.status === 'modified' || entry.status === 'conflict') {
-      const absLocal = joinFs(workspaceId, relPath);
-      await remote.uploadFile(workspaceId, relPath, absLocal);
-    } else {
-      return;
+      const newRemote = await remote.list(workspaceId);
+      state.setRemoteIndex(workspaceId, newRemote);
     }
 
     const newRemote = await remote.list(workspaceId);

@@ -66,19 +66,48 @@
       ]
     },
     "commands": [
-      { "command": "livesync.experimental.node.showDiff", "title": "Show Diff (Remote ↔ Local)", "category": "LiveSync" },
+      {
+        "command": "livesync.resolve.keepLocal",
+        "title": "Keep Local (Upload)",
+        "category": "LiveSync",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "livesync.resolve.keepRemote",
+        "title": "Keep Remote (Download)",
+        "category": "LiveSync",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "livesync.resolveFolder.keepLocal",
+        "title": "Resolve Folder: Keep Local (Upload)",
+        "category": "LiveSync",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "livesync.resolveFolder.keepRemote",
+        "title": "Resolve Folder: Keep Remote (Download)",
+        "category": "LiveSync",
+        "icon": "$(arrow-down)"
+      },
 
-      { "command": "livesync.experimental.indexLocal", "title": "Build Local Index", "category": "LiveSync" },
+      { "command": "livesync.view.toggleShowUnchanged", "title": "Toggle Show Unchanged", "category": "LiveSync", "icon": "$(eye)" },
+      { "command": "livesync.experimental.refreshRemoteIndex", "title": "Refresh Remote Index", "category": "LiveSync", "icon": "$(cloud-download)" },
+      { "command": "livesync.experimental.refreshAll", "title": "Refresh Local & Remote", "category": "LiveSync", "icon": "$(sync)" },
+      { "command": "livesync.experimental.node.showDiff", "title": "Show Diff (Remote ↔ Local)", "category": "LiveSync", "icon": "$(arrow-both)" },
 
-      { "command": "livesync.experimental.node.applyToRemote", "title": "Apply to Remote", "category": "LiveSync" },
-      { "command": "livesync.experimental.folder.applyToRemoteRecursively", "title": "Apply Folder to Remote (Recursive)", "category": "LiveSync" },
+      { "command": "livesync.experimental.indexLocal", "title": "Build Local Index", "category": "LiveSync", "icon": "$(database)" },
 
-      { "command": "livesync.experimental.node.applyFromRemote", "title": "Download from Remote", "category": "LiveSync" },
-      { "command": "livesync.experimental.folder.applyFromRemoteRecursively", "title": "Download Folder from Remote (Recursive)", "category": "LiveSync" },
+      { "command": "livesync.experimental.node.applyToRemote", "title": "Apply to Remote", "category": "LiveSync", "icon": "$(arrow-up)" },
+      { "command": "livesync.experimental.folder.applyToRemoteRecursively", "title": "Apply Folder to Remote (Recursive)", "category": "LiveSync", "icon": "$(arrow-up)" },
 
-      { "command": "livesync.focusExperimentalView", "title": "Focus LiveSync View", "category": "LiveSync" },
-      { "command": "livesync.experimental.remote.load", "title": "Load Remote Snapshot (Dev)", "category": "LiveSync (Dev)" },
-      { "command": "livesync.experimental.remote.saveFromLocal", "title": "Save Remote Snapshot from Local (Dev)", "category": "LiveSync (Dev)" },
+      { "command": "livesync.experimental.node.applyFromRemote", "title": "Download from Remote", "category": "LiveSync", "icon": "$(arrow-down)" },
+      { "command": "livesync.experimental.folder.applyFromRemoteRecursively", "title": "Download Folder from Remote (Recursive)", "category": "LiveSync", "icon": "$(arrow-down)" },
+
+      { "command": "livesync.focusExperimentalView", "title": "Focus LiveSync View", "category": "LiveSync", "icon": "$(telescope)" },
+
+      { "command": "livesync.experimental.remote.load", "title": "Load Remote Snapshot (Dev)", "category": "LiveSync (Dev)", "icon": "$(beaker)" },
+      { "command": "livesync.experimental.remote.saveFromLocal", "title": "Save Remote Snapshot from Local (Dev)", "category": "LiveSync (Dev)", "icon": "$(beaker)" },
 
 
       {
@@ -173,6 +202,47 @@
     ],
     "menus": {
       "view/item/context": [
+        {
+          "command": "livesync.resolve.keepLocal",
+          "when": "view == livesyncExperimental && viewItem == fileEntry-file-modified",
+          "group": "inline@0"
+        },
+        {
+          "command": "livesync.resolve.keepLocal",
+          "when": "view == livesyncExperimental && viewItem == fileEntry-file-conflict",
+          "group": "inline@0"
+        },
+        {
+          "command": "livesync.resolve.keepRemote",
+          "when": "view == livesyncExperimental && livesync.supportsDownload && viewItem == fileEntry-file-modified",
+          "group": "inline@0"
+        },
+        {
+          "command": "livesync.resolve.keepRemote",
+          "when": "view == livesyncExperimental && livesync.supportsDownload && viewItem == fileEntry-file-conflict",
+          "group": "inline@0"
+        },
+
+        {
+          "command": "livesync.resolveFolder.keepLocal",
+          "when": "view == livesyncExperimental && viewItem == fileEntry-directory-modified",
+          "group": "navigation@1"
+        },
+        {
+          "command": "livesync.resolveFolder.keepLocal",
+          "when": "view == livesyncExperimental && viewItem == fileEntry-directory-conflict",
+          "group": "navigation@1"
+        },
+        {
+          "command": "livesync.resolveFolder.keepRemote",
+          "when": "view == livesyncExperimental && livesync.supportsDownload && viewItem == fileEntry-directory-modified",
+          "group": "navigation@1"
+        },
+        {
+          "command": "livesync.resolveFolder.keepRemote",
+          "when": "view == livesyncExperimental && livesync.supportsDownload && viewItem == fileEntry-directory-conflict",
+          "group": "navigation@1"
+        },
         {
           "command": "livesync.experimental.node.applyToRemote",
           "when": "view == livesyncExperimental && viewItem == fileEntry-file-added",
@@ -295,6 +365,48 @@
       ],
       "view/title": [
         {
+          "command": "livesync.resolveFolder.keepLocal",
+          "when": "view == livesyncExperimental",
+          "group": "navigation@5",
+          "icon": "$(arrow-up)"
+        },
+        {
+          "command": "livesync.resolveFolder.keepRemote",
+          "when": "view == livesyncExperimental && livesync.supportsDownload",
+          "group": "navigation@6",
+          "icon": "$(arrow-down)"
+        },
+        {
+          "command": "livesync.view.toggleShowUnchanged",
+          "when": "view == livesyncExperimental",
+          "group": "navigation@1",
+          "icon": "$(eye)"
+        },
+        {
+          "command": "livesync.experimental.indexLocal",
+          "when": "view == livesyncExperimental",
+          "group": "navigation@2",
+          "icon": "$(database)"
+        },
+        {
+          "command": "livesync.experimental.refreshRemoteIndex",
+          "when": "view == livesyncExperimental",
+          "group": "navigation@3",
+          "icon": "$(cloud-download)"
+        },
+        {
+          "command": "livesync.experimental.refreshAll",
+          "when": "view == livesyncExperimental",
+          "group": "navigation@4",
+          "icon": "$(sync)"
+        },
+        {
+          "command": "workbench.actions.treeView.livesyncExperimental.collapseAll",
+          "when": "view == livesyncExperimental",
+          "group": "navigation@99"
+        },
+
+        {
           "command": "livesync.refreshAll",
           "when": "view == livesync.diffs",
           "group": "navigation@1"
@@ -362,25 +474,6 @@
     "configuration": {
       "title": "LiveSync",
       "properties": {
-        "livesync.index.excludeGlobs": {
-          "type": "array",
-          "scope": "resource",
-          "default": [
-            "**/.git/**",
-            "**/node_modules/**",
-            "**/.vscode/**",
-            "**/.idea/**",
-            "**/dist/**",
-            "**/build/**",
-            "**/.cache/**",
-            "**/.next/**",
-            "**/coverage/**"
-          ],
-          "items": {
-            "type": "string"
-          },
-          "markdownDescription": "Extra glob patterns to exclude **in addition to built-in defaults** during local indexing. Uses VS Code glob syntax. Example: `**/Pods/**`, `**/target/**`."
-        },
         "livesync.index.concurrency": {
           "type": "integer",
           "scope": "resource",
