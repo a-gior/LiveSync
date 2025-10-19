@@ -27,6 +27,8 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
   private readonly changeEmitter = new vscode.EventEmitter<ExperimentalNode | undefined>();
   public readonly onDidChangeTreeData = this.changeEmitter.event;
 
+  private currentWorkspaceId: WorkspaceId;
+
   // Track all active timers for cleanup
   private readonly activeTimers = new Set<NodeJS.Timeout>();
   private isDisposed = false;
@@ -51,13 +53,11 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
 
   constructor(
     private readonly state: SyncStateManager,
-    private readonly workspaceIds: WorkspaceId[],
+    initialWorkspaceId: WorkspaceId,
     public readonly folderStateStore: FolderStateStore
   ) {
-    // Prepare top-level nodes
-    for (const wsId of this.workspaceIds) {
-      this.getOrCreateWorkspaceNode(wsId);
-    }
+    this.currentWorkspaceId = initialWorkspaceId;
+    this.getOrCreateWorkspaceNode(initialWorkspaceId);
 
     // Load config-driven view options immediately
     this.updateViewConfig();
@@ -143,6 +143,13 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     this.disposeCallbacks.length = 0;
   }
 
+  public setCurrentWorkspace(workspaceId: WorkspaceId): void {
+    if (this.currentWorkspaceId !== workspaceId) {
+      this.currentWorkspaceId = workspaceId;
+      this.refreshAll();
+    }
+  }
+
   // =====================================================================================
   // View configuration (called from activate() when settings change)
   // =====================================================================================
@@ -221,9 +228,18 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
   // vscode.TreeDataProvider<T>
   // =====================================================================================
 
+  public refreshAll(): void {
+    this.changeEmitter.fire(undefined);
+  }
+
   async getChildren(element?: ExperimentalNode): Promise<ExperimentalNode[]> {
     if (!element) {
-      return this.workspaceIds.map((wsId) => this.getOrCreateWorkspaceNode(wsId));
+      // In single-workspace mode, return workspace node; in multi-root, return entries directly
+      const raw = this.state.getChildren(this.currentWorkspaceId, undefined);
+      const filtered = this.filterByVisibility(this.currentWorkspaceId, raw);
+      const nodes = filtered.map((p) => this.getOrCreateEntryNode(this.currentWorkspaceId, p));
+      this.markRealized(this.currentWorkspaceId, nodes.map((n) => n.path));
+      return nodes;
     }
 
     if (element.kind === 'workspace') {
