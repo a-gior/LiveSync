@@ -21,14 +21,14 @@ export function asRel(input: string): RelPath {
  * Returns undefined if `absFsPath` is *not* within the workspace folder.
  * If it equals the workspace folder itself, returns '' (root).
  */
-export function relFromAbs(workspaceFsPath: string, absFsPath: string): RelPath | undefined {
+export function relFromAbs(workspaceFsPath: string, absFsPath: string): RelPath {
   const root = _normSlash(workspaceFsPath).replace(/\/+$/, '');
   const abs  = _normSlash(absFsPath);
   if (abs === root) {
     return stringToRel(''); // root
   }
   if (!abs.startsWith(root + '/')) {
-    return undefined;
+    throw new Error(`Path "${absFsPath}" is not under workspace root "${workspaceFsPath}".`);
   }
   return asRel(abs.slice(root.length + 1));
 }
@@ -61,4 +61,3 @@ export function parentsOf(p: RelPath): RelPath[] {
   }
   return out;
 }
-

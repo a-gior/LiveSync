@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { sha1OfFile } from '@helpers/hash/FileHash';
-import { FileMeta } from '@domain/types';
+import { sha256OfFile } from '@helpers/hash/FileHash';
+import { FileMeta, FolderMeta, NodeMeta } from '@domain/types';
 
 export type BuildIndexOptions = {
   excludeGlobs?: string[];          // extra excludes from settings
@@ -11,46 +11,72 @@ export type BuildIndexOptions = {
 };
 
 /**
- * Build a hash-only local index for a workspace folder.
+ * Build a complete local index for a workspace folder.
  * - Files => { type:'file', hash }
- * - Folders are inferred from paths.
- * - Runs with limited concurrency, progress, and cancellation.
+ * - Folders => { type:'folder', hash:'' } (including empty folders)
  */
 export async function buildLocalIndex(
   workspace: vscode.WorkspaceFolder,
   options: BuildIndexOptions = {}
-): Promise<Map<string, FileMeta>> {
-  const index = new Map<string, FileMeta>();
+): Promise<Map<string, NodeMeta>> {
+  const index = new Map<string, NodeMeta>();
   const concurrency = Math.max(1, options.concurrency ?? 4);
 
   const excludeGlobs = mergeExcludeGlobs(options.excludeGlobs ?? []);
 
-  // List files first
+  // List all items (files + directories)
   const includeGlob = new vscode.RelativePattern(workspace, '**/*');
-  const fileUris = await vscode.workspace.findFiles(includeGlob, excludeGlobs);
+  const allUris = await vscode.workspace.findFiles(includeGlob, excludeGlobs);
 
-  // Filter out directories defensively (findFiles returns files, but double check)
+  // Separate files and folders
   const filePaths: string[] = [];
-  for (const uri of fileUris) {
+  const folderPaths = new Set<string>(); // Use Set to deduplicate
+
+  for (const uri of allUris) {
     if (options.token?.isCancellationRequested) {
       return index;
     }
+    
     try {
       const stat = await vscode.workspace.fs.stat(uri);
-      if ((stat.type & vscode.FileType.Directory) === 0) {
+      const relPath = toRelativeFsPath(workspace, uri.fsPath);
+
+      if ((stat.type & vscode.FileType.Directory) !== 0) {
+        // It's a directory
+        folderPaths.add(relPath);
+        
+        // Also add all parent directories
+        const parts = relPath.split('/').filter(Boolean);
+        for (let i = 1; i < parts.length; i++) {
+          folderPaths.add(parts.slice(0, i).join('/'));
+        }
+      } else {
+        // It's a file
         filePaths.push(uri.fsPath);
+        
+        // Add all parent directories of this file
+        const parts = relPath.split('/').filter(Boolean);
+        for (let i = 1; i < parts.length; i++) {
+          folderPaths.add(parts.slice(0, i).join('/'));
+        }
       }
-    } catch {
-      // ignore files that disappeared
+    } catch (err) {
+      // ignore items that disappeared
     }
+  }
+
+  // Add all folders to index first (so empty folders appear)
+  for (const folderRel of folderPaths) {
+    index.set(folderRel, { type: 'folder', hash: '' } as FolderMeta);
   }
 
   const totalCount = filePaths.length;
   let doneCount = 0;
 
-  // Concurrency pool
-  const queue = filePaths.slice(); // clone
+  // Hash files with concurrency
+  const queue = filePaths.slice();
   const workers: Promise<void>[] = [];
+  
   for (let i = 0; i < concurrency; i += 1) {
     workers.push(
       (async () => {
@@ -64,14 +90,13 @@ export async function buildLocalIndex(
           }
           const rel = toRelativeFsPath(workspace, fsPath);
           try {
-            const hash = await sha1OfFile(fsPath);
-            index.set(rel, { type: 'file', hash });
-          } catch {
+            const hash = await sha256OfFile(fsPath);
+            index.set(rel, { type: 'file', hash } as FileMeta);
+          } catch (err) {
             // ignore unreadable files
           } finally {
             doneCount += 1;
             options.progress?.(doneCount, totalCount);
-            // yield to keep extension host responsive
             await new Promise((r) => setImmediate(r));
           }
         }

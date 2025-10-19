@@ -10,7 +10,7 @@ import type { RelPath } from '../../domain/types';
 
 import { absFs, relToString, isUnder, stringToWsId, stringToRel } from '@infra/helpers/path';
 import { withProgress, reportCounter } from '@infra/helpers/async';
-import { sha1OfFile } from '@infra/helpers/hash/FileHash';
+import { sha256OfFile } from '@infra/helpers/hash/FileHash';
 import { isDownloadable } from '../../infrastructure/helpers/diff';
 
 export function registerApplyFromRemote(services: Services): void {
@@ -41,7 +41,7 @@ export function registerApplyFromRemote(services: Services): void {
       return;
     }
 
-    const hash = await sha1OfFile(absLocal);
+    const hash = await sha256OfFile(absLocal);
     state.applyLocal({
       workspaceId,
       type: 'modify',
@@ -96,7 +96,7 @@ export function registerApplyFromRemote(services: Services): void {
         try {
           await fsp.mkdir(path.dirname(absLocal), { recursive: true });
           await remote.downloadFile(workspaceId, rel, absLocal);
-          const hash = await sha1OfFile(absLocal);
+          const hash = await sha256OfFile(absLocal);
           applied.push({ path: rel, hash });
         } catch (e: any) {
           void vscode.window.showWarningMessage(

@@ -5,7 +5,7 @@ import * as path from 'path';
 import { SyncStateManager } from '@app/SyncStateManager';
 import { WorkspaceConfigService } from '@infra/config/WorkspaceConfigService';
 import { absFs } from '@infra/helpers/path/PathJoin';
-import { sha1OfFile } from '@infra/helpers/hash/FileHash';
+import { sha256OfFile } from '@infra/helpers/hash/FileHash';
 import type { RemotePort } from '@app/ports/RemotePort';
 
 import type {
@@ -77,7 +77,7 @@ export class FileEventBridge {
     await this.operationQueue.enqueue(queueKey, async () => {
       // 1) Update local snapshot with new file hash
       try {
-        const hash = await sha1OfFile(doc.uri.fsPath);
+        const hash = await sha256OfFile(doc.uri.fsPath);
         this.state.applyLocal({
           workspaceId,
           type: 'modify',
@@ -130,7 +130,7 @@ export class FileEventBridge {
           });
         } else {
           try {
-            const hash = await sha1OfFile(uri.fsPath);
+            const hash = await sha256OfFile(uri.fsPath);
             this.state.applyLocal({
               workspaceId,
               type: 'modify',
@@ -214,7 +214,7 @@ export class FileEventBridge {
               const absLocal = absFs(workspaceId, relPath);
               await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(absLocal)));
               await this.remote.downloadFile(workspaceId, relPath, absLocal);
-              const hash = await sha1OfFile(absLocal);
+              const hash = await sha256OfFile(absLocal);
               this.state.applyLocal({ workspaceId, type: 'modify', path: relPath, meta: { type: 'file', hash } });
             }
           } catch (err) {
@@ -247,7 +247,7 @@ export class FileEventBridge {
           newIsDir = (stat.type & vscode.FileType.Directory) !== 0;
 
           if (!newIsDir) {
-            const hash = await sha1OfFile(newUri.fsPath);
+            const hash = await sha256OfFile(newUri.fsPath);
             this.state.applyLocal({
               workspaceId,
               type: 'modify',
@@ -294,7 +294,7 @@ export class FileEventBridge {
             const absLocal = absFs(workspaceId, newRel);
             await this.remote.uploadFile(workspaceId, newRel, absLocal);
             // Update remote snapshot optimistically
-            const hash = await sha1OfFile(absLocal).catch(() => undefined);
+            const hash = await sha256OfFile(absLocal).catch(() => undefined);
             if (hash) {
               this.state.upsertRemoteNode(workspaceId, newRel, { type: 'file', hash });
             }
@@ -310,7 +310,7 @@ export class FileEventBridge {
                 if (meta.type === 'file') {
                   const absLocal = absFs(workspaceId, rel);
                   await this.remote.uploadFile(workspaceId, rel, absLocal);
-                  const h = await sha1OfFile(absLocal).catch(() => undefined);
+                  const h = await sha256OfFile(absLocal).catch(() => undefined);
                   if (h) {this.state.upsertRemoteNode(workspaceId, rel, { type: 'file', hash: h });}
                 } else {
                   // ensure folder nodes exist remotely as we go
@@ -333,7 +333,7 @@ export class FileEventBridge {
           if (!newIsDir) {
             const absLocal = absFs(workspaceId, newRel);
             await this.remote.uploadFile(workspaceId, newRel, absLocal);
-            const h = await sha1OfFile(absLocal).catch(() => undefined);
+            const h = await sha256OfFile(absLocal).catch(() => undefined);
             if (h) {
               this.state.upsertRemoteNode(workspaceId, newRel, { type: 'file', hash: h });
             }
@@ -347,7 +347,7 @@ export class FileEventBridge {
                 if (meta.type === 'file') {
                   const absLocal = absFs(workspaceId, rel);
                   await this.remote.uploadFile(workspaceId, rel, absLocal);
-                  const h = await sha1OfFile(absLocal).catch(() => undefined);
+                  const h = await sha256OfFile(absLocal).catch(() => undefined);
                   if (h) {
                     this.state.upsertRemoteNode(workspaceId, rel, { type: 'file', hash: h });
                   }
@@ -372,7 +372,7 @@ export class FileEventBridge {
             // Try exact file
             const absLocal = absFs(workspaceId, newRel);
             await this.remote.downloadFile(workspaceId, newRel, absLocal).catch(() => undefined);
-            const h = await sha1OfFile(absLocal).catch(() => undefined);
+            const h = await sha256OfFile(absLocal).catch(() => undefined);
             if (h) {
               this.state.applyLocal({ workspaceId, type: 'modify', path: newRel, meta: { type: 'file', hash: h } });
             }
@@ -422,7 +422,7 @@ export class FileEventBridge {
 
         const abs = absFs(workspaceId, relPath);
         await this.remote.downloadFile(workspaceId, relPath, abs);
-        const hash = await sha1OfFile(abs);
+        const hash = await sha256OfFile(abs);
         this.state.applyLocal({ workspaceId, type: 'modify', path: relPath, meta: { type: 'file', hash } });
       }
     });
@@ -447,7 +447,7 @@ export class FileEventBridge {
       if (isDir) {
         this.state.applyLocal({ workspaceId, type: 'modify', path: rel, meta: { type: 'folder', hash: '' } });
       } else {
-        const hash = await sha1OfFile(uri.fsPath);
+        const hash = await sha256OfFile(uri.fsPath);
         this.state.applyLocal({ workspaceId, type: 'modify', path: rel, meta: { type: 'file', hash } });
       }
     } catch {
@@ -513,7 +513,7 @@ export class FileEventBridge {
       const absLocal = absFs(workspaceId, rel);
       await fsp.mkdir(path.dirname(absLocal), { recursive: true });
       await this.remote.downloadFile(workspaceId, rel, absLocal);
-      const hash = await sha1OfFile(absLocal);
+      const hash = await sha256OfFile(absLocal);
       this.state.applyLocal({ workspaceId, type: 'modify', path: rel, meta: { type: 'file', hash } });
       restored += 1;
     }
@@ -524,51 +524,205 @@ export class FileEventBridge {
   // Policy application (shared)
   // ====================================================================================
 
+  private async checkShouldPrompt(
+    workspaceId: WorkspaceId,
+    relPath: RelPath,
+    hint: 'save' | 'create' | 'open' | 'delete' | 'move' | 'upload' | 'download'
+  ): Promise<{ shouldPrompt: boolean; reason?: string }> {
+    const entry = this.state.getDiffEntry(workspaceId, relPath);
+    const localMeta = this.state.getLocalMeta(workspaceId, relPath);
+    const remoteMeta = this.state.getRemoteMeta(workspaceId, relPath);
+
+    switch (hint) {
+      case 'save':
+      case 'open':
+      case 'upload': {
+        // Check if remote was modified by someone else
+        if (!remoteMeta) {
+          return { shouldPrompt: false }; // File doesn't exist remotely, no conflict
+        }
+        if (!localMeta || localMeta.type !== 'file' || remoteMeta.type !== 'file') {
+          return { shouldPrompt: false };
+        }
+        // Compare known remote hash (from our state) with what we expect
+        // If they differ, someone else modified it
+        const remoteChanged = entry?.status === 'modified' || entry?.status === 'conflict';
+        return { 
+          shouldPrompt: remoteChanged, 
+          reason: remoteChanged ? 'Remote file was modified by someone else' : undefined 
+        };
+      }
+
+      case 'create':
+      case 'move': {
+        // Check if file already exists remotely
+        const exists = !!remoteMeta;
+        return { 
+          shouldPrompt: exists, 
+          reason: exists ? 'File already exists remotely' : undefined 
+        };
+      }
+
+      case 'delete': {
+        // Check if someone modified the file remotely before we delete it
+        if (!remoteMeta || !localMeta) {
+          return { shouldPrompt: false };
+        }
+        if (remoteMeta.type !== 'file' || localMeta.type !== 'file') {
+          return { shouldPrompt: false };
+        }
+        const remoteChanged = entry?.status === 'modified' || entry?.status === 'conflict';
+        return { 
+          shouldPrompt: remoteChanged, 
+          reason: remoteChanged ? 'Remote file was modified before deletion' : undefined 
+        };
+      }
+
+      case 'download': {
+        // Check if local file is different from what we're about to download
+        if (!localMeta || !remoteMeta) {
+          return { shouldPrompt: false }; // One side missing, no conflict
+        }
+        const localDifferent = entry?.status === 'modified' || entry?.status === 'conflict';
+        return { 
+          shouldPrompt: localDifferent, 
+          reason: localDifferent ? 'Local file differs from remote' : undefined 
+        };
+      }
+
+      default:
+        return { shouldPrompt: false };
+    }
+  }
+
+  // Replace the entire maybeActByPolicy method
   private async maybeActByPolicy(
     workspaceId: WorkspaceId,
     relPath: RelPath,
     policy: ReturnType<typeof parseActionPolicy>,
-    hint: 'save' | 'create' | 'open' | 'rename' | 'delete'
+    hint: 'save' | 'create' | 'open' | 'delete' | 'move' | 'upload' | 'download'
   ): Promise<void> {
-    // A) check-only → info popup, no action
-    if (policy.check && !policy.direction && policy.extras.size === 0) {
-      await this.showCheckInfo(hint, relPath);
+    // No direction and no extras → nothing to do
+    if (!policy.direction && policy.extras.size === 0) {
+      if (policy.check) {
+        // Check-only: show info if check is negative
+        const { shouldPrompt, reason } = await this.checkShouldPrompt(workspaceId, relPath, hint);
+        if (shouldPrompt) {
+          await vscode.window.showInformationMessage(
+            `LiveSync (check): ${reason || 'Check failed'} for "${relPath as string}". No sync action taken.`
+          );
+        }
+      }
       return;
     }
 
-    // B) direction-only (upload/download), optionally with check
+    // Has a direction (upload/download) or extras (delete/rename)
     if (policy.direction) {
       const entry = this.state.getDiffEntry(workspaceId, relPath);
       const allowed = policy.direction === 'upload'
         ? (entry ? isUploadable(entry.status) : true)
         : (entry ? isDownloadable(entry.status) : true);
 
-      if (!allowed) {return;}
-
-      if (policy.check) {
-        const allowDiff =
-          policy.direction === 'upload' && (hint === 'save' || hint === 'create' || hint === 'rename');
-        const decision = await this.confirmPolicyAction(workspaceId, policy.direction, allowDiff, relPath);
-        if (decision !== 'proceed') {return;}
+      if (!allowed) {
+        return; // Status doesn't allow this action
       }
 
+      // If check is enabled, verify condition
+      if (policy.check) {
+        const { shouldPrompt, reason } = await this.checkShouldPrompt(
+          workspaceId, 
+          relPath, 
+          policy.direction === 'upload' ? hint : 'download'
+        );
+        
+        if (shouldPrompt) {
+          // Prompt user to confirm action
+          const decision = await this.confirmPolicyAction(
+            workspaceId, 
+            policy.direction, 
+            policy.direction === 'upload' && (hint === 'save' || hint === 'create'), // allowDiff
+            relPath,
+            undefined,
+            reason
+          );
+          if (decision !== 'proceed') {
+            return; // User cancelled
+          }
+        }
+        // If check passed (shouldPrompt = false), proceed silently
+      }
+
+      // Perform the action
       if (policy.direction === 'upload') {
         const abs = absFs(workspaceId, relPath);
         await this.remote.uploadFile(workspaceId, relPath, abs);
-        // Optimistically update the remote snapshot with the local file hash
-        const h = await sha1OfFile(abs).catch(() => undefined);
-        if (h) {this.state.upsertRemoteNode(workspaceId, relPath, { type: 'file', hash: h });}
-        return;
+        const h = await sha256OfFile(abs).catch(() => undefined);
+        if (h) {
+          this.state.upsertRemoteNode(workspaceId, relPath, { type: 'file', hash: h });
+        }
       } else {
         const abs = absFs(workspaceId, relPath);
         await this.remote.downloadFile(workspaceId, relPath, abs);
-        const h = await sha1OfFile(abs).catch(() => undefined);
-        if (h) {this.state.applyLocal({ workspaceId, type: 'modify', path: relPath, meta: { type: 'file', hash: h } });}
-        return;
+        const h = await sha256OfFile(abs).catch(() => undefined);
+        if (h) {
+          this.state.applyLocal({ workspaceId, type: 'modify', path: relPath, meta: { type: 'file', hash: h } });
+        }
       }
     }
 
-    // C) extras-only (e.g., delete/rename) are handled in their specific handlers.
+    // Extras are handled in specific event handlers (delete/rename)
+  }
+
+  // Update confirmPolicyAction to remove duplicate Cancel and add reason
+  private async confirmPolicyAction(
+    workspaceId: WorkspaceId,
+    mode: 'upload' | 'download' | 'delete' | 'move',
+    allowDiff: boolean,
+    relPath: RelPath,
+    oldPath?: RelPath,
+    reason?: string
+  ): Promise<'proceed' | 'diff' | 'cancel'> {
+    const label =
+      mode === 'upload'   ? 'Upload' :
+      mode === 'download' ? 'Download' :
+      mode === 'delete'   ? 'Delete from Remote' : 'Move on Remote';
+
+    const reasonText = reason ? `\n\n${reason}` : '';
+    const message = `LiveSync: ${label} "${(relPath as string) || '.'}"?${reasonText}`;
+    
+    // Build buttons array based on allowDiff
+    const buttons = allowDiff 
+      ? (['Proceed', 'Show Diff', 'Cancel'] as const)
+      : (['Proceed', 'Cancel'] as const);
+
+    const choice = await vscode.window.showWarningMessage(
+      message, 
+      { modal: true }, 
+      ...buttons
+    );
+
+    if (choice === 'Proceed') {
+      return 'proceed';
+    }
+    
+    if (choice === 'Show Diff' && allowDiff) {
+      await vscode.commands.executeCommand('livesync.experimental.node.showDiff', {
+        kind: 'entry',
+        workspaceId,
+        path: relPath,
+      });
+
+      const display = oldPath ? `${oldPath} → ${relPath}` : relPath;
+      const again = await vscode.window.showInformationMessage(
+        `Proceed to ${label.toLowerCase()} "${display}"?`,
+        { modal: true },
+        'Proceed',
+        'Cancel'
+      );
+      return again === 'Proceed' ? 'proceed' : 'cancel';
+    }
+    
+    return 'cancel';
   }
 
   // ====================================================================================
@@ -596,39 +750,5 @@ export class FileEventBridge {
 
     const message = `LiveSync (check): ${verb} “${display}”. No sync action taken (policy = check).`;
     await vscode.window.showInformationMessage(message);
-  }
-
-  private async confirmPolicyAction(
-    workspaceId: WorkspaceId,
-    mode: 'upload' | 'download' | 'delete' | 'move',
-    allowDiff: boolean,
-    relPath: RelPath,
-    oldPath?: RelPath
-  ): Promise<'proceed' | 'diff' | 'cancel'> {
-    const label =
-      mode === 'upload'   ? 'Upload' :
-      mode === 'download' ? 'Download' :
-      mode === 'delete'   ? 'Delete from Remote' : 'Move on Remote';
-
-    const message = `LiveSync: ${label} “${(relPath as string) || '.'}”?`;
-    const buttons = (allowDiff ? (['Proceed', 'Show Diff', 'Cancel'] as const) : (['Proceed', 'Cancel'] as const));
-
-    const choice = await vscode.window.showWarningMessage(message, { modal: true }, ...buttons);
-    if (choice === 'Proceed') {return 'proceed';}
-    if (choice === 'Show Diff') {
-      await vscode.commands.executeCommand('livesync.experimental.node.showDiff', {
-        kind: 'entry',
-        workspaceId,
-        path: relPath,
-      });
-
-      const display = oldPath ? `${oldPath} → ${relPath}` : relPath;
-      const again = await vscode.window.showInformationMessage(
-        `Proceed to ${label.toLowerCase()} “${display}”?`,
-        'Proceed', 'Cancel'
-      );
-      return again === 'Proceed' ? 'proceed' : 'cancel';
-    }
-    return 'cancel';
   }
 }
