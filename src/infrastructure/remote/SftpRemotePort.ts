@@ -5,11 +5,13 @@ import { Minimatch } from 'minimatch';
 import { Client as SSHClient } from 'ssh2';
 
 import type { RemotePort } from '@app/ports/RemotePort';
-import type { WorkspaceId, RelPath, NodeIndex, NodeMeta } from '@domain/types';
+import type { WorkspaceId, RelPath, NodeIndex, FolderMeta, FileMeta } from '@domain/types';
 
 import { WorkspaceConfigService } from '../config/WorkspaceConfigService';
 import { asRel, relFromAbs } from '@helpers/path/RelPath';
 import { logExpectedError, logInfoMessage } from '@helpers/logging';
+import { computeFolderHashFromNodeIndex } from '../helpers/hash';
+import { stringToRel } from '../helpers/path';
 
 const p = path.posix;
 
@@ -30,7 +32,7 @@ export class SftpRemotePort implements RemotePort {
     const root = normalize(cfg.data.remotePath);
     const ignores = compileIgnores(cfg.ignoreGlobs);
 
-    // NEW: Use batched SSH listing instead of recursive SFTP
+    // Use batched SSH listing instead of recursive SFTP
     return await this.listViaBatchedSSH(cfg, root, ignores);
   }
 
@@ -43,56 +45,40 @@ export class SftpRemotePort implements RemotePort {
 
     try {
       // Connect SSH
-      await new Promise<void>((resolve, reject) => {
-        const key = cfg.data.privateKeyPath
-          ? fsp.readFile(cfg.data.privateKeyPath, 'utf8').catch(() => undefined)
-          : Promise.resolve(undefined);
+      await this.connectSSH(sshClient, cfg);
 
-        key.then((privateKey) => {
-          sshClient
-            .on('ready', () => resolve())
-            .on('error', reject)
-            .connect({
-              host: cfg.data.hostname!,
-              port: cfg.data.port ?? 22,
-              username: cfg.data.username,
-              password: cfg.data.password,
-              privateKey,
-              passphrase: cfg.data.passphrase,
-              readyTimeout: 10000,
-            });
-        }).catch(reject);
-      });
-
-      // Execute batched find + stat + hash commands
       const out: NodeIndex = new Map();
 
-      // 1) List all files and directories with metadata in ONE command
-      const findCmd = `find "${root}" -printf '%p|%y|%s|%T@\\n' 2>/dev/null || true`;
+      // 1) List all files and directories with metadata
+      const findCmd = `find "${root}" -printf '%p|%y\\n' 2>/dev/null || true`;
       const findOutput = await this.execSSH(sshClient, findCmd);
 
       const filesForHashing: Array<{ rel: RelPath; abs: string }> = [];
+      const folders = new Set<RelPath>();
       const lines = findOutput.split('\n').filter(Boolean);
 
       for (const line of lines) {
         const parts = line.split('|');
-        if (parts.length < 4) continue;
+        if (parts.length < 2) continue;
 
-        const [absPath, type, ] = parts; // [absPath, type, sizeStr]
+        const [absPath, type] = parts;
         const rel = relFromAbs(root, absPath);
-        
+
         if (shouldIgnore(rel, ignores)) continue;
 
         if (type === 'd') {
-          // Directory
-          out.set(asRel(rel), { type: 'folder', hash: '' } as NodeMeta);
+          folders.add(asRel(rel));
         } else if (type === 'f') {
-          // File - defer hashing
           filesForHashing.push({ rel: asRel(rel), abs: absPath });
         }
       }
 
-      // 2) Hash all files with limited concurrency
+      // 2) Add all folders first (including empty ones)
+      for (const folderRel of folders) {
+        out.set(folderRel, { type: 'folder', hash: '' } as FolderMeta);
+      }
+
+      // 3) Hash all files with concurrency
       const queue = filesForHashing.slice();
       const workers: Promise<void>[] = [];
 
@@ -103,12 +89,11 @@ export class SftpRemotePort implements RemotePort {
             if (!file) break;
 
             try {
-              // Use SHA256 via SSH (faster than downloading via SFTP)
               const hashCmd = `sha256sum "${file.abs}" 2>/dev/null | awk '{print $1}' || echo "__error__"`;
               const hash = (await this.execSSH(sshClient, hashCmd)).trim();
-              
+
               if (hash && hash !== '__error__') {
-                out.set(file.rel, { type: 'file', hash } as NodeMeta);
+                out.set(file.rel, { type: 'file', hash } as FileMeta);
               } else {
                 logExpectedError(`SftpRemotePort:hash:${file.rel}`, new Error('Hash command failed'));
               }
@@ -121,11 +106,39 @@ export class SftpRemotePort implements RemotePort {
 
       await Promise.all(workers);
 
+      // 4) Compute folder hashes bottom-up
+      await this.computeAllFolderHashes(out);
+
       return out;
 
     } finally {
       sshClient.end();
     }
+  }
+
+  private async computeAllFolderHashes(index: NodeIndex): Promise<void> {
+    // Get all folder paths sorted by depth (deepest first)
+    const folders = Array.from(index.entries())
+      .filter(([, meta]) => meta.type === 'folder')
+      .map(([rel]) => rel)
+      .sort((a, b) => {
+        const depthA = (a as string).split('/').filter(Boolean).length;
+        const depthB = (b as string).split('/').filter(Boolean).length;
+        return depthB - depthA; // Deepest first
+      });
+
+    // Compute hash for each folder
+    for (const folderRel of folders) {
+      const hash = computeFolderHashFromNodeIndex(index, folderRel);
+      const folderMeta = index.get(folderRel);
+      if (folderMeta && folderMeta.type === 'folder') {
+        folderMeta.hash = hash;
+      }
+    }
+
+    // Compute root folder hash
+    const rootHash = computeFolderHashFromNodeIndex(index, stringToRel(''));
+    index.set(stringToRel(''), { type: 'folder', hash: rootHash } as FolderMeta);
   }
 
   private execSSH(client: SSHClient, cmd: string): Promise<string> {
@@ -220,6 +233,27 @@ export class SftpRemotePort implements RemotePort {
   }
 
   // ---- helpers --------------------------------------------------------------
+
+  private async connectSSH(client: SSHClient, cfg: Awaited<ReturnType<WorkspaceConfigService['getById']>>): Promise<void> {
+    const key = cfg.data.privateKeyPath
+      ? await fsp.readFile(cfg.data.privateKeyPath, 'utf8').catch(() => undefined)
+      : undefined;
+
+    return new Promise<void>((resolve, reject) => {
+      client
+        .on('ready', () => resolve())
+        .on('error', reject)
+        .connect({
+          host: cfg.data.hostname!,
+          port: cfg.data.port ?? 22,
+          username: cfg.data.username,
+          password: cfg.data.password,
+          privateKey: key,
+          passphrase: cfg.data.passphrase,
+          readyTimeout: 10000,
+        });
+    });
+  }
 
   private async connectSFTP(cfg: Awaited<ReturnType<WorkspaceConfigService['getById']>>): Promise<SftpClient> {
     const sftp = new SftpClient();

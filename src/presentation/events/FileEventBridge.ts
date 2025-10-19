@@ -524,12 +524,15 @@ export class FileEventBridge {
   // Policy application (shared)
   // ====================================================================================
 
+  /**
+   * Check if we should prompt the user based on the policy check.
+   * Returns true only if the check condition is negative (conflict detected).
+   */
   private async checkShouldPrompt(
     workspaceId: WorkspaceId,
     relPath: RelPath,
     hint: 'save' | 'create' | 'open' | 'delete' | 'move' | 'upload' | 'download'
   ): Promise<{ shouldPrompt: boolean; reason?: string }> {
-    const entry = this.state.getDiffEntry(workspaceId, relPath);
     const localMeta = this.state.getLocalMeta(workspaceId, relPath);
     const remoteMeta = this.state.getRemoteMeta(workspaceId, relPath);
 
@@ -537,56 +540,101 @@ export class FileEventBridge {
       case 'save':
       case 'open':
       case 'upload': {
-        // Check if remote was modified by someone else
+        // Check: Has the remote file been modified by someone else?
+        // We compare our KNOWN remote hash (from state) with the ACTUAL remote hash
         if (!remoteMeta) {
-          return { shouldPrompt: false }; // File doesn't exist remotely, no conflict
+          return { shouldPrompt: false }; // No remote file, no conflict
         }
-        if (!localMeta || localMeta.type !== 'file' || remoteMeta.type !== 'file') {
+        
+        if (remoteMeta.type !== 'file' || !remoteMeta.hash) {
           return { shouldPrompt: false };
         }
-        // Compare known remote hash (from our state) with what we expect
-        // If they differ, someone else modified it
-        const remoteChanged = entry?.status === 'modified' || entry?.status === 'conflict';
-        return { 
-          shouldPrompt: remoteChanged, 
-          reason: remoteChanged ? 'Remote file was modified by someone else' : undefined 
+
+        // Fetch the ACTUAL current remote hash
+        let actualRemoteHash: string;
+        try {
+          const remoteIndex = await this.remote.list(workspaceId);
+          const actualMeta = remoteIndex.get(relPath);
+          if (!actualMeta || actualMeta.type !== 'file') {
+            return { shouldPrompt: false }; // Remote file disappeared
+          }
+          actualRemoteHash = actualMeta.hash;
+        } catch (err) {
+          // Can't check remote, assume no conflict
+          return { shouldPrompt: false };
+        }
+
+        // Compare: known vs actual
+        const remoteWasModified = remoteMeta.hash !== actualRemoteHash;
+        
+        return {
+          shouldPrompt: remoteWasModified,
+          reason: remoteWasModified 
+            ? `Remote file was modified by someone else (expected: ${remoteMeta.hash.slice(0, 8)}..., actual: ${actualRemoteHash.slice(0, 8)}...)` 
+            : undefined
         };
       }
 
       case 'create':
       case 'move': {
-        // Check if file already exists remotely
-        const exists = !!remoteMeta;
-        return { 
-          shouldPrompt: exists, 
-          reason: exists ? 'File already exists remotely' : undefined 
+        // Check: Does file already exist remotely?
+        if (!remoteMeta) {
+          return { shouldPrompt: false }; // Doesn't exist, OK to create
+        }
+        
+        return {
+          shouldPrompt: true,
+          reason: `File already exists remotely`
         };
       }
 
       case 'delete': {
-        // Check if someone modified the file remotely before we delete it
-        if (!remoteMeta || !localMeta) {
+        // Check: Has someone modified the remote file before we delete it?
+        if (!remoteMeta || remoteMeta.type !== 'file') {
+          return { shouldPrompt: false }; // Nothing to delete or not a file
+        }
+
+        // Fetch actual remote hash
+        let actualRemoteHash: string;
+        try {
+          const remoteIndex = await this.remote.list(workspaceId);
+          const actualMeta = remoteIndex.get(relPath);
+          if (!actualMeta || actualMeta.type !== 'file') {
+            return { shouldPrompt: false }; // Already deleted
+          }
+          actualRemoteHash = actualMeta.hash;
+        } catch (err) {
           return { shouldPrompt: false };
         }
-        if (remoteMeta.type !== 'file' || localMeta.type !== 'file') {
-          return { shouldPrompt: false };
-        }
-        const remoteChanged = entry?.status === 'modified' || entry?.status === 'conflict';
-        return { 
-          shouldPrompt: remoteChanged, 
-          reason: remoteChanged ? 'Remote file was modified before deletion' : undefined 
+
+        const remoteWasModified = remoteMeta.hash !== actualRemoteHash;
+        
+        return {
+          shouldPrompt: remoteWasModified,
+          reason: remoteWasModified 
+            ? 'Remote file was modified before deletion' 
+            : undefined
         };
       }
 
       case 'download': {
-        // Check if local file is different from what we're about to download
+        // Check: Is local file different from what we're about to download?
         if (!localMeta || !remoteMeta) {
-          return { shouldPrompt: false }; // One side missing, no conflict
+          return { shouldPrompt: false }; // One side missing
         }
-        const localDifferent = entry?.status === 'modified' || entry?.status === 'conflict';
-        return { 
-          shouldPrompt: localDifferent, 
-          reason: localDifferent ? 'Local file differs from remote' : undefined 
+        
+        if (localMeta.type !== 'file' || remoteMeta.type !== 'file') {
+          return { shouldPrompt: false };
+        }
+
+        // Local differs from remote
+        const localDifferent = localMeta.hash !== remoteMeta.hash;
+        
+        return {
+          shouldPrompt: localDifferent,
+          reason: localDifferent 
+            ? `Local file differs from remote (will be overwritten)` 
+            : undefined
         };
       }
 
