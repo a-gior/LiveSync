@@ -57,11 +57,8 @@
         },
         {
           "id": "livesync.diffs",
-          "name": "Diffs"
-        },
-        {
-          "id": "livesyncExperimental",
-          "name": "LiveSync (Experimental)"
+          "name": "Diffs",
+          "contextualTitle": "LiveSync Diffs"
         }
       ]
     },
@@ -107,367 +104,190 @@
       { "command": "livesync.focusExperimentalView", "title": "Focus LiveSync View", "category": "LiveSync", "icon": "$(telescope)" },
 
       { "command": "livesync.experimental.remote.load", "title": "Load Remote Snapshot (Dev)", "category": "LiveSync (Dev)", "icon": "$(beaker)" },
-      { "command": "livesync.experimental.remote.saveFromLocal", "title": "Save Remote Snapshot from Local (Dev)", "category": "LiveSync (Dev)", "icon": "$(beaker)" },
-
-
-      {
-        "command": "livesync.configuration",
-        "title": "LiveSync: Configure Workspace"
-      },
-      {
-        "command": "livesync.refreshConfig",
-        "title": "LiveSync: Reload Configuration Settings"
-      },
-      {
-        "command": "livesync.refreshAll",
-        "title": "LiveSync: Refresh Workspace Differences",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "livesync.refresh",
-        "title": "LiveSync: Refresh Differences",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "livesync.showDiff",
-        "title": "LiveSync: Show Diff",
-        "icon": "$(arrow-both)"
-      },
-      {
-        "command": "livesync.upload",
-        "title": "LiveSync: Upload",
-        "icon": "$(arrow-up)"
-      },
-      {
-        "command": "livesync.download",
-        "title": "LiveSync: Download",
-        "icon": "$(arrow-down)"
-      },
-      {
-        "command": "livesync.deleteLocal",
-        "title": "LiveSync: Delete Local File or Folder",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "livesync.deleteRemote",
-        "title": "LiveSync: Delete Remote File or Folder",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "livesync.uploadAll",
-        "title": "LiveSync: Upload the whole workspace without checking",
-        "icon": "$(arrow-up)"
-      },
-      {
-        "command": "livesync.downloadAll",
-        "title": "LiveSync: Download the whole workspace without checking",
-        "icon": "$(arrow-down)"
-      },
-      {
-        "command": "livesync.toggleToTreeView",
-        "title": "LiveSync: Switch to Tree View Mode",
-        "category": "LiveSync",
-        "icon": "$(list-tree)"
-      },
-      {
-        "command": "livesync.toggleToListView",
-        "title": "LiveSync: Switch to List View Mode",
-        "category": "LiveSync",
-        "icon": "$(list-selection)"
-      },
-      {
-        "command": "livesync.showUnchanged",
-        "title": "LiveSync: Show Unchanged Files & Folders",
-        "icon": "$(circle-filled)"
-      },
-      {
-        "command": "livesync.hideUnchanged",
-        "title": "LiveSync: Hide Unchanged Files & Folders",
-        "icon": "$(circle-slash)"
-      },
-      {
-        "command": "livesync.collapseAll",
-        "title": "LiveSync: Collapse All Folders in View",
-        "icon": "$(collapse-all)"
-      },
-      {
-        "command": "livesync.expandChangedFolders",
-        "title": "Expand Changed Folders",
-        "icon": "$(expand-all)"
-      },
-      {
-        "command": "livesync.toggleRefreshOnConfigSave",
-        "title": "LiveSync: Toggle Refresh on Config Save"
-      }
+      { "command": "livesync.experimental.remote.saveFromLocal", "title": "Save Remote Snapshot from Local (Dev)", "category": "LiveSync (Dev)", "icon": "$(beaker)" }
     ],
     "menus": {
       "view/item/context": [
         {
           "command": "livesync.resolve.keepLocal",
-          "when": "view == livesyncExperimental && viewItem == fileEntry-file-modified",
+          "when": "view == livesync.diffs && viewItem == fileEntry-file-modified",
           "group": "inline@0"
         },
         {
           "command": "livesync.resolve.keepLocal",
-          "when": "view == livesyncExperimental && viewItem == fileEntry-file-conflict",
+          "when": "view == livesync.diffs && viewItem == fileEntry-file-conflict",
           "group": "inline@0"
         },
         {
           "command": "livesync.resolve.keepRemote",
-          "when": "view == livesyncExperimental && livesync.supportsDownload && viewItem == fileEntry-file-modified",
+          "when": "view == livesync.diffs && livesync.supportsDownload && viewItem == fileEntry-file-modified",
           "group": "inline@0"
         },
         {
           "command": "livesync.resolve.keepRemote",
-          "when": "view == livesyncExperimental && livesync.supportsDownload && viewItem == fileEntry-file-conflict",
+          "when": "view == livesync.diffs && livesync.supportsDownload && viewItem == fileEntry-file-conflict",
           "group": "inline@0"
         },
 
         {
           "command": "livesync.resolveFolder.keepLocal",
-          "when": "view == livesyncExperimental && viewItem == fileEntry-directory-modified",
+          "when": "view == livesync.diffs && viewItem == fileEntry-directory-modified",
           "group": "navigation@1"
         },
         {
           "command": "livesync.resolveFolder.keepLocal",
-          "when": "view == livesyncExperimental && viewItem == fileEntry-directory-conflict",
+          "when": "view == livesync.diffs && viewItem == fileEntry-directory-conflict",
           "group": "navigation@1"
         },
         {
           "command": "livesync.resolveFolder.keepRemote",
-          "when": "view == livesyncExperimental && livesync.supportsDownload && viewItem == fileEntry-directory-modified",
+          "when": "view == livesync.diffs && livesync.supportsDownload && viewItem == fileEntry-directory-modified",
           "group": "navigation@1"
         },
         {
           "command": "livesync.resolveFolder.keepRemote",
-          "when": "view == livesyncExperimental && livesync.supportsDownload && viewItem == fileEntry-directory-conflict",
+          "when": "view == livesync.diffs && livesync.supportsDownload && viewItem == fileEntry-directory-conflict",
           "group": "navigation@1"
         },
         {
           "command": "livesync.experimental.node.applyToRemote",
-          "when": "view == livesyncExperimental && viewItem == fileEntry-file-added",
+          "when": "view == livesync.diffs && viewItem == fileEntry-file-added",
           "group": "inline@1"
         },
         {
           "command": "livesync.experimental.node.applyToRemote",
-          "when": "view == livesyncExperimental && viewItem == fileEntry-file-modified",
+          "when": "view == livesync.diffs && viewItem == fileEntry-file-modified",
           "group": "inline@1"
         },
         {
           "command": "livesync.experimental.node.applyToRemote",
-          "when": "view == livesyncExperimental && viewItem == fileEntry-file-removed",
+          "when": "view == livesync.diffs && viewItem == fileEntry-file-removed",
           "group": "inline@1"
         },
         {
           "command": "livesync.experimental.node.applyToRemote",
-          "when": "view == livesyncExperimental && viewItem == fileEntry-file-conflict",
+          "when": "view == livesync.diffs && viewItem == fileEntry-file-conflict",
           "group": "inline@1"
         },
 
         {
           "command": "livesync.experimental.node.applyFromRemote",
-          "when": "view == livesyncExperimental && viewItem == fileEntry-file-modified && livesync.supportsDownload",
+          "when": "view == livesync.diffs && viewItem == fileEntry-file-modified && livesync.supportsDownload",
           "group": "inline@2"
         },
         {
           "command": "livesync.experimental.node.applyFromRemote",
-          "when": "view == livesyncExperimental && viewItem == fileEntry-file-removed && livesync.supportsDownload",
+          "when": "view == livesync.diffs && viewItem == fileEntry-file-removed && livesync.supportsDownload",
           "group": "inline@2"
         },
         {
           "command": "livesync.experimental.node.applyFromRemote",
-          "when": "view == livesyncExperimental && viewItem == fileEntry-file-conflict && livesync.supportsDownload",
+          "when": "view == livesync.diffs && viewItem == fileEntry-file-conflict && livesync.supportsDownload",
           "group": "inline@2"
         },
 
         {
           "command": "livesync.experimental.node.showDiff",
-          "when": "view == livesyncExperimental && viewItem == fileEntry-file-modified && livesync.supportsDownload",
+          "when": "view == livesync.diffs && viewItem == fileEntry-file-modified && livesync.supportsDownload",
           "group": "inline@3"
         },
         {
           "command": "livesync.experimental.node.showDiff",
-          "when": "view == livesyncExperimental && viewItem == fileEntry-file-conflict && livesync.supportsDownload",
+          "when": "view == livesync.diffs && viewItem == fileEntry-file-conflict && livesync.supportsDownload",
           "group": "inline@3"
         },
 
         {
           "command": "livesync.experimental.folder.applyToRemoteRecursively",
-          "when": "view == livesyncExperimental && viewItem == fileEntry-directory-added",
+          "when": "view == livesync.diffs && viewItem == fileEntry-directory-added",
           "group": "navigation@2"
         },
         {
           "command": "livesync.experimental.folder.applyToRemoteRecursively",
-          "when": "view == livesyncExperimental && viewItem == fileEntry-directory-modified",
+          "when": "view == livesync.diffs && viewItem == fileEntry-directory-modified",
           "group": "navigation@2"
         },
         {
           "command": "livesync.experimental.folder.applyToRemoteRecursively",
-          "when": "view == livesyncExperimental && viewItem == fileEntry-directory-removed",
+          "when": "view == livesync.diffs && viewItem == fileEntry-directory-removed",
           "group": "navigation@2"
         },
 
         {
           "command": "livesync.experimental.folder.applyFromRemoteRecursively",
-          "when": "view == livesyncExperimental && viewItem == fileEntry-directory-modified && livesync.supportsDownload",
+          "when": "view == livesync.diffs && viewItem == fileEntry-directory-modified && livesync.supportsDownload",
           "group": "navigation@3"
         },
         {
           "command": "livesync.experimental.folder.applyFromRemoteRecursively",
-          "when": "view == livesyncExperimental && viewItem == fileEntry-directory-removed && livesync.supportsDownload",
+          "when": "view == livesync.diffs && viewItem == fileEntry-directory-removed && livesync.supportsDownload",
           "group": "navigation@3"
-        },
-        
-        {
-          "command": "livesync.upload",
-          "when": "viewItem =~ /-(file|directory)-(added|modified)$/",
-          "group": "inline@1"
-        },
-        {
-          "command": "livesync.download",
-          "when": "viewItem =~ /-(file|directory)-(removed|modified)$/",
-          "group": "inline@2"
-        },
-        {
-          "command": "livesync.showDiff",
-          "when": "viewItem =~ /-file-modified$/",
-          "group": "inline@3"
-        },
-        {
-          "command": "livesync.refresh",
-          "when": "viewItem =~ /^fileEntry-directory/",
-          "group": "inline@4"
-        },
-        {
-          "command": "livesync.deleteLocal",
-          "when": "viewItem =~ /-(file|directory)-added$/",
-          "group": "inline@5"
-        },
-        {
-          "command": "livesync.deleteRemote",
-          "when": "viewItem =~ /-(file|directory)-removed$/",
-          "group": "inline@5"
         }
       ],
       "editor/context": [
         {
-          "command": "livesync.upload",
+          "command": "livesync.experimental.node.applyToRemote",
           "group": "inline@1"
         },
         {
-          "command": "livesync.download",
+          "command": "livesync.experimental.node.applyFromRemote",
           "group": "inline@2"
         },
         {
-          "command": "livesync.showDiff",
+          "command": "livesync.experimental.node.showDiff",
           "group": "inline@3"
         }
       ],
       "view/title": [
         {
           "command": "livesync.resolveFolder.keepLocal",
-          "when": "view == livesyncExperimental",
+          "when": "view == livesync.diffs",
           "group": "navigation@5",
           "icon": "$(arrow-up)"
         },
         {
           "command": "livesync.resolveFolder.keepRemote",
-          "when": "view == livesyncExperimental && livesync.supportsDownload",
+          "when": "view == livesync.diffs && livesync.supportsDownload",
           "group": "navigation@6",
           "icon": "$(arrow-down)"
         },
         {
           "command": "livesync.view.toggleShowUnchanged",
-          "when": "view == livesyncExperimental",
+          "when": "view == livesync.diffs",
           "group": "navigation@1",
           "icon": "$(eye)"
         },
         {
           "command": "livesync.experimental.indexLocal",
-          "when": "view == livesyncExperimental",
+          "when": "view == livesync.diffs",
           "group": "navigation@2",
           "icon": "$(database)"
         },
         {
           "command": "livesync.experimental.refreshRemoteIndex",
-          "when": "view == livesyncExperimental",
+          "when": "view == livesync.diffs",
           "group": "navigation@3",
           "icon": "$(cloud-download)"
         },
         {
           "command": "livesync.experimental.refreshAll",
-          "when": "view == livesyncExperimental",
+          "when": "view == livesync.diffs",
           "group": "navigation@4",
           "icon": "$(sync)"
-        },
-        {
-          "command": "workbench.actions.treeView.livesyncExperimental.collapseAll",
-          "when": "view == livesyncExperimental",
-          "group": "navigation@99"
-        },
-
-        {
-          "command": "livesync.refreshAll",
-          "when": "view == livesync.diffs",
-          "group": "navigation@1"
-        },
-        {
-          "command": "livesync.collapseAll",
-          "when": "view == livesync.diffs && livesyncViewMode == 'tree' && livesyncExpandMode == 'expand'",
-          "group": "navigation@2"
-        },
-        {
-          "command": "livesync.expandChangedFolders",
-          "when": "view == livesync.diffs && livesyncViewMode == 'tree' && livesyncExpandMode == 'collapse'",
-          "group": "navigation@2"
-        },
-        {
-          "command": "livesync.toggleToListView",
-          "when": "view == livesync.diffs && livesyncViewMode == 'tree'",
-          "group": "navigation@3"
-        },
-        {
-          "command": "livesync.toggleToTreeView",
-          "when": "view == livesync.diffs && livesyncViewMode == 'list'",
-          "group": "navigation@3"
-        },
-        {
-          "command": "livesync.showUnchanged",
-          "when": "view == livesync.diffs && livesyncShowUnchanged == false",
-          "group": "navigation@4"
-        },
-        {
-          "command": "livesync.hideUnchanged",
-          "when": "view == livesync.diffs && livesyncShowUnchanged == true",
-          "group": "navigation@4"
-        },
-        {
-          "command": "livesync.uploadAll",
-          "when": "view == livesync.diffs",
-          "group": "navigation@5"
-        },
-        {
-          "command": "livesync.downloadAll",
-          "when": "view == livesync.diffs",
-          "group": "navigation@6"
         }
       ],
       "explorer/context": [
         {
-          "command": "livesync.showDiff",
+          "command": "livesync.experimental.node.showDiff",
           "group": "LiveSync@1"
         },
         {
-          "command": "livesync.upload",
+          "command": "livesync.experimental.node.applyToRemote",
           "group": "LiveSync@2"
         },
         {
-          "command": "livesync.download",
+          "command": "livesync.experimental.node.applyFromRemote",
           "group": "LiveSync@3"
-        },
-        {
-          "command": "livesync.refresh",
-          "group": "LiveSync@4"
         }
       ]
     },
