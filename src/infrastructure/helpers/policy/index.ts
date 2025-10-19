@@ -1,10 +1,4 @@
-import type { DiffStatus } from '../../domain/types';
-
-export type ActionPolicy = {
-  check: boolean;
-  direction?: 'upload' | 'download';
-  extras: Set<'delete' | 'rename'>;
-};
+import { ActionPolicy } from "../../../domain/types";
 
 /**
  * Accepts strings like:
@@ -71,14 +65,4 @@ export function parseActionPolicy(input?: string | null): ActionPolicy {
   }
 
   return policy;
-}
-
-/** Upload is meaningful for: local-only added, locally changed, or conflict. */
-export function canUpload(status: DiffStatus): boolean {
-  return status === 'added' || status === 'modified' || status === 'conflict';
-}
-
-/** Download is meaningful for: remote-only removed, remotely changed, or conflict. */
-export function canDownload(status: DiffStatus): boolean {
-  return status === 'removed' || status === 'modified' || status === 'conflict';
 }

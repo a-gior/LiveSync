@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import type { Services } from './services';
-import { decidePresence } from './remotePresence.logic';
 
 export function registerRemotePresence(services: Services): void {
   const { config, progress } = services;
@@ -25,4 +24,20 @@ export function registerRemotePresence(services: Services): void {
     config.onDidChange(() => { recompute().catch(() => undefined); }),
     vscode.workspace.onDidChangeWorkspaceFolders(() => { recompute().catch(() => undefined); })
   );
+}
+
+export function decidePresence(
+  hasRemotes: boolean[],
+  workspaceCount: number
+): { supportsDownload: boolean; hint: string | undefined } {
+  if (workspaceCount === 0) {
+    return { supportsDownload: false, hint: undefined };
+  }
+  if (workspaceCount === 1) {
+    const has = hasRemotes[0] ?? false;
+    return { supportsDownload: has, hint: has ? undefined : 'local snapshot' };
+  }
+  const count = hasRemotes.filter(Boolean).length;
+  const any = count > 0;
+  return { supportsDownload: any, hint: any ? `${count}/${workspaceCount} remotes` : `${workspaceCount} workspaces` };
 }

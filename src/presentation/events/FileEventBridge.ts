@@ -1,28 +1,40 @@
 import * as vscode from 'vscode';
 import * as fsp from 'fs/promises';
 import * as path from 'path';
-import { SyncStateManager } from '../../application/SyncStateManager';
-import { WorkspaceConfigService } from '../../infrastructure/config/WorkspaceConfigService';
-import { parseActionPolicy, canUpload, canDownload } from '../../infrastructure/config/ActionPolicy';
-import { joinFs } from '../../infrastructure/workspace/PathJoin';
-import { sha1OfFile } from '../../infrastructure/files/FileHash';
-import type { RemotePort } from '../../application/ports/RemotePort';
+
+import { SyncStateManager } from '@app/SyncStateManager';
+import { WorkspaceConfigService } from '@infra/config/WorkspaceConfigService';
+import { absFs } from '@infra/helpers/path/PathJoin';
+import { sha1OfFile } from '@infra/helpers/hash/FileHash';
+import type { RemotePort } from '@app/ports/RemotePort';
+
+import type {
+  WorkspaceId,
+  RelPath,
+  NodeIndex,
+} from '../../domain/types';
+import { IndexCacheService } from '@infra/persistence/IndexCacheService';
+import { compile, ignored } from '@infra/helpers/ignore/Ignore';
+import { stringToRel, stringToWsId } from '@infra/helpers/path';
+import { isDownloadable, isUploadable } from '@infra/helpers/diff';
+import { parseActionPolicy } from '@infra/helpers/policy';
 
 export class FileEventBridge {
   constructor(
     private readonly state: SyncStateManager,
     private readonly config: WorkspaceConfigService,
-    private readonly remote: RemotePort
+    private readonly remote: RemotePort,
+    private readonly remoteCache: IndexCacheService
   ) {}
 
   register(disposables: vscode.Disposable[]): void {
-    // VS Code-initiated file ops 
+    // VS Code-initiated file ops
     disposables.push(vscode.workspace.onDidCreateFiles((e) => this.onCreate(e)));
     disposables.push(vscode.workspace.onDidDeleteFiles((e) => this.onDelete(e)));
     disposables.push(vscode.workspace.onDidRenameFiles((e) => this.onRename(e)));
     disposables.push(vscode.workspace.onDidSaveTextDocument((d) => this.onSave(d)));
 
-    // External changes (terminal/git/OS)
+    // External changes (terminal/git/OS): we watch all folders
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
       const pattern = new vscode.RelativePattern(folder, '**/*');
       const watcher = vscode.workspace.createFileSystemWatcher(pattern, false, false, false);
@@ -30,60 +42,94 @@ export class FileEventBridge {
       watcher.onDidChange((uri) => this.onExternalChange(uri));
       watcher.onDidDelete((uri) => this.onExternalDelete(uri));
       disposables.push(watcher);
-
-      disposables.push(vscode.workspace.onDidOpenTextDocument((d) => this.onOpen(d)));
     }
+
+    // Open happens per document (no need to duplicate per folder)
+    disposables.push(vscode.workspace.onDidOpenTextDocument((d) => this.onOpen(d)));
   }
 
-  // ---------- handlers
+  // ====================================================================================
+  // Handlers for VS Code events
+  // ====================================================================================
 
   private async onSave(doc: vscode.TextDocument): Promise<void> {
-    if (doc.isUntitled) { return; }
-    const folder = vscode.workspace.getWorkspaceFolder(doc.uri);
-    if (!folder) { return; }
+    if (doc.isUntitled) {return;}
 
-    const workspaceId = folder.uri.fsPath;
+    const folder = vscode.workspace.getWorkspaceFolder(doc.uri);
+    if (!folder) {return;}
+
+    const workspaceId = stringToWsId(folder.uri.fsPath);
     const relPath = this.relativeOf(workspaceId, doc.uri.fsPath);
 
-    // Apply local change (hash new content)
+    // 1) Update local snapshot with new file hash (NodeIndex contains files & folders)
     try {
       const hash = await sha1OfFile(doc.uri.fsPath);
       this.state.applyLocal({
         workspaceId,
         type: 'modify',
         path: relPath,
-        meta: { type: 'file', hash }
+        meta: { type: 'file', hash },
       });
     } catch {
-      // ignore hash errors
+      // ignore hashing errors (file may be transiently locked)
     }
 
-    // Auto-action: actionOnSave e.g. "check&save" => check + upload
+    // 2) Apply policy for save (e.g., "check&save" → prompt + upload)
     const eff = await this.config.getById(workspaceId);
-    const policy = parseActionPolicy(eff.data.actionOnSave);
 
-    await this.maybeActByPolicy(workspaceId, relPath, policy, /*eventHint*/'save');
+    const rules = compile(eff.ignoreGlobs);
+    if (ignored(relPath, rules)) { return; }
+
+    const policy = parseActionPolicy(eff.data.actionOnSave);
+    await this.maybeActByPolicy(workspaceId, relPath, policy, 'save');
   }
 
   private async onCreate(e: vscode.FileCreateEvent): Promise<void> {
     for (const uri of e.files) {
       const folder = vscode.workspace.getWorkspaceFolder(uri);
-      if (!folder) { continue; }
-      const workspaceId = folder.uri.fsPath;
+      if (!folder) {continue;}
+
+      const workspaceId = stringToWsId(folder.uri.fsPath);
       const relPath = this.relativeOf(workspaceId, uri.fsPath);
 
-      // local index: add file if file; for folders, children events will come
+      // Determine if the created target is a file or a folder
+      let isDir = false;
       try {
-        const hash = await sha1OfFile(uri.fsPath);
+        const stat = await vscode.workspace.fs.stat(uri);
+        isDir = (stat.type & vscode.FileType.Directory) !== 0;
+      } catch {
+        // best effort; if stat fails, we'll try hashing as file
+      }
+
+      // Update local snapshot:
+      if (isDir) {
+        // Create a folder node; folder hash will be recomputed during recompute()
         this.state.applyLocal({
           workspaceId,
           type: 'modify',
           path: relPath,
-          meta: { type: 'file', hash }
+          meta: { type: 'folder', hash: '' },
         });
-      } catch {/* ignore */}
+      } else {
+        try {
+          const hash = await sha1OfFile(uri.fsPath);
+          this.state.applyLocal({
+            workspaceId,
+            type: 'modify',
+            path: relPath,
+            meta: { type: 'file', hash },
+          });
+        } catch {
+          // ignore (temporary files etc.)
+        }
+      }
 
+      // Policy on create
       const eff = await this.config.getById(workspaceId);
+    
+      const rules = compile(eff.ignoreGlobs);
+      if (ignored(relPath, rules)) { return; }
+
       const policy = parseActionPolicy(eff.data.actionOnCreate);
       await this.maybeActByPolicy(workspaceId, relPath, policy, 'create');
     }
@@ -92,13 +138,12 @@ export class FileEventBridge {
   private async onDelete(event: vscode.FileDeleteEvent): Promise<void> {
     for (const uri of event.files) {
       const folder = vscode.workspace.getWorkspaceFolder(uri);
-      if (!folder) {
-        continue;
-      }
-      const workspaceId = folder.uri.fsPath;
+      if (!folder) {continue;}
+
+      const workspaceId = stringToWsId(folder.uri.fsPath);
       const relPath = this.relativeOf(workspaceId, uri.fsPath);
 
-      // Update local index: remove leaf or subtree
+      // Update local index: remove file or entire subtree
       const hadLocalChildren = this.state.hasLocalChildren(workspaceId, relPath);
       if (hadLocalChildren) {
         this.state.removeLocalSubtree(workspaceId, relPath);
@@ -106,42 +151,45 @@ export class FileEventBridge {
         this.state.applyLocal({ workspaceId, type: 'delete', path: relPath });
       }
 
-      const effective = await this.config.getById(workspaceId);
-      const policy = parseActionPolicy(effective.data.actionOnDelete);
+      // Policy on delete (check-only, delete remote, or restore from remote)
+      const eff = await this.config.getById(workspaceId);
+    
+      const rules = compile(eff.ignoreGlobs);
+      if (ignored(relPath, rules)) { return; }
 
-      // A) check-only → info popup, no action
+      const policy = parseActionPolicy(eff.data.actionOnDelete);
+
+      // A) check-only → informational popup
       if (policy.check && !policy.direction && policy.extras.size === 0) {
         await this.showCheckInfo('delete', relPath);
         continue;
       }
 
-      // B) check&delete or delete → remote delete
+      // B) contains 'delete' → delete on remote (recursive for folders)
       if (policy.extras.has('delete')) {
         if (policy.check) {
-          const decision = await this.confirmPolicyAction(workspaceId, relPath, 'delete', /*allowDiff*/ false);
-          if (decision !== 'proceed') {
-            continue;
-          }
+          const decision = await this.confirmPolicyAction(workspaceId, 'delete', /*allowDiff*/ false, relPath);
+          if (decision !== 'proceed') {continue;}
         }
+
         await this.remote.deletePath(workspaceId, relPath);
-        const newRemote = await this.remote.list(workspaceId);
-        this.state.setRemoteIndex(workspaceId, newRemote);
+        // Optimistic remote snapshot update (no full rescan)
+        this.state.removeRemoteSubtree(workspaceId, relPath, /*includeRoot*/ true);
         continue;
       }
 
-      // C) check&download or download → restore from remote (file or subtree)
+      // C) direction === 'download' → restore from remote (file or subtree)
       if (policy.direction === 'download') {
         if (policy.check) {
-          const decision = await this.confirmPolicyAction(workspaceId, relPath, 'download', /*allowDiff*/ false);
-          if (decision !== 'proceed') {
-            continue;
-          }
+          const decision = await this.confirmPolicyAction(workspaceId, 'download', /*allowDiff*/ false, relPath);
+          if (decision !== 'proceed') {continue;}
         }
+
         const restored = await this.restoreRemoteSubtree(workspaceId, relPath);
         if (restored === 0) {
-          // Try exact file as a final attempt
-          const absLocal = joinFs(workspaceId, relPath);
-          await vscode.workspace.fs.createDirectory(vscode.Uri.file(require('path').dirname(absLocal)));
+          // Try exact-file restore as a last attempt
+          const absLocal = absFs(workspaceId, relPath);
+          await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(absLocal)));
           await this.remote.downloadFile(workspaceId, relPath, absLocal).catch(() => undefined);
           try {
             const hash = await sha1OfFile(absLocal);
@@ -151,182 +199,178 @@ export class FileEventBridge {
         continue;
       }
 
-      // D) none → leave as a diff (remote-only)
+      // D) none → leave as a remote-only diff
     }
   }
 
   private async onRename(event: vscode.FileRenameEvent): Promise<void> {
     for (const { oldUri, newUri } of event.files) {
-      const folder =
-        vscode.workspace.getWorkspaceFolder(newUri) ?? vscode.workspace.getWorkspaceFolder(oldUri);
-      if (!folder) {
-        continue;
-      }
+      const folder = vscode.workspace.getWorkspaceFolder(newUri) ?? vscode.workspace.getWorkspaceFolder(oldUri);
+      if (!folder) {continue;}
 
-      const workspaceId = folder.uri.fsPath;
+      const workspaceId = stringToWsId(folder.uri.fsPath);
       const oldRel = this.relativeOf(workspaceId, oldUri.fsPath);
       const newRel = this.relativeOf(workspaceId, newUri.fsPath);
 
-      // Update local state: remove old; add/modify new if it's a file.
+      // Local snapshot: remove old path (file or subtree), then add new (if file)
       this.state.applyLocal({ workspaceId, type: 'delete', path: oldRel });
+
+      let newIsDir = false;
       try {
         const stat = await vscode.workspace.fs.stat(newUri);
-        const isDirectory = (stat.type & vscode.FileType.Directory) !== 0;
+        newIsDir = (stat.type & vscode.FileType.Directory) !== 0;
 
-        if (!isDirectory) {
+        if (!newIsDir) {
           const hash = await sha1OfFile(newUri.fsPath);
           this.state.applyLocal({
             workspaceId,
             type: 'modify',
             path: newRel,
-            meta: { type: 'file', hash }
+            meta: { type: 'file', hash },
+          });
+        } else {
+          // Create folder node; its hash will settle via recompute
+          this.state.applyLocal({
+            workspaceId,
+            type: 'modify',
+            path: newRel,
+            meta: { type: 'folder', hash: '' },
           });
         }
-        // If it’s a directory, we rely on file watch events to populate children as they appear under the new path.
       } catch {
-        // Ignore errors probing the new path (race with FS updates is possible).
+        // If stat fails, we still removed oldRel, and recompute will reflect downstream events.
       }
 
-      const effective = await this.config.getById(workspaceId);
-      const policy = parseActionPolicy(effective.data.actionOnMove);
+      const eff = await this.config.getById(workspaceId);
+    
+      const rules = compile(eff.ignoreGlobs);
+      if (ignored(oldRel, rules)) { return; }
+      const policy = parseActionPolicy(eff.data.actionOnMove);
 
-      // A) check-only → info popup, no action
+      // A) check-only (no 'rename' extra) → info and done
       if (policy.check && !policy.direction && !policy.extras.has('rename')) {
-        await this.showCheckInfo('rename', `${oldRel} → ${newRel}`);
+        await this.showCheckInfo('rename', newRel, oldRel);
         continue;
       }
 
-      // B) Full "rename/move" policy (extras.has('rename'))
+      // B) extras.has('rename') → remote semantics = delete old + upload new (file or subtree)
       if (policy.extras.has('rename')) {
         if (policy.check) {
-          const decision = await this.confirmPolicyAction(
-            workspaceId,
-            `${oldRel} → ${newRel}`,
-            'move',
-            /*allowDiff*/ false
-          );
-          if (decision !== 'proceed') {
-            continue;
-          }
+          const decision = await this.confirmPolicyAction(workspaceId, 'move', false, newRel, oldRel);
+          if (decision !== 'proceed') {continue;}
         }
 
-        // Delete old on remote, then upload the new path (file or subtree).
         await this.remote.deletePath(workspaceId, oldRel).catch(() => undefined);
 
-        // Upload file-or-folder at newRel
-        const stat = await vscode.workspace.fs.stat(newUri).catch(() => undefined);
-        const isDirectory = !!stat && (stat.type & vscode.FileType.Directory) !== 0;
-
-        if (!isDirectory) {
-          const absLocal = joinFs(workspaceId, newRel);
+        if (!newIsDir) {
+          const absLocal = absFs(workspaceId, newRel);
           await this.remote.uploadFile(workspaceId, newRel, absLocal);
+          // Update remote snapshot optimistically
+          const hash = await sha1OfFile(absLocal).catch(() => undefined);
+          if (hash) {
+            this.state.upsertRemoteNode(workspaceId, newRel, { type: 'file', hash });
+          }
+          this.state.removeRemoteSubtree(workspaceId, oldRel, /*includeRoot*/ true);
         } else {
-          // Folder: upload all local files under newRel from the local index snapshot
-          const localIndex = this.state.getLocalIndexSnapshot(workspaceId);
-          const prefix = newRel.replace(/\\/g, '/').replace(/\/+$/, '') + '/';
+          // Upload folder subtree
+          const localIndex = this.state.getLocalIndex(workspaceId);
+          const prefix = stringToRel((newRel as string).replace(/\\/g, '/').replace(/\/+$/, '') + '/');
 
-          for (const [rel, meta] of localIndex.entries()) {
-            if (rel === newRel || rel.startsWith(prefix)) {
+          for (const [rel, meta] of localIndex) {
+            const s = rel as string;
+            if (rel === newRel || s.startsWith(prefix)) {
               if (meta.type === 'file') {
-                const absLocal = joinFs(workspaceId, rel);
+                const absLocal = absFs(workspaceId, rel);
                 await this.remote.uploadFile(workspaceId, rel, absLocal);
+                const h = await sha1OfFile(absLocal).catch(() => undefined);
+                if (h) {this.state.upsertRemoteNode(workspaceId, rel, { type: 'file', hash: h });}
+              } else {
+                // ensure folder nodes exist remotely as we go
+                this.state.upsertRemoteNode(workspaceId, rel, { type: 'folder', hash: '' });
               }
             }
           }
+          this.state.removeRemoteSubtree(workspaceId, oldRel, /*includeRoot*/ true);
         }
-
-        const newRemote = await this.remote.list(workspaceId);
-        this.state.setRemoteIndex(workspaceId, newRemote);
         continue;
       }
 
-      // C) direction === 'upload' → ensure the NEW path exists remotely
+      // C) direction === 'upload' → ensure the NEW path exists on remote
       if (policy.direction === 'upload') {
-        const stat = await vscode.workspace.fs.stat(newUri).catch(() => undefined);
-        const isDirectory = !!stat && (stat.type & vscode.FileType.Directory) !== 0;
-
         if (policy.check) {
-          const decision = await this.confirmPolicyAction(
-            workspaceId,
-            newRel,
-            'upload',
-            /*allowDiff*/ (stat && !isDirectory) ? true : false
-          );
-          if (decision !== 'proceed') {
-            continue;
-          }
+          const decision = await this.confirmPolicyAction( workspaceId, 'upload', /*allowDiff*/ !newIsDir, newRel);
+          if (decision !== 'proceed') {continue;}
         }
 
-        if (!isDirectory) {
-          const absLocal = joinFs(workspaceId, newRel);
+        if (!newIsDir) {
+          const absLocal = absFs(workspaceId, newRel);
           await this.remote.uploadFile(workspaceId, newRel, absLocal);
+          const h = await sha1OfFile(absLocal).catch(() => undefined);
+          if (h) {
+            this.state.upsertRemoteNode(workspaceId, newRel, { type: 'file', hash: h });
+          }
         } else {
-          const localIndex = this.state.getLocalIndexSnapshot(workspaceId);
-          const prefix = newRel.replace(/\\/g, '/').replace(/\/+$/, '') + '/';
-          for (const [rel, meta] of localIndex.entries()) {
-            if (rel === newRel || rel.startsWith(prefix)) {
+          // Upload folder subtree
+          const localIndex = this.state.getLocalIndex(workspaceId);
+          const prefix = stringToRel((newRel as string).replace(/\\/g, '/').replace(/\/+$/, '') + '/');
+          for (const [rel, meta] of localIndex) {
+            const s = rel as string;
+            if (rel === newRel || s.startsWith(prefix)) {
               if (meta.type === 'file') {
-                const absLocal = joinFs(workspaceId, rel);
+                const absLocal = absFs(workspaceId, rel);
                 await this.remote.uploadFile(workspaceId, rel, absLocal);
+                const h = await sha1OfFile(absLocal).catch(() => undefined);
+                if (h) {
+                  this.state.upsertRemoteNode(workspaceId, rel, { type: 'file', hash: h });
+                }
+              } else {
+                this.state.upsertRemoteNode(workspaceId, rel, { type: 'folder', hash: '' });
               }
             }
           }
         }
-
-        const newRemote = await this.remote.list(workspaceId);
-        this.state.setRemoteIndex(workspaceId, newRemote);
         continue;
       }
 
-      // D) direction === 'download' → pull the NEW path from remote (file or subtree)
+      // D) direction === 'download' → restore the NEW path from remote
       if (policy.direction === 'download') {
         if (policy.check) {
-          const decision = await this.confirmPolicyAction(
-            workspaceId,
-            newRel,
-            'download',
-            /*allowDiff*/ false
-          );
-          if (decision !== 'proceed') {
-            continue;
-          }
+          const decision = await this.confirmPolicyAction(workspaceId, 'download', false, newRel);
+          if (decision !== 'proceed') {continue;}
         }
 
-        // If remote has subtree at newRel, restore it; otherwise try exact file.
         const restored = await this.restoreRemoteSubtree(workspaceId, newRel);
         if (restored === 0) {
-          const absLocal = joinFs(workspaceId, newRel);
+          // Try exact file
+          const absLocal = absFs(workspaceId, newRel);
           await this.remote.downloadFile(workspaceId, newRel, absLocal).catch(() => undefined);
-          try {
-            const hash = await sha1OfFile(absLocal);
-            this.state.applyLocal({
-              workspaceId,
-              type: 'modify',
-              path: newRel,
-              meta: { type: 'file', hash }
-            });
-          } catch { /* ignore */ }
+          const h = await sha1OfFile(absLocal).catch(() => undefined);
+          if (h) {
+            this.state.applyLocal({ workspaceId, type: 'modify', path: newRel, meta: { type: 'file', hash: h } });
+          }
         }
         continue;
       }
 
-      // E) no policy → nothing to do
+      // E) no policy → do nothing remotely; diff will reflect the mismatch
     }
   }
 
   private async onOpen(doc: vscode.TextDocument): Promise<void> {
-    if (doc.isUntitled) {
-      return;
-    }
+    if (doc.isUntitled) {return;}
+
     const folder = vscode.workspace.getWorkspaceFolder(doc.uri);
-    if (!folder) {
-      return;
-    }
-    const workspaceId = folder.uri.fsPath;
+    if (!folder) {return;}
+
+    const workspaceId = stringToWsId(folder.uri.fsPath);
     const relPath = this.relativeOf(workspaceId, doc.uri.fsPath);
 
-    const effective = await this.config.getById(workspaceId);
-    const policy = parseActionPolicy(effective.data.actionOnOpen);
+    const eff = await this.config.getById(workspaceId);
+    
+    const rules = compile(eff.ignoreGlobs);
+    if (ignored(relPath, rules)) { return; }
+
+    const policy = parseActionPolicy(eff.data.actionOnOpen);
 
     // check-only → info
     if (policy.check && !policy.direction && policy.extras.size === 0) {
@@ -336,47 +380,58 @@ export class FileEventBridge {
 
     if (policy.direction === 'download') {
       const entry = this.state.getDiffEntry(workspaceId, relPath);
-      const allowed = entry ? canDownload(entry.status) : true;
-
-      if (!allowed) {
-        return;
-      }
+      const allowed = entry ? isDownloadable(entry.status) : true;
+      if (!allowed) {return;}
 
       if (policy.check) {
-        const decision = await this.confirmPolicyAction(workspaceId, relPath, 'download', /*allowDiff*/ false);
-        if (decision !== 'proceed') {
-          return;
-        }
+        const decision = await this.confirmPolicyAction(workspaceId, 'download', false, relPath);
+        if (decision !== 'proceed') {return;}
       }
 
-      const abs = joinFs(workspaceId, relPath);
+      const abs = absFs(workspaceId, relPath);
       await this.remote.downloadFile(workspaceId, relPath, abs);
       const hash = await sha1OfFile(abs);
       this.state.applyLocal({ workspaceId, type: 'modify', path: relPath, meta: { type: 'file', hash } });
     }
   }
 
+  // ====================================================================================
+  // External watchers: mutate local snapshot only (avoid loops)
+  // ====================================================================================
 
-  // External watchers: only update local index; no auto-action (avoid loops)
   private async onExternalCreate(uri: vscode.Uri): Promise<void> {
-    const folder = vscode.workspace.getWorkspaceFolder(uri); if (!folder) { return; }
-    const workspaceId = folder.uri.fsPath; const rel = this.relativeOf(workspaceId, uri.fsPath);
+    const folder = vscode.workspace.getWorkspaceFolder(uri);
+    if (!folder) {return;}
+
+    const workspaceId = stringToWsId(folder.uri.fsPath);
+    const rel = this.relativeOf(workspaceId, uri.fsPath);
+
+    // Probe kind; treat folders as folder nodes to ensure they show up/fold properly
     try {
-      const hash = await sha1OfFile(uri.fsPath);
-      this.state.applyLocal({ workspaceId, type: 'modify', path: rel, meta: { type: 'file', hash } });
-    } catch {}
+      const stat = await vscode.workspace.fs.stat(uri);
+      const isDir = (stat.type & vscode.FileType.Directory) !== 0;
+
+      if (isDir) {
+        this.state.applyLocal({ workspaceId, type: 'modify', path: rel, meta: { type: 'folder', hash: '' } });
+      } else {
+        const hash = await sha1OfFile(uri.fsPath);
+        this.state.applyLocal({ workspaceId, type: 'modify', path: rel, meta: { type: 'file', hash } });
+      }
+    } catch {
+      // If stat/hash fails, ignore; next scan will reconcile
+    }
   }
 
   private async onExternalChange(uri: vscode.Uri): Promise<void> {
-    await this.onExternalCreate(uri); // same as create → rehash and modify
+    // Same as create for files: recompute hash and mark modified
+    await this.onExternalCreate(uri);
   }
-  
+
   private async onExternalDelete(uri: vscode.Uri): Promise<void> {
     const folder = vscode.workspace.getWorkspaceFolder(uri);
-    if (!folder) {
-      return;
-    }
-    const workspaceId = folder.uri.fsPath;
+    if (!folder) {return;}
+
+    const workspaceId = stringToWsId(folder.uri.fsPath);
     const relPath = this.relativeOf(workspaceId, uri.fsPath);
 
     const hasChildren = this.state.hasLocalChildren(workspaceId, relPath);
@@ -387,160 +442,160 @@ export class FileEventBridge {
     }
   }
 
+  // ====================================================================================
+  // Core restoring logic (download subtree from remote to local)
+  // ====================================================================================
+
   /**
    * Restore a folder (and its descendants) from remote to local.
    * Returns the number of files restored.
+   * - Uses remote.list(workspace) once and downloads only file nodes under the prefix.
+   * - Updates *local* snapshot only; the remote snapshot is already authoritative.
    */
-  private async restoreRemoteSubtree(workspaceId: string, folderRel: string): Promise<number> {
-    const remoteIndex = await this.remote.list(workspaceId);
+  private async restoreRemoteSubtree(workspaceId: WorkspaceId, folderRel: RelPath): Promise<number> {
+    const remoteIndex: NodeIndex = await this.remote.list(workspaceId);
+    await this.remoteCache.save(workspaceId, remoteIndex);
 
-    const normalized = folderRel.replace(/\\/g, '/').replace(/\/+$/, '');
+    const normalized = (folderRel as string).replace(/\\/g, '/').replace(/\/+$/, '');
     const prefix = normalized ? normalized + '/' : '';
+    const targets: RelPath[] = [];
 
-    // If remote has an exact file at folderRel, treat it as a single-file restore.
-    const exact = remoteIndex.get(normalized);
-    const targets: string[] = [];
-
+    const exact = remoteIndex.get(stringToRel(normalized));
     if (exact?.type === 'file') {
-      targets.push(normalized);
+      targets.push(stringToRel(normalized));
     } else {
-      for (const rel of remoteIndex.keys()) {
-        if (rel === normalized || (prefix && rel.startsWith(prefix))) {
-          const entry = remoteIndex.get(rel)!;
-          if (entry.type === 'file') {
-            targets.push(rel);
-          }
+      for (const [rel, meta] of remoteIndex) {
+        const s = rel as string;
+        if (rel === stringToRel(normalized) || (prefix && s.startsWith(prefix))) {
+          if (meta.type === 'file') {targets.push(rel);}
+          // For folders: we’ll ensure directories exist locally before downloading files
         }
       }
     }
 
-    if (targets.length === 0) {
-      return 0;
-    }
+    if (targets.length === 0) {return 0;}
 
     let restored = 0;
-    // Optional: if your SyncStateManager supports explicit batching, wrap with begin/end here.
     for (const rel of targets) {
-      const absLocal = joinFs(workspaceId, rel);
+      const absLocal = absFs(workspaceId, rel);
       await fsp.mkdir(path.dirname(absLocal), { recursive: true });
       await this.remote.downloadFile(workspaceId, rel, absLocal);
       const hash = await sha1OfFile(absLocal);
-      this.state.applyLocal({
-        workspaceId,
-        type: 'modify',
-        path: rel,
-        meta: { type: 'file', hash }
-      });
+      this.state.applyLocal({ workspaceId, type: 'modify', path: rel, meta: { type: 'file', hash } });
       restored += 1;
     }
     return restored;
   }
 
-
-
-  // ---------- core acting logic
+  // ====================================================================================
+  // Policy application (shared)
+  // ====================================================================================
 
   private async maybeActByPolicy(
-    workspaceId: string,
-    relPath: string,
+    workspaceId: WorkspaceId,
+    relPath: RelPath,
     policy: ReturnType<typeof parseActionPolicy>,
     hint: 'save' | 'create' | 'open' | 'rename' | 'delete'
   ): Promise<void> {
-    // A) check-only → info popup, NO action
+    // A) check-only → info popup, no action
     if (policy.check && !policy.direction && policy.extras.size === 0) {
       await this.showCheckInfo(hint, relPath);
       return;
     }
 
-    // B) direction-only (upload/download), possibly with check
+    // B) direction-only (upload/download), optionally with check
     if (policy.direction) {
       const entry = this.state.getDiffEntry(workspaceId, relPath);
       const allowed = policy.direction === 'upload'
-        ? (entry ? canUpload(entry.status) : true)
-        : (entry ? canDownload(entry.status) : true);
+        ? (entry ? isUploadable(entry.status) : true)
+        : (entry ? isDownloadable(entry.status) : true);
 
-      if (!allowed) {
-        return;
-      }
+      if (!allowed) {return;}
 
       if (policy.check) {
         const allowDiff =
           policy.direction === 'upload' && (hint === 'save' || hint === 'create' || hint === 'rename');
-        const decision = await this.confirmPolicyAction(workspaceId, relPath, policy.direction, allowDiff);
-        if (decision !== 'proceed') {
-          return;
-        }
+        const decision = await this.confirmPolicyAction(workspaceId, policy.direction, allowDiff, relPath);
+        if (decision !== 'proceed') {return;}
       }
 
       if (policy.direction === 'upload') {
-        const abs = joinFs(workspaceId, relPath);
+        const abs = absFs(workspaceId, relPath);
         await this.remote.uploadFile(workspaceId, relPath, abs);
-        const newRemote = await this.remote.list(workspaceId);
-        this.state.setRemoteIndex(workspaceId, newRemote);
+        // Optimistically update the remote snapshot with the local file hash
+        const h = await sha1OfFile(abs).catch(() => undefined);
+        if (h) {this.state.upsertRemoteNode(workspaceId, relPath, { type: 'file', hash: h });}
         return;
       } else {
-        const abs = joinFs(workspaceId, relPath);
+        const abs = absFs(workspaceId, relPath);
         await this.remote.downloadFile(workspaceId, relPath, abs);
-        const hash = await sha1OfFile(abs);
-        this.state.applyLocal({ workspaceId, type: 'modify', path: relPath, meta: { type: 'file', hash } });
+        const h = await sha1OfFile(abs).catch(() => undefined);
+        if (h) {this.state.applyLocal({ workspaceId, type: 'modify', path: relPath, meta: { type: 'file', hash: h } });}
         return;
       }
     }
 
-    // C) extras-only (e.g. delete/rename) are handled in the specific event handlers.
+    // C) extras-only (e.g., delete/rename) are handled in their specific handlers.
   }
 
+  // ====================================================================================
+  // UI helpers (prompts / formatting)
+  // ====================================================================================
 
-
-  // ---------- utils
-  private relativeOf(workspaceId: string, absFsPath: string): string {
-    const normRoot = workspaceId.replace(/\\/g, '/').replace(/\/+$/, '');
+  private relativeOf(workspaceId: WorkspaceId, absFsPath: string): RelPath {
+    const normRoot = (workspaceId as string).replace(/\\/g, '/').replace(/\/+$/, '');
     const normAbs = absFsPath.replace(/\\/g, '/');
-    return normAbs.startsWith(normRoot + '/') ? normAbs.slice(normRoot.length + 1) : '';
+    return stringToRel(normAbs.startsWith(normRoot + '/') ? normAbs.slice(normRoot.length + 1) : '');
   }
 
-  private async showCheckInfo(hint: 'save' | 'create' | 'open' | 'rename' | 'delete', relPath: string): Promise<void> {
+  private async showCheckInfo(
+    hint: 'save' | 'create' | 'open' | 'rename' | 'delete',
+    relPath: RelPath,
+    oldPath?: RelPath
+  ): Promise<void> {
     const verb =
-      hint === 'save'   ? 'Saved'
-    : hint === 'create' ? 'Created'
-    : hint === 'open'   ? 'Opened'
-    : hint === 'rename' ? 'Renamed'
-    :                     'Deleted';
+      hint === 'save'   ? 'Saved' :
+      hint === 'create' ? 'Created' :
+      hint === 'open'   ? 'Opened' :
+      hint === 'rename' ? 'Renamed' : 'Deleted';
 
-    const message = `LiveSync (check): ${verb} “${relPath || '.'}”. No sync action taken (policy = check).`;
+      const display = oldPath ? `${oldPath} → ${relPath}` : relPath;
+
+    const message = `LiveSync (check): ${verb} “${display}”. No sync action taken (policy = check).`;
     await vscode.window.showInformationMessage(message);
   }
 
   private async confirmPolicyAction(
-    workspaceId: string,
-    relPath: string,
+    workspaceId: WorkspaceId,
     mode: 'upload' | 'download' | 'delete' | 'move',
-    allowDiff: boolean
+    allowDiff: boolean,
+    relPath: RelPath,
+    oldPath?: RelPath
   ): Promise<'proceed' | 'diff' | 'cancel'> {
     const label =
-      mode === 'upload'   ? 'Upload'
-    : mode === 'download' ? 'Download'
-    : mode === 'delete'   ? 'Delete from Remote'
-    :                       'Move on Remote';
+      mode === 'upload'   ? 'Upload' :
+      mode === 'download' ? 'Download' :
+      mode === 'delete'   ? 'Delete from Remote' : 'Move on Remote';
 
-    const message = `LiveSync: ${label} “${relPath || '.'}”?`;
-    const buttons = allowDiff ? ['Proceed', 'Show Diff', 'Cancel'] as const : ['Proceed', 'Cancel'] as const;
+    const message = `LiveSync: ${label} “${(relPath as string) || '.'}”?`;
+    const buttons = (allowDiff ? (['Proceed', 'Show Diff', 'Cancel'] as const) : (['Proceed', 'Cancel'] as const));
 
     const choice = await vscode.window.showWarningMessage(message, { modal: true }, ...buttons);
-    if (choice === 'Proceed') {
-      return 'proceed';
-    }
+    if (choice === 'Proceed') {return 'proceed';}
     if (choice === 'Show Diff') {
       await vscode.commands.executeCommand('livesync.experimental.node.showDiff', {
         kind: 'entry',
         workspaceId,
-        path: relPath
+        path: relPath,
       });
-      // Ask once more after diff to avoid accidental action.
-      const again = await vscode.window.showInformationMessage(`Proceed to ${label.toLowerCase()} “${relPath || '.'}”?`, 'Proceed', 'Cancel');
+
+      const display = oldPath ? `${oldPath} → ${relPath}` : relPath;
+      const again = await vscode.window.showInformationMessage(
+        `Proceed to ${label.toLowerCase()} “${display}”?`,
+        'Proceed', 'Cancel'
+      );
       return again === 'Proceed' ? 'proceed' : 'cancel';
     }
     return 'cancel';
   }
-
 }

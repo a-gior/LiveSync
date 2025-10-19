@@ -1,19 +1,15 @@
-import type { FileMeta } from '@domain/types';
+import type { WorkspaceId, RelPath, NodeIndex } from '@domain/types';
 
-/**
- * Abstraction over your real remote.
- * Implement this against your current backend (HTTP, WebDAV, S3, etc.).
- */
 export interface RemotePort {
-  /** Get a full remote index (path -> FileMeta). */
-  list(workspaceId: string): Promise<Map<string, FileMeta>>;
+  /** List remote nodes (files + folders). Keys MUST be RelPath. */
+  list(workspaceId: WorkspaceId): Promise<NodeIndex>;
 
-  /** Upload (create/overwrite) a file from local disk to remote. */
-  uploadFile(workspaceId: string, relativePath: string, absoluteLocalPath: string): Promise<void>;
+  /** Upload a single file at RelPath from an absolute local path. */
+  uploadFile(workspaceId: WorkspaceId, relativePath: RelPath, absoluteLocalPath: string): Promise<void>;
 
-  /** Delete a file or an entire directory subtree on remote. */
-  deletePath(workspaceId: string, relativePath: string): Promise<void>;
+  /** Delete a file or folder subtree at RelPath (recursive for folders). */
+  deletePath(workspaceId: WorkspaceId, relativePath: RelPath): Promise<void>;
 
-  /** Download a file from remote to local disk (overwrite if exists). */
-  downloadFile(workspaceId: string, relativePath: string, absoluteLocalPath: string): Promise<void>;
+  /** Download a single file at RelPath to an absolute local path. */
+  downloadFile(workspaceId: WorkspaceId, relativePath: RelPath, absoluteLocalPath: string): Promise<void>;
 }

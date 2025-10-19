@@ -4,12 +4,12 @@ import type { FileMeta } from '../../src/domain/types';
 
 const f = (hash: string): FileMeta => ({ type: 'file', hash });
 
-describe('DefaultDiffEngine.computeWithFolders', () => {
+describe('DefaultDiffEngine.compute', () => {
   it('marks folder unchanged when all descendants unchanged', () => {
     const eng = new DefaultDiffEngine();
     const local = new Map<string, FileMeta>([['a/x.txt', f('1')], ['a/y.txt', f('2')]]);
     const remote = new Map<string, FileMeta>([['a/x.txt', f('1')], ['a/y.txt', f('2')]]);
-    const diff = eng.computeWithFolders!(local, remote);
+    const diff = eng.compute!(local, remote);
     assert.equal(diff.get('a')!.type, 'folder');
     assert.equal(diff.get('a')!.status, 'unchanged');
   });
@@ -18,7 +18,7 @@ describe('DefaultDiffEngine.computeWithFolders', () => {
     const eng = new DefaultDiffEngine();
     const local = new Map<string, FileMeta>([['a/x.txt', f('1')], ['a/y.txt', f('2')]]);
     const remote = new Map<string, FileMeta>([['a/x.txt', f('9')], ['a/y.txt', f('2')]]);
-    const diff = eng.computeWithFolders!(local, remote);
+    const diff = eng.compute!(local, remote);
     assert.equal(diff.get('a')!.status, 'modified');
   });
 
@@ -26,10 +26,10 @@ describe('DefaultDiffEngine.computeWithFolders', () => {
     const eng = new DefaultDiffEngine();
     const local = new Map<string, FileMeta>([['b/z.txt', f('Z')]]);
     const remote = new Map<string, FileMeta>();
-    const diff1 = eng.computeWithFolders!(local, remote);
+    const diff1 = eng.compute!(local, remote);
     assert.equal(diff1.get('b')!.status, 'added');
 
-    const diff2 = eng.computeWithFolders!(remote, local);
+    const diff2 = eng.compute!(remote, local);
     assert.equal(diff2.get('b')!.status, 'removed');
   });
 
@@ -37,7 +37,7 @@ describe('DefaultDiffEngine.computeWithFolders', () => {
     const eng = new DefaultDiffEngine();
     const local = new Map<string, FileMeta>([['a/b/c.txt', f('1')]]);
     const remote = new Map<string, FileMeta>([['a/b/c.txt', f('2')]]);
-    const diff = eng.computeWithFolders!(local, remote);
+    const diff = eng.compute!(local, remote);
     assert.equal(diff.get('a')!.status, 'modified');
     assert.equal(diff.get('a/b')!.status, 'modified');
   });

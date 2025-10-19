@@ -5,6 +5,8 @@ import { ExperimentalTreeProvider, ExperimentalNode } from '../presentation/tree
 import { WorkspaceConfigService } from '../infrastructure/config/WorkspaceConfigService';
 import type { RemotePort } from '../application/ports/RemotePort';
 import { ProgressService } from '../presentation/statusbar/ProgressService';
+import { IndexCacheService } from '../infrastructure/persistence/IndexCacheService';
+import { ConfigErrorSuppressor } from '../infrastructure/storage/ConfigErrorSuppressor';
 
 export interface Services {
   context: vscode.ExtensionContext;
@@ -15,4 +17,7 @@ export interface Services {
   provider: ExperimentalTreeProvider;
   treeView: vscode.TreeView<ExperimentalNode>;
   progress: ProgressService;
+  localCache: IndexCacheService;
+  remoteCache: IndexCacheService;
+  suppressor: ConfigErrorSuppressor;
 }

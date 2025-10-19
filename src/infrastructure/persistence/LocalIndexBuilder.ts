@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { sha1OfFile } from '@infra/files/FileHash';
+import { sha1OfFile } from '@helpers/hash/FileHash';
 import { FileMeta } from '@domain/types';
 
 export type BuildIndexOptions = {
@@ -23,20 +23,7 @@ export async function buildLocalIndex(
   const index = new Map<string, FileMeta>();
   const concurrency = Math.max(1, options.concurrency ?? 4);
 
-  // sensible defaults; you can extend via settings later
-  const defaultExcludes = [
-    '**/.git/**',
-    '**/.svn/**',
-    '**/node_modules/**',
-    '**/.vscode/**',
-    '**/.idea/**',
-    '**/dist/**',
-    '**/build/**',
-    '**/.cache/**',
-    '**/.next/**',
-    '**/coverage/**'
-  ];
-  const excludeGlobs = mergeExcludeGlobs(defaultExcludes, options.excludeGlobs ?? []);
+  const excludeGlobs = mergeExcludeGlobs(options.excludeGlobs ?? []);
 
   // List files first
   const includeGlob = new vscode.RelativePattern(workspace, '**/*');
@@ -96,11 +83,10 @@ export async function buildLocalIndex(
   return index;
 }
 
-function mergeExcludeGlobs(defaults: string[], extras: string[]): string {
+function mergeExcludeGlobs(globs: string[]): string {
   // vscode.workspace.findFiles takes a single pattern string for excludes.
   // We can join multiple with brace expansion: {a,b,c}
-  const all = [...defaults, ...extras];
-  const cleaned = all.map((g) => g.replace(/^\s+|\s+$/g, '')).filter(Boolean);
+  const cleaned = globs.map((g) => g.replace(/^\s+|\s+$/g, '')).filter(Boolean);
   if (cleaned.length === 0) {
     return '';
   }

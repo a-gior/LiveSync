@@ -16,6 +16,7 @@
       "@domain/*": ["src/domain/*"],
       "@app/*": ["src/application/*"],
       "@infra/*": ["src/infrastructure/*"],
+      "@helpers/*": ["src/infrastructure/helpers/*"],
       "@presentation/*": ["src/presentation/*"]
     },
     // "rootDir": "src",

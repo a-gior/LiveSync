@@ -1,4 +1,4 @@
-import type { DiffEntry } from '../../domain/types';
+import type { DiffEntry } from '@domain/types';
 
 /** Returns file paths under folderPath (inclusive) that pass the predicate. */
 export function collectTargetsRecursive(

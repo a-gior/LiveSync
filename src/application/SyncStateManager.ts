@@ -1,190 +1,233 @@
-import { DiffEntry, FileMeta } from '../domain/types';
-import { DiffEngine } from '../domain/diff/DiffEngine';
+import {
+  DiffEntry,
+  DiffMap,
+  NodeIndex,
+  NodeMeta,
+  RelPath,
+  WorkspaceId,
+  ReadonlyNodeIndex,
+} from '@domain/types';
+import { DiffEngine } from '@domain/diff/DiffEngine';
 
-export type LocalEventType = 'create' | 'modify' | 'delete' | 'rename';
+import { dirnameRel, parentsOf, stringToRel } from '@helpers/path';
+import { computeFolderHashFromNodeIndex } from '@helpers/hash';
+import { deleteSubtree } from '@helpers/index';
+
+/** Local FS event kinds we reflect into the local snapshot. */
+export type LocalEventType  = 'create' | 'modify' | 'delete' | 'rename';
+/** Remote event kinds (used for optimistic updates after remote ops succeed). */
 export type RemoteEventType = 'create' | 'modify' | 'delete' | 'rename';
 
-export type DiffChangeEvent = {
-  workspaceId: string;
-  parentPath?: string; // used by the TreeView to refresh only a branch
-  changedPath?: string;
+type DiffChangeEvent = {
+  workspaceId: WorkspaceId;
+  /** Used by the TreeView to refresh only a branch (parent of changedPath). */
+  parentPath?: RelPath;
+  /** The path that triggered the recompute (for targeted refresh). */
+  changedPath?: RelPath;
 };
 
 type Listener = (event: DiffChangeEvent) => void;
 
 /**
  * Framework-agnostic state manager.
- * Holds per-workspace local/remote indexes and the computed diff.
- * Emits change events when a recompute happens.
+ * - Holds per-workspace local/remote NodeIndex snapshots and the computed DiffMap.
+ * - Emits targeted change events whenever a recompute happens.
+ * - Provides optimistic mutation helpers for the *remote* snapshot so the UI updates instantly
+ *   after we perform a remote action (upload/delete/rename), without a full rescan.
  */
 export class SyncStateManager {
-  private localIndexByWorkspace = new Map<string, Map<string, FileMeta>>();
-  private remoteIndexByWorkspace = new Map<string, Map<string, FileMeta>>();
-  private diffByWorkspace = new Map<string, Map<string, DiffEntry>>();
-  private batchingWorkspaces = new Set<string>();
+  // Per-workspace snapshots (files + folders, with hashes)
+  private localByWorkspace: Map<WorkspaceId, NodeIndex> = new Map();
+  private remoteByWorkspace: Map<WorkspaceId, NodeIndex> = new Map();
+
+  // Computed diffs per workspace
+  private diffByWorkspace: Map<WorkspaceId, DiffMap> = new Map();
+
+  // Workspaces currently batching: recompute is deferred until batch ends
+  private batchingWorkspaces: Set<WorkspaceId> = new Set();
 
   private diffListeners = new Set<Listener>();
 
   constructor(private readonly diffEngine: DiffEngine) {}
 
+  // ------------------------------------------------------------------------------------
+  // Subscriptions
+  // ------------------------------------------------------------------------------------
+
   subscribeToDiffChanges(listener: Listener): () => void {
     this.diffListeners.add(listener);
-    return () => {
-      this.diffListeners.delete(listener);
-    };
+    return () => { this.diffListeners.delete(listener); };
   }
 
-  setLocalIndex(workspaceId: string, index: Map<string, FileMeta>): void {
-    this.localIndexByWorkspace.set(workspaceId, index);
+  // ------------------------------------------------------------------------------------
+  // Snapshot setters (replace entire index)
+  // ------------------------------------------------------------------------------------
+
+  setLocalIndex(workspaceId: WorkspaceId, index: NodeIndex): void {
+    this.localByWorkspace.set(workspaceId, new Map(index));
     this.recompute(workspaceId);
   }
 
-  setRemoteIndex(workspaceId: string, index: Map<string, FileMeta>): void {
-    this.remoteIndexByWorkspace.set(workspaceId, index);
+  setRemoteIndex(workspaceId: WorkspaceId, index: NodeIndex): void {
+    this.remoteByWorkspace.set(workspaceId, new Map(index));
     this.recompute(workspaceId);
   }
+
+  // ------------------------------------------------------------------------------------
+  // Incremental *local* mutations (from FS events): create/modify/delete/rename
+  // These update the local snapshot and trigger a recompute.
+  // meta: NodeMeta for 'file' (with content hash) or 'folder' (with folder hash)
+  // ------------------------------------------------------------------------------------
 
   applyLocal(event: {
-    workspaceId: string;
+    workspaceId: WorkspaceId;
     type: LocalEventType;
-    path: string;
-    meta?: FileMeta;
-    newPath?: string;
+    path: RelPath;
+    meta?: NodeMeta;
+    newPath?: RelPath;
   }): void {
-    const localIndex = this.ensureWorkspaceMap(this.localIndexByWorkspace, event.workspaceId);
+    const local = this.ensureWorkspaceIndex(this.localByWorkspace, event.workspaceId);
 
-    if (event.type === 'create' || event.type === 'modify') {
-      localIndex.set(event.path, event.meta!);
-    } else if (event.type === 'delete') {
-      localIndex.delete(event.path);
-    } else if (event.type === 'rename') {
-      localIndex.delete(event.path);
-      if (event.meta && event.newPath) {
-        localIndex.set(event.newPath, event.meta);
+    switch (event.type) {
+      case 'create':
+      case 'modify': {
+        if (!event.meta) { return; }
+        if (event.meta.type === 'file') { this.ensureAncestorFolders(local, event.path); }
+        local.set(event.path, event.meta);
+        break;
+      }
+      case 'delete': {
+        deleteSubtree(local, event.path, /*includeRoot*/ true);
+        break;
+      }
+      case 'rename': {
+        deleteSubtree(local, event.path, /*includeRoot*/ true);
+        if (event.meta && event.newPath) {
+          if (event.meta.type === 'file') { this.ensureAncestorFolders(local, event.newPath); }
+          local.set(event.newPath, event.meta);
+        }
+        break;
+      }
+      default: {
+        // no-op
+        break;
       }
     }
 
-    this.recompute(event.workspaceId, event.path);
+    const hint = stringToRel(event.newPath ?? event.path);
+    this.recompute(event.workspaceId, hint);
   }
 
-  applyRemote(event: {
-    workspaceId: string;
-    type: RemoteEventType;
-    path: string;
-    meta?: FileMeta;
-    newPath?: string;
-  }): void {
-    const remoteIndex = this.ensureWorkspaceMap(this.remoteIndexByWorkspace, event.workspaceId);
+  // ------------------------------------------------------------------------------------
+  // Incremental *remote* mutations (after remote actions succeed)
+  // Call them from FileEventBridge *after* the remote port confirms success.
+  // ------------------------------------------------------------------------------------
 
-    if (event.type === 'create' || event.type === 'modify') {
-      remoteIndex.set(event.path, event.meta!);
-    } else if (event.type === 'delete') {
-      remoteIndex.delete(event.path);
-    } else if (event.type === 'rename') {
-      remoteIndex.delete(event.path);
-      if (event.meta && event.newPath) {
-        remoteIndex.set(event.newPath, event.meta);
-      }
+  /** Upsert a single remote node (file or folder). Rehash remote ancestors and recompute. */
+  upsertRemoteNode(workspaceId: WorkspaceId, path: RelPath, meta: NodeMeta): void {
+    const remote = this.ensureWorkspaceIndex(this.remoteByWorkspace, workspaceId);
+    if (meta.type === 'file') { this.ensureAncestorFolders(remote, path); }
+    remote.set(path, meta);
+    this.rehashAncestors(remote, path);
+    this.recompute(workspaceId, path);
+  }
+
+  /**
+   * Remove a remote subtree (optionally including the root node).
+   * Use after "delete remote (recursive)" succeeds.
+   */
+  removeRemoteSubtree(workspaceId: WorkspaceId, root: RelPath, includeRoot = true): void {
+    const remote = this.ensureWorkspaceIndex(this.remoteByWorkspace, workspaceId);
+    deleteSubtree(remote, root, includeRoot);
+    this.rehashAncestors(remote, root);
+    this.recompute(workspaceId, root);
+  }
+
+  /**
+   * Replace a remote subtree with a freshly listed slice (e.g. after verify/listSubtree).
+   * This is a low-IO way to correct an optimistic snapshot when you want belt & suspenders.
+   */
+  replaceRemoteSubtree(workspaceId: WorkspaceId, root: RelPath, slice: ReadonlyNodeIndex): void {
+    const remote = this.ensureWorkspaceIndex(this.remoteByWorkspace, workspaceId);
+    deleteSubtree(remote, root, /*includeRoot*/ true);
+    for (const [p, m] of slice) {
+      if (m.type === 'file') { this.ensureAncestorFolders(remote, p); }
+      remote.set(p, { ...m });
     }
-
-    this.recompute(event.workspaceId, event.path);
+    this.rehashAncestors(remote, root);
+    this.recompute(workspaceId, root);
   }
 
-  getDiffEntry(workspaceId: string, path: string): DiffEntry | undefined {
-    const diffMap = this.ensureWorkspaceMap(this.diffByWorkspace, workspaceId);
-    return diffMap.get(path);
+  // ------------------------------------------------------------------------------------
+  // Queries
+  // ------------------------------------------------------------------------------------
+
+  getDiffEntry(workspaceId: WorkspaceId, path: RelPath): DiffEntry | undefined {
+    const diff = this.ensureWorkspaceDiff(this.diffByWorkspace, workspaceId);
+    return diff.get(path);
   }
 
-  getChildren(workspaceId: string, parentPath?: string): string[] {
-    const prefix = parentPath ? parentPath + '/' : '';
-    const diffMap = this.ensureWorkspaceMap(this.diffByWorkspace, workspaceId);
+  /**
+   * Return immediate children under a parent path according to the current diff.
+   * - If parentPath is undefined or '', returns top-level entries.
+   * - Returns deduplicated child paths (files or folders) as RelPath[] sorted lexicographically.
+   */
+  getChildren(workspaceId: WorkspaceId, parentPath?: RelPath): RelPath[] {
+    const prefix = parentPath && (parentPath as string).length > 0
+      ? (stringToRel(parentPath + '/'))
+      : (stringToRel(''));
 
-    const childPaths = new Set<string>();
-    for (const fullPath of diffMap.keys()) {
-      if (!fullPath.startsWith(prefix)) {
-        continue;
-      }
-      const remainder = fullPath.slice(prefix.length);
+    const diff = this.ensureWorkspaceDiff(this.diffByWorkspace, workspaceId);
+    const childPaths = new Set<RelPath>();
+
+    for (const fullPath of diff.keys()) {
+      const s = fullPath as string;
+      if (prefix && !s.startsWith(prefix)) { continue; }
+      const remainder = prefix ? s.slice((prefix as string).length) : s;
+      if (!remainder) { continue; }
       const firstSegment = remainder.split('/')[0];
-      if (firstSegment && remainder.length > 0) {
-        childPaths.add(prefix + firstSegment);
+      if (firstSegment) {
+        childPaths.add(stringToRel((prefix as string) + firstSegment));
       }
     }
-    return Array.from(childPaths).sort();
+
+    return Array.from(childPaths).sort((a, b) => (a as string).localeCompare(b as string));
   }
 
-  private recompute(workspaceId: string, touchedPath?: string): void {
-    if (this.batchingWorkspaces?.has && this.batchingWorkspaces.has(workspaceId)) {
-      return;
-    }
-
-    const localIndex = this.ensureWorkspaceMap(this.localIndexByWorkspace, workspaceId);
-    const remoteIndex = this.ensureWorkspaceMap(this.remoteIndexByWorkspace, workspaceId);
-
-    // use folder-aware diff if available
-    const newDiff = (this.diffEngine.computeWithFolders ?? this.diffEngine.computeFull).call(
-      this.diffEngine,
-      localIndex,
-      remoteIndex
-    );
-
-    this.diffByWorkspace.set(workspaceId, newDiff);
-
-    const parentPath = touchedPath ? this.dirnameRelative(touchedPath) || undefined : undefined;
-    this.emitDiffChange({ workspaceId, parentPath, changedPath: touchedPath });
+  /** Shallow read-only copies for external consumers (avoid leaking internal maps). */
+  public getLocalIndex(workspaceId: WorkspaceId): ReadonlyNodeIndex {
+    const idx = this.ensureWorkspaceIndex(this.localByWorkspace, workspaceId);
+    return new Map(idx);
   }
 
-  private ensureWorkspaceMap<T>(
-    byWorkspace: Map<string, Map<string, T>>,
-    workspaceId: string
-  ): Map<string, T> {
-    if (!byWorkspace.has(workspaceId)) {
-      byWorkspace.set(workspaceId, new Map<string, T>());
-    }
-    return byWorkspace.get(workspaceId)!;
+  public getRemoteIndex(workspaceId: WorkspaceId): ReadonlyNodeIndex {
+    const idx = this.ensureWorkspaceIndex(this.remoteByWorkspace, workspaceId);
+    return new Map(idx);
   }
 
-  private emitDiffChange(event: DiffChangeEvent): void {
-    for (const listener of this.diffListeners) {
-      listener(event);
-    }
+  public getLocalMeta(workspaceId: WorkspaceId, path: RelPath): NodeMeta | undefined {
+    return this.ensureWorkspaceIndex(this.localByWorkspace, workspaceId).get(path);
   }
 
-  private dirnameRelative(path: string): string {
-    const lastSlash = path.lastIndexOf('/');
-    if (lastSlash < 0) {
-      return '';
-    }
-    return path.slice(0, lastSlash);
-  }
-  
-  public getLocalIndex(workspaceId: string): Map<string, FileMeta> {
-    const index = this.ensureWorkspaceMap(this.localIndexByWorkspace, workspaceId);
-    return new Map(index);
+  public getRemoteMeta(workspaceId: WorkspaceId, path: RelPath): NodeMeta | undefined {
+    return this.ensureWorkspaceIndex(this.remoteByWorkspace, workspaceId).get(path);
   }
 
-  public getRemoteIndex(workspaceId: string): Map<string, FileMeta> {
-    const index = this.ensureWorkspaceMap(this.remoteIndexByWorkspace, workspaceId);
-    return new Map(index);
+  /** Shallow copy of the whole diff map (read-only to callers). */
+  public getDiffEntries(workspaceId: WorkspaceId): DiffMap {
+    const diff = this.ensureWorkspaceDiff(this.diffByWorkspace, workspaceId);
+    return new Map(diff);
   }
 
-  public getLocalMeta(workspaceId: string, path: string): FileMeta | undefined {
-    const index = this.ensureWorkspaceMap(this.localIndexByWorkspace, workspaceId);
-    return index.get(path);
-  }
+  // ------------------------------------------------------------------------------------
+  // Batching
+  // ------------------------------------------------------------------------------------
 
-  public getRemoteMeta(workspaceId: string, path: string): FileMeta | undefined {
-    const index = this.ensureWorkspaceMap(this.remoteIndexByWorkspace, workspaceId);
-    return index.get(path);
-  }
-
-  // Return a shallow copy of the whole diff map (read-only for callers)
-  public getDiffEntries(workspaceId: string): Map<string, DiffEntry> {
-    const index = this.ensureWorkspaceMap(this.diffByWorkspace, workspaceId);
-    return new Map(index);
-  }
-
-  public runBatch(workspaceId: string, hintPath: string | undefined, fn: () => void): void {
+  /**
+   * Batch a sequence of mutations (local and/or remote). We suppress recomputes during the
+   * callback, then do a single recompute at the end with an optional hintPath for targeted refresh.
+   */
+  public runBatch(workspaceId: WorkspaceId, hintPath: RelPath | undefined, fn: () => void): void {
     this.batchingWorkspaces.add(workspaceId);
     try {
       fn();
@@ -194,53 +237,130 @@ export class SyncStateManager {
     }
   }
 
-  /** Returns true if local index has an exact file entry at relPath. */
-  public hasLocalEntry(workspaceId: string, relPath: string): boolean {
-    const idx = this.localIndexByWorkspace.get(workspaceId);
+  // ------------------------------------------------------------------------------------
+  // Convenience helpers for local snapshot management
+  // ------------------------------------------------------------------------------------
+
+  /** True if local index has an exact entry at relPath (file or folder). */
+  public hasLocalEntry(workspaceId: WorkspaceId, relPath: RelPath): boolean {
+    const idx = this.localByWorkspace.get(workspaceId);
     return !!idx && idx.has(relPath);
   }
 
-  /** Returns true if local index has any entries under relPath/<...>. */
-  public hasLocalChildren(workspaceId: string, relPath: string): boolean {
-    const idx = this.localIndexByWorkspace.get(workspaceId);
+  /** True if local index has any entries under relPath/… (files or folders). */
+  public hasLocalChildren(workspaceId: WorkspaceId, relPath: RelPath): boolean {
+    const idx = this.localByWorkspace.get(workspaceId);
     if (!idx) { return false; }
-    const prefix = relPath.endsWith('/') ? relPath : relPath + '/';
+    const prefix = ((relPath as string).endsWith('/') ? (relPath as string) : ((relPath as string) + '/'));
     for (const key of idx.keys()) {
-      if (key.startsWith(prefix)) { return true; }
+      if ((key as string).startsWith(prefix)) { return true; }
     }
     return false;
   }
 
-  /** Remove every local file entry at relPath and below. Batches notifications. */
-  public removeLocalSubtree(workspaceId: string, relPath: string): void {
-    const idx = this.localIndexByWorkspace.get(workspaceId);
+  /**
+   * Remove every local entry at relPath and below (file or folder subtree).
+   * Internally performs per-path deletes within a batch to emit a single targeted refresh.
+   */
+  public removeLocalSubtree(workspaceId: WorkspaceId, relPath: RelPath): void {
+    const idx = this.localByWorkspace.get(workspaceId);
     if (!idx) { return; }
 
-    const toDelete: string[] = [];
-    const prefix = relPath.endsWith('/') ? relPath : relPath + '/';
+    const toDelete: RelPath[] = [];
+    const rootStr = relPath as string;
+    const prefix = rootStr.endsWith('/') ? rootStr : (rootStr + '/');
 
-    // delete exact file if present
-    if (idx.has(relPath)) {
-      toDelete.push(relPath);
-    }
-    // delete all children
+    if (idx.has(relPath)) { toDelete.push(relPath); }
     for (const key of idx.keys()) {
-      if (key.startsWith(prefix)) {
-        toDelete.push(key);
-      }
+      const s = key as string;
+      if (s.startsWith(prefix)) { toDelete.push(key); }
     }
-
     if (toDelete.length === 0) { return; }
 
     this.runBatch(workspaceId, relPath, () => {
-      for (const path of toDelete) {
-        this.applyLocal({ workspaceId, type: 'delete', path });
+      for (const p of toDelete) {
+        this.applyLocal({ workspaceId, type: 'delete', path: p });
       }
     });
   }
 
-  public getLocalIndexSnapshot(workspaceId: string): Map<string, FileMeta> {
-    const index = this.localIndexByWorkspace.get(workspaceId);
-    return new Map(index ?? []);
+  // ------------------------------------------------------------------------------------
+  // Internals
+  // ------------------------------------------------------------------------------------
+
+  /** Recompute the diff for one workspace (skips if in a batch). */
+  private recompute(workspaceId: WorkspaceId, touchedPath?: RelPath): void {
+    if (this.batchingWorkspaces.has(workspaceId)) { return; }
+
+    const local  = this.ensureWorkspaceIndex(this.localByWorkspace, workspaceId);
+    const remote = this.ensureWorkspaceIndex(this.remoteByWorkspace, workspaceId);
+
+    const newDiff = this.diffEngine.compute(local, remote);
+    this.diffByWorkspace.set(workspaceId, newDiff);
+
+    const parentPath = touchedPath ? (dirnameRel(touchedPath) || undefined) : undefined;
+    this.emitDiffChange({ workspaceId, parentPath, changedPath: touchedPath });
+  }
+
+  /** Get-or-create a NodeIndex for a workspace. */
+  private ensureWorkspaceIndex(map: Map<WorkspaceId, NodeIndex>, workspaceId: WorkspaceId): NodeIndex {
+    let idx = map.get(workspaceId);
+    if (!idx) {
+      idx = new Map();
+      map.set(workspaceId, idx);
+    }
+    return idx;
+  }
+
+  /** Get-or-create a DiffMap for a workspace. */
+  private ensureWorkspaceDiff(map: Map<WorkspaceId, DiffMap>, workspaceId: WorkspaceId): DiffMap {
+    let diff = map.get(workspaceId);
+    if (!diff) {
+      diff = new Map();
+      map.set(workspaceId, diff);
+    }
+    return diff;
+  }
+
+  private emitDiffChange(event: DiffChangeEvent): void {
+    for (const listener of this.diffListeners) {
+      listener(event);
+    }
+  }
+
+  // ------------------------------------------------------------------------------------
+  // Folder-hash maintenance (now uses @infra/hash to ensure parity)
+  // ------------------------------------------------------------------------------------
+
+  /** Ensure all ancestor folders exist as folder nodes so their hashes can be computed. */
+  private ensureAncestorFolders(index: NodeIndex, path: RelPath): void {
+    for (const dir of parentsOf(path)) {
+      if (!index.has(dir)) {
+        index.set(dir, { type: 'folder', hash: '' });
+      }
+    }
+  }
+
+  /** Recompute folder hashes up the ancestor chain of `path` (plus root). */
+  private rehashAncestors(index: NodeIndex, path: RelPath): void {
+    // Recompute for each ancestor (closest first or last—order doesn’t matter here)
+    for (const dir of parentsOf(path)) {
+      const h = computeFolderHashFromNodeIndex(index, dir);
+      const existing = index.get(dir);
+      if (existing && existing.type === 'folder') {
+        existing.hash = h;
+      } else {
+        index.set(dir, { type: 'folder', hash: h });
+      }
+    }
+    // Also rehash the root '' (treat workspace root as a folder entry if you want top-level parity)
+    const rootDir = stringToRel('');
+    const rootHash = computeFolderHashFromNodeIndex(index, rootDir);
+    const rootExisting = index.get(rootDir);
+    if (rootExisting && rootExisting.type === 'folder') {
+      rootExisting.hash = rootHash;
+    } else {
+      index.set(rootDir, { type: 'folder', hash: rootHash });
+    }
   }
 }

@@ -2,7 +2,8 @@ import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { WorkspaceConfigData, EffectiveWorkspaceConfig } from './WorkspaceConfig';
-import { ActionPolicy, parseActionPolicy } from './ActionPolicy';
+import { ActionPolicy, WorkspaceId } from '../../domain/types';
+import { parseActionPolicy } from '../helpers/policy';
 
 export class WorkspaceConfigService {
   private readonly cache = new Map<string, EffectiveWorkspaceConfig>();
@@ -34,7 +35,7 @@ export class WorkspaceConfigService {
     return loaded;
   }
 
-  public async getById(workspaceId: string) {
+  public async getById(workspaceId: WorkspaceId) {
     const cached = this.cache.get(workspaceId);
     if (cached) { return cached; }
     const filePath = path.join(workspaceId, '.vscode', 'livesync.json');
@@ -112,7 +113,7 @@ export function actionsFromData(data: any): EffectiveActions {
 }
 
 // Optionally expose a convenience getter by folder id:
-export async function getActionsForId(this: WorkspaceConfigService, workspaceId: string): Promise<EffectiveActions> {
+export async function getActionsForId(this: WorkspaceConfigService, workspaceId: WorkspaceId): Promise<EffectiveActions> {
   const eff = await this.getById(workspaceId);
   return actionsFromData(eff.data);
 }

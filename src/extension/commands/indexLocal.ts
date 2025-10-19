@@ -2,36 +2,48 @@ import * as vscode from 'vscode';
 import { cmd } from '../cmd';
 import type { Services } from '../services';
 import { buildLocalIndex } from '../../infrastructure/persistence/LocalIndexBuilder';
+import type { NodeIndex } from '../../domain/types';
+import { resolveWorkspaceFolders } from '../../infrastructure/helpers/resolve';
+import { stringToWsId } from '../../infrastructure/helpers/path';
 
-export function registerIndexLocal(services: Services) {
+export function registerIndexLocal(services: Services): void {
   const { context, state, config } = services;
 
-  cmd(context, 'livesync.experimental.indexLocal', async () => {
-    const folders = vscode.workspace.workspaceFolders ?? [];
+  cmd(context, 'livesync.experimental.indexLocal', async (arg?: unknown) => {
+    const folders = resolveWorkspaceFolders(arg);
     if (!folders.length) {
-      vscode.window.showWarningMessage('No workspace folders open.');
+      void vscode.window.showWarningMessage('No workspace folders open.');
       return;
     }
 
     await vscode.window.withProgress(
-      { title: 'LiveSync: Building local index…', location: vscode.ProgressLocation.Notification, cancellable: true },
+      {
+        title: 'LiveSync: Building local index…',
+        location: vscode.ProgressLocation.Notification,
+        cancellable: true
+      },
       async (progress, token) => {
         const total = folders.length;
         let processed = 0;
 
         for (const folder of folders) {
-          if (token.isCancellationRequested) { break; }
+          if (token.isCancellationRequested) {
+            break;
+          }
           processed += 1;
 
           const prefix = `${folder.name} (${processed}/${total})`;
           let last = 0;
 
+          // Effective settings for this workspace
+          // (your service supports get(WorkspaceFolder); if you prefer, switch to getById(wsId))
           const eff = await config.get(folder);
           const settings = vscode.workspace.getConfiguration('livesync');
           const concurrency = settings.get<number>('index.concurrency') ?? 4;
           const excludes = eff.ignoreGlobs;
 
-          const localIndex = await buildLocalIndex(folder, {
+          // Build index for this folder
+          const localIndex = (await buildLocalIndex(folder, {
             excludeGlobs: excludes,
             concurrency,
             token,
@@ -41,13 +53,20 @@ export function registerIndexLocal(services: Services) {
                 progress.report({ message: `${prefix} — ${done}/${count}` });
               }
             }
-          });
+          })) as NodeIndex;
 
-          state.setLocalIndex(folder.uri.fsPath, localIndex);
+          // Commit under branded WorkspaceId
+          const wsId = stringToWsId(folder.uri.fsPath);
+          state.setLocalIndex(wsId, localIndex);
+          await services.localCache.save(wsId, localIndex);
+
         }
 
-        vscode.window.showInformationMessage(token.isCancellationRequested
-          ? 'LiveSync: Local index cancelled.' : 'LiveSync: Local index built.');
+        void vscode.window.showInformationMessage(
+          token.isCancellationRequested
+            ? 'LiveSync: Local index cancelled.'
+            : 'LiveSync: Local index built.'
+        );
       }
     );
   });

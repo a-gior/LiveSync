@@ -1,7 +1,4 @@
 import * as vscode from 'vscode';
-import { WorkspaceConfigManager } from './managers/WorkspaceConfigManager';
-import { logInfoMessage } from './managers/LogManager';
-import { FileStatusDecorationProvider } from './services/FileDecorationProvider';
 
 import { bootstrap } from './extension/bootstrap';
 import { registerViewCommands } from './extension/commands/view';
@@ -13,22 +10,22 @@ import { FileEventBridge } from './presentation/events/FileEventBridge';
 import { registerRemotePresence } from './extension/remotePresence';
 import { registerViewToolbar } from './extension/commands/viewToolbar';
 import { registerConflictResolver } from './extension/commands/conflictResolver';
-
-export let configManager: WorkspaceConfigManager | null = null;
+import { FileStatusDecorationProvider } from '@presentation/decoration/FileStatusDecorationProvider';
+import { logInfoMessage } from './infrastructure/helpers/logging';
 
 export async function activate(context: vscode.ExtensionContext) {
   logInfoMessage('LiveSync activating…');
 
-  // Decorations (unchanged)
-  const decorations = new FileStatusDecorationProvider();
-  context.subscriptions.push(vscode.window.registerFileDecorationProvider(decorations));
+  // Decorations
+  const deco = new FileStatusDecorationProvider();
+  context.subscriptions.push(vscode.window.registerFileDecorationProvider(deco));
 
   // Build core services
   const services = await bootstrap(context);
   registerRemotePresence(services);
 
   // File event auto-actions (save/create/delete/rename)
-  const bridge = new FileEventBridge(services.state, services.config, services.remote);
+  const bridge = new FileEventBridge(services.state, services.config, services.remote, services.remoteCache);
   bridge.register(context.subscriptions);
 
   // Commands

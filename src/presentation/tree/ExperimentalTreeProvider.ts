@@ -3,101 +3,118 @@ import { SyncStateManager } from '@app/SyncStateManager';
 import { FolderStateStore } from '@presentation/tree/FolderStateStore';
 import { computeRefreshTarget } from './refresh/RefreshPlanner';
 
-// Node identities
-type WorkspaceNode = { kind: 'workspace'; workspaceId: string; label: string };
-type EntryNode = { kind: 'entry'; workspaceId: string; path: string };
+import type { WorkspaceId, RelPath, DiffStatus } from '@domain/types';
+import { stringToRel } from '@helpers/path';
+
+// -------------------------------------------------------------------------------------
+// Public node identities emitted by this provider (used by commands/context menus)
+// -------------------------------------------------------------------------------------
+
+type WorkspaceNode = { kind: 'workspace'; workspaceId: WorkspaceId; label: string };
+type EntryNode     = { kind: 'entry';     workspaceId: WorkspaceId; path: RelPath };
 export type ExperimentalNode = WorkspaceNode | EntryNode;
 
-const StatusLabel: Record<string, string> = {
+// Human-readable labels for statuses
+const StatusLabel: Record<DiffStatus, string> = {
   added: 'added',
   removed: 'removed',
   modified: 'modified',
   unchanged: 'unchanged',
-  conflict: 'conflict'
+  conflict: 'conflict',
 };
 
 export class ExperimentalTreeProvider implements vscode.TreeDataProvider<ExperimentalNode> {
   private readonly changeEmitter = new vscode.EventEmitter<ExperimentalNode | undefined>();
   public readonly onDidChangeTreeData = this.changeEmitter.event;
 
-  // stable identities
-  private readonly workspaceNodeById = new Map<string, WorkspaceNode>();
-  private readonly entryNodeByWs = new Map<string, Map<string, EntryNode>>();
-  private readonly realizedEntriesByWs = new Map<string, Set<string>>();
+  // Stable identities to avoid object churn
+  private readonly workspaceNodeById = new Map<WorkspaceId, WorkspaceNode>();
+  private readonly entryNodeByWs     = new Map<WorkspaceId, Map<RelPath, EntryNode>>();
+  private readonly realizedByWs      = new Map<WorkspaceId, Set<RelPath>>();
 
   // UI options
-  private showAsTree = true;        // replicate _showAsTree
-  private collapseAll = false;      // replicate _collapseAll
-  private expandEpoch = 0;          // replicate _expandEpoch (affects IDs)
+  private showAsTree: boolean = true;
+  private collapseAll: boolean = false;
+  private expandEpoch: number = 0;     // affects IDs → forces tree refresh
 
   // Visibility config
   private showUnchanged: boolean = false;
   private retentionMs: number = 800;
 
   // Recently-resolved tracker: wsId -> (path -> timeout)
-  private readonly recentlyResolvedByWs = new Map<string, Map<string, NodeJS.Timeout>>();
+  private readonly recentlyResolvedByWs = new Map<WorkspaceId, Map<RelPath, NodeJS.Timeout>>();
 
   constructor(
     private readonly state: SyncStateManager,
-    private readonly workspaceIds: string[],
+    private readonly workspaceIds: WorkspaceId[],
     public readonly folderStateStore: FolderStateStore
   ) {
-    for (const workspaceId of this.workspaceIds) {
-      this.getOrCreateWorkspaceNode(workspaceId);
+    // Prepare top-level nodes
+    for (const wsId of this.workspaceIds) {
+      this.getOrCreateWorkspaceNode(wsId);
     }
 
+    // Load config-driven view options immediately
     this.updateViewConfig();
 
+    // Subscribe to targeted diff changes; refresh minimally using the RefreshPlanner
     this.state.subscribeToDiffChanges(({ workspaceId, changedPath, parentPath }) => {
       const realizedPaths = this.getRealizedPathsSet(workspaceId);
-      const entryStillExists = !!(changedPath && this.state.getDiffEntry(workspaceId, changedPath));
+      const entryStillExists = Boolean(changedPath && this.state.getDiffEntry(workspaceId, stringToRel(changedPath)));
 
       const decision = computeRefreshTarget({
-        changedPath,
-        parentPath,
+        changedPath: changedPath as string | undefined,
+        parentPath : parentPath  as string | undefined,
         entryStillExists,
-        realizedPaths
+        realizedPaths: new Set<string>([...realizedPaths].map(p => p as unknown as string)),
       });
 
       if (decision.kind === 'file') {
-        this.changeEmitter.fire(this.getOrCreateEntryNode(workspaceId, decision.path));
+        this.changeEmitter.fire(this.getOrCreateEntryNode(workspaceId, stringToRel(decision.path)));
       } else if (decision.kind === 'parent') {
-        this.changeEmitter.fire(this.getOrCreateEntryNode(workspaceId, decision.path!));
+        this.changeEmitter.fire(this.getOrCreateEntryNode(workspaceId, stringToRel(decision.path ?? '')));
       } else {
         this.changeEmitter.fire(this.getOrCreateWorkspaceNode(workspaceId));
       }
     });
   }
 
-  // NEW: called from activate() when settings change
+  // =====================================================================================
+  // View configuration (called from activate() when settings change)
+  // =====================================================================================
+
   public updateViewConfig(): void {
     const config = vscode.workspace.getConfiguration('livesync');
-    this.showUnchanged = config.get<boolean>('view.showUnchanged') ?? false;
-    this.retentionMs = config.get<number>('view.recentlyResolvedRetentionMs') ?? 800;
+    this.showUnchanged = (config.get<boolean>('view.showUnchanged') ?? false);
+    this.retentionMs   = (config.get<number>('view.recentlyResolvedRetentionMs') ?? 800);
     this.changeEmitter.fire(undefined); // refresh with new filter behavior
   }
 
-  // NEW: mark a batch of paths (and all ancestors) as recently resolved
-  public markRecentlyResolvedBatch(workspaceId: string, paths: string[]): void {
+  // =====================================================================================
+  // Recently-resolved overlay (purely visual; does not change logical diff)
+  // =====================================================================================
+
+  /** Mark a batch of paths (and all their ancestors) as "recently resolved" for fade-out behavior. */
+  public markRecentlyResolvedBatch(workspaceId: WorkspaceId, paths: RelPath[]): void {
     if (this.retentionMs <= 0) {
       return;
     }
-    const allPaths = new Set<string>();
-    for (const path of paths) {
-      allPaths.add(path);
-      for (const ancestor of this.ancestorPaths(path)) {
-        allPaths.add(ancestor);
+    const all = new Set<RelPath>();
+    for (const p of paths) {
+      all.add(p);
+      for (const a of this.ancestorPaths(p)) {
+        all.add(a);
       }
     }
-    for (const path of allPaths) {
-      this.markRecentlyResolved(workspaceId, path);
+    for (const p of all) {
+      this.markRecentlyResolved(workspaceId, p);
     }
   }
 
-  private markRecentlyResolved(workspaceId: string, path: string): void {
+  private markRecentlyResolved(workspaceId: WorkspaceId, path: RelPath): void {
     let mapForWs = this.recentlyResolvedByWs.get(workspaceId);
     if (!mapForWs) {
-      mapForWs = new Map<string, NodeJS.Timeout>();
+      mapForWs = new Map<RelPath, NodeJS.Timeout>();
       this.recentlyResolvedByWs.set(workspaceId, mapForWs);
     }
 
@@ -107,41 +124,42 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
       clearTimeout(existing);
     }
 
-    // Start retention timer
+    // Start retention timer and refresh parent on expiry so the item can vanish
     const timeout = setTimeout(() => {
-      // Remove from set and refresh parent so it can vanish
       const store = this.recentlyResolvedByWs.get(workspaceId);
       if (store) {
         store.delete(path);
       }
+
       const parentPath = this.parentPath(path);
       const nodeToRefresh = parentPath
         ? this.getOrCreateEntryNode(workspaceId, parentPath)
         : this.getOrCreateWorkspaceNode(workspaceId);
+
       this.changeEmitter.fire(nodeToRefresh);
     }, this.retentionMs);
 
     mapForWs.set(path, timeout);
   }
 
-  private isRecentlyResolved(workspaceId: string, path: string): boolean {
+  private isRecentlyResolved(workspaceId: WorkspaceId, path: RelPath): boolean {
     const set = this.recentlyResolvedByWs.get(workspaceId);
     return Boolean(set?.has(path));
   }
 
-  // getTreeItem(...) stays as we last wrote it (no iconPath, uses resourceUri)
+  // =====================================================================================
+  // vscode.TreeDataProvider<T>
+  // =====================================================================================
 
   async getChildren(element?: ExperimentalNode): Promise<ExperimentalNode[]> {
     if (!element) {
-      return this.workspaceIds.map((workspaceId) => {
-        return this.getOrCreateWorkspaceNode(workspaceId);
-      });
+      return this.workspaceIds.map((wsId) => this.getOrCreateWorkspaceNode(wsId));
     }
 
     if (element.kind === 'workspace') {
-      const childPathsRaw = this.state.getChildren(element.workspaceId, undefined);
-      const childPaths = this.filterByVisibility(element.workspaceId, childPathsRaw);
-      const nodes = childPaths.map((path) => this.getOrCreateEntryNode(element.workspaceId, path));
+      const raw = this.state.getChildren(element.workspaceId, undefined);
+      const filtered = this.filterByVisibility(element.workspaceId, raw);
+      const nodes = filtered.map((p) => this.getOrCreateEntryNode(element.workspaceId, p));
       this.markRealized(element.workspaceId, nodes.map((n) => n.path));
       return nodes;
     }
@@ -149,21 +167,11 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     // element.kind === 'entry'
     this.markRealized(element.workspaceId, [element.path]);
 
-    const childPathsRaw = this.state.getChildren(element.workspaceId, element.path);
-    const childPaths = this.filterByVisibility(element.workspaceId, childPathsRaw);
-    const nodes = childPaths.map((path) => this.getOrCreateEntryNode(element.workspaceId, path));
+    const raw = this.state.getChildren(element.workspaceId, element.path);
+    const filtered = this.filterByVisibility(element.workspaceId, raw);
+    const nodes = filtered.map((p) => this.getOrCreateEntryNode(element.workspaceId, p));
     this.markRealized(element.workspaceId, nodes.map((n) => n.path));
     return nodes;
-  }
-
-  // Public toggles if you wire them to settings/commands later
-  setShowAsTree(value: boolean): void {
-    this.showAsTree = value;
-    this.bumpExpandEpochAndRefreshAll();
-  }
-  setCollapseAll(value: boolean): void {
-    this.collapseAll = value;
-    this.bumpExpandEpochAndRefreshAll();
   }
 
   getTreeItem(element: ExperimentalNode): vscode.TreeItem {
@@ -175,51 +183,69 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
       return item;
     }
 
+    // Entry node
     const diffEntry = this.state.getDiffEntry(element.workspaceId, element.path);
-    const hasChildren = this.state.getChildren(element.workspaceId, element.path).length > 0;
+    const children = this.state.getChildren(element.workspaceId, element.path);
+    const hasChildren = children.length > 0;
     const isFolder = (diffEntry?.type === 'folder') || (!diffEntry && hasChildren);
 
-    // Label logic: show only the basename when showAsTree=true; otherwise the relative path
-    const label = this.showAsTree ? this.basename(element.path) : element.path;
+    // Label: basename when showAsTree=true; full relPath otherwise
+    const label = this.showAsTree ? this.basename(element.path) : (element.path as string);
 
-    // Collapsible logic: replicate your "shouldBeOpen = !collapseAll && isMarkedOpen"
+    // Collapsible: follow FolderStateStore open/closed + collapseAll override
     let collapsibleState = vscode.TreeItemCollapsibleState.None;
     if (isFolder) {
-      const isMarkedOpen = this.folderStateStore.isOpen(element.workspaceId, element.path);
-      const shouldBeOpen = !this.collapseAll && isMarkedOpen;
-      collapsibleState = shouldBeOpen
-        ? vscode.TreeItemCollapsibleState.Expanded
-        : vscode.TreeItemCollapsibleState.Collapsed;
+      const isOpen = this.folderStateStore.isOpen(element.workspaceId as unknown as string, element.path as unknown as string);
+      const shouldOpen = (!this.collapseAll) && isOpen;
+      collapsibleState = shouldOpen ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed;
     }
 
     const item = new vscode.TreeItem(label, collapsibleState);
 
-    // Stable-ish ID; include epoch so switching showAsTree/collapseAll forces refresh
+    // Stable-ish ID includes an epoch so toggling layout forces refresh
     item.id = `ws:${element.workspaceId}::${element.path || '.'}::${this.expandEpoch}`;
 
-    // Icons + context + description (status-based)
-    const status = diffEntry?.status ?? 'unchanged';
+    // Status → description + context + decoration
+    const status: DiffStatus = diffEntry?.status ?? 'unchanged';
     item.description = StatusLabel[status];
     item.contextValue = `fileEntry-${isFolder ? 'directory' : 'file'}-${status}`;
-
-    // Resource URI with query for FileDecorationProvider (status-aware)
     item.resourceUri = this.buildResourceUri(element.workspaceId, element.path, status);
 
-    // Open-file command only for files not removed
+    // Open-file command only for non-removed files
     if (!isFolder && status !== 'removed') {
       item.command = {
         command: 'livesync.openFile',
         title: 'Open File',
-        arguments: [this.absoluteFsPath(element.workspaceId, element.path)]
+        arguments: [this.absoluteFsPath(element.workspaceId, element.path)],
       };
     }
 
     return item;
   }
 
-  // ---------- helpers
+  // =====================================================================================
+  // Public toggles (wire them to commands/settings as needed)
+  // =====================================================================================
 
-  private getOrCreateWorkspaceNode(workspaceId: string): WorkspaceNode {
+  setShowAsTree(value: boolean): void {
+    this.showAsTree = value;
+    this.bumpExpandEpochAndRefreshAll();
+  }
+
+  setCollapseAll(value: boolean): void {
+    this.collapseAll = value;
+    this.bumpExpandEpochAndRefreshAll();
+  }
+
+  public getWorkspaceNode(workspaceId: WorkspaceId): WorkspaceNode {
+    return this.getOrCreateWorkspaceNode(workspaceId);
+  }
+
+  // =====================================================================================
+  // Internals
+  // =====================================================================================
+
+  private getOrCreateWorkspaceNode(workspaceId: WorkspaceId): WorkspaceNode {
     let node = this.workspaceNodeById.get(workspaceId);
     if (!node) {
       node = { kind: 'workspace', workspaceId, label: this.labelOf(workspaceId) };
@@ -228,63 +254,80 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     return node;
   }
 
-  private getOrCreateEntryNode(workspaceId: string, path: string): EntryNode {
-    let mapForWs = this.entryNodeByWs.get(workspaceId);
-    if (!mapForWs) {
-      mapForWs = new Map<string, EntryNode>();
-      this.entryNodeByWs.set(workspaceId, mapForWs);
+  private getOrCreateEntryNode(workspaceId: WorkspaceId, path: RelPath): EntryNode {
+    let forWs = this.entryNodeByWs.get(workspaceId);
+    if (!forWs) {
+      forWs = new Map<RelPath, EntryNode>();
+      this.entryNodeByWs.set(workspaceId, forWs);
     }
-    let node = mapForWs.get(path);
+    let node = forWs.get(path);
     if (!node) {
       node = { kind: 'entry', workspaceId, path };
-      mapForWs.set(path, node);
+      forWs.set(path, node);
     }
     return node;
   }
 
-  private getRealizedPathsSet(workspaceId: string): Set<string> {
-    let set = this.realizedEntriesByWs.get(workspaceId);
+  private getRealizedPathsSet(workspaceId: WorkspaceId): Set<RelPath> {
+    let set = this.realizedByWs.get(workspaceId);
     if (!set) {
-      set = new Set<string>();
-      this.realizedEntriesByWs.set(workspaceId, set);
+      set = new Set<RelPath>();
+      this.realizedByWs.set(workspaceId, set);
     }
     return set;
   }
 
-  private markRealized(workspaceId: string, paths: string[]): void {
+  private markRealized(workspaceId: WorkspaceId, paths: RelPath[]): void {
     const set = this.getRealizedPathsSet(workspaceId);
-    for (const path of paths) {
-      set.add(path);
+    for (const p of paths) {
+      set.add(p);
     }
   }
 
-  private buildResourceUri(workspaceId: string, relativePath: string, status: string): vscode.Uri {
+  private filterByVisibility(workspaceId: WorkspaceId, paths: RelPath[]): RelPath[] {
+    if (this.showUnchanged) {
+      return paths;
+    }
+    const filtered: RelPath[] = [];
+    for (const p of paths) {
+      const entry = this.state.getDiffEntry(workspaceId, p);
+      const isChanged = Boolean(entry && entry.status !== 'unchanged');
+      const keep = isChanged || this.isRecentlyResolved(workspaceId, p);
+      if (keep) {
+        filtered.push(p);
+      }
+    }
+    return filtered;
+  }
+
+  private buildResourceUri(workspaceId: WorkspaceId, relativePath: RelPath, status: DiffStatus): vscode.Uri {
     const fsPath = this.absoluteFsPath(workspaceId, relativePath);
-    return vscode.Uri.file(fsPath).with({ query: `?status=${StatusLabel[status] ?? status}` });
+    // Intentionally keep "?status=" in the query to preserve your existing decoration parser
+    return vscode.Uri.file(fsPath).with({ query: `?status=${StatusLabel[status]}` });
   }
 
-  private absoluteFsPath(workspaceId: string, relativePath: string): string {
-    // workspaceId is folder.uri.fsPath
-    const normalizedRoot = workspaceId.replace(/\\/g, '/').replace(/\/+$/, '');
-    const normalizedRel = relativePath.replace(/\\/g, '/').replace(/^\/+/, '');
-    return `${normalizedRoot}/${normalizedRel}`;
+  private absoluteFsPath(workspaceId: WorkspaceId, relativePath: RelPath): string {
+    const root = (workspaceId as string).replace(/\\/g, '/').replace(/\/+$/, '');
+    const rel  = (relativePath as string).replace(/\\/g, '/').replace(/^\/+/, '');
+    return `${root}/${rel}`;
   }
 
-  private basename(pathString: string): string {
-    const lastSlashIndex = pathString.lastIndexOf('/');
-    if (lastSlashIndex < 0) {
-      return pathString;
+  private basename(relPath: RelPath): string {
+    const s = relPath as string;
+    const i = s.lastIndexOf('/');
+    if (i < 0) {
+      return s;
     }
-    return pathString.slice(lastSlashIndex + 1);
+    return s.slice(i + 1);
   }
 
-  private labelOf(workspaceId: string): string {
-    const normalized = workspaceId.replace(/\\/g, '/');
-    const lastSlashIndex = normalized.lastIndexOf('/');
-    if (lastSlashIndex < 0) {
-      return normalized;
+  private labelOf(workspaceId: WorkspaceId): string {
+    const norm = (workspaceId as string).replace(/\\/g, '/');
+    const i = norm.lastIndexOf('/');
+    if (i < 0) {
+      return norm;
     }
-    return normalized.slice(lastSlashIndex + 1);
+    return norm.slice(i + 1);
   }
 
   private bumpExpandEpochAndRefreshAll(): void {
@@ -292,37 +335,17 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     this.changeEmitter.fire(undefined);
   }
 
-  public getWorkspaceNode(workspaceId: string) {
-    return this['getOrCreateWorkspaceNode'](workspaceId); // uses the existing method
-  }
-
-  // Apply showUnchanged + recentlyResolved logic
-  private filterByVisibility(workspaceId: string, paths: string[]): string[] {
-    if (this.showUnchanged) {
-      return paths;
-    }
-    const filtered: string[] = [];
-    for (const path of paths) {
-      const entry = this.state.getDiffEntry(workspaceId, path);
-      const isChanged = entry ? entry.status !== 'unchanged' : false;
-      const keep = isChanged || this.isRecentlyResolved(workspaceId, path);
-      if (keep) {
-        filtered.push(path);
-      }
-    }
-    return filtered;
-  }
-
-  private parentPath(pathString: string): string | undefined {
-    const lastSlashIndex = pathString.lastIndexOf('/');
-    if (lastSlashIndex < 0) {
+  private parentPath(pathString: RelPath): RelPath | undefined {
+    const s = pathString as string;
+    const i = s.lastIndexOf('/');
+    if (i < 0) {
       return undefined;
     }
-    return pathString.slice(0, lastSlashIndex);
+    return stringToRel(s.slice(0, i));
   }
 
-  private ancestorPaths(pathString: string): string[] {
-    const ancestors: string[] = [];
+  private ancestorPaths(pathString: RelPath): RelPath[] {
+    const ancestors: RelPath[] = [];
     let current = this.parentPath(pathString);
     while (current && current.length > 0) {
       ancestors.push(current);
@@ -330,5 +353,4 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     }
     return ancestors;
   }
-
 }
