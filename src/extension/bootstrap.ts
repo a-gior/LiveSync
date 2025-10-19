@@ -57,8 +57,14 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   );
 
   const progress = new ProgressService();
-  context.subscriptions.push({ dispose: () => progress.dispose() });
+  context.subscriptions.push(
+    { dispose: () => progress.dispose() },
+    { dispose: () => provider.dispose() },
+    treeView
+  );
   context.subscriptions.push(treeView);
+
+
 
   return { context, diffEngine, state, config, remote, provider, treeView, progress, localCache, remoteCache, suppressor };
 }

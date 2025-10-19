@@ -27,6 +27,11 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
   private readonly changeEmitter = new vscode.EventEmitter<ExperimentalNode | undefined>();
   public readonly onDidChangeTreeData = this.changeEmitter.event;
 
+  // Track all active timers for cleanup
+  private readonly activeTimers = new Set<NodeJS.Timeout>();
+  private isDisposed = false;
+  private readonly disposeCallbacks: Array<() => void> = [];
+
   // Stable identities to avoid object churn
   private readonly workspaceNodeById = new Map<WorkspaceId, WorkspaceNode>();
   private readonly entryNodeByWs     = new Map<WorkspaceId, Map<RelPath, EntryNode>>();
@@ -77,6 +82,65 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
         this.changeEmitter.fire(this.getOrCreateWorkspaceNode(workspaceId));
       }
     });
+
+    // Subscribe to diff changes with cleanup tracking
+    const unsubscribe = this.state.subscribeToDiffChanges(({ workspaceId, changedPath, parentPath }) => {
+      if (this.isDisposed) {return;} // Guard against post-disposal events
+
+      const realizedPaths = this.getRealizedPathsSet(workspaceId);
+      const entryStillExists = Boolean(changedPath && this.state.getDiffEntry(workspaceId, stringToRel(changedPath)));
+
+      const decision = computeRefreshTarget({
+        changedPath: changedPath as string | undefined,
+        parentPath : parentPath  as string | undefined,
+        entryStillExists,
+        realizedPaths: new Set<string>([...realizedPaths].map(p => p as unknown as string)),
+      });
+
+      if (decision.kind === 'file') {
+        this.changeEmitter.fire(this.getOrCreateEntryNode(workspaceId, stringToRel(decision.path)));
+      } else if (decision.kind === 'parent') {
+        this.changeEmitter.fire(this.getOrCreateEntryNode(workspaceId, stringToRel(decision.path ?? '')));
+      } else {
+        this.changeEmitter.fire(this.getOrCreateWorkspaceNode(workspaceId));
+      }
+    });
+
+    // Store unsubscribe function for disposal
+    this.disposeCallbacks.push(unsubscribe);
+  }
+
+  public dispose(): void {
+    if (this.isDisposed) {return;}
+    this.isDisposed = true;
+
+    // Clear all active timers
+    for (const timer of this.activeTimers) {
+      clearTimeout(timer);
+    }
+    this.activeTimers.clear();
+
+    // Clear all recently-resolved timers
+    for (const [, mapForWs] of this.recentlyResolvedByWs) {
+      for (const timer of mapForWs.values()) {
+        clearTimeout(timer);
+      }
+      mapForWs.clear();
+    }
+    this.recentlyResolvedByWs.clear();
+
+    // Clean up event emitter
+    this.changeEmitter.dispose();
+
+    // Call all registered disposal callbacks
+    for (const dispose of this.disposeCallbacks) {
+      try {
+        dispose();
+      } catch (err) {
+        console.error('[ExperimentalTreeProvider] Error during disposal:', err);
+      }
+    }
+    this.disposeCallbacks.length = 0;
   }
 
   // =====================================================================================
@@ -112,6 +176,8 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
   }
 
   private markRecentlyResolved(workspaceId: WorkspaceId, path: RelPath): void {
+    if (this.isDisposed) return;
+    
     let mapForWs = this.recentlyResolvedByWs.get(workspaceId);
     if (!mapForWs) {
       mapForWs = new Map<RelPath, NodeJS.Timeout>();
@@ -122,10 +188,13 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     const existing = mapForWs.get(path);
     if (existing) {
       clearTimeout(existing);
+      this.activeTimers.delete(existing);
     }
 
     // Start retention timer and refresh parent on expiry so the item can vanish
     const timeout = setTimeout(() => {
+      if (this.isDisposed) return;
+
       const store = this.recentlyResolvedByWs.get(workspaceId);
       if (store) {
         store.delete(path);
@@ -140,6 +209,7 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     }, this.retentionMs);
 
     mapForWs.set(path, timeout);
+    this.activeTimers.add(timeout);
   }
 
   private isRecentlyResolved(workspaceId: WorkspaceId, path: RelPath): boolean {
