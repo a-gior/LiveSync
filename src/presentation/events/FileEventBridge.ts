@@ -18,6 +18,7 @@ import { compile, ignored } from '@infra/helpers/ignore/Ignore';
 import { stringToRel, stringToWsId } from '@infra/helpers/path';
 import { isDownloadable, isUploadable } from '@infra/helpers/diff';
 import { parseActionPolicy } from '@infra/helpers/policy';
+import { logExpectedError } from '../../infrastructure/helpers/logging';
 
 export class FileEventBridge {
   constructor(
@@ -70,8 +71,9 @@ export class FileEventBridge {
         path: relPath,
         meta: { type: 'file', hash },
       });
-    } catch {
+    } catch(err) {
       // ignore hashing errors (file may be transiently locked)
+      logExpectedError(`FileEventBridge:hashFile:${doc.uri.fsPath}`, err);
     }
 
     // 2) Apply policy for save (e.g., "check&save" → prompt + upload)
@@ -260,7 +262,9 @@ export class FileEventBridge {
           if (decision !== 'proceed') {continue;}
         }
 
-        await this.remote.deletePath(workspaceId, oldRel).catch(() => undefined);
+        await this.remote.deletePath(workspaceId, oldRel).catch((err) => {
+          logExpectedError(`FileEventBridge:deleteOldPath:${oldRel}`, err);
+        });
 
         if (!newIsDir) {
           const absLocal = absFs(workspaceId, newRel);

@@ -9,6 +9,7 @@ import { absFs, relToString, stringToRel, stringToWsId } from '@helpers/path';
 import { partitionChangesUnder, topMost } from '@helpers/diff';
 import { withProgress, reportCounter } from '@helpers/async';
 import { refreshRemoteSnapshot } from '@helpers/remote';
+import { logExpectedError } from '../../infrastructure/helpers/logging';
 
 export function registerApplyToRemote(services: Services): void {
   const { context, state, remote, provider } = services;
@@ -144,8 +145,9 @@ export function registerApplyToRemote(services: Services): void {
       // 3) Refresh remote once → diff recompute → UI refresh
       try {
         await refreshRemoteSnapshot(services, workspaceId);
-      } catch {
+      } catch(err) {
         // ignore; operations already attempted
+        logExpectedError('applyToRemote:refreshSnapshot', err);
       }
 
       // 4) Recently-resolved fade

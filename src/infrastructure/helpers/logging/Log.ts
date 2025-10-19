@@ -165,6 +165,29 @@ export function logWarnMessage(
   }
 }
 
+/**
+ * Log an error that's expected/handled but should still be recorded.
+ * Use this for non-fatal errors that won't show a popup but need tracking.
+ */
+export function logExpectedError(
+  context: string,
+  error: unknown,
+  flags: LogFlags = LOG_FLAGS.CONSOLE_AND_LOG_MANAGER
+): void {
+  const message = error instanceof Error ? error.message : String(error);
+  const line = fmt('WARN', `[${context}] ${message}`, error);
+
+  if (flags.console) {
+    console.warn(`[LiveSync] ${line}`);
+  }
+  if (flags.logManager) {
+    LogManager.log(line);
+  }
+  if (flags.vscode) {
+    void vscode.window.showWarningMessage(`LiveSync: ${message}`);
+  }
+}
+
 // --------------------------------------------------------------------------------------
 // LogManager (OutputChannel holder) – minimal, stable surface
 // --------------------------------------------------------------------------------------

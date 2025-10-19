@@ -9,7 +9,7 @@ import type { WorkspaceId, RelPath, NodeIndex, NodeMeta } from '@domain/types';
 import { WorkspaceConfigService } from '../config/WorkspaceConfigService';
 import { sha1FromSftpGetResult } from './SftpHashCore';
 import { asRel } from '@helpers/path/RelPath';
-import { logInfoMessage } from '@helpers/logging';
+import { logExpectedError, logInfoMessage } from '@helpers/logging';
 
 const p = path.posix;
 
@@ -65,7 +65,9 @@ export class SftpRemotePort implements RemotePort {
 
       return out;
     } finally {
-      await client.end().catch(() => {});
+      await client.end().catch((err) => {
+        logExpectedError('SftpRemotePort:disconnect', err);
+      });
     }
   }
 

@@ -13,6 +13,7 @@ import { withProgress, reportCounter } from '@infra/helpers/async';
 import { refreshRemoteSnapshot } from '@infra/helpers/remote';
 import { sha1OfFile } from '@infra/helpers/hash/FileHash';
 import { isResolvable } from '../../infrastructure/helpers/diff';
+import { logExpectedError } from '../../infrastructure/helpers/logging';
 
 export function registerConflictResolver(services: Services): void {
   const { context, state, remote, provider } = services;
@@ -121,8 +122,9 @@ export function registerConflictResolver(services: Services): void {
       // Single remote refresh → diff recompute
       try {
         await refreshRemoteSnapshot(services, workspaceId);
-      } catch {
+      } catch(err) {
         // ignore; uploads already attempted
+        logExpectedError('conflictResolver:refreshSnapshot', err);
       }
 
       provider.markRecentlyResolvedBatch(stringToWsId(workspaceId), targets);
