@@ -10,8 +10,7 @@ import type { WorkspaceId, RelPath, NodeIndex, FolderMeta, FileMeta } from '@dom
 import { WorkspaceConfigService } from '../config/WorkspaceConfigService';
 import { asRel, relFromAbs } from '@helpers/path/RelPath';
 import { logExpectedError, logInfoMessage } from '@helpers/logging';
-import { computeFolderHashFromNodeIndex } from '../helpers/hash';
-import { stringToRel } from '../helpers/path';
+import { computeAllFolderHashes } from '../helpers/hash';
 
 const p = path.posix;
 
@@ -107,38 +106,13 @@ export class SftpRemotePort implements RemotePort {
       await Promise.all(workers);
 
       // 4) Compute folder hashes bottom-up
-      await this.computeAllFolderHashes(out);
+      await computeAllFolderHashes(out);
 
       return out;
 
     } finally {
       sshClient.end();
     }
-  }
-
-  private async computeAllFolderHashes(index: NodeIndex): Promise<void> {
-    // Get all folder paths sorted by depth (deepest first)
-    const folders = Array.from(index.entries())
-      .filter(([, meta]) => meta.type === 'folder')
-      .map(([rel]) => rel)
-      .sort((a, b) => {
-        const depthA = (a as string).split('/').filter(Boolean).length;
-        const depthB = (b as string).split('/').filter(Boolean).length;
-        return depthB - depthA; // Deepest first
-      });
-
-    // Compute hash for each folder
-    for (const folderRel of folders) {
-      const hash = computeFolderHashFromNodeIndex(index, folderRel);
-      const folderMeta = index.get(folderRel);
-      if (folderMeta && folderMeta.type === 'folder') {
-        folderMeta.hash = hash;
-      }
-    }
-
-    // Compute root folder hash
-    const rootHash = computeFolderHashFromNodeIndex(index, stringToRel(''));
-    index.set(stringToRel(''), { type: 'folder', hash: rootHash } as FolderMeta);
   }
 
   private execSSH(client: SSHClient, cmd: string): Promise<string> {

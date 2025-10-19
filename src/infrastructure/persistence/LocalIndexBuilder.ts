@@ -1,99 +1,113 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import fg, { Entry } from 'fast-glob';
 import { sha256OfFile } from '@helpers/hash/FileHash';
-import { FileMeta, FolderMeta, NodeMeta } from '@domain/types';
+import { computeAllFolderHashes } from '@helpers/hash/FolderHash';
+import { FileMeta, FolderMeta, NodeMeta, RelPath } from '@domain/types';
+import { stringToRel, relFromAbs } from '@helpers/path';
+import { compile, ignored } from '@helpers/ignore';
 
 export type BuildIndexOptions = {
-  excludeGlobs?: string[];          // extra excludes from settings
-  concurrency?: number;             // default 4
+  excludeGlobs?: string[];
+  concurrency?: number;
   progress?: (done: number, total: number) => void;
-  token?: vscode.CancellationToken; // allow cancellation
+  token?: vscode.CancellationToken;
 };
 
 /**
- * Build a complete local index for a workspace folder.
- * - Files => { type:'file', hash }
- * - Folders => { type:'folder', hash:'' } (including empty folders)
+ * Build a complete local index for a workspace folder using fast-glob.
+ * - Files => { type:'file', hash: sha256 }
+ * - Folders => { type:'folder', hash: computed from children }
+ * - Includes empty folders
  */
 export async function buildLocalIndex(
   workspace: vscode.WorkspaceFolder,
   options: BuildIndexOptions = {}
-): Promise<Map<string, NodeMeta>> {
-  const index = new Map<string, NodeMeta>();
+): Promise<Map<RelPath, NodeMeta>> {
+  const index = new Map<RelPath, NodeMeta>();
   const concurrency = Math.max(1, options.concurrency ?? 4);
+  const rootPath = workspace.uri.fsPath;
 
-  const excludeGlobs = mergeExcludeGlobs(options.excludeGlobs ?? []);
+  // Compile ignore rules from excludeGlobs
+  const ignoreRules = compile(options.excludeGlobs ?? []);
 
-  // List all items (files + directories)
-  const includeGlob = new vscode.RelativePattern(workspace, '**/*');
-  const allUris = await vscode.workspace.findFiles(includeGlob, excludeGlobs);
+  // Convert VSCode exclude globs to fast-glob ignore patterns
+  const ignorePatterns = options.excludeGlobs?.map(g => {
+    return g.replace(/^\*\*\//, '').replace(/\/\*\*$/, '');
+  }) ?? [];
 
-  // Separate files and folders
-  const filePaths: string[] = [];
-  const folderPaths = new Set<string>(); // Use Set to deduplicate
+  // Step 1: Use fast-glob to list ALL entries (files + directories) at once
+  const entries: Entry[] = await fg('**/*', {
+    cwd: rootPath,
+    dot: true,
+    stats: true,
+    onlyFiles: false,
+    ignore: ignorePatterns,
+    suppressErrors: true,
+  });
 
-  for (const uri of allUris) {
+  // Step 2: Process entries into files and folders
+  const filesToHash: Array<{ relPath: RelPath; absPath: string }> = [];
+  const allFolders = new Set<RelPath>();
+
+  for (const entry of entries) {
     if (options.token?.isCancellationRequested) {
       return index;
     }
-    
-    try {
-      const stat = await vscode.workspace.fs.stat(uri);
-      const relPath = toRelativeFsPath(workspace, uri.fsPath);
 
-      if ((stat.type & vscode.FileType.Directory) !== 0) {
-        // It's a directory
-        folderPaths.add(relPath);
-        
-        // Also add all parent directories
-        const parts = relPath.split('/').filter(Boolean);
-        for (let i = 1; i < parts.length; i++) {
-          folderPaths.add(parts.slice(0, i).join('/'));
-        }
-      } else {
-        // It's a file
-        filePaths.push(uri.fsPath);
-        
-        // Add all parent directories of this file
-        const parts = relPath.split('/').filter(Boolean);
-        for (let i = 1; i < parts.length; i++) {
-          folderPaths.add(parts.slice(0, i).join('/'));
-        }
-      }
-    } catch (err) {
-      // ignore items that disappeared
+    if (!entry.stats) continue;
+
+    const absPath = path.join(rootPath, entry.path);
+    
+    // Use existing helper to get RelPath
+    const relPath = relFromAbs(rootPath, absPath);
+    
+    // Double-check ignore rules
+    if (ignored(relPath as string, ignoreRules)) {
+      continue;
+    }
+
+    if (entry.stats.isDirectory()) {
+      allFolders.add(relPath);
+    } else if (entry.stats.isFile()) {
+      filesToHash.push({ relPath, absPath });
     }
   }
 
-  // Add all folders to index first (so empty folders appear)
-  for (const folderRel of folderPaths) {
+  // Step 3: Add parent folders of files (for intermediate folders)
+  for (const file of filesToHash) {
+    const parts = (file.relPath as string).split('/');
+    for (let i = 1; i < parts.length; i++) {
+      const folderRel = parts.slice(0, i).join('/');
+      allFolders.add(stringToRel(folderRel));
+    }
+  }
+
+  // Step 4: Add all folders to index (including empty ones)
+  for (const folderRel of allFolders) {
     index.set(folderRel, { type: 'folder', hash: '' } as FolderMeta);
   }
 
-  const totalCount = filePaths.length;
+  // Step 5: Hash all files with concurrency
+  const totalCount = filesToHash.length;
   let doneCount = 0;
-
-  // Hash files with concurrency
-  const queue = filePaths.slice();
+  const queue = filesToHash.slice();
   const workers: Promise<void>[] = [];
-  
+
   for (let i = 0; i < concurrency; i += 1) {
     workers.push(
       (async () => {
         while (true) {
-          if (options.token?.isCancellationRequested) {
-            return;
-          }
-          const fsPath = queue.shift();
-          if (!fsPath) {
-            return;
-          }
-          const rel = toRelativeFsPath(workspace, fsPath);
+          if (options.token?.isCancellationRequested) return;
+          
+          const file = queue.shift();
+          if (!file) return;
+
           try {
-            const hash = await sha256OfFile(fsPath);
-            index.set(rel, { type: 'file', hash } as FileMeta);
+            const hash = await sha256OfFile(file.absPath);
+            index.set(file.relPath, { type: 'file', hash } as FileMeta);
           } catch (err) {
-            // ignore unreadable files
+            // File became unreadable or was deleted during scan
           } finally {
             doneCount += 1;
             options.progress?.(doneCount, totalCount);
@@ -105,31 +119,11 @@ export async function buildLocalIndex(
   }
 
   await Promise.all(workers);
+
+  // Step 6: Compute folder hashes bottom-up using existing helper
+  await computeAllFolderHashes(index);
+
   return index;
-}
-
-function mergeExcludeGlobs(globs: string[]): string {
-  // vscode.workspace.findFiles takes a single pattern string for excludes.
-  // We can join multiple with brace expansion: {a,b,c}
-  const cleaned = globs.map((g) => g.replace(/^\s+|\s+$/g, '')).filter(Boolean);
-  if (cleaned.length === 0) {
-    return '';
-  }
-  return `{${cleaned.join(',')}}`;
-}
-
-export function toRelativeFsPath(workspace: vscode.WorkspaceFolder, fsPath: string): string {
-  const root = normalizeSlashes(workspace.uri.fsPath);
-  const full = normalizeSlashes(fsPath);
-  if (!full.startsWith(root)) {
-    return full.replace(/\\/g, '/');
-  }
-  const trimmed = full.slice(root.length).replace(/^[/\\]/, '');
-  return trimmed.replace(/\\/g, '/');
-}
-
-function normalizeSlashes(inputPath: string): string {
-  return path.resolve(inputPath).replace(/\\/g, '/');
 }
 
 export function getIndexingSettings() {
