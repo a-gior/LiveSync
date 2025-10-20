@@ -8,8 +8,8 @@ import type { RemotePort } from '@app/ports/RemotePort';
 import type { WorkspaceId, RelPath, NodeIndex, FolderMeta, FileMeta } from '@domain/types';
 
 import { WorkspaceConfigService } from '../config/WorkspaceConfigService';
-import { asRel, relFromAbs } from '@helpers/path/RelPath';
-import { logExpectedError, logInfoMessage } from '@helpers/logging';
+import { asRel } from '@helpers/path/RelPath';
+import { logInfoMessage } from '@helpers/logging';
 import { computeAllFolderHashes } from '../helpers/hash';
 
 const p = path.posix;
@@ -47,65 +47,100 @@ export class SftpRemotePort implements RemotePort {
       await this.connectSSH(sshClient, cfg);
 
       const out: NodeIndex = new Map();
+      
+      const [filesAndDirsRaw, filesHashRaw] = await Promise.all([
+        // Command 1: Get ALL entries (files + dirs) with type and stat in one pass
+        // Using -printf is faster than piping to stat
+        this.execSSH(sshClient, 
+          `find "${root}" -printf '%p|%y|%s|%T@\\n' 2>/dev/null || true`
+        ),
+        
+        // Command 2: Get hashes only (can't combine with stat efficiently)
+        // Using -print0 with xargs is faster for large datasets
+        this.execSSH(sshClient, 
+          `find "${root}" -type f -print0 2>/dev/null | xargs -0 -P4 -n100 sha256sum 2>/dev/null | sed -E "s|\\s+${root}/|,|" || true`
+        )
+      ]);
 
-      // 1) List all files and directories with metadata
-      const findCmd = `find "${root}" -printf '%p|%y\\n' 2>/dev/null || true`;
-      const findOutput = await this.execSSH(sshClient, findCmd);
-
-      const filesForHashing: Array<{ rel: RelPath; abs: string }> = [];
+      // Pre-allocate maps with estimated capacity
+      const files: Array<{ rel: RelPath; size: number; mtime: number }> = [];
       const folders = new Set<RelPath>();
-      const lines = findOutput.split('\n').filter(Boolean);
-
-      for (const line of lines) {
+      
+      // Single-pass parsing with minimal string operations
+      const lines = filesAndDirsRaw.split('\n');
+      const rootLen = root.length;
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line) continue;
+        
         const parts = line.split('|');
-        if (parts.length < 2) continue;
+        if (parts.length < 4) continue;
 
-        const [absPath, type] = parts;
-        const rel = relFromAbs(root, absPath);
+        const fullPath = parts[0];
+        const type = parts[1];
+        
+        // Fast path calculation without creating intermediate strings
+        let rel: string;
+        if (fullPath === root) {
+          rel = '';
+        } else if (fullPath.length > rootLen && fullPath[rootLen] === '/' && fullPath.startsWith(root)) {
+          rel = fullPath.substring(rootLen + 1);
+        } else {
+          continue;
+        }
 
-        if (shouldIgnore(rel, ignores)) continue;
+        const relPath = asRel(rel);
+        if (shouldIgnore(relPath, ignores)) continue;
 
         if (type === 'd') {
-          folders.add(asRel(rel));
+          folders.add(relPath);
         } else if (type === 'f') {
-          filesForHashing.push({ rel: asRel(rel), abs: absPath });
+          // Parse size and mtime inline
+          const size = parseInt(parts[2], 10) || 0;
+          const mtime = Math.floor(parseFloat(parts[3]) * 1000);
+          files.push({ rel: relPath, size, mtime });
         }
       }
 
-      // 2) Add all folders first (including empty ones)
+      // Parse hashes into a Map once
+      const fileHashMap = new Map<string, string>();
+      const hashLines = filesHashRaw.split('\n');
+      
+      for (let i = 0; i < hashLines.length; i++) {
+        const line = hashLines[i];
+        if (!line) continue;
+        
+        const commaIdx = line.indexOf(',');
+        if (commaIdx === -1) continue;
+        
+        // Direct substring instead of split
+        const hash = line.substring(0, commaIdx);
+        const relPath = line.substring(commaIdx + 1);
+        
+        if (hash && relPath) {
+          fileHashMap.set(relPath, hash);
+        }
+      }
+
+      // Batch add to index (fewer map operations)
+      // Add folders first
       for (const folderRel of folders) {
         out.set(folderRel, { type: 'folder', hash: '' } as FolderMeta);
       }
 
-      // 3) Hash all files with concurrency
-      const queue = filesForHashing.slice();
-      const workers: Promise<void>[] = [];
-
-      for (let i = 0; i < Math.max(1, this.concurrency); i += 1) {
-        workers.push((async () => {
-          while (queue.length > 0) {
-            const file = queue.shift();
-            if (!file) break;
-
-            try {
-              const hashCmd = `sha256sum "${file.abs}" 2>/dev/null | awk '{print $1}' || echo "__error__"`;
-              const hash = (await this.execSSH(sshClient, hashCmd)).trim();
-
-              if (hash && hash !== '__error__') {
-                out.set(file.rel, { type: 'file', hash } as FileMeta);
-              } else {
-                logExpectedError(`SftpRemotePort:hash:${file.rel}`, new Error('Hash command failed'));
-              }
-            } catch (err) {
-              logExpectedError(`SftpRemotePort:hash:${file.rel}`, err);
-            }
-          }
-        })());
+      // Add files with their hashes
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const hash = fileHashMap.get(file.rel as string) || '';
+        
+        out.set(file.rel, { 
+          type: 'file', 
+          hash 
+        } as FileMeta);
       }
 
-      await Promise.all(workers);
-
-      // 4) Compute folder hashes bottom-up
+      // Compute folder hashes bottom-up
       await computeAllFolderHashes(out);
 
       return out;
