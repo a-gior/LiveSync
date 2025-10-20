@@ -90,7 +90,8 @@
 
       { "command": "livesync.view.toggleShowUnchanged", "title": "Toggle Show Unchanged", "category": "LiveSync", "icon": "$(eye)" },
       { "command": "livesync.experimental.refreshRemoteIndex", "title": "Refresh Remote Index", "category": "LiveSync", "icon": "$(cloud-download)" },
-      { "command": "livesync.experimental.refreshAll", "title": "Refresh Local & Remote", "category": "LiveSync", "icon": "$(sync)" },
+      { "command": "livesync.experimental.refresh", "title": "Refresh Current Workspace", "category": "LiveSync", "icon": "$(refresh)" },
+      { "command": "livesync.experimental.refreshAll", "title": "Refresh All Workspaces", "category": "LiveSync", "icon": "$(sync)" },
       { "command": "livesync.experimental.node.showDiff", "title": "Show Diff (Remote ↔ Local)", "category": "LiveSync", "icon": "$(arrow-both)" },
 
       { "command": "livesync.experimental.indexLocal", "title": "Build Local Index", "category": "LiveSync", "icon": "$(database)" },
@@ -270,10 +271,14 @@
           "icon": "$(cloud-download)"
         },
         {
-          "command": "livesync.experimental.refreshAll",
+          "command": "livesync.experimental.refresh",
           "when": "view == livesync.diffs",
-          "group": "navigation@4",
-          "icon": "$(sync)"
+          "group": "navigation@2"
+        },
+        {
+          "command": "livesync.experimental.refreshAll",
+          "when": "view == livesync.workspaces && livesync.multiRoot",
+          "group": "navigation@1"
         }
       ],
       "explorer/context": [

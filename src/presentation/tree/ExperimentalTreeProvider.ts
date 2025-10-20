@@ -150,6 +150,13 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     }
   }
 
+  /**
+   * Get the currently displayed workspace ID
+   */
+  public getCurrentWorkspace(): WorkspaceId | undefined {
+    return this.currentWorkspaceId;
+  }
+
   // =====================================================================================
   // View configuration (called from activate() when settings change)
   // =====================================================================================

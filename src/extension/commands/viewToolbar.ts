@@ -7,7 +7,7 @@ import { stringToWsId } from '../../infrastructure/helpers/path';
 import { refreshRemoteSnapshot } from '../../infrastructure/helpers/remote';
 
 export function registerViewToolbar(services: Services): void {
-  const { context, state, config, remote, progress } = services;
+  const { context, state, config, remote, progress, provider } = services;
 
   // Toggle "show unchanged" (tree will auto-refresh on configuration change)
   cmd(context, 'livesync.view.toggleShowUnchanged', async () => {
@@ -16,29 +16,128 @@ export function registerViewToolbar(services: Services): void {
     await cfg.update('view.showUnchanged', !current, vscode.ConfigurationTarget.Workspace);
   });
 
-  // Refresh remote index (all workspaces or the targeted one)
-  cmd(context, 'livesync.experimental.refreshRemoteIndex', async (arg?: unknown) => {
-    const folders = resolveWorkspaceFolders(arg);
-    if (!folders.length) {
-      void vscode.window.showWarningMessage('LiveSync: no workspace folders.');
+  // ════════════════════════════════════════════════════════════════════════════
+  // DIFF VIEW COMMANDS (workspace-specific)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  // Refresh remote index for the CURRENT workspace shown in Diff view
+  cmd(context, 'livesync.experimental.refreshRemoteIndex', async () => {
+    const currentWsId = provider.getCurrentWorkspace();
+    if (!currentWsId) {
+      void vscode.window.showWarningMessage('LiveSync: no workspace selected.');
       return;
     }
 
-    await progress.withTask('Refreshing remote index', async (report) => {
-      let i = 0;
-      for (const folder of folders) {
-        i += 1;
-        report(`${folder.name} (${i}/${folders.length})`);
-        const wsId = stringToWsId(folder.uri.fsPath);
+    const folder = vscode.workspace.workspaceFolders?.find(
+      f => stringToWsId(f.uri.fsPath) === currentWsId
+    );
 
-        await refreshRemoteSnapshot(services, wsId);
-      }
+    if (!folder) {
+      void vscode.window.showWarningMessage('LiveSync: workspace folder not found.');
+      return;
+    }
+
+    await progress.withTask(`Refreshing remote index for ${folder.name}`, async () => {
+      await refreshRemoteSnapshot(services, currentWsId);
     });
 
-    void vscode.window.showInformationMessage('LiveSync: remote index refreshed.');
+    void vscode.window.showInformationMessage(`LiveSync: remote index refreshed for ${folder.name}.`);
   });
 
-  // Refresh both local & remote (all workspaces or the targeted one)
+  // Refresh both local & remote for the CURRENT workspace shown in Diff view
+  cmd(context, 'livesync.experimental.refresh', async () => {
+    const currentWsId = provider.getCurrentWorkspace();
+    if (!currentWsId) {
+      void vscode.window.showWarningMessage('LiveSync: no workspace selected.');
+      return;
+    }
+
+    const folder = vscode.workspace.workspaceFolders?.find(
+      f => stringToWsId(f.uri.fsPath) === currentWsId
+    );
+
+    if (!folder) {
+      void vscode.window.showWarningMessage('LiveSync: workspace folder not found.');
+      return;
+    }
+
+    await vscode.window.withProgress(
+      {
+        title: `LiveSync: Refreshing ${folder.name}…`,
+        location: vscode.ProgressLocation.Notification,
+        cancellable: true
+      },
+      async (p, token) => {
+        if (token.isCancellationRequested) { return; }
+
+        const settings = vscode.workspace.getConfiguration('livesync');
+        const concurrency = settings.get<number>('index.concurrency') ?? 4;
+
+        // ── Local index
+        const eff = await config.get(folder);
+        const excludes = eff.ignoreGlobs;
+        const { buildLocalIndex } = await import('../../infrastructure/persistence/LocalIndexBuilder');
+
+        let last = 0;
+        p.report({ message: 'Building local index…' });
+        const localIndex = await buildLocalIndex(folder, {
+          excludeGlobs: excludes,
+          concurrency,
+          token,
+          progress: (done, count) => {
+            if (done - last > 25 || done === count) {
+              last = done;
+              p.report({ message: `Local index: ${done}/${count}` });
+            }
+          }
+        }) as NodeIndex;
+
+        // ── Remote index
+        p.report({ message: 'Fetching remote index…' });
+        let remoteIndex: NodeIndex | undefined;
+        try {
+          remoteIndex = await remote.list(currentWsId);
+        } catch (e: any) {
+          if (e?.name === 'RemoteNotConfiguredError') {
+            void vscode.window.setStatusBarMessage(`LiveSync: ${folder.name} — remote not configured`, 2000);
+            remoteIndex = undefined;
+          } else {
+            throw e;
+          }
+        }
+
+        // ── Commit atomically
+        state.runBatch(currentWsId, undefined as any, () => {
+          state.setLocalIndex(currentWsId, localIndex);
+          if (remoteIndex) {
+            state.setRemoteIndex(currentWsId, remoteIndex);
+          }
+        });
+
+        // ── Persist caches
+        try {
+          await services.localCache.save(currentWsId, localIndex);
+          if (remoteIndex) {
+            await services.remoteCache.save(currentWsId, remoteIndex);
+          }
+        } catch {
+          // ignore cache write errors
+        }
+
+        if (token.isCancellationRequested) {
+          void vscode.window.showInformationMessage(`LiveSync: refresh cancelled for ${folder.name}.`);
+        } else {
+          void vscode.window.showInformationMessage(`LiveSync: refreshed ${folder.name}.`);
+        }
+      }
+    );
+  });
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // WORKSPACES VIEW COMMANDS (all workspaces)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  // Refresh ALL workspaces (for use in Workspaces view)
   cmd(context, 'livesync.experimental.refreshAll', async (arg?: unknown) => {
     const folders = resolveWorkspaceFolders(arg);
     if (!folders.length) {
@@ -48,7 +147,7 @@ export function registerViewToolbar(services: Services): void {
 
     await vscode.window.withProgress(
       {
-        title: 'LiveSync: Refreshing local & remote…',
+        title: 'LiveSync: Refreshing all workspaces…',
         location: vscode.ProgressLocation.Notification,
         cancellable: true
       },
@@ -90,7 +189,6 @@ export function registerViewToolbar(services: Services): void {
             remoteIndex = await remote.list(wsId);
           } catch (e: any) {
             if (e?.name === 'RemoteNotConfiguredError') {
-              // Skip remote for this workspace; keep whatever we had (or cache).
               void vscode.window.setStatusBarMessage(`LiveSync: ${folder.name} — remote not configured`, 2000);
               remoteIndex = undefined;
             } else {
@@ -98,7 +196,7 @@ export function registerViewToolbar(services: Services): void {
             }
           }
 
-          // ── Commit atomically so we don’t show half-diffs
+          // ── Commit atomically
           state.runBatch(wsId, undefined as any, () => {
             state.setLocalIndex(wsId, localIndex);
             if (remoteIndex) {
@@ -106,7 +204,7 @@ export function registerViewToolbar(services: Services): void {
             }
           });
 
-          // ── Persist caches (best effort)
+          // ── Persist caches
           try {
             await services.localCache.save(wsId, localIndex);
             if (remoteIndex) {
@@ -120,10 +218,9 @@ export function registerViewToolbar(services: Services): void {
         if (token.isCancellationRequested) {
           void vscode.window.showInformationMessage('LiveSync: refresh cancelled.');
         } else {
-          void vscode.window.showInformationMessage('LiveSync: refreshed local & remote.');
+          void vscode.window.showInformationMessage('LiveSync: refreshed all workspaces.');
         }
       }
     );
   });
-
 }
