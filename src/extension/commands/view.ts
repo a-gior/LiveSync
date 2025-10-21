@@ -8,24 +8,18 @@ export function registerViewCommands(services: Services): void {
   const { context, provider, treeView } = services;
 
   // Focus the LiveSync view:
-  // - If invoked with a Tree/Explorer/Editor context, focus THAT workspace.
-  // - Otherwise, focus the first workspace.
+  // - If invoked with a Tree/Explorer/Editor context, switch to THAT workspace.
+  // - Otherwise, just focus the view (no need to reveal specific nodes)
   cmd(context, 'livesync.focusExperimentalView', async (arg?: unknown) => {
-    // Prefer explicit target from arg; else first workspace
+    // If there's a specific target, switch to that workspace
     const target = resolveEntryTarget(arg, { allowActiveEditor: true });
-    const fallbackWs = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? undefined;
-    const workspaceId = target?.workspaceId ?? fallbackWs;
-
-    if (!workspaceId) {
-      return;
+    if (target?.workspaceId) {
+      provider.setCurrentWorkspace(stringToWsId(target.workspaceId));
     }
 
-    const rootNode = provider.getWorkspaceNode(stringToWsId(workspaceId));
-    if (!rootNode) {
-      return;
-    }
-
-    await treeView.reveal(rootNode, { expand: true, select: false });
+    // Simply focus the tree view - no need to reveal specific nodes
+    // VS Code will automatically show the tree content
+    await vscode.commands.executeCommand('livesync.diffs.focus');
   });
 
   // React to settings changes that affect the tree filter/appearance

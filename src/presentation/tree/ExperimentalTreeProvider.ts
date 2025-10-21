@@ -239,6 +239,30 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     this.changeEmitter.fire(undefined);
   }
 
+  /**
+   * Returns the parent of the given element.
+   */
+  getParent(element: ExperimentalNode): ExperimentalNode | undefined {
+    // Workspace nodes have no parent
+    if (element.kind === 'workspace') {
+      return undefined;
+    }
+
+    // Entry nodes: find their parent based on path
+    const parentRelPath = this.parentPath(element.path);
+    
+    // If no parent path, this is a root-level entry under the workspace
+    if (!parentRelPath || parentRelPath.length === 0) {
+      // In single-workspace mode, entries are directly under the root
+      // In multi-workspace mode, entries are under their workspace node
+      // For now, return undefined (root level)
+      return undefined;
+    }
+
+    // Return the parent entry node
+    return this.getOrCreateEntryNode(element.workspaceId, parentRelPath);
+  }
+
   async getChildren(element?: ExperimentalNode): Promise<ExperimentalNode[]> {
     if (!element) {
       // In single-workspace mode, return workspace node; in multi-root, return entries directly
