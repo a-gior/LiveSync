@@ -170,7 +170,10 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   );
   context.subscriptions.push(treeView);
 
-
+  // Initial refresh
+  setTimeout(() => {
+    provider.refreshAll();
+  }, 100);
 
   return { context, diffEngine, state, config, remote, provider, treeView, workspaceListProvider, progress, localCache, remoteCache, suppressor };
 }
