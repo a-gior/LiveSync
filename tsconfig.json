@@ -13,6 +13,7 @@
       "@shared/*": ["shared/*"],
       "@resources/*": ["resources/*"],
       
+      "@ext/*": ["src/extension/*"],
       "@domain/*": ["src/domain/*"],
       "@app/*": ["src/application/*"],
       "@infra/*": ["src/infrastructure/*"],

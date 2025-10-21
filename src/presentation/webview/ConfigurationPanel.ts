@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { Services } from '../../extension/services';
-import { ConfigWriter } from '../../infrastructure/config/ConfigWriter';
-import { getNonce, getUri } from '../../infrastructure/helpers/webview';
-import { stringToWsId } from '../../infrastructure/helpers/path';
+import { Services } from '@ext/services';
+import { ConfigWriter } from '@infra/config/ConfigWriter';
+import { getNonce, getUri } from '@infra/helpers/webview';
+import { stringToWsId } from '@infra/helpers/path';
+import { ConfigValidator } from '@infra/config/ConfigValidator';
 
 export class ConfigurationPanel {
   private static currentPanel?: ConfigurationPanel;
@@ -170,20 +171,43 @@ export class ConfigurationPanel {
     }
   }
 
-  private async testConnection(connectionSettings: any): Promise<void> {
-    try {
-      // You can implement a test connection here by temporarily
-      // creating an SFTP connection with the provided settings
-      // For now, just show a placeholder message
-      void vscode.window.showInformationMessage(
-        'Connection test: Feature coming soon'
-      );
-    } catch (error: any) {
-      void vscode.window.showErrorMessage(
-        `Connection test failed: ${error.message}`
-      );
+    private async testConnection(connectionSettings: any): Promise<void> {
+        
+        try {
+            const result = await ConfigValidator.testConnection({
+            hostname: connectionSettings.hostname || '',
+            port: connectionSettings.port || 22,
+            username: connectionSettings.username || '',
+            password: connectionSettings.password,
+            privateKeyPath: connectionSettings.privateKeyPath,
+            passphrase: connectionSettings.passphrase
+            });
+
+            if (result.success) {
+                void vscode.window.showInformationMessage(result.message);
+            } else {
+                const detailsMsg = result.details ? `\n\n${result.details}` : '';
+                void vscode.window.showErrorMessage(`${result.message}${detailsMsg}`);
+            }
+
+            // Send result back to webview
+            this.panel.webview.postMessage({
+                command: 'testConnectionResult',
+                success: result.success,
+                message: result.message,
+                details: result.details
+            });
+        } catch (error: any) {
+            void vscode.window.showErrorMessage(`Connection test failed: ${error.message}`);
+            
+            this.panel.webview.postMessage({
+                command: 'testConnectionResult',
+                success: false,
+                message: 'Test failed',
+                details: error.message
+            });
+        }
     }
-  }
 
   private async sendInitialConfiguration(): Promise<void> {
     const { config } = this.services;
