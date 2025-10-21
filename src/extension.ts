@@ -12,6 +12,7 @@ import { registerViewToolbar } from './extension/commands/viewToolbar';
 import { registerConflictResolver } from './extension/commands/conflictResolver';
 import { FileStatusDecorationProvider } from '@presentation/decoration/FileStatusDecorationProvider';
 import { logInfoMessage } from './infrastructure/helpers/logging';
+import { registerConfigurationCommands } from './extension/commands/configuration';
 
 export async function activate(context: vscode.ExtensionContext) {
   logInfoMessage('LiveSync activating…');
@@ -36,6 +37,7 @@ export async function activate(context: vscode.ExtensionContext) {
   registerApplyToRemote(services);
   registerApplyFromRemote(services);
   registerShowDiff(services);
+  registerConfigurationCommands(services);
 
   logInfoMessage('LiveSync activated.');
 }

@@ -6,5 +6,8 @@
     "tsconfig-paths/register"
   ],
   "timeout": 10000,
-  "watch-files": ["src/**/*.ts", "test/**/*.ts"]
+  "watch-files": ["src/**/*.ts", "test/**/*.ts"],
+  "reporter": "spec",
+  "slow": 500,
+  "exit": true
 }

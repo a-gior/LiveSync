@@ -64,6 +64,12 @@
     },
     "commands": [
       {
+        "command": "livesync.configuration",
+        "title": "Configure Workspace",
+        "category": "LiveSync",
+        "icon": "$(gear)"
+      },
+      {
         "command": "livesync.resolve.keepLocal",
         "title": "Keep Local (Upload)",
         "category": "LiveSync",
