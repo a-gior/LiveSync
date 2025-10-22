@@ -118,6 +118,51 @@ export class SyncStateManager {
     this.recompute(event.workspaceId, hint);
   }
 
+  /**
+   * Apply an incremental change to the remote snapshot.
+   */
+  applyRemote(event: {
+    workspaceId: WorkspaceId;
+    type: RemoteEventType;
+    path: RelPath;
+    meta?: NodeMeta;
+    newPath?: RelPath;
+  }): void {
+    const remote = this.ensureWorkspaceIndex(this.remoteByWorkspace, event.workspaceId);
+
+    switch (event.type) {
+      case 'create':
+      case 'modify': {
+        if (!event.meta) { return; }
+        if (event.meta.type === 'file') { 
+          this.ensureAncestorFolders(remote, event.path); 
+        }
+        remote.set(event.path, event.meta);
+        this.rehashAncestors(remote, event.path);
+        break;
+      }
+      case 'delete': {
+        deleteSubtree(remote, event.path, /*includeRoot*/ true);
+        this.rehashAncestors(remote, event.path);
+        break;
+      }
+      case 'rename': {
+        deleteSubtree(remote, event.path, /*includeRoot*/ true);
+        if (event.meta && event.newPath) {
+          if (event.meta.type === 'file') { 
+            this.ensureAncestorFolders(remote, event.newPath); 
+          }
+          remote.set(event.newPath, event.meta);
+          this.rehashAncestors(remote, event.newPath);
+        }
+        break;
+      }
+    }
+
+    const hint = stringToRel(event.newPath ?? event.path);
+    this.recompute(event.workspaceId, hint);
+  }
+
   // ------------------------------------------------------------------------------------
   // Incremental *remote* mutations (after remote actions succeed)
   // Call them from FileEventBridge *after* the remote port confirms success.

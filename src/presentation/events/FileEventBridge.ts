@@ -194,7 +194,11 @@ export class FileEventBridge {
 
           try {
             await this.remote.deletePath(workspaceId, relPath);
-            this.state.removeRemoteSubtree(workspaceId, relPath, true);
+            this.state.applyRemote({
+              workspaceId,
+              type: 'delete',
+              path: relPath
+            });
           } catch (err) {
             logExpectedError(`FileEventBridge:onDelete:remote:${relPath}`, err);
           }
@@ -296,9 +300,19 @@ export class FileEventBridge {
             // Update remote snapshot optimistically
             const hash = await sha256OfFile(absLocal).catch(() => undefined);
             if (hash) {
-              this.state.upsertRemoteNode(workspaceId, newRel, { type: 'file', hash });
+              this.state.applyRemote({
+                workspaceId,
+                type: 'modify',
+                path: newRel,
+                meta: { type: 'file', hash }
+              });
             }
-            this.state.removeRemoteSubtree(workspaceId, oldRel, /*includeRoot*/ true);
+            
+            this.state.applyRemote({
+              workspaceId,
+              type: 'delete',
+              path: oldRel
+            });
           } else {
             // Upload folder subtree
             const localIndex = this.state.getLocalIndex(workspaceId);
@@ -311,14 +325,32 @@ export class FileEventBridge {
                   const absLocal = absFs(workspaceId, rel);
                   await this.remote.uploadFile(workspaceId, rel, absLocal);
                   const h = await sha256OfFile(absLocal).catch(() => undefined);
-                  if (h) {this.state.upsertRemoteNode(workspaceId, rel, { type: 'file', hash: h });}
+                  if (h) {
+                    this.state.applyRemote({
+                      workspaceId,
+                      type: 'modify',
+                      path: rel,
+                      meta: { type: 'file', hash: h }
+                    });
+                  }
                 } else {
                   // ensure folder nodes exist remotely as we go
-                  this.state.upsertRemoteNode(workspaceId, rel, { type: 'folder', hash: '' });
+                  this.state.applyRemote({
+                    workspaceId,
+                    type: 'modify',
+                    path: rel,
+                    meta: { type: 'folder', hash: '' }
+                  });
+                  
                 }
               }
             }
-            this.state.removeRemoteSubtree(workspaceId, oldRel, /*includeRoot*/ true);
+            
+            this.state.applyRemote({
+              workspaceId,
+              type: 'delete',
+              path: oldRel
+            });
           }
           return;
         }
@@ -335,7 +367,12 @@ export class FileEventBridge {
             await this.remote.uploadFile(workspaceId, newRel, absLocal);
             const h = await sha256OfFile(absLocal).catch(() => undefined);
             if (h) {
-              this.state.upsertRemoteNode(workspaceId, newRel, { type: 'file', hash: h });
+              this.state.applyRemote({
+                workspaceId,
+                type: 'modify',
+                path: newRel,
+                meta: { type: 'file', hash: h }
+              });
             }
           } else {
             // Upload folder subtree
@@ -349,10 +386,20 @@ export class FileEventBridge {
                   await this.remote.uploadFile(workspaceId, rel, absLocal);
                   const h = await sha256OfFile(absLocal).catch(() => undefined);
                   if (h) {
-                    this.state.upsertRemoteNode(workspaceId, rel, { type: 'file', hash: h });
+                    this.state.applyRemote({
+                      workspaceId,
+                      type: 'modify',
+                      path: rel,
+                      meta: { type: 'file', hash: h }
+                    });
                   }
                 } else {
-                  this.state.upsertRemoteNode(workspaceId, rel, { type: 'folder', hash: '' });
+                  this.state.applyRemote({
+                    workspaceId,
+                    type: 'modify',
+                    path: rel,
+                    meta: { type: 'folder', hash: '' }
+                  });
                 }
               }
             }
@@ -706,7 +753,12 @@ export class FileEventBridge {
         await this.remote.uploadFile(workspaceId, relPath, abs);
         const h = await sha256OfFile(abs).catch(() => undefined);
         if (h) {
-          this.state.upsertRemoteNode(workspaceId, relPath, { type: 'file', hash: h });
+          this.state.applyRemote({
+            workspaceId,
+            type: 'modify',
+            path: relPath,
+            meta: { type: 'file', hash: h }
+          });
         }
       } else {
         const abs = absFs(workspaceId, relPath);
