@@ -385,11 +385,18 @@
     "watch": "run-p watch:ts watch:alias",
     "watch:ts": "tsc -w -p .",
     "watch:alias": "tsc-alias -p tsconfig.json -w",
+    
     "pretest": "npm run build",
-    "test": "npm run test:unit",
-    "test:unit": "mocha",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "mocha 'test/unit/**/*.spec.ts'",
+    "test:integration": "mocha 'test/integration/**/*.spec.ts'",
+    "test:watch": "mocha --watch",
+    "test:coverage": "c8 --reporter=text --reporter=html --reporter=lcov npm test",
+    "test:coverage:unit": "c8 --reporter=text npm run test:unit",
+    "test:debug": "node --inspect-brk node_modules/.bin/mocha",
+    
     "test:ext": "node ./out/test/runTest.js",
-    "clean": "rimraf out coverage"
+    "clean": "rimraf out coverage .nyc_output"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
