@@ -11,7 +11,7 @@ import { DiffEngine } from '@domain/diff/DiffEngine';
 
 import { dirnameRel, parentsOf, stringToRel } from '@helpers/path';
 import { computeFolderHashFromNodeIndex } from '@helpers/hash';
-import { deleteSubtree } from '@helpers/index';
+import { deleteSubtree, renameSubtree } from '@helpers/index';
 
 /** Local FS event kinds we reflect into the local snapshot. */
 export type LocalEventType  = 'create' | 'modify' | 'delete' | 'rename';
@@ -101,10 +101,12 @@ export class SyncStateManager {
         break;
       }
       case 'rename': {
-        deleteSubtree(local, event.path, /*includeRoot*/ true);
-        if (event.meta && event.newPath) {
-          if (event.meta.type === 'file') { this.ensureAncestorFolders(local, event.newPath); }
-          local.set(event.newPath, event.meta);
+        if (event.newPath) {
+          renameSubtree(local, event.path, event.newPath, (index, path, meta) => {
+            if (meta.type === 'file') {
+              this.ensureAncestorFolders(index, path);
+            }
+          });
         }
         break;
       }
@@ -147,12 +149,12 @@ export class SyncStateManager {
         break;
       }
       case 'rename': {
-        deleteSubtree(remote, event.path, /*includeRoot*/ true);
-        if (event.meta && event.newPath) {
-          if (event.meta.type === 'file') { 
-            this.ensureAncestorFolders(remote, event.newPath); 
-          }
-          remote.set(event.newPath, event.meta);
+        if (event.newPath) {
+          renameSubtree(remote, event.path, event.newPath, (index, path, meta) => {
+            if (meta.type === 'file') {
+              this.ensureAncestorFolders(index, path);
+            }
+          });
           this.rehashAncestors(remote, event.newPath);
         }
         break;
