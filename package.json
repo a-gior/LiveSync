@@ -34,8 +34,8 @@
     "watch files"
   ],
   "activationEvents": [
-    "onView:package-explorer",
-    "workspaceContains:.vscode/settings.json"
+    "onView:diffs",
+    "workspaceContains:.vscode/livesync.json"
   ],
   "main": "./out/src/extension.js",
   "contributes": {
