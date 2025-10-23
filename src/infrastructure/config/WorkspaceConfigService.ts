@@ -81,12 +81,28 @@ export class WorkspaceConfigService {
 }
 
 function toExcludeGlobs(ignoreList: string[]): string[] {
-  // Convert entries like ".vscode" => ["**/.vscode/**", "**/.vscode"]
+  // Convert ignore entries to glob patterns
+  // Examples:
+  //   ".vscode" => ["**/.vscode/**", "**/.vscode"]
+  //   "node_modules" => ["**/node_modules/**", "**/node_modules"]
+  //   "../.vscode" => ["**/.vscode/**", "**/.vscode"] (normalize relative paths)
+  //   "src/*.tmp" => ["src/*.tmp"] (keep as-is if already a pattern)
+  
   const globs: string[] = [];
+  
   for (const entry of ignoreList) {
-    const name = entry.replace(/^[./\\]+/, ''); // sanitize
-    globs.push(`**/${name}/**`, `**/${name}`);
+    // Remove leading "./" or "../" or "/" or "\" but PRESERVE dots in filenames like ".vscode"
+    let clean = entry.replace(/^(?:\.\.\/|\.\/|\/|\\)+/, '');
+    
+    // If the entry already contains glob patterns (*, ?, [), use it as-is
+    if (clean.includes('*') || clean.includes('?') || clean.includes('[')) {
+      globs.push(clean);
+    } else {
+      // Otherwise, create glob patterns to match the name anywhere in the tree
+      globs.push(`**/${clean}/**`, `**/${clean}`);
+    }
   }
+  
   return globs;
 }
 
