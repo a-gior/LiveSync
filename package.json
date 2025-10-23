@@ -441,6 +441,7 @@
     "watch:alias": "tsc-alias -p tsconfig.json -w",
     "pretest": "npm run build",
     "test": "npm run test:unit && npm run test:integration",
+    "test:fast": "mocha",
     "test:unit": "mocha 'test/unit/**/*.spec.ts'",
     "test:integration": "mocha 'test/integration/**/*.spec.ts'",
     "test:watch": "mocha --watch",
