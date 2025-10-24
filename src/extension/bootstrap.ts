@@ -17,6 +17,7 @@ import { stringToWsId } from '../infrastructure/helpers/path';
 import { WorkspaceListProvider } from '../presentation/tree/WorkspaceListProvider';
 import { WorkspaceId } from '../domain/types';
 import { ConfigValidator } from '../infrastructure/config/ConfigValidator';
+import { initializeAllWorkspaces } from './initialization';
 
 export async function bootstrap(context: vscode.ExtensionContext): Promise<Services> {
   const diffEngine = new DefaultDiffEngine();
@@ -56,16 +57,7 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   const suppressor = new ConfigErrorSuppressor(storage);
   initLoggingDeps({ suppressor });
 
-  for (const ws of workspaceIds) {
-    const local  = await localCache.load(ws);
-    const remote = await remoteCache.load(ws);
-    if (local || remote) {
-      state.runBatch(ws, undefined as any, () => {
-        if (local)  { state.setLocalIndex(ws,  local); }
-        if (remote) { state.setRemoteIndex(ws, remote); }
-      });
-    }
-  }
+  await initializeAllWorkspaces(state, localCache, remoteCache);
   
   // Create workspace list view if multi-root
   if (isMultiRoot) {
