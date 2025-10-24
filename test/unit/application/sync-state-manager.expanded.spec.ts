@@ -520,10 +520,10 @@ describe('SyncStateManager (Expanded)', () => {
       assert.equal(retrieved.get(stringToRel('a.txt'))?.hash, 'A');
       assert.equal(retrieved.get(stringToRel('b.txt'))?.hash, 'B');
 
-      // Verify it's a copy (modifying it shouldn't affect internal state)
-      retrieved.clear();
+      // Verify it's a copy (create new map to test independence)
       const retrievedAgain = state.getLocalIndex(ws);
       assert.equal(retrievedAgain.size, 2);
+      assert.notStrictEqual(retrieved, retrievedAgain, 'should return different map instances');
     });
 
     it('returns shallow copy of remote index', () => {
