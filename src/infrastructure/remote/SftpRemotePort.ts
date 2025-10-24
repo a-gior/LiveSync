@@ -106,7 +106,6 @@ const sftpLimit = pLimit(9);
 
 export class SftpRemotePort implements RemotePort {
   private readonly sshConnectionPool: SSHConnectionPool;
-  private sftpClient: SftpClient | null = null;
 
   constructor(
     private readonly configService: WorkspaceConfigService,
