@@ -100,12 +100,6 @@
         "icon": "$(eye)"
       },
       {
-        "command": "livesync.experimental.refreshRemoteIndex",
-        "title": "Refresh Remote Index",
-        "category": "LiveSync",
-        "icon": "$(cloud-download)"
-      },
-      {
         "command": "livesync.experimental.refresh",
         "title": "Refresh Current Workspace",
         "category": "LiveSync",
@@ -122,12 +116,6 @@
         "title": "Show Diff (Remote ↔ Local)",
         "category": "LiveSync",
         "icon": "$(arrow-both)"
-      },
-      {
-        "command": "livesync.experimental.indexLocal",
-        "title": "Build Local Index",
-        "category": "LiveSync",
-        "icon": "$(database)"
       },
       {
         "command": "livesync.experimental.node.applyToRemote",
@@ -317,18 +305,6 @@
           "when": "view == livesync.diffs",
           "group": "navigation@1",
           "icon": "$(eye)"
-        },
-        {
-          "command": "livesync.experimental.indexLocal",
-          "when": "view == livesync.diffs",
-          "group": "navigation@2",
-          "icon": "$(database)"
-        },
-        {
-          "command": "livesync.experimental.refreshRemoteIndex",
-          "when": "view == livesync.diffs",
-          "group": "navigation@3",
-          "icon": "$(cloud-download)"
         },
         {
           "command": "livesync.experimental.refresh",

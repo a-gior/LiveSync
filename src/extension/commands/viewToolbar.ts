@@ -21,23 +21,6 @@ export function registerViewToolbar(services: Services): void {
   // DIFF VIEW COMMANDS (workspace-specific)
   // ════════════════════════════════════════════════════════════════════════════
 
-  // Refresh remote index for the CURRENT workspace shown in Diff view
-  cmd(context, 'livesync.experimental.refreshRemoteIndex', async () => {
-    const currentWsId = provider.getCurrentWorkspace();
-    if (!currentWsId) {
-      void vscode.window.showWarningMessage('LiveSync: no workspace selected.');
-      return;
-    }
-    
-    const folder = findWorkspaceFolderById(stringToWsId(currentWsId));
-
-    await progress.withTask(`Refreshing remote index for ${folder.name}`, async () => {
-      await refreshRemoteSnapshot(services, currentWsId);
-    });
-
-    void vscode.window.showInformationMessage(`LiveSync: remote index refreshed for ${folder.name}.`);
-  });
-
   // Refresh both local & remote for the CURRENT workspace shown in Diff view
   cmd(context, 'livesync.experimental.refresh', async () => {
     const currentWsId = provider.getCurrentWorkspace();
