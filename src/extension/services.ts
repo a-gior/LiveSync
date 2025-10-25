@@ -6,7 +6,6 @@ import { WorkspaceConfigService } from '../infrastructure/config/WorkspaceConfig
 import type { RemotePort } from '../application/ports/RemotePort';
 import { ProgressService } from '../presentation/statusbar/ProgressService';
 import { IndexCacheService } from '../infrastructure/persistence/IndexCacheService';
-import { ConfigErrorSuppressor } from '../infrastructure/storage/ConfigErrorSuppressor';
 import { WorkspaceListProvider } from '../presentation/tree/WorkspaceListProvider';
 
 export interface Services {
@@ -20,6 +19,5 @@ export interface Services {
   progress: ProgressService;
   localCache: IndexCacheService;
   remoteCache: IndexCacheService;
-  suppressor: ConfigErrorSuppressor;
   workspaceListProvider?: WorkspaceListProvider;
 }

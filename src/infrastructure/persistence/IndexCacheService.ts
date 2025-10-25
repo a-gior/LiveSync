@@ -1,4 +1,3 @@
-// src/infrastructure/persistence/IndexCacheService.ts
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { WorkspaceId, NodeIndex, FileMeta } from '../../domain/types';
