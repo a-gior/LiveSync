@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 
 import { bootstrap } from './extension/bootstrap';
 import { registerViewCommands } from './extension/commands/view';
-import { registerIndexLocal } from './extension/commands/indexLocal';
 import { registerApplyToRemote } from './extension/commands/applyToRemote';
 import { registerApplyFromRemote } from './extension/commands/applyFromRemote';
 import { registerShowDiff } from './extension/commands/showDiff';
@@ -26,6 +25,12 @@ export async function activate(context: vscode.ExtensionContext) {
   const services = await bootstrap(context);
   registerRemotePresence(services);
 
+  // Initialize view mode context and provider
+  const cfg = vscode.workspace.getConfiguration('livesync');
+  const showAsTree = cfg.get<boolean>('view.showAsTree') ?? true;
+  await vscode.commands.executeCommand('setContext', 'livesyncViewMode', showAsTree ? 'tree' : 'list');
+  services.provider.setShowAsTree(showAsTree);
+
   // File event auto-actions (save/create/delete/rename)
   const bridge = new FileEventBridge(services.state, services.config, services.remote, services.remoteCache);
   bridge.register(context.subscriptions);
@@ -34,7 +39,6 @@ export async function activate(context: vscode.ExtensionContext) {
   registerConflictResolver(services);
   registerViewToolbar(services);
   registerViewCommands(services);
-  registerIndexLocal(services);
   registerApplyToRemote(services);
   registerApplyFromRemote(services);
   registerShowDiff(services);

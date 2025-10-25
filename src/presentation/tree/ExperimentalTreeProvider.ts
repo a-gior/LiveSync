@@ -264,8 +264,13 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
   }
 
   async getChildren(element?: ExperimentalNode): Promise<ExperimentalNode[]> {
+    // List mode: return all files/folders flat from the root
+    if (!this.showAsTree && !element) {
+      return this.getAllEntriesFlat(this.currentWorkspaceId);
+    }
+
     if (!element) {
-      // In single-workspace mode, return workspace node; in multi-root, return entries directly
+      // Tree mode: return root-level entries
       const raw = this.state.getChildren(this.currentWorkspaceId, undefined);
       const filtered = this.filterByVisibility(this.currentWorkspaceId, raw);
       const nodes = filtered.map((p) => this.getOrCreateEntryNode(this.currentWorkspaceId, p));
@@ -274,6 +279,12 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     }
 
     if (element.kind === 'workspace') {
+      // List mode: return all entries flat
+      if (!this.showAsTree) {
+        return this.getAllEntriesFlat(element.workspaceId);
+      }
+      
+      // Tree mode: return root-level entries
       const raw = this.state.getChildren(element.workspaceId, undefined);
       const filtered = this.filterByVisibility(element.workspaceId, raw);
       const nodes = filtered.map((p) => this.getOrCreateEntryNode(element.workspaceId, p));
@@ -282,12 +293,70 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     }
 
     // element.kind === 'entry'
-    this.markRealized(element.workspaceId, [element.path]);
+    // In list mode, entries have no children (flat list)
+    if (!this.showAsTree) {
+      return [];
+    }
 
+    // Tree mode: return children of this entry
+    this.markRealized(element.workspaceId, [element.path]);
     const raw = this.state.getChildren(element.workspaceId, element.path);
     const filtered = this.filterByVisibility(element.workspaceId, raw);
     const nodes = filtered.map((p) => this.getOrCreateEntryNode(element.workspaceId, p));
     this.markRealized(element.workspaceId, nodes.map((n) => n.path));
+    return nodes;
+  }
+
+  private getAllEntriesFlat(workspaceId: WorkspaceId): ExperimentalNode[] {
+    const allPaths: RelPath[] = [];
+    const foldersWithContent = new Set<RelPath>();
+    const stack: RelPath[] = [stringToRel('')];
+
+    // DFS to collect all paths and track folders with content
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      const children = this.state.getChildren(workspaceId, current.length === 0 ? undefined : current);
+      
+      for (const child of children) {
+        const entry = this.state.getDiffEntry(workspaceId, child);
+        const childChildren = this.state.getChildren(workspaceId, child);
+        const isFolder = (entry?.type === 'folder') || (!entry && childChildren.length > 0);
+        
+        if (isFolder) {
+          // Add folder to stack for traversal
+          stack.push(child);
+          
+          // Check if folder has any content (files or subfolders)
+          if (childChildren.length > 0) {
+            foldersWithContent.add(child);
+            // Mark all parent folders as having content too
+            let parentPath = this.parentPath(child);
+            while (parentPath && parentPath.length > 0) {
+              foldersWithContent.add(parentPath);
+              parentPath = this.parentPath(parentPath);
+            }
+          }
+        }
+        
+        allPaths.push(child);
+      }
+    }
+
+    // Filter: keep all files and only empty folders
+    const filteredPaths = allPaths.filter(p => {
+      const entry = this.state.getDiffEntry(workspaceId, p);
+      const children = this.state.getChildren(workspaceId, p);
+      const isFolder = (entry?.type === 'folder') || (!entry && children.length > 0);
+      
+      // Keep files, or folders that have no content
+      return !isFolder || !foldersWithContent.has(p);
+    });
+
+    // Filter by visibility and create nodes
+    const filtered = this.filterByVisibility(workspaceId, filteredPaths);
+    const nodes = filtered.map((p) => this.getOrCreateEntryNode(workspaceId, p));
+    this.markRealized(workspaceId, nodes.map((n) => n.path));
+    
     return nodes;
   }
 
@@ -307,15 +376,20 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     const isFolder = (diffEntry?.type === 'folder') || (!diffEntry && hasChildren);
 
     // Label: basename when showAsTree=true; full relPath otherwise
-    const label = this.showAsTree ? this.basename(element.path) : (element.path as string);
+    const label = this.showAsTree 
+      ? this.basename(element.path) 
+      : (element.path as string);
 
-    // Collapsible: follow FolderStateStore open/closed + collapseAll override
+    // Collapsible state
     let collapsibleState = vscode.TreeItemCollapsibleState.None;
-    if (isFolder) {
+    
+    if (this.showAsTree && isFolder) {
+      // Tree mode: folders are collapsible based on FolderStateStore
       const isOpen = this.folderStateStore.isOpen(element.workspaceId as unknown as string, element.path as unknown as string);
       const shouldOpen = (!this.collapseAll) && isOpen;
       collapsibleState = shouldOpen ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed;
     }
+    // List mode: everything is None (no collapse icon)
 
     const item = new vscode.TreeItem(label, collapsibleState);
 
@@ -327,6 +401,11 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     item.description = StatusLabel[status];
     item.contextValue = `fileEntry-${isFolder ? 'directory' : 'file'}-${status}`;
     item.resourceUri = this.buildResourceUri(element.workspaceId, element.path, status);
+
+    // Set folder icon for directories (both tree and list mode)
+    if (isFolder) {
+      item.iconPath = new vscode.ThemeIcon('folder');
+    }
 
     // Open-file command only for non-removed files
     if (!isFolder && status !== 'removed') {

@@ -2,24 +2,63 @@ import * as vscode from 'vscode';
 import { cmd } from '../cmd';
 import type { Services } from '../services';
 import type { NodeIndex } from '../../domain/types';
-import { resolveWorkspaceFolders } from '../../infrastructure/helpers/resolve';
-import { stringToWsId } from '../../infrastructure/helpers/path';
-import { refreshRemoteSnapshot } from '../../infrastructure/helpers/remote';
-import { findWorkspaceFolderById } from '../../infrastructure/helpers/workspaceFolder';
+import { resolveWorkspaceFolders } from '@helpers/resolve';
+import { stringToWsId } from '@helpers/path';
+import { refreshRemoteSnapshot } from '@helpers/remote';
 
 export function registerViewToolbar(services: Services): void {
   const { context, state, config, remote, progress, provider } = services;
 
-  // Toggle "show unchanged" (tree will auto-refresh on configuration change)
+  // Toggle "show unchanged"
   cmd(context, 'livesync.view.toggleShowUnchanged', async () => {
     const cfg = vscode.workspace.getConfiguration('livesync');
     const current = cfg.get<boolean>('view.showUnchanged') ?? false;
     await cfg.update('view.showUnchanged', !current, vscode.ConfigurationTarget.Workspace);
   });
 
+  // Switch to tree view
+  cmd(context, 'livesync.view.switchToTree', async () => {
+    const cfg = vscode.workspace.getConfiguration('livesync');
+    await cfg.update('view.showAsTree', true, vscode.ConfigurationTarget.Workspace);
+    await vscode.commands.executeCommand('setContext', 'livesyncViewMode', 'tree');
+    provider.setShowAsTree(true);
+  });
+
+  // Switch to list view
+  cmd(context, 'livesync.view.switchToList', async () => {
+    const cfg = vscode.workspace.getConfiguration('livesync');
+    await cfg.update('view.showAsTree', false, vscode.ConfigurationTarget.Workspace);
+    await vscode.commands.executeCommand('setContext', 'livesyncViewMode', 'list');
+    provider.setShowAsTree(false);
+  });
+
   // ════════════════════════════════════════════════════════════════════════════
   // DIFF VIEW COMMANDS (workspace-specific)
   // ════════════════════════════════════════════════════════════════════════════
+
+  // Refresh remote index for the CURRENT workspace shown in Diff view
+  cmd(context, 'livesync.experimental.refreshRemoteIndex', async () => {
+    const currentWsId = provider.getCurrentWorkspace();
+    if (!currentWsId) {
+      void vscode.window.showWarningMessage('LiveSync: no workspace selected.');
+      return;
+    }
+
+    const folder = vscode.workspace.workspaceFolders?.find(
+      f => stringToWsId(f.uri.fsPath) === currentWsId
+    );
+
+    if (!folder) {
+      void vscode.window.showWarningMessage('LiveSync: workspace folder not found.');
+      return;
+    }
+
+    await progress.withTask(`Refreshing remote index for ${folder.name}`, async () => {
+      await refreshRemoteSnapshot(services, currentWsId);
+    });
+
+    void vscode.window.showInformationMessage(`LiveSync: remote index refreshed for ${folder.name}.`);
+  });
 
   // Refresh both local & remote for the CURRENT workspace shown in Diff view
   cmd(context, 'livesync.experimental.refresh', async () => {
@@ -29,7 +68,14 @@ export function registerViewToolbar(services: Services): void {
       return;
     }
 
-    const folder = findWorkspaceFolderById(stringToWsId(currentWsId));
+    const folder = vscode.workspace.workspaceFolders?.find(
+      f => stringToWsId(f.uri.fsPath) === currentWsId
+    );
+
+    if (!folder) {
+      void vscode.window.showWarningMessage('LiveSync: workspace folder not found.');
+      return;
+    }
 
     await vscode.window.withProgress(
       {

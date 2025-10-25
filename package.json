@@ -70,12 +70,6 @@
         "icon": "$(gear)"
       },
       {
-        "command": "livesync.resolve.keepLocal",
-        "title": "Keep Local (Upload)",
-        "category": "LiveSync",
-        "icon": "$(arrow-up)"
-      },
-      {
         "command": "livesync.resolve.keepRemote",
         "title": "Keep Remote (Download)",
         "category": "LiveSync",
@@ -148,25 +142,20 @@
         "icon": "$(telescope)"
       },
       {
-        "command": "livesync.experimental.remote.load",
-        "title": "Load Remote Snapshot (Dev)",
-        "category": "LiveSync (Dev)",
-        "icon": "$(beaker)"
+        "command": "livesync.view.switchToTree",
+        "title": "Switch to Tree View",
+        "category": "LiveSync",
+        "icon": "$(list-tree)"
       },
       {
-        "command": "livesync.experimental.remote.saveFromLocal",
-        "title": "Save Remote Snapshot from Local (Dev)",
-        "category": "LiveSync (Dev)",
-        "icon": "$(beaker)"
+        "command": "livesync.view.switchToList",
+        "title": "Switch to List View",
+        "category": "LiveSync",
+        "icon": "$(list-flat)"
       }
     ],
     "menus": {
       "view/item/context": [
-        {
-          "command": "livesync.resolve.keepLocal",
-          "when": "view == livesync.diffs && viewItem == fileEntry-file-modified",
-          "group": "inline@0"
-        },
         {
           "command": "livesync.resolve.keepLocal",
           "when": "view == livesync.diffs && viewItem == fileEntry-file-conflict",
@@ -204,22 +193,7 @@
         },
         {
           "command": "livesync.experimental.node.applyToRemote",
-          "when": "view == livesync.diffs && viewItem == fileEntry-file-added",
-          "group": "inline@1"
-        },
-        {
-          "command": "livesync.experimental.node.applyToRemote",
-          "when": "view == livesync.diffs && viewItem == fileEntry-file-modified",
-          "group": "inline@1"
-        },
-        {
-          "command": "livesync.experimental.node.applyToRemote",
-          "when": "view == livesync.diffs && viewItem == fileEntry-file-removed",
-          "group": "inline@1"
-        },
-        {
-          "command": "livesync.experimental.node.applyToRemote",
-          "when": "view == livesync.diffs && viewItem == fileEntry-file-conflict",
+          "when": "view == livesync.diffs && viewItem =~ /fileEntry-file-(added|removed|modified|conflict)$/",
           "group": "inline@1"
         },
         {
@@ -315,6 +289,16 @@
           "command": "livesync.experimental.refreshAll",
           "when": "view == livesync.workspaces && livesync.multiRoot",
           "group": "navigation@1"
+        },
+        {
+          "command": "livesync.view.switchToTree",
+          "when": "view == livesync.diffs && livesyncViewMode == list",
+          "group": "navigation@1"
+        },
+        {
+          "command": "livesync.view.switchToList",
+          "when": "view == livesync.diffs && livesyncViewMode == tree",
+          "group": "navigation@1"
         }
       ],
       "explorer/context": [
@@ -396,6 +380,11 @@
             ]
           },
           "uniqueItems": true
+        },
+        "livesync.view.showAsTree": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show files in tree structure (true) or flat list (false)"
         }
       }
     }
