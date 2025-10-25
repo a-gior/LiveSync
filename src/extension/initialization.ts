@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
 
-import { WorkspaceId } from '@domain/types';
 import { SyncStateManager } from '@app/SyncStateManager';
 import { IndexCacheService } from '@infra/persistence/IndexCacheService';
 import { StorageService } from '@infra/storage/StorageService';
 import { ConfigErrorSuppressor } from '@infra/storage/ConfigErrorSuppressor';
 import { initLoggingDeps } from '@infra/helpers/logging';
 import { WorkspaceConfigService } from '../infrastructure/config/WorkspaceConfigService';
+import { stringToWsId } from '../infrastructure/helpers/path';
 
 /**
  * Initializes core infrastructure services:
@@ -53,7 +53,7 @@ export async function initializeAllWorkspaces(
   console.log('[Initialization] Processing', folders.length, 'workspace(s)');
   
   for (const folder of folders) {
-    const wsId = folder.uri.fsPath as WorkspaceId;
+    const wsId = stringToWsId(folder.uri.fsPath);
     console.log('[Initialization] --- Workspace:', wsId);
     
     const local = await localCache.load(wsId);

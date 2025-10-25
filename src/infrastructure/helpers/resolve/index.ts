@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { WorkspaceId, RelPath } from '../../../domain/types';
 import { asRel, dirnameRel, relFromAbs } from '../path/RelPath';
 import { stringToWsId } from '../path';
+import { findWorkspaceFolderById } from '../workspaceFolder';
 
 export interface ResolvedTarget {
   workspaceId: WorkspaceId;
@@ -110,10 +111,8 @@ export function resolveWorkspaceFolders(arg?: unknown): ReadonlyArray<vscode.Wor
   // Tree workspace node
   if (arg && typeof arg === 'object' && (arg as any).kind === 'workspace') {
     const wsId = (arg as any).workspaceId as string;
-    const folder = (vscode.workspace.workspaceFolders ?? []).find(f => f.uri.fsPath === wsId);
-    if (folder) {
-      return [folder];
-    }
+    
+    return [ findWorkspaceFolderById(stringToWsId(wsId)) ];
   }
 
   // URI from Explorer/Editor

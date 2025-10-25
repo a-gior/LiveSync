@@ -5,6 +5,7 @@ import type { NodeIndex } from '../../domain/types';
 import { resolveWorkspaceFolders } from '../../infrastructure/helpers/resolve';
 import { stringToWsId } from '../../infrastructure/helpers/path';
 import { refreshRemoteSnapshot } from '../../infrastructure/helpers/remote';
+import { findWorkspaceFolderById } from '../../infrastructure/helpers/workspaceFolder';
 
 export function registerViewToolbar(services: Services): void {
   const { context, state, config, remote, progress, provider } = services;
@@ -27,15 +28,8 @@ export function registerViewToolbar(services: Services): void {
       void vscode.window.showWarningMessage('LiveSync: no workspace selected.');
       return;
     }
-
-    const folder = vscode.workspace.workspaceFolders?.find(
-      f => stringToWsId(f.uri.fsPath) === currentWsId
-    );
-
-    if (!folder) {
-      void vscode.window.showWarningMessage('LiveSync: workspace folder not found.');
-      return;
-    }
+    
+    const folder = findWorkspaceFolderById(stringToWsId(currentWsId));
 
     await progress.withTask(`Refreshing remote index for ${folder.name}`, async () => {
       await refreshRemoteSnapshot(services, currentWsId);
@@ -52,14 +46,7 @@ export function registerViewToolbar(services: Services): void {
       return;
     }
 
-    const folder = vscode.workspace.workspaceFolders?.find(
-      f => stringToWsId(f.uri.fsPath) === currentWsId
-    );
-
-    if (!folder) {
-      void vscode.window.showWarningMessage('LiveSync: workspace folder not found.');
-      return;
-    }
+    const folder = findWorkspaceFolderById(stringToWsId(currentWsId));
 
     await vscode.window.withProgress(
       {

@@ -4,10 +4,11 @@ import * as path from 'path';
 import { WorkspaceConfigData, EffectiveWorkspaceConfig } from './WorkspaceConfig';
 import { ActionPolicy, WorkspaceId } from '../../domain/types';
 import { parseActionPolicy } from '../helpers/policy';
+import { stringToWsId } from '../helpers/path';
 
 export class WorkspaceConfigService {
   private readonly cache = new Map<string, EffectiveWorkspaceConfig>();
-  private readonly emitter = new vscode.EventEmitter<{ workspaceId: string }>();
+  private readonly emitter = new vscode.EventEmitter<{ workspaceId: WorkspaceId }>();
   public readonly onDidChange = this.emitter.event;
 
   constructor(private readonly ctx: vscode.ExtensionContext) {
@@ -55,12 +56,12 @@ export class WorkspaceConfigService {
   private async reload(folder: vscode.WorkspaceFolder): Promise<void> {
     const eff = await this.loadFromDisk(folder);
     this.cache.set(folder.uri.fsPath, eff);
-    this.emitter.fire({ workspaceId: folder.uri.fsPath });
+    this.emitter.fire({ workspaceId: stringToWsId(folder.uri.fsPath) });
   }
 
   private remove(folder: vscode.WorkspaceFolder): void {
     this.cache.delete(folder.uri.fsPath);
-    this.emitter.fire({ workspaceId: folder.uri.fsPath });
+    this.emitter.fire({ workspaceId: stringToWsId(folder.uri.fsPath) });
   }
 
   private async loadFromDisk(folder: vscode.WorkspaceFolder): Promise<EffectiveWorkspaceConfig> {
