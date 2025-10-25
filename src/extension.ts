@@ -6,7 +6,6 @@ import { registerApplyToRemote } from './extension/commands/applyToRemote';
 import { registerApplyFromRemote } from './extension/commands/applyFromRemote';
 import { registerShowDiff } from './extension/commands/showDiff';
 import { FileEventBridge } from './presentation/events/FileEventBridge';
-import { registerRemotePresence } from './extension/remotePresence';
 import { registerViewToolbar } from './extension/commands/viewToolbar';
 import { registerConflictResolver } from './extension/commands/conflictResolver';
 import { FileStatusDecorationProvider } from '@presentation/decoration/FileStatusDecorationProvider';
@@ -23,7 +22,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Build core services
   const services = await bootstrap(context);
-  registerRemotePresence(services);
 
   // Initialize view mode context and provider
   const cfg = vscode.workspace.getConfiguration('livesync');

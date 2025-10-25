@@ -10,6 +10,7 @@ import { partitionChangesUnder, topMost } from '@helpers/diff';
 import { withProgress, reportCounter } from '@helpers/async';
 import { refreshRemoteSnapshot } from '@helpers/remote';
 import { logExpectedError } from '../../infrastructure/helpers/logging';
+import { requireValidRemoteConfig } from '../../infrastructure/helpers/config';
 
 export function registerApplyToRemote(services: Services): void {
   const { context, state, remote, provider } = services;
@@ -23,6 +24,11 @@ export function registerApplyToRemote(services: Services): void {
   cmd(context, 'livesync.experimental.node.applyToRemote', async (arg?: unknown) => {
     const target = resolveEntryTarget(arg);
     if (!target) { return; }
+    
+    // Check validation before proceeding
+    if (!await requireValidRemoteConfig(services, target.workspaceId)) {
+      return;
+    }
 
     const { workspaceId, relPath } = target;
     const entry = state.getDiffEntry(workspaceId, relPath);
@@ -85,6 +91,7 @@ export function registerApplyToRemote(services: Services): void {
   cmd(context, 'livesync.experimental.folder.applyToRemoteRecursively', async (arg?: unknown) => {
     const target = resolveFolderTarget(arg);
     if (!target) { return; }
+    
 
     const { workspaceId, folderPath } = target;
     const diff = state.getDiffEntries(workspaceId);

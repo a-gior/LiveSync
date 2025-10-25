@@ -23,12 +23,12 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
 
   // Configuration
   const config = new WorkspaceConfigService(context);
-  const configValidator = new ConfigValidator(config);
+  const validator = new ConfigValidator(config);
   
   // On startup: Quick reachability check (2s timeout per host)
   // This is fast enough for startup while still catching unreachable hosts
-  const validationResults = await configValidator.validateAll(false, true);
-  configValidator.getTracker().initialize(validationResults);
+  const validationResults = await validator.validateAll(false, true);
+  validator.getTracker().initialize(validationResults);
 
   // Remote connection
   const sftpRemote = new SftpRemotePort(config, 4);
@@ -59,7 +59,7 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   }
 
   // Register config change handler (quick validation on config changes)
-  registerConfigChangeHandler(config, configValidator, views.listProvider, context);
+  registerConfigChangeHandler(config, validator, views.listProvider, context);
 
   // Register commands
   context.subscriptions.push(
@@ -81,6 +81,7 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
     diffEngine,
     state,
     config,
+    validator,
     remote,
     provider: views.diffsProvider,
     treeView: views.diffsView,

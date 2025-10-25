@@ -87,6 +87,7 @@ export class ConfigValidationTracker {
 
 export class ConfigValidator {
   private readonly tracker = new ConfigValidationTracker();
+  private readonly validationCache = new Map<WorkspaceId, ConfigValidationResult>();
 
   constructor(private readonly configService: WorkspaceConfigService) {}
 
@@ -95,6 +96,45 @@ export class ConfigValidator {
    */
   getTracker(): ConfigValidationTracker {
     return this.tracker;
+  }
+
+  /**
+   * Get cached validation result, or return invalid if not cached
+   */
+  getCached(workspaceId: WorkspaceId): ConfigValidationResult {
+    const cached = this.validationCache.get(workspaceId);
+    if (cached) {
+      return cached;
+    }
+    
+    // Not validated yet - return invalid
+    return {
+      workspaceId,
+      hasConfig: false,
+      isValid: false,
+      error: 'Configuration not yet validated'
+    };
+  }
+
+  /**
+   * Clear cache for a workspace (call when config changes)
+   */
+  clearCache(workspaceId: WorkspaceId): void {
+    this.validationCache.delete(workspaceId);
+  }
+
+  /**
+   * Check if workspace has valid config (from cache)
+   */
+  isValid(workspaceId: WorkspaceId): boolean {
+    return this.getCached(workspaceId).isValid;
+  }
+
+  /**
+   * Get validation error message (from cache)
+   */
+  getError(workspaceId: WorkspaceId): string | undefined {
+    return this.getCached(workspaceId).error;
   }
 
   /**
@@ -130,16 +170,20 @@ export class ConfigValidator {
     const workspaceId = stringToWsId(folder.uri.fsPath);
     const configPath = path.join(folder.uri.fsPath, '.vscode', 'livesync.json');
 
+    let result: ConfigValidationResult;
+
     // Check if config file exists
     try {
       await fs.promises.access(configPath, fs.constants.F_OK);
     } catch {
-      return {
+      result = {
         workspaceId,
         hasConfig: false,
         isValid: false,
         error: 'No configuration file found'
       };
+      this.validationCache.set(workspaceId, result);
+      return result;
     }
 
     // Try to load and validate config
@@ -148,43 +192,33 @@ export class ConfigValidator {
 
       // Basic validation: needs hostname and remotePath for remote sync
       if (!config.data.hostname || !config.data.remotePath) {
-        return {
+        result = {
           workspaceId,
           hasConfig: true,
           isValid: false,
           error: 'Missing required fields (hostname or remotePath)'
         };
       }
-
       // Needs authentication
-      if (!config.data.password && !config.data.privateKeyPath) {
-        return {
+      else if (!config.data.password && !config.data.privateKeyPath) {
+        result = {
           workspaceId,
           hasConfig: true,
           isValid: false,
           error: 'Missing authentication (password or privateKeyPath)'
         };
       }
-
       // Quick reachability check (fast - just TCP connect)
-      if (quickReachability) {
-        const isReachable = await ConfigValidator.quickReachabilityTest(
-          config.data.hostname,
-          config.data.port || 22
-        );
-        
-        if (!isReachable) {
-          return {
-            workspaceId,
-            hasConfig: true,
-            isValid: false,
-            error: `Host unreachable: ${config.data.hostname}:${config.data.port || 22}`
-          };
-        }
+      else if (quickReachability && !await ConfigValidator.quickReachabilityTest(config.data.hostname, config.data.port || 22)) {
+        result = {
+          workspaceId,
+          hasConfig: true,
+          isValid: false,
+          error: `Host unreachable: ${config.data.hostname}:${config.data.port || 22}`
+        };
       }
-
       // Full connection test (slow - full SSH handshake + auth)
-      if (testConnection) {
+      else if (testConnection) {
         const connectionTest = await ConfigValidator.testConnection({
           hostname: config.data.hostname,
           port: config.data.port || 22,
@@ -194,29 +228,26 @@ export class ConfigValidator {
           passphrase: config.data.passphrase,
         });
 
-        if (!connectionTest.success) {
-          return {
-            workspaceId,
-            hasConfig: true,
-            isValid: false,
-            error: `Connection failed: ${connectionTest.message}`
-          };
-        }
+        result = connectionTest.success
+          ? { workspaceId, hasConfig: true, isValid: true }
+          : { workspaceId, hasConfig: true, isValid: false, error: `Connection failed: ${connectionTest.message}` };
       }
-
-      return {
-        workspaceId,
-        hasConfig: true,
-        isValid: true
-      };
+      // All checks passed
+      else {
+        result = { workspaceId, hasConfig: true, isValid: true };
+      }
     } catch (err) {
-      return {
+      result = {
         workspaceId,
         hasConfig: true,
         isValid: false,
         error: err instanceof Error ? err.message : 'Unknown error'
       };
     }
+
+    // Cache and return
+    this.validationCache.set(workspaceId, result);
+    return result;
   }
 
   /**

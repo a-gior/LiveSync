@@ -24,6 +24,9 @@ export function registerConfigChangeHandler(
     config.onDidChange(async (event: { workspaceId: WorkspaceId }) => {
       console.log('[ConfigChange] Config file changed for workspace:', event.workspaceId);
       
+      // Clear cache for this workspace
+      validator.clearCache(event.workspaceId);
+
       // Find the specific workspace folder that changed
       const folder = findWorkspaceFolderById(event.workspaceId);
       

@@ -7,12 +7,14 @@ import type { RemotePort } from '../application/ports/RemotePort';
 import { ProgressService } from '../presentation/statusbar/ProgressService';
 import { IndexCacheService } from '../infrastructure/persistence/IndexCacheService';
 import { WorkspaceListProvider } from '../presentation/tree/WorkspaceListProvider';
+import { ConfigValidator } from '../infrastructure/config/ConfigValidator';
 
 export interface Services {
   context: vscode.ExtensionContext;
   diffEngine: DefaultDiffEngine;
   state: SyncStateManager;
   config: WorkspaceConfigService;
+  validator: ConfigValidator;
   remote: RemotePort;
   provider: ExperimentalTreeProvider;
   treeView: vscode.TreeView<ExperimentalNode>;

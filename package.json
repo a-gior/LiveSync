@@ -163,12 +163,12 @@
         },
         {
           "command": "livesync.resolve.keepRemote",
-          "when": "view == livesync.diffs && livesync.supportsDownload && viewItem == fileEntry-file-modified",
+          "when": "view == livesync.diffs  && viewItem == fileEntry-file-modified",
           "group": "inline@0"
         },
         {
           "command": "livesync.resolve.keepRemote",
-          "when": "view == livesync.diffs && livesync.supportsDownload && viewItem == fileEntry-file-conflict",
+          "when": "view == livesync.diffs  && viewItem == fileEntry-file-conflict",
           "group": "inline@0"
         },
         {
@@ -183,12 +183,12 @@
         },
         {
           "command": "livesync.resolveFolder.keepRemote",
-          "when": "view == livesync.diffs && livesync.supportsDownload && viewItem == fileEntry-directory-modified",
+          "when": "view == livesync.diffs  && viewItem == fileEntry-directory-modified",
           "group": "navigation@1"
         },
         {
           "command": "livesync.resolveFolder.keepRemote",
-          "when": "view == livesync.diffs && livesync.supportsDownload && viewItem == fileEntry-directory-conflict",
+          "when": "view == livesync.diffs  && viewItem == fileEntry-directory-conflict",
           "group": "navigation@1"
         },
         {
@@ -198,27 +198,27 @@
         },
         {
           "command": "livesync.experimental.node.applyFromRemote",
-          "when": "view == livesync.diffs && viewItem == fileEntry-file-modified && livesync.supportsDownload",
+          "when": "view == livesync.diffs && viewItem == fileEntry-file-modified ",
           "group": "inline@2"
         },
         {
           "command": "livesync.experimental.node.applyFromRemote",
-          "when": "view == livesync.diffs && viewItem == fileEntry-file-removed && livesync.supportsDownload",
+          "when": "view == livesync.diffs && viewItem == fileEntry-file-removed ",
           "group": "inline@2"
         },
         {
           "command": "livesync.experimental.node.applyFromRemote",
-          "when": "view == livesync.diffs && viewItem == fileEntry-file-conflict && livesync.supportsDownload",
+          "when": "view == livesync.diffs && viewItem == fileEntry-file-conflict ",
           "group": "inline@2"
         },
         {
           "command": "livesync.experimental.node.showDiff",
-          "when": "view == livesync.diffs && viewItem == fileEntry-file-modified && livesync.supportsDownload",
+          "when": "view == livesync.diffs && viewItem == fileEntry-file-modified ",
           "group": "inline@3"
         },
         {
           "command": "livesync.experimental.node.showDiff",
-          "when": "view == livesync.diffs && viewItem == fileEntry-file-conflict && livesync.supportsDownload",
+          "when": "view == livesync.diffs && viewItem == fileEntry-file-conflict ",
           "group": "inline@3"
         },
         {
@@ -238,12 +238,12 @@
         },
         {
           "command": "livesync.experimental.folder.applyFromRemoteRecursively",
-          "when": "view == livesync.diffs && viewItem == fileEntry-directory-modified && livesync.supportsDownload",
+          "when": "view == livesync.diffs && viewItem == fileEntry-directory-modified ",
           "group": "navigation@3"
         },
         {
           "command": "livesync.experimental.folder.applyFromRemoteRecursively",
-          "when": "view == livesync.diffs && viewItem == fileEntry-directory-removed && livesync.supportsDownload",
+          "when": "view == livesync.diffs && viewItem == fileEntry-directory-removed ",
           "group": "navigation@3"
         }
       ],
@@ -270,7 +270,7 @@
         },
         {
           "command": "livesync.resolveFolder.keepRemote",
-          "when": "view == livesync.diffs && livesync.supportsDownload",
+          "when": "view == livesync.diffs ",
           "group": "navigation@6",
           "icon": "$(arrow-down)"
         },

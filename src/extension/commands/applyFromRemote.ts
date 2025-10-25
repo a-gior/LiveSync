@@ -12,6 +12,7 @@ import { absFs, relToString, isUnder, stringToWsId, stringToRel } from '@infra/h
 import { withProgress, reportCounter } from '@infra/helpers/async';
 import { sha256OfFile } from '@infra/helpers/hash/FileHash';
 import { isDownloadable } from '../../infrastructure/helpers/diff';
+import { requireValidRemoteConfig } from '../../infrastructure/helpers/config';
 
 export function registerApplyFromRemote(services: Services): void {
   const { context, state, remote, provider } = services;
@@ -23,6 +24,11 @@ export function registerApplyFromRemote(services: Services): void {
   cmd(context, 'livesync.experimental.node.applyFromRemote', async (arg?: unknown) => {
     const target = resolveEntryTarget(arg);
     if (!target) { return; }
+
+    // Check validation before proceeding
+    if (!await requireValidRemoteConfig(services, target.workspaceId)) {
+      return;
+    }
 
     const { workspaceId, relPath } = target;
 
@@ -59,6 +65,11 @@ export function registerApplyFromRemote(services: Services): void {
   cmd(context, 'livesync.experimental.folder.applyFromRemoteRecursively', async (arg?: unknown) => {
     const target = resolveFolderTarget(arg);
     if (!target) { return; }
+    
+    // Check validation before proceeding
+    if (!await requireValidRemoteConfig(services, target.workspaceId)) {
+      return;
+    }
 
     const { workspaceId, folderPath } = target;
     const diff = state.getDiffEntries(workspaceId);
