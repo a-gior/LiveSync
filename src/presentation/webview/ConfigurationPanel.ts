@@ -1,46 +1,29 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
-import { Services } from '@ext/services';
+import { stringToWsId } from '@helpers/path';
 import { ConfigWriter } from '@infra/config/ConfigWriter';
-import { getNonce, getUri } from '@infra/helpers/webview';
-import { stringToWsId } from '@infra/helpers/path';
-import { ConfigValidator } from '@infra/config/ConfigValidator';
+import type { Services } from '../../extension/services';
 
 export class ConfigurationPanel {
-  private static currentPanel?: ConfigurationPanel;
+  public static currentPanel: ConfigurationPanel | undefined;
   private readonly panel: vscode.WebviewPanel;
-  private readonly services: Services;
-  private workspaceFolder: vscode.WorkspaceFolder;
   private disposables: vscode.Disposable[] = [];
 
   private constructor(
     panel: vscode.WebviewPanel,
     extensionUri: vscode.Uri,
-    services: Services,
-    workspaceFolder: vscode.WorkspaceFolder
+    private readonly services: Services,
+    private workspaceFolder: vscode.WorkspaceFolder
   ) {
     this.panel = panel;
-    this.services = services;
-    this.workspaceFolder = workspaceFolder;
 
-    // Set HTML content
-    this.panel.webview.html = this.getWebviewContent(
-      this.panel.webview,
-      extensionUri
-    );
+    this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
+    this.panel.webview.html = this.getWebviewContent(this.panel.webview, extensionUri);
 
-    // Handle messages from webview
     this.panel.webview.onDidReceiveMessage(
       (message) => this.handleMessage(message),
-      undefined,
+      null,
       this.disposables
     );
-
-    // Handle panel disposal
-    this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
-
-    // Send initial configuration
-    void this.sendInitialConfiguration();
   }
 
   public static show(
@@ -49,16 +32,13 @@ export class ConfigurationPanel {
     folder: vscode.WorkspaceFolder
   ): void {
     const viewType = 'livesync.configurationPanel';
-    const title = 'LiveSync Configuration';
+    const title = `LiveSync Configuration - ${folder.name}`;
 
-    // If panel already exists, reveal it
+    // If panel already exists, just reveal it
     if (ConfigurationPanel.currentPanel) {
       ConfigurationPanel.currentPanel.panel.reveal(vscode.ViewColumn.One);
-      // Update workspace folder if different
-      if (ConfigurationPanel.currentPanel.workspaceFolder.uri.fsPath !== folder.uri.fsPath) {
-        ConfigurationPanel.currentPanel.workspaceFolder = folder;
-        void ConfigurationPanel.currentPanel.sendInitialConfiguration();
-      }
+      ConfigurationPanel.currentPanel.workspaceFolder = folder;
+      void ConfigurationPanel.currentPanel.sendInitialConfiguration();
       return;
     }
 
@@ -84,6 +64,9 @@ export class ConfigurationPanel {
       services,
       folder
     );
+
+    // Send initial configuration after panel is created
+    void ConfigurationPanel.currentPanel.sendInitialConfiguration();
   }
 
   public static kill(): void {
@@ -171,43 +154,41 @@ export class ConfigurationPanel {
     }
   }
 
-    private async testConnection(connectionSettings: any): Promise<void> {
-        
-        try {
-            const result = await ConfigValidator.testConnection({
-            hostname: connectionSettings.hostname || '',
-            port: connectionSettings.port || 22,
-            username: connectionSettings.username || '',
-            password: connectionSettings.password,
-            privateKeyPath: connectionSettings.privateKeyPath,
-            passphrase: connectionSettings.passphrase
-            });
-
-            if (result.success) {
-                void vscode.window.showInformationMessage(result.message);
-            } else {
-                const detailsMsg = result.details ? `\n\n${result.details}` : '';
-                void vscode.window.showErrorMessage(`${result.message}${detailsMsg}`);
-            }
-
-            // Send result back to webview
-            this.panel.webview.postMessage({
-                command: 'testConnectionResult',
-                success: result.success,
-                message: result.message,
-                details: result.details
-            });
-        } catch (error: any) {
-            void vscode.window.showErrorMessage(`Connection test failed: ${error.message}`);
-            
-            this.panel.webview.postMessage({
-                command: 'testConnectionResult',
-                success: false,
-                message: 'Test failed',
-                details: error.message
-            });
-        }
+  /**
+   * Test connection using the registered command
+   * This tests the connection WITHOUT saving the config first
+   */
+  private async testConnection(connectionSettings: any): Promise<void> {
+    try {
+      // Call the command with raw connection settings (no saving required)
+      const result = await vscode.commands.executeCommand('livesync.testConnection', {
+        hostname: connectionSettings.hostname,
+        port: connectionSettings.port || 22,
+        username: connectionSettings.username,
+        password: connectionSettings.password,
+        privateKeyPath: connectionSettings.privateKeyPath,
+        passphrase: connectionSettings.passphrase,
+      });
+      
+      // Send result back to webview
+      this.panel.webview.postMessage({
+        command: 'testConnectionResult',
+        success: (result as any)?.success ?? false,
+        message: (result as any)?.message ?? 'Test completed',
+        details: (result as any)?.details
+      });
+      
+    } catch (error: any) {
+      void vscode.window.showErrorMessage(`Connection test failed: ${error.message}`);
+      
+      this.panel.webview.postMessage({
+        command: 'testConnectionResult',
+        success: false,
+        message: 'Test failed',
+        details: error.message
+      });
     }
+  }
 
   private async sendInitialConfiguration(): Promise<void> {
     const { config } = this.services;
@@ -260,39 +241,48 @@ export class ConfigurationPanel {
     webview: vscode.Webview,
     extensionUri: vscode.Uri
   ): string {
+    const scriptUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(extensionUri, 'webview-ui', 'public', 'build', 'pages', 'configuration', 'configuration.js')
+    );
+    const styleUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(extensionUri, 'webview-ui', 'public', 'build', 'pages', 'configuration', 'configuration.css')
+    );
+    
+    // Add reset CSS and VSCode theme CSS
+    const resetCss = webview.asWebviewUri(
+      vscode.Uri.joinPath(extensionUri, 'resources', 'css', 'reset.css')
+    );
+    const vscodeCss = webview.asWebviewUri(
+      vscode.Uri.joinPath(extensionUri, 'resources', 'css', 'vscode.css')
+    );
+
+    // Generate a nonce for inline scripts (CSP)
     const nonce = getNonce();
 
-    const filepaths = [
-      'resources/css/reset.css',
-      'resources/css/vscode.css',
-      'webview-ui/public/build/pages/configuration/configuration.css',
-      'webview-ui/public/build/pages/configuration/configuration.js'
-    ];
-
-    let htmlContent = `
-      <!DOCTYPE html>
+    return `<!DOCTYPE html>
       <html lang="en">
-        <head>
-          <title>LiveSync Configuration</title>
-          <meta charset="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
-    `;
-
-    // Add CSS and JS files
-    filepaths.forEach((filepath) => {
-      const uri = getUri(webview, extensionUri, filepath.split('/'));
-      const extension = path.extname(filepath).toLowerCase();
-
-      if (extension === '.css') {
-        htmlContent += `\n<link rel="stylesheet" type="text/css" href="${uri}">`;
-      } else if (extension === '.js') {
-        htmlContent += `\n<script defer nonce="${nonce}" src="${uri}"></script>`;
-      }
-    });
-
-    htmlContent += `\n</head>\n<body>\n</body>\n</html>`;
-
-    return htmlContent;
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
+        <link href="${resetCss}" rel="stylesheet">
+        <link href="${vscodeCss}" rel="stylesheet">
+        <link href="${styleUri}" rel="stylesheet">
+        <title>LiveSync Configuration</title>
+      </head>
+      <body>
+        <div id="app"></div>
+        <script nonce="${nonce}" src="${scriptUri}"></script>
+      </body>
+      </html>`;
   }
+}
+
+function getNonce(): string {
+  let text = '';
+  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  for (let i = 0; i < 32; i++) {
+    text += possible.charAt(Math.floor(Math.random() * possible.length));
+  }
+  return text;
 }

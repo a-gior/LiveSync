@@ -16,7 +16,7 @@ export interface ConfigValidationResult {
 
 export interface ConnectionSettings {
   hostname: string;
-  port: number;
+  port?: number;
   username: string;
   password?: string;
   privateKeyPath?: string;
@@ -224,27 +224,13 @@ export class ConfigValidator {
    * Much faster than full SSH handshake (1-2 seconds vs 5-8 seconds)
    */
   static async quickReachabilityTest(hostname: string, port: number = 22): Promise<boolean> {
-    return new Promise((resolve) => {
-      const socket = new net.Socket();
-      
-      const timeout = setTimeout(() => {
-        socket.destroy();
-        resolve(false);
-      }, 2000); // 2 second timeout
-      
-      socket.on('connect', () => {
-        clearTimeout(timeout);
-        socket.destroy();
-        resolve(true);
-      });
-      
-      socket.on('error', () => {
-        clearTimeout(timeout);
-        socket.destroy();
-        resolve(false);
-      });
-      
-      socket.connect(port, hostname);
+    return new Promise(resolve => {
+      const sock = new net.Socket();
+      sock.setTimeout(2000);
+      sock.once("connect", () => { sock.destroy(); resolve(true); });
+      sock.once("timeout", () => { sock.destroy(); resolve(false); });
+      sock.once("error", () => { sock.destroy(); resolve(false); });
+      sock.connect(port, hostname);
     });
   }
 
