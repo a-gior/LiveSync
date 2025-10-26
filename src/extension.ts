@@ -2,16 +2,14 @@ import * as vscode from 'vscode';
 
 import { bootstrap } from './extension/bootstrap';
 import { registerViewCommands } from './extension/commands/view';
-import { registerApplyToRemote } from './extension/commands/applyToRemote';
-import { registerApplyFromRemote } from './extension/commands/applyFromRemote';
 import { registerShowDiff } from './extension/commands/showDiff';
 import { FileEventBridge } from './presentation/events/FileEventBridge';
 import { registerViewToolbar } from './extension/commands/viewToolbar';
-import { registerConflictResolver } from './extension/commands/conflictResolver';
 import { FileStatusDecorationProvider } from '@presentation/decoration/FileStatusDecorationProvider';
 import { logInfoMessage } from './infrastructure/helpers/logging';
 import { registerConfigurationCommands } from './extension/commands/configuration';
 import { registerTestConnectionCommand } from './extension/commands/testConnection';
+import { registerUploadDownload } from './extension/commands/uploadDownload';
 
 export async function activate(context: vscode.ExtensionContext) {
   logInfoMessage('LiveSync activating…');
@@ -34,14 +32,12 @@ export async function activate(context: vscode.ExtensionContext) {
   bridge.register(context.subscriptions);
 
   // Commands
-  registerConflictResolver(services);
   registerViewToolbar(services);
   registerViewCommands(services);
-  registerApplyToRemote(services);
-  registerApplyFromRemote(services);
   registerShowDiff(services);
   registerConfigurationCommands(services);
   registerTestConnectionCommand(services);
+  registerUploadDownload(services);
 
   logInfoMessage('LiveSync activated.');
 }

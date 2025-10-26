@@ -278,6 +278,86 @@ export class SftpRemotePort implements RemotePort {
     });
   }
 
+  /**
+   * Upload multiple files in a folder with concurrent SFTP connections.
+   * Returns array of successfully uploaded RelPaths.
+   */
+  async uploadFolder(
+    workspaceId: WorkspaceId,
+    files: Array<{ relPath: RelPath; absLocal: string }>
+  ): Promise<RelPath[]> {
+    const cfg = await this.configService.getById(workspaceId);
+    if (!cfg.hasRemote) return [];
+
+    const uploaded: RelPath[] = [];
+    const errors: Array<{ path: RelPath; error: string }> = [];
+
+    await Promise.all(
+      files.map((f) =>
+        sftpLimit(async () => {
+          try {
+            await this.withSFTP(cfg, async (sftpClient) => {
+              const remoteAbs = joinRemote(cfg.data.remotePath!, f.relPath as string);
+              const remoteDir = p.dirname(remoteAbs);
+              
+              await ensureRemoteDir(sftpClient, remoteDir);
+              await sftpClient.fastPut(f.absLocal, remoteAbs);
+            });
+            uploaded.push(f.relPath);
+          } catch (e: any) {
+            errors.push({ path: f.relPath, error: e?.message ?? String(e) });
+          }
+        })
+      )
+    );
+
+    if (errors.length > 0) {
+      logInfoMessage(`[LiveSync][SFTP] Upload errors: ${errors.map(e => `${e.path}: ${e.error}`).join('; ')}`);
+    }
+
+    return uploaded;
+  }
+
+  /**
+   * Download multiple files in a folder with concurrent SFTP connections.
+   * Returns array of successfully downloaded RelPaths.
+   */
+  async downloadFolder(
+    workspaceId: WorkspaceId,
+    files: Array<{ relPath: RelPath; absLocal: string }>
+  ): Promise<RelPath[]> {
+    const cfg = await this.configService.getById(workspaceId);
+    if (!cfg.hasRemote) return [];
+
+    const downloaded: RelPath[] = [];
+    const errors: Array<{ path: RelPath; error: string }> = [];
+
+    await Promise.all(
+      files.map((f) =>
+        sftpLimit(async () => {
+          try {
+            await this.withSFTP(cfg, async (sftpClient) => {
+              const remoteAbs = joinRemote(cfg.data.remotePath!, f.relPath as string);
+              const localDir = path.dirname(f.absLocal);
+              
+              await fsp.mkdir(localDir, { recursive: true });
+              await sftpClient.fastGet(remoteAbs, f.absLocal);
+            });
+            downloaded.push(f.relPath);
+          } catch (e: any) {
+            errors.push({ path: f.relPath, error: e?.message ?? String(e) });
+          }
+        })
+      )
+    );
+
+    if (errors.length > 0) {
+      logInfoMessage(`[LiveSync][SFTP] Download errors: ${errors.map(e => `${e.path}: ${e.error}`).join('; ')}`);
+    }
+
+    return downloaded;
+  }
+
   async deletePath(workspaceId: WorkspaceId, relPath: RelPath): Promise<void> {
     const cfg = await this.configService.getById(workspaceId);
     if (!cfg.hasRemote) return;

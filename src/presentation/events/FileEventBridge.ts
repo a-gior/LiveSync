@@ -15,9 +15,9 @@ import type {
 } from '../../domain/types';
 import { IndexCacheService } from '@infra/persistence/IndexCacheService';
 import { compile, ignored } from '@infra/helpers/ignore/Ignore';
-import { stringToRel, stringToWsId } from '@infra/helpers/path';
-import { isDownloadable, isUploadable } from '@infra/helpers/diff';
-import { parseActionPolicy } from '@infra/helpers/policy';
+import { relFromAbs, stringToRel, stringToWsId } from '@infra/helpers/path';
+import { isDownloadable } from '@infra/helpers/diff';
+import { confirmPolicyAction, maybeActByPolicy, parseActionPolicy, showCheckInfo } from '@infra/helpers/policy';
 import { logExpectedError } from '@infra/helpers/logging';
 import { FileOperationQueue } from '@infra/helpers/concurrency';
 
@@ -69,7 +69,7 @@ export class FileEventBridge {
     if (!folder) {return;}
 
     const workspaceId = stringToWsId(folder.uri.fsPath);
-    const relPath = this.relativeOf(workspaceId, doc.uri.fsPath);
+    const relPath = relFromAbs(workspaceId, doc.uri.fsPath);
 
     // Queue key includes workspace to allow parallel ops across workspaces
     const queueKey = `${workspaceId}:${relPath}`;
@@ -95,7 +95,7 @@ export class FileEventBridge {
       if (ignored(relPath, rules)) return;
 
       const policy = parseActionPolicy(eff.data.actionOnSave);
-      await this.maybeActByPolicy(workspaceId, relPath, policy, 'save');
+      await maybeActByPolicy(workspaceId, relPath, policy, 'save', this.state, this.remote);
     });
   }
 
@@ -106,7 +106,7 @@ export class FileEventBridge {
       if (!folder) return Promise.resolve();
 
       const workspaceId = stringToWsId(folder.uri.fsPath);
-      const relPath = this.relativeOf(workspaceId, uri.fsPath);
+      const relPath = relFromAbs(workspaceId, uri.fsPath);
       const queueKey = `${workspaceId}:${relPath}`;
 
       return this.operationQueue.enqueue(queueKey, async () => {
@@ -149,7 +149,7 @@ export class FileEventBridge {
         if (ignored(relPath, rules)) return;
 
         const policy = parseActionPolicy(eff.data.actionOnCreate);
-        await this.maybeActByPolicy(workspaceId, relPath, policy, 'create');
+        await maybeActByPolicy(workspaceId, relPath, policy, 'create', this.state, this.remote);
       });
     }));
   }
@@ -160,7 +160,7 @@ export class FileEventBridge {
       if (!folder) return Promise.resolve();
 
       const workspaceId = stringToWsId(folder.uri.fsPath);
-      const relPath = this.relativeOf(workspaceId, uri.fsPath);
+      const relPath = relFromAbs(workspaceId, uri.fsPath);
       const queueKey = `${workspaceId}:${relPath}`;
 
       return this.operationQueue.enqueue(queueKey, async () => {
@@ -181,14 +181,14 @@ export class FileEventBridge {
 
         // A) check-only → informational popup
         if (policy.check && !policy.direction && policy.extras.size === 0) {
-          await this.showCheckInfo('delete', relPath);
+          await showCheckInfo('delete', relPath);
           return;
         }
 
         // B) contains 'delete' → delete on remote
         if (policy.extras.has('delete')) {
           if (policy.check) {
-            const decision = await this.confirmPolicyAction(workspaceId, 'delete', false, relPath);
+            const decision = await confirmPolicyAction(workspaceId, 'delete', false, relPath);
             if (decision !== 'proceed') return;
           }
 
@@ -208,7 +208,7 @@ export class FileEventBridge {
         // C) direction === 'download' → restore from remote
         if (policy.direction === 'download') {
           if (policy.check) {
-            const decision = await this.confirmPolicyAction(workspaceId, 'download', false, relPath);
+            const decision = await confirmPolicyAction(workspaceId, 'download', false, relPath);
             if (decision !== 'proceed') return;
           }
 
@@ -235,8 +235,8 @@ export class FileEventBridge {
       if (!folder) return Promise.resolve();
 
       const workspaceId = stringToWsId(folder.uri.fsPath);
-      const oldRel = this.relativeOf(workspaceId, oldUri.fsPath);
-      const newRel = this.relativeOf(workspaceId, newUri.fsPath);
+      const oldRel = relFromAbs(workspaceId, oldUri.fsPath);
+      const newRel = relFromAbs(workspaceId, newUri.fsPath);
       
       const queueKey = `${workspaceId}:${oldUri}`;
 
@@ -279,14 +279,14 @@ export class FileEventBridge {
 
         // A) check-only (no 'rename' extra) → info and done
         if (policy.check && !policy.direction && !policy.extras.has('rename')) {
-          await this.showCheckInfo('rename', newRel, oldRel);
+          await showCheckInfo('rename', newRel, oldRel);
           return;
         }
 
         // B) extras.has('rename') → remote semantics = delete old + upload new (file or subtree)
         if (policy.extras.has('rename')) {
           if (policy.check) {
-            const decision = await this.confirmPolicyAction(workspaceId, 'move', false, newRel, oldRel);
+            const decision = await confirmPolicyAction(workspaceId, 'move', false, newRel, oldRel);
             if (decision !== 'proceed') {return;}
           }
 
@@ -358,7 +358,7 @@ export class FileEventBridge {
         // C) direction === 'upload' → ensure the NEW path exists on remote
         if (policy.direction === 'upload') {
           if (policy.check) {
-            const decision = await this.confirmPolicyAction( workspaceId, 'upload', /*allowDiff*/ !newIsDir, newRel);
+            const decision = await confirmPolicyAction( workspaceId, 'upload', /*allowDiff*/ !newIsDir, newRel);
             if (decision !== 'proceed') {return;}
           }
 
@@ -410,7 +410,7 @@ export class FileEventBridge {
         // D) direction === 'download' → restore the NEW path from remote
         if (policy.direction === 'download') {
           if (policy.check) {
-            const decision = await this.confirmPolicyAction(workspaceId, 'download', false, newRel);
+            const decision = await confirmPolicyAction(workspaceId, 'download', false, newRel);
             if (decision !== 'proceed') {return;}
           }
 
@@ -439,7 +439,7 @@ export class FileEventBridge {
     if (!folder) {return;}
 
     const workspaceId = stringToWsId(folder.uri.fsPath);
-    const relPath = this.relativeOf(workspaceId, doc.uri.fsPath);
+    const relPath = relFromAbs(workspaceId, doc.uri.fsPath);
 
     const queueKey = `${workspaceId}:${relPath}`;
 
@@ -453,7 +453,7 @@ export class FileEventBridge {
 
       // check-only → info
       if (policy.check && !policy.direction && policy.extras.size === 0) {
-        await this.showCheckInfo('open', relPath);
+        await showCheckInfo('open', relPath);
         return;
       }
 
@@ -463,7 +463,7 @@ export class FileEventBridge {
         if (!allowed) {return;}
 
         if (policy.check) {
-          const decision = await this.confirmPolicyAction(workspaceId, 'download', false, relPath);
+          const decision = await confirmPolicyAction(workspaceId, 'download', false, relPath);
           if (decision !== 'proceed') {return;}
         }
 
@@ -484,7 +484,7 @@ export class FileEventBridge {
     if (!folder) {return;}
 
     const workspaceId = stringToWsId(folder.uri.fsPath);
-    const rel = this.relativeOf(workspaceId, uri.fsPath);
+    const rel = relFromAbs(workspaceId, uri.fsPath);
 
     // Probe kind; treat folders as folder nodes to ensure they show up/fold properly
     try {
@@ -512,7 +512,7 @@ export class FileEventBridge {
     if (!folder) {return;}
 
     const workspaceId = stringToWsId(folder.uri.fsPath);
-    const relPath = this.relativeOf(workspaceId, uri.fsPath);
+    const relPath = relFromAbs(workspaceId, uri.fsPath);
 
     const hasChildren = this.state.hasLocalChildren(workspaceId, relPath);
     if (hasChildren) {
@@ -565,290 +565,5 @@ export class FileEventBridge {
       restored += 1;
     }
     return restored;
-  }
-
-  // ====================================================================================
-  // Policy application (shared)
-  // ====================================================================================
-
-  /**
-   * Check if we should prompt the user based on the policy check.
-   * Returns true only if the check condition is negative (conflict detected).
-   */
-  private async checkShouldPrompt(
-    workspaceId: WorkspaceId,
-    relPath: RelPath,
-    hint: 'save' | 'create' | 'open' | 'delete' | 'move' | 'upload' | 'download'
-  ): Promise<{ shouldPrompt: boolean; reason?: string }> {
-    const localMeta = this.state.getLocalMeta(workspaceId, relPath);
-    const remoteMeta = this.state.getRemoteMeta(workspaceId, relPath);
-
-    switch (hint) {
-      case 'save':
-      case 'open':
-      case 'upload': {
-        // Check: Has the remote file been modified by someone else?
-        // We compare our KNOWN remote hash (from state) with the ACTUAL remote hash
-        if (!remoteMeta) {
-          return { shouldPrompt: false }; // No remote file, no conflict
-        }
-        
-        if (remoteMeta.type !== 'file' || !remoteMeta.hash) {
-          return { shouldPrompt: false };
-        }
-
-        // Fetch the ACTUAL current remote hash
-        let actualRemoteHash: string;
-        try {
-          const remoteIndex = await this.remote.list(workspaceId);
-          const actualMeta = remoteIndex.get(relPath);
-          if (!actualMeta || actualMeta.type !== 'file') {
-            return { shouldPrompt: false }; // Remote file disappeared
-          }
-          actualRemoteHash = actualMeta.hash;
-        } catch (err) {
-          // Can't check remote, assume no conflict
-          return { shouldPrompt: false };
-        }
-
-        // Compare: known vs actual
-        const remoteWasModified = remoteMeta.hash !== actualRemoteHash;
-        
-        return {
-          shouldPrompt: remoteWasModified,
-          reason: remoteWasModified 
-            ? `Remote file was modified by someone else (expected: ${remoteMeta.hash.slice(0, 8)}..., actual: ${actualRemoteHash.slice(0, 8)}...)` 
-            : undefined
-        };
-      }
-
-      case 'create':
-      case 'move': {
-        // Check: Does file already exist remotely?
-        if (!remoteMeta) {
-          return { shouldPrompt: false }; // Doesn't exist, OK to create
-        }
-        
-        return {
-          shouldPrompt: true,
-          reason: `File already exists remotely`
-        };
-      }
-
-      case 'delete': {
-        // Check: Has someone modified the remote file before we delete it?
-        if (!remoteMeta || remoteMeta.type !== 'file') {
-          return { shouldPrompt: false }; // Nothing to delete or not a file
-        }
-
-        // Fetch actual remote hash
-        let actualRemoteHash: string;
-        try {
-          const remoteIndex = await this.remote.list(workspaceId);
-          const actualMeta = remoteIndex.get(relPath);
-          if (!actualMeta || actualMeta.type !== 'file') {
-            return { shouldPrompt: false }; // Already deleted
-          }
-          actualRemoteHash = actualMeta.hash;
-        } catch (err) {
-          return { shouldPrompt: false };
-        }
-
-        const remoteWasModified = remoteMeta.hash !== actualRemoteHash;
-        
-        return {
-          shouldPrompt: remoteWasModified,
-          reason: remoteWasModified 
-            ? 'Remote file was modified before deletion' 
-            : undefined
-        };
-      }
-
-      case 'download': {
-        // Check: Is local file different from what we're about to download?
-        if (!localMeta || !remoteMeta) {
-          return { shouldPrompt: false }; // One side missing
-        }
-        
-        if (localMeta.type !== 'file' || remoteMeta.type !== 'file') {
-          return { shouldPrompt: false };
-        }
-
-        // Local differs from remote
-        const localDifferent = localMeta.hash !== remoteMeta.hash;
-        
-        return {
-          shouldPrompt: localDifferent,
-          reason: localDifferent 
-            ? `Local file differs from remote (will be overwritten)` 
-            : undefined
-        };
-      }
-
-      default:
-        return { shouldPrompt: false };
-    }
-  }
-
-  // Replace the entire maybeActByPolicy method
-  private async maybeActByPolicy(
-    workspaceId: WorkspaceId,
-    relPath: RelPath,
-    policy: ReturnType<typeof parseActionPolicy>,
-    hint: 'save' | 'create' | 'open' | 'delete' | 'move' | 'upload' | 'download'
-  ): Promise<void> {
-    // No direction and no extras → nothing to do
-    if (!policy.direction && policy.extras.size === 0) {
-      if (policy.check) {
-        // Check-only: show info if check is negative
-        const { shouldPrompt, reason } = await this.checkShouldPrompt(workspaceId, relPath, hint);
-        if (shouldPrompt) {
-          await vscode.window.showInformationMessage(
-            `LiveSync (check): ${reason || 'Check failed'} for "${relPath as string}". No sync action taken.`
-          );
-        }
-      }
-      return;
-    }
-
-    // Has a direction (upload/download) or extras (delete/rename)
-    if (policy.direction) {
-      const entry = this.state.getDiffEntry(workspaceId, relPath);
-      const allowed = policy.direction === 'upload'
-        ? (entry ? isUploadable(entry.status) : true)
-        : (entry ? isDownloadable(entry.status) : true);
-
-      if (!allowed) {
-        return; // Status doesn't allow this action
-      }
-
-      // If check is enabled, verify condition
-      if (policy.check) {
-        const { shouldPrompt, reason } = await this.checkShouldPrompt(
-          workspaceId, 
-          relPath, 
-          policy.direction === 'upload' ? hint : 'download'
-        );
-        
-        if (shouldPrompt) {
-          // Prompt user to confirm action
-          const decision = await this.confirmPolicyAction(
-            workspaceId, 
-            policy.direction, 
-            policy.direction === 'upload' && (hint === 'save' || hint === 'create'), // allowDiff
-            relPath,
-            undefined,
-            reason
-          );
-          if (decision !== 'proceed') {
-            return; // User cancelled
-          }
-        }
-        // If check passed (shouldPrompt = false), proceed silently
-      }
-
-      // Perform the action
-      if (policy.direction === 'upload') {
-        const abs = absFs(workspaceId, relPath);
-        await this.remote.uploadFile(workspaceId, relPath, abs);
-        const h = await sha256OfFile(abs).catch(() => undefined);
-        if (h) {
-          this.state.applyRemote({
-            workspaceId,
-            type: 'modify',
-            path: relPath,
-            meta: { type: 'file', hash: h }
-          });
-        }
-      } else {
-        const abs = absFs(workspaceId, relPath);
-        await this.remote.downloadFile(workspaceId, relPath, abs);
-        const h = await sha256OfFile(abs).catch(() => undefined);
-        if (h) {
-          this.state.applyLocal({ workspaceId, type: 'modify', path: relPath, meta: { type: 'file', hash: h } });
-        }
-      }
-    }
-
-    // Extras are handled in specific event handlers (delete/rename)
-  }
-
-  // Update confirmPolicyAction to remove duplicate Cancel and add reason
-  private async confirmPolicyAction(
-    workspaceId: WorkspaceId,
-    mode: 'upload' | 'download' | 'delete' | 'move',
-    allowDiff: boolean,
-    relPath: RelPath,
-    oldPath?: RelPath,
-    reason?: string
-  ): Promise<'proceed' | 'diff' | 'cancel'> {
-    const label =
-      mode === 'upload'   ? 'Upload' :
-      mode === 'download' ? 'Download' :
-      mode === 'delete'   ? 'Delete from Remote' : 'Move on Remote';
-
-    const reasonText = reason ? `\n\n${reason}` : '';
-    const message = `LiveSync: ${label} "${(relPath as string) || '.'}"?${reasonText}`;
-    
-    // Build buttons array based on allowDiff
-    const buttons = allowDiff 
-      ? (['Proceed', 'Show Diff', 'Cancel'] as const)
-      : (['Proceed', 'Cancel'] as const);
-
-    const choice = await vscode.window.showWarningMessage(
-      message, 
-      { modal: true }, 
-      ...buttons
-    );
-
-    if (choice === 'Proceed') {
-      return 'proceed';
-    }
-    
-    if (choice === 'Show Diff' && allowDiff) {
-      await vscode.commands.executeCommand('livesync.experimental.node.showDiff', {
-        kind: 'entry',
-        workspaceId,
-        path: relPath,
-      });
-
-      const display = oldPath ? `${oldPath} → ${relPath}` : relPath;
-      const again = await vscode.window.showInformationMessage(
-        `Proceed to ${label.toLowerCase()} "${display}"?`,
-        { modal: true },
-        'Proceed',
-        'Cancel'
-      );
-      return again === 'Proceed' ? 'proceed' : 'cancel';
-    }
-    
-    return 'cancel';
-  }
-
-  // ====================================================================================
-  // UI helpers (prompts / formatting)
-  // ====================================================================================
-
-  private relativeOf(workspaceId: WorkspaceId, absFsPath: string): RelPath {
-    const normRoot = (workspaceId as string).replace(/\\/g, '/').replace(/\/+$/, '');
-    const normAbs = absFsPath.replace(/\\/g, '/');
-    return stringToRel(normAbs.startsWith(normRoot + '/') ? normAbs.slice(normRoot.length + 1) : '');
-  }
-
-  private async showCheckInfo(
-    hint: 'save' | 'create' | 'open' | 'rename' | 'delete',
-    relPath: RelPath,
-    oldPath?: RelPath
-  ): Promise<void> {
-    const verb =
-      hint === 'save'   ? 'Saved' :
-      hint === 'create' ? 'Created' :
-      hint === 'open'   ? 'Opened' :
-      hint === 'rename' ? 'Renamed' : 'Deleted';
-
-      const display = oldPath ? `${oldPath} → ${relPath}` : relPath;
-
-    const message = `LiveSync (check): ${verb} “${display}”. No sync action taken (policy = check).`;
-    await vscode.window.showInformationMessage(message);
   }
 }
