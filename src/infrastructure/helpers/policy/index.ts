@@ -215,8 +215,8 @@ export async function confirmPolicyAction(
   
   // Build buttons array based on allowDiff
   const buttons = allowDiff 
-    ? (['Proceed', 'Show Diff', 'Cancel'] as const)
-    : (['Proceed', 'Cancel'] as const);
+    ? (['Proceed', 'Show Diff'] as const)
+    : (['Proceed'] as const);
 
   const choice = await vscode.window.showWarningMessage(
     message, 
@@ -240,7 +240,6 @@ export async function confirmPolicyAction(
       `Proceed to ${label.toLowerCase()} "${display}"?`,
       { modal: true },
       'Proceed',
-      'Cancel'
     );
     return again === 'Proceed' ? 'proceed' : 'cancel';
   }

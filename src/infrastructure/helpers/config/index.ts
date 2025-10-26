@@ -22,7 +22,6 @@ export async function requireValidRemoteConfig(
     const choice = await vscode.window.showWarningMessage(
       'No remote server configured. Configure remote sync?',
       'Configure',
-      'Cancel'
     );
     
     if (choice === 'Configure') {
@@ -36,7 +35,6 @@ export async function requireValidRemoteConfig(
     const choice = await vscode.window.showErrorMessage(
       `Remote configuration error: ${errorMsg}`,
       'Fix Configuration',
-      'Cancel'
     );
     
     if (choice === 'Fix Configuration') {
