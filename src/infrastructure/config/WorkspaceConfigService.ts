@@ -2,8 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { WorkspaceConfigData, EffectiveWorkspaceConfig } from './WorkspaceConfig';
-import { ActionPolicy, WorkspaceId } from '../../domain/types';
-import { parseActionPolicy } from '../helpers/policy';
+import { WorkspaceId } from '../../domain/types';
 import { stringToWsId } from '../helpers/path';
 
 export class WorkspaceConfigService {
@@ -106,33 +105,3 @@ function toExcludeGlobs(ignoreList: string[]): string[] {
   
   return globs;
 }
-
-export interface EffectiveActions {
-  onSave: ActionPolicy;
-  onCreate: ActionPolicy;
-  onDelete: ActionPolicy;
-  onMove: ActionPolicy;
-  onOpen: ActionPolicy;
-  onUpload: ActionPolicy;    // optional, for explicit commands
-  onDownload: ActionPolicy;  // optional, for explicit commands
-}
-
-export function actionsFromData(data: any): EffectiveActions {
-  return {
-    onSave:      parseActionPolicy(data.actionOnSave),
-    onCreate:    parseActionPolicy(data.actionOnCreate),
-    onDelete:    parseActionPolicy(data.actionOnDelete),
-    onMove:      parseActionPolicy(data.actionOnMove),
-    onOpen:      parseActionPolicy(data.actionOnOpen),
-    onUpload:    parseActionPolicy(data.actionOnUpload),
-    onDownload:  parseActionPolicy(data.actionOnDownload),
-  };
-}
-
-// Optionally expose a convenience getter by folder id:
-export async function getActionsForId(this: WorkspaceConfigService, workspaceId: WorkspaceId): Promise<EffectiveActions> {
-  const eff = await this.getById(workspaceId);
-  return actionsFromData(eff.data);
-}
-// add method on class
-(WorkspaceConfigService.prototype as any).getActionsForId = getActionsForId;
