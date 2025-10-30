@@ -166,46 +166,6 @@ export class SyncStateManager {
   }
 
   // ------------------------------------------------------------------------------------
-  // Incremental *remote* mutations (after remote actions succeed)
-  // Call them from FileEventBridge *after* the remote port confirms success.
-  // ------------------------------------------------------------------------------------
-
-  /** Upsert a single remote node (file or folder). Rehash remote ancestors and recompute. */
-  upsertRemoteNode(workspaceId: WorkspaceId, path: RelPath, meta: NodeMeta): void {
-    const remote = this.ensureWorkspaceIndex(this.remoteByWorkspace, workspaceId);
-    if (meta.type === 'file') { this.ensureAncestorFolders(remote, path); }
-    remote.set(path, meta);
-    this.rehashAncestors(remote, path);
-    this.recompute(workspaceId, path);
-  }
-
-  /**
-   * Remove a remote subtree (optionally including the root node).
-   * Use after "delete remote (recursive)" succeeds.
-   */
-  removeRemoteSubtree(workspaceId: WorkspaceId, root: RelPath, includeRoot = true): void {
-    const remote = this.ensureWorkspaceIndex(this.remoteByWorkspace, workspaceId);
-    deleteSubtree(remote, root, includeRoot);
-    this.rehashAncestors(remote, root);
-    this.recompute(workspaceId, root);
-  }
-
-  /**
-   * Replace a remote subtree with a freshly listed slice (e.g. after verify/listSubtree).
-   * This is a low-IO way to correct an optimistic snapshot when you want belt & suspenders.
-   */
-  replaceRemoteSubtree(workspaceId: WorkspaceId, root: RelPath, slice: ReadonlyNodeIndex): void {
-    const remote = this.ensureWorkspaceIndex(this.remoteByWorkspace, workspaceId);
-    deleteSubtree(remote, root, /*includeRoot*/ true);
-    for (const [p, m] of slice) {
-      if (m.type === 'file') { this.ensureAncestorFolders(remote, p); }
-      remote.set(p, { ...m });
-    }
-    this.rehashAncestors(remote, root);
-    this.recompute(workspaceId, root);
-  }
-
-  // ------------------------------------------------------------------------------------
   // Queries
   // ------------------------------------------------------------------------------------
 
