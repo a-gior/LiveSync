@@ -25,9 +25,13 @@ export class FileEventBridge {
   ) {}
 
   register(disposables: vscode.Disposable[]): void {
+    // VS Code-initiated file ops
+    disposables.push(vscode.workspace.onDidCreateFiles((e) => this.onCreate(e)));
+    disposables.push(vscode.workspace.onDidDeleteFiles((e) => this.onDelete(e)));
+    disposables.push(vscode.workspace.onDidRenameFiles((e) => this.onRename(e)));
     disposables.push(vscode.workspace.onDidSaveTextDocument((d) => this.onSave(d)));
 
-    // FileSystemWatcher catches everything else
+    // External changes (terminal/git/OS): we watch all folders
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
       const pattern = new vscode.RelativePattern(folder, '**/*');
       const watcher = vscode.workspace.createFileSystemWatcher(pattern, false, false, false);
