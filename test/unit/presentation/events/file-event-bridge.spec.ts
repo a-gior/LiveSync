@@ -3,7 +3,6 @@ import * as sinon from 'sinon';
 import { FileEventBridge } from '../../../../src/presentation/events/FileEventBridge';
 import { SyncStateManager } from '../../../../src/application/SyncStateManager';
 import { WorkspaceConfigService } from '../../../../src/infrastructure/config/WorkspaceConfigService';
-import { IndexCacheService } from '../../../../src/infrastructure/persistence/IndexCacheService';
 
 /**
  * Phase 2: FileEventBridge Simplified Test Suite
@@ -23,14 +22,12 @@ describe('FileEventBridge (Phase 2 - Unit Tests)', () => {
     deletePath: sinon.SinonStub;
     downloadFile: sinon.SinonStub;
   };
-  let cacheService: sinon.SinonStubbedInstance<IndexCacheService>;
 
   beforeEach(() => {
     sandbox = sinon.createSandbox();
     
     stateManager = sandbox.createStubInstance(SyncStateManager);
     configService = sandbox.createStubInstance(WorkspaceConfigService);
-    cacheService = sandbox.createStubInstance(IndexCacheService);
     
     remotePort = {
       list: sandbox.stub(),
@@ -50,7 +47,6 @@ describe('FileEventBridge (Phase 2 - Unit Tests)', () => {
         stateManager as any,
         configService as any,
         remotePort as any,
-        cacheService as any
       );
       
       assert.ok(bridge);
@@ -62,7 +58,6 @@ describe('FileEventBridge (Phase 2 - Unit Tests)', () => {
         stateManager as any,
         configService as any,
         remotePort as any,
-        cacheService as any
       );
       
       // Dependencies are private, but bridge should be constructed
@@ -76,7 +71,6 @@ describe('FileEventBridge (Phase 2 - Unit Tests)', () => {
         stateManager as any,
         configService as any,
         remotePort as any,
-        cacheService as any
       );
       
       const disposables: any[] = [];
@@ -95,7 +89,6 @@ describe('FileEventBridge (Phase 2 - Unit Tests)', () => {
         stateManager as any,
         configService as any,
         remotePort as any,
-        cacheService as any
       );
       
       const disposables: any[] = [];
