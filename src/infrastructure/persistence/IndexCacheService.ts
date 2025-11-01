@@ -1,6 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import type { WorkspaceId, NodeIndex, FileMeta } from '../../domain/types';
+import type { WorkspaceId, NodeIndex, FileMeta, ReadonlyNodeIndex } from '../../domain/types';
 import { stringToRel, wsToString } from '../helpers/path';
 
 type Cache = {
@@ -30,7 +30,7 @@ export class IndexCacheService {
     } catch { return undefined; }
   }
 
-  async save(workspaceId: WorkspaceId, index: NodeIndex): Promise<void> {
+  async save(workspaceId: WorkspaceId, index: NodeIndex|ReadonlyNodeIndex): Promise<void> {
     const fp = this.filePath(workspaceId);
     await fs.mkdir(path.dirname(fp), { recursive: true });
     const obj: Cache = {

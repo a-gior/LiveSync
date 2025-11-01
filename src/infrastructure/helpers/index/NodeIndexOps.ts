@@ -4,7 +4,6 @@ import { absFs } from '../path/PathJoin';
 import { sha256OfFile } from '../hash/FileHash';
 import type { RemotePort } from '@app/ports/RemotePort';
 import type { SyncStateManager } from '@app/SyncStateManager';
-import type { IndexCacheService } from '@infra/persistence/IndexCacheService';
 import * as fsp from 'fs/promises';
 import * as path from 'path';
 
@@ -76,11 +75,10 @@ export async function restoreRemoteSubtree(
   workspaceId: WorkspaceId,
   folderRel: RelPath,
   remote: RemotePort,
-  state: SyncStateManager,
-  remoteCache: IndexCacheService
+  state: SyncStateManager
 ): Promise<number> {
   const remoteIndex: NodeIndex = await remote.list(workspaceId);
-  await remoteCache.save(workspaceId, remoteIndex);
+  state.setRemoteIndex(workspaceId, remoteIndex);
 
   const normalized = (folderRel as string).replace(/\\/g, '/').replace(/\/+$/, '');
   const prefix = normalized ? normalized + '/' : '';

@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import * as fsp from 'fs/promises';
 import * as path from 'path';
 
 import { SyncStateManager } from '@app/SyncStateManager';
@@ -8,18 +7,13 @@ import { absFs } from '@infra/helpers/path/PathJoin';
 import { sha256OfFile } from '@infra/helpers/hash/FileHash';
 import type { RemotePort } from '@app/ports/RemotePort';
 
-import type {
-  WorkspaceId,
-  RelPath,
-  NodeIndex,
-} from '../../domain/types';
-import { IndexCacheService } from '@infra/persistence/IndexCacheService';
 import { compile, ignored } from '@infra/helpers/ignore/Ignore';
 import { relFromAbs, stringToRel, stringToWsId } from '@infra/helpers/path';
 import { isDownloadable } from '@infra/helpers/diff';
 import { confirmPolicyAction, maybeActByPolicy, parseActionPolicy, showCheckInfo } from '@infra/helpers/policy';
 import { logExpectedError } from '@infra/helpers/logging';
 import { FileOperationQueue } from '@infra/helpers/concurrency';
+import { restoreRemoteSubtree } from '../../infrastructure/helpers/index';
 
 export class FileEventBridge {
   private readonly operationQueue = new FileOperationQueue();
@@ -27,18 +21,13 @@ export class FileEventBridge {
   constructor(
     private readonly state: SyncStateManager,
     private readonly config: WorkspaceConfigService,
-    private readonly remote: RemotePort,
-    private readonly remoteCache: IndexCacheService
+    private readonly remote: RemotePort
   ) {}
 
   register(disposables: vscode.Disposable[]): void {
-    // VS Code-initiated file ops
-    disposables.push(vscode.workspace.onDidCreateFiles((e) => this.onCreate(e)));
-    disposables.push(vscode.workspace.onDidDeleteFiles((e) => this.onDelete(e)));
-    disposables.push(vscode.workspace.onDidRenameFiles((e) => this.onRename(e)));
     disposables.push(vscode.workspace.onDidSaveTextDocument((d) => this.onSave(d)));
 
-    // External changes (terminal/git/OS): we watch all folders
+    // FileSystemWatcher catches everything else
     for (const folder of vscode.workspace.workspaceFolders ?? []) {
       const pattern = new vscode.RelativePattern(folder, '**/*');
       const watcher = vscode.workspace.createFileSystemWatcher(pattern, false, false, false);
@@ -213,7 +202,7 @@ export class FileEventBridge {
           }
 
           try {
-            const restored = await this.restoreRemoteSubtree(workspaceId, relPath);
+            const restored = await restoreRemoteSubtree(workspaceId, relPath, this.remote, this.state);
             if (restored === 0) {
               const absLocal = absFs(workspaceId, relPath);
               await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(absLocal)));
@@ -229,48 +218,54 @@ export class FileEventBridge {
     }));
   }
 
+
   private async onRename(event: vscode.FileRenameEvent): Promise<void> {
     await Promise.all(event.files.map(({ oldUri, newUri }) => {
-      const folder = vscode.workspace.getWorkspaceFolder(newUri) ?? vscode.workspace.getWorkspaceFolder(oldUri);
+      const folder = vscode.workspace.getWorkspaceFolder(newUri) ??
+                     vscode.workspace.getWorkspaceFolder(oldUri);
       if (!folder) return Promise.resolve();
 
       const workspaceId = stringToWsId(folder.uri.fsPath);
       const oldRel = relFromAbs(workspaceId, oldUri.fsPath);
       const newRel = relFromAbs(workspaceId, newUri.fsPath);
-      
-      const queueKey = `${workspaceId}:${oldUri}`;
+      const queueKey = `${workspaceId}:${newRel}`;
 
       return this.operationQueue.enqueue(queueKey, async () => {
-
-        // Local snapshot: remove old path (file or subtree), then add new (if file)
-        this.state.applyLocal({ workspaceId, type: 'delete', path: oldRel });
-
+        // Determine if target is a file or folder
         let newIsDir = false;
         try {
           const stat = await vscode.workspace.fs.stat(newUri);
           newIsDir = (stat.type & vscode.FileType.Directory) !== 0;
+        } catch {
+          return; // Target doesn't exist
+        }
 
-          if (!newIsDir) {
+        // Update local snapshot
+        if (newIsDir) {
+          this.state.applyLocal({
+            workspaceId,
+            type: 'rename',
+            path: oldRel,
+            newPath: newRel,
+            meta: { type: 'folder', hash: '' }
+          });
+        } else {
+          try {
             const hash = await sha256OfFile(newUri.fsPath);
             this.state.applyLocal({
               workspaceId,
-              type: 'modify',
-              path: newRel,
-              meta: { type: 'file', hash },
+              type: 'rename',
+              path: oldRel,
+              newPath: newRel,
+              meta: { type: 'file', hash }
             });
-          } else {
-            // Create folder node; its hash will settle via recompute
-            this.state.applyLocal({
-              workspaceId,
-              type: 'modify',
-              path: newRel,
-              meta: { type: 'folder', hash: '' },
-            });
+          } catch (err) {
+            logExpectedError(`FileEventBridge:onRename:hash:${newRel}`, err);
+            return;
           }
-        } catch {
-          // If stat fails, we still removed oldRel, and recompute will reflect downstream events.
         }
 
+        // Policy on move/rename
         const eff = await this.config.getById(workspaceId);
       
         const rules = compile(eff.ignoreGlobs);
@@ -290,62 +285,75 @@ export class FileEventBridge {
             if (decision !== 'proceed') {return;}
           }
 
+          // Delete old path on remote
           await this.remote.deletePath(workspaceId, oldRel).catch((err) => {
             logExpectedError(`FileEventBridge:deleteOldPath:${oldRel}`, err);
           });
 
           if (!newIsDir) {
+            // Upload single file
             const absLocal = absFs(workspaceId, newRel);
-            await this.remote.uploadFile(workspaceId, newRel, absLocal);
-            // Update remote snapshot optimistically
-            const hash = await sha256OfFile(absLocal).catch(() => undefined);
-            if (hash) {
+            try {
+              await this.remote.uploadFile(workspaceId, newRel, absLocal);
+              
+              // Only update remote index if upload succeeded
+              const hash = await sha256OfFile(absLocal).catch(() => undefined);
+              if (hash) {
+                this.state.applyRemote({
+                  workspaceId,
+                  type: 'modify',
+                  path: newRel,
+                  meta: { type: 'file', hash }
+                });
+              }
+              
               this.state.applyRemote({
                 workspaceId,
-                type: 'modify',
-                path: newRel,
-                meta: { type: 'file', hash }
+                type: 'delete',
+                path: oldRel
               });
+            } catch (err) {
+              logExpectedError(`FileEventBridge:onRename:upload:${newRel}`, err);
             }
-            
-            this.state.applyRemote({
-              workspaceId,
-              type: 'delete',
-              path: oldRel
-            });
           } else {
             // Upload folder subtree
             const localIndex = this.state.getLocalIndex(workspaceId);
             const prefix = stringToRel((newRel as string).replace(/\\/g, '/').replace(/\/+$/, '') + '/');
-
+            
             for (const [rel, meta] of localIndex) {
               const s = rel as string;
               if (rel === newRel || s.startsWith(prefix)) {
                 if (meta.type === 'file') {
                   const absLocal = absFs(workspaceId, rel);
-                  await this.remote.uploadFile(workspaceId, rel, absLocal);
-                  const h = await sha256OfFile(absLocal).catch(() => undefined);
-                  if (h) {
-                    this.state.applyRemote({
-                      workspaceId,
-                      type: 'modify',
-                      path: rel,
-                      meta: { type: 'file', hash: h }
-                    });
+                  try {
+                    await this.remote.uploadFile(workspaceId, rel, absLocal);
+                    
+                    // Only update remote index if upload succeeded
+                    const h = await sha256OfFile(absLocal).catch(() => undefined);
+                    if (h) {
+                      this.state.applyRemote({
+                        workspaceId,
+                        type: 'modify',
+                        path: rel,
+                        meta: { type: 'file', hash: h }
+                      });
+                    }
+                  } catch (err) {
+                    logExpectedError(`FileEventBridge:onRename:folder:upload:${rel}`, err);
                   }
                 } else {
-                  // ensure folder nodes exist remotely as we go
+                  // Folder nodes - always update (no remote operation needed)
                   this.state.applyRemote({
                     workspaceId,
                     type: 'modify',
                     path: rel,
                     meta: { type: 'folder', hash: '' }
                   });
-                  
                 }
               }
             }
             
+            // Delete old path after all uploads
             this.state.applyRemote({
               workspaceId,
               type: 'delete',
@@ -364,36 +372,50 @@ export class FileEventBridge {
 
           if (!newIsDir) {
             const absLocal = absFs(workspaceId, newRel);
-            await this.remote.uploadFile(workspaceId, newRel, absLocal);
-            const h = await sha256OfFile(absLocal).catch(() => undefined);
-            if (h) {
-              this.state.applyRemote({
-                workspaceId,
-                type: 'modify',
-                path: newRel,
-                meta: { type: 'file', hash: h }
-              });
+            try {
+              await this.remote.uploadFile(workspaceId, newRel, absLocal);
+              
+              // Only update remote index if upload succeeded
+              const h = await sha256OfFile(absLocal).catch(() => undefined);
+              if (h) {
+                this.state.applyRemote({
+                  workspaceId,
+                  type: 'modify',
+                  path: newRel,
+                  meta: { type: 'file', hash: h }
+                });
+              }
+            } catch (err) {
+              logExpectedError(`FileEventBridge:onRename:directionUpload:${newRel}`, err);
             }
           } else {
             // Upload folder subtree
             const localIndex = this.state.getLocalIndex(workspaceId);
             const prefix = stringToRel((newRel as string).replace(/\\/g, '/').replace(/\/+$/, '') + '/');
+            
             for (const [rel, meta] of localIndex) {
               const s = rel as string;
               if (rel === newRel || s.startsWith(prefix)) {
                 if (meta.type === 'file') {
                   const absLocal = absFs(workspaceId, rel);
-                  await this.remote.uploadFile(workspaceId, rel, absLocal);
-                  const h = await sha256OfFile(absLocal).catch(() => undefined);
-                  if (h) {
-                    this.state.applyRemote({
-                      workspaceId,
-                      type: 'modify',
-                      path: rel,
-                      meta: { type: 'file', hash: h }
-                    });
+                  try {
+                    await this.remote.uploadFile(workspaceId, rel, absLocal);
+                    
+                    // Only update remote index if upload succeeded
+                    const h = await sha256OfFile(absLocal).catch(() => undefined);
+                    if (h) {
+                      this.state.applyRemote({
+                        workspaceId,
+                        type: 'modify',
+                        path: rel,
+                        meta: { type: 'file', hash: h }
+                      });
+                    }
+                  } catch (err) {
+                    logExpectedError(`FileEventBridge:onRename:folder:directionUpload:${rel}`, err);
                   }
                 } else {
+                  // Folder nodes - always update
                   this.state.applyRemote({
                     workspaceId,
                     type: 'modify',
@@ -414,7 +436,7 @@ export class FileEventBridge {
             if (decision !== 'proceed') {return;}
           }
 
-          const restored = await this.restoreRemoteSubtree(workspaceId, newRel);
+          const restored = await restoreRemoteSubtree(workspaceId, newRel, this.remote, this.state);
           if (restored === 0) {
             // Try exact file
             const absLocal = absFs(workspaceId, newRel);
@@ -486,6 +508,13 @@ export class FileEventBridge {
     const workspaceId = stringToWsId(folder.uri.fsPath);
     const rel = relFromAbs(workspaceId, uri.fsPath);
 
+    // Check ignore rules
+    const eff = await this.config.getById(workspaceId);
+    const rules = compile(eff.ignoreGlobs);
+    if (ignored(rel as string, rules)) {
+      return; // Ignore this file/folder
+    }
+
     // Probe kind; treat folders as folder nodes to ensure they show up/fold properly
     try {
       const stat = await vscode.workspace.fs.stat(uri);
@@ -514,56 +543,19 @@ export class FileEventBridge {
     const workspaceId = stringToWsId(folder.uri.fsPath);
     const relPath = relFromAbs(workspaceId, uri.fsPath);
 
+
+    // Check ignore rules
+    const eff = await this.config.getById(workspaceId);
+    const rules = compile(eff.ignoreGlobs);
+    if (ignored(relPath as string, rules)) {
+      return; // Ignore this deletion
+    }
+
     const hasChildren = this.state.hasLocalChildren(workspaceId, relPath);
     if (hasChildren) {
       this.state.removeLocalSubtree(workspaceId, relPath);
     } else {
       this.state.applyLocal({ workspaceId, type: 'delete', path: relPath });
     }
-  }
-
-  // ====================================================================================
-  // Core restoring logic (download subtree from remote to local)
-  // ====================================================================================
-
-  /**
-   * Restore a folder (and its descendants) from remote to local.
-   * Returns the number of files restored.
-   * - Uses remote.list(workspace) once and downloads only file nodes under the prefix.
-   * - Updates *local* snapshot only; the remote snapshot is already authoritative.
-   */
-  private async restoreRemoteSubtree(workspaceId: WorkspaceId, folderRel: RelPath): Promise<number> {
-    const remoteIndex: NodeIndex = await this.remote.list(workspaceId);
-    await this.remoteCache.save(workspaceId, remoteIndex);
-
-    const normalized = (folderRel as string).replace(/\\/g, '/').replace(/\/+$/, '');
-    const prefix = normalized ? normalized + '/' : '';
-    const targets: RelPath[] = [];
-
-    const exact = remoteIndex.get(stringToRel(normalized));
-    if (exact?.type === 'file') {
-      targets.push(stringToRel(normalized));
-    } else {
-      for (const [rel, meta] of remoteIndex) {
-        const s = rel as string;
-        if (rel === stringToRel(normalized) || (prefix && s.startsWith(prefix))) {
-          if (meta.type === 'file') {targets.push(rel);}
-          // For folders: we’ll ensure directories exist locally before downloading files
-        }
-      }
-    }
-
-    if (targets.length === 0) {return 0;}
-
-    let restored = 0;
-    for (const rel of targets) {
-      const absLocal = absFs(workspaceId, rel);
-      await fsp.mkdir(path.dirname(absLocal), { recursive: true });
-      await this.remote.downloadFile(workspaceId, rel, absLocal);
-      const hash = await sha256OfFile(absLocal);
-      this.state.applyLocal({ workspaceId, type: 'modify', path: rel, meta: { type: 'file', hash } });
-      restored += 1;
-    }
-    return restored;
   }
 }

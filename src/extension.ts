@@ -11,6 +11,8 @@ import { registerConfigurationCommands } from './extension/commands/configuratio
 import { registerTestConnectionCommand } from './extension/commands/testConnection';
 import { registerUploadDownload } from './extension/commands/uploadDownload';
 
+let globalServices: Awaited<ReturnType<typeof bootstrap>> | undefined;
+
 export async function activate(context: vscode.ExtensionContext) {
   logInfoMessage('LiveSync activating…');
 
@@ -20,6 +22,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Build core services
   const services = await bootstrap(context);
+  globalServices = services;
 
   // Initialize view mode context and provider
   const cfg = vscode.workspace.getConfiguration('livesync');
@@ -28,7 +31,7 @@ export async function activate(context: vscode.ExtensionContext) {
   services.provider.setShowAsTree(showAsTree);
 
   // File event auto-actions (save/create/delete/rename)
-  const bridge = new FileEventBridge(services.state, services.config, services.remote, services.remoteCache);
+  const bridge = new FileEventBridge(services.state, services.config, services.remote);
   bridge.register(context.subscriptions);
 
   // Commands
@@ -42,6 +45,11 @@ export async function activate(context: vscode.ExtensionContext) {
   logInfoMessage('LiveSync activated.');
 }
 
-export function deactivate() {
+export async function deactivate() {
+  // Flush any pending cache writes before shutdown
+  if (globalServices?.cachePersister) {
+    await globalServices.cachePersister.forceFlush();
+  }
+
   logInfoMessage('LiveSync deactivated.');
 }

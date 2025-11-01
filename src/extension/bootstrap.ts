@@ -15,6 +15,7 @@ import type { Services } from './services';
 import { setupWorkspaceViews } from './setupWorkspaceViews';
 import { registerConfigChangeHandler } from './registerConfigChangeHandler';
 import { initializeInfrastructure } from './initialization';
+import { DebouncedCachePersister } from '../infrastructure/persistence/DebouncedCachePersister';
 
 export async function bootstrap(context: vscode.ExtensionContext): Promise<Services> {
   // Core domain and application services
@@ -43,6 +44,13 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
 
   // Initialize infrastructure (storage, caching, logging)
   const { localCache, remoteCache } = await initializeInfrastructure(context, state, config);
+
+  const cachePersister = new DebouncedCachePersister(state, localCache, remoteCache, 1000);
+  context.subscriptions.push({
+    dispose: () => {
+      cachePersister.dispose();
+    }
+  });
 
   // Setup workspace views (diffs tree + workspace list if multi-root)
   const views = setupWorkspaceViews(workspaceIds, state, folderState);
@@ -89,5 +97,6 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
     remoteCache,
     progress,
     workspaceListProvider: views.listProvider,
+    cachePersister,
   };
 }

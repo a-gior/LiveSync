@@ -130,16 +130,6 @@ export function registerViewToolbar(services: Services): void {
           }
         });
 
-        // ── Persist caches
-        try {
-          await services.localCache.save(currentWsId, localIndex);
-          if (remoteIndex) {
-            await services.remoteCache.save(currentWsId, remoteIndex);
-          }
-        } catch {
-          // ignore cache write errors
-        }
-
         if (token.isCancellationRequested) {
           void vscode.window.showInformationMessage(`LiveSync: refresh cancelled for ${folder.name}.`);
         } else {
@@ -220,15 +210,6 @@ export function registerViewToolbar(services: Services): void {
             }
           });
 
-          // ── Persist caches
-          try {
-            await services.localCache.save(wsId, localIndex);
-            if (remoteIndex) {
-              await services.remoteCache.save(wsId, remoteIndex);
-            }
-          } catch {
-            // ignore cache write errors
-          }
         }
 
         if (token.isCancellationRequested) {

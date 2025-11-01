@@ -69,7 +69,7 @@ export class ConfigWriter {
         actionOnDelete: 'none',
         actionOnMove: 'check&move',
         actionOnOpen: 'check&download',
-        ignoreList: ['.vscode', '.git', '.svn']
+        ignoreList: ['.vscode', '.git', '.svn', '.livesync']
       };
 
       // Ensure .vscode directory exists
