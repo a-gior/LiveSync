@@ -164,6 +164,92 @@ export class FileEventBridge {
     }));
   }
 
+  private async checkShouldPrompt(
+    workspaceId: WorkspaceId,
+    relPath: RelPath,
+    hint: 'save' | 'create' | 'open' | 'delete' | 'move' | 'upload' | 'download',
+    state: SyncStateManager,
+    remote: RemotePort
+  ): Promise<{ shouldPrompt: boolean; reason?: string }> {
+    
+    const remoteMeta = state.getRemoteIndex(workspaceId).get(relPath);
+
+    switch (hint) {
+      case 'save':
+      case 'upload':
+      case 'create': {
+        // Fetch ACTUAL remote hash to detect if someone else modified it
+        if (!remoteMeta || remoteMeta.type !== 'file') {
+          return { shouldPrompt: false };
+        }
+
+        try {
+          const actualRemoteHash = await remote.getFileHash(workspaceId, relPath);
+          const remoteChanged = actualRemoteHash !== remoteMeta.hash;
+          
+          return {
+            shouldPrompt: remoteChanged,
+            reason: remoteChanged 
+              ? 'Remote file was modified by someone else' 
+              : undefined
+          };
+        } catch (err) {
+          // Server unreachable - don't prompt, just fail silently
+          logExpectedError(`checkShouldPrompt:${hint}:${relPath}`, err);
+          return { shouldPrompt: false };
+        }
+      }
+
+      case 'open':
+      case 'download': {
+        //  Fetch ACTUAL remote hash to see if it changed
+        if (!remoteMeta || remoteMeta.type !== 'file') {
+          return { shouldPrompt: false };
+        }
+
+        try {
+          const actualRemoteHash = await remote.getFileHash(workspaceId, relPath);
+          const remoteChanged = actualRemoteHash !== remoteMeta.hash;
+          
+          return {
+            shouldPrompt: remoteChanged,
+            reason: remoteChanged 
+              ? 'Remote file was modified by someone else' 
+              : undefined
+          };
+        } catch (err) {
+          // Server unreachable - don't show prompt
+          logExpectedError(`checkShouldPrompt:${hint}:${relPath}`, err);
+          return { shouldPrompt: false };
+        }
+      }
+
+      case 'delete': {
+        if (!remoteMeta) {
+          return { shouldPrompt: false };
+        }
+
+        try {
+          const actualRemoteHash = await remote.getFileHash(workspaceId, relPath);
+          const remoteChanged = actualRemoteHash !== remoteMeta.hash;
+          
+          return {
+            shouldPrompt: remoteChanged,
+            reason: remoteChanged 
+              ? 'Remote file was modified before deletion' 
+              : undefined
+          };
+        } catch (err) {
+          logExpectedError(`checkShouldPrompt:delete:${relPath}`, err);
+          return { shouldPrompt: false };
+        }
+      }
+
+      default:
+        return { shouldPrompt: false };
+    }
+  }
+
   // ====================================================================================
   // Pre-tracking (onWill events - fire BEFORE operations)
   // ====================================================================================
@@ -475,6 +561,13 @@ export class FileEventBridge {
     if (!info) return;
 
     const { workspaceId, relPath } = info;
+    
+    if (this.isRecentVSCodeOp(workspaceId, relPath)) {
+      console.log(`[onOpen] DEDUPE: Skipped recent operation`);
+      return;
+    }
+    this.trackVSCodeOp(workspaceId, relPath);
+    
     const queueKey = `${workspaceId}:${relPath}`;
 
     await this.operationQueue.enqueue(queueKey, async () => {
@@ -483,7 +576,6 @@ export class FileEventBridge {
       const eff = await this.config.getById(workspaceId);
       const policy = parseActionPolicy(eff.data.actionOnOpen);
 
-      // check-only → info
       if (policy.check && !policy.direction && policy.extras.size === 0) {
         await showCheckInfo('open', relPath);
         return;
@@ -495,14 +587,29 @@ export class FileEventBridge {
         if (!allowed) return;
 
         if (policy.check) {
-          const decision = await confirmPolicyAction(workspaceId, 'download', false, relPath);
-          if (decision !== 'proceed') return;
+          // ✅ Check if someone else modified remote file (fetches actual remote hash)
+          const { shouldPrompt, reason } = await this.checkShouldPrompt(
+            workspaceId,
+            relPath,
+            'open',
+            this.state,
+            this.remote
+          );
+          
+          if (shouldPrompt) {
+            const decision = await confirmPolicyAction(workspaceId, 'download', false, relPath, undefined, reason);
+            if (decision !== 'proceed') return;
+          }
         }
 
-        const abs = absFs(workspaceId, relPath);
-        await this.remote.downloadFile(workspaceId, relPath, abs);
-        const hash = await sha256OfFile(abs);
-        this.state.applyLocal({ workspaceId, type: 'modify', path: relPath, meta: { type: 'file', hash } });
+        try {
+          const abs = absFs(workspaceId, relPath);
+          await this.remote.downloadFile(workspaceId, relPath, abs);
+          const hash = await sha256OfFile(abs);
+          this.state.applyLocal({ workspaceId, type: 'modify', path: relPath, meta: { type: 'file', hash } });
+        } catch (err) {
+          logExpectedError(`FileEventBridge:onOpen:download:${relPath}`, err);
+        }
       }
     });
   }

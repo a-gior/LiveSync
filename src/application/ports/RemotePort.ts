@@ -24,4 +24,7 @@ export interface RemotePort {
 
   /** Delete a file or folder subtree at RelPath (recursive for folders). */
   deletePath(workspaceId: WorkspaceId, relativePath: RelPath): Promise<void>;
+
+  /** Get hash of a single remote file without downloading it */
+  getFileHash(workspaceId: WorkspaceId, relPath: RelPath): Promise<string>;
 }

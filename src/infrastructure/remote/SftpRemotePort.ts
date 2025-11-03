@@ -1,5 +1,6 @@
 import * as fsp from 'fs/promises';
 import * as path from 'path';
+import { tmpdir } from 'os';
 import SftpClient from 'ssh2-sftp-client';
 import { Minimatch } from 'minimatch';
 import { Client as SSHClient } from 'ssh2';
@@ -11,7 +12,7 @@ import type { WorkspaceId, RelPath, NodeIndex, FolderMeta, FileMeta } from '@dom
 import { WorkspaceConfigService } from '../config/WorkspaceConfigService';
 import { asRel } from '@helpers/path/RelPath';
 import { logInfoMessage } from '@helpers/logging';
-import { computeAllFolderHashes } from '../helpers/hash';
+import { computeAllFolderHashes, sha256OfFile } from '../helpers/hash';
 
 const p = path.posix;
 
@@ -394,6 +395,27 @@ export class SftpRemotePort implements RemotePort {
 
         logInfoMessage(`[LiveSync][SFTP] Deleted ${fileCount} file(s), ${folderCount} folder(s) under ${relPath}`);
       });
+    });
+  }
+
+  async getFileHash(workspaceId: WorkspaceId, relPath: RelPath): Promise<string> {
+    const cfg = await this.configService.getById(workspaceId);
+    if (!cfg.hasRemote) throw new Error('No remote config');
+
+    return await this.withSFTP(cfg, async (sftpClient) => {
+      const remoteAbs = joinRemote(cfg.data.remotePath!, relPath as string);
+      
+      // Download to temp buffer and hash it
+      const tmpFile = path.join(tmpdir(), `livesync-${Date.now()}-${path.basename(relPath as string)}`);
+      try {
+        await sftpClient.fastGet(remoteAbs, tmpFile);
+        const hash = await sha256OfFile(tmpFile);
+        await fsp.unlink(tmpFile);
+        return hash;
+      } catch (err) {
+        await fsp.unlink(tmpFile).catch(() => {});
+        throw err;
+      }
     });
   }
 
