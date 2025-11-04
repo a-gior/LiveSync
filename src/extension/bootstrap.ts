@@ -16,6 +16,7 @@ import { setupWorkspaceViews } from './setupWorkspaceViews';
 import { registerConfigChangeHandler } from './registerConfigChangeHandler';
 import { initializeInfrastructure } from './initialization';
 import { DebouncedCachePersister } from '../infrastructure/persistence/DebouncedCachePersister';
+import { registerWorkspaceFolderHandler } from './registerWorkspaceFolderHandler';
 
 export async function bootstrap(context: vscode.ExtensionContext): Promise<Services> {
   // Core domain and application services
@@ -68,6 +69,8 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
 
   // Register config change handler (quick validation on config changes)
   registerConfigChangeHandler(config, validator, views.listProvider, context);
+  // Register workspace folder changes handler (add/remove folders)
+  registerWorkspaceFolderHandler(validator, views.listProvider, context);
 
   // Register commands
   context.subscriptions.push(
