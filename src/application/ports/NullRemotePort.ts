@@ -33,4 +33,8 @@ export class NullRemotePort implements RemotePort {
   async deletePath(workspaceId: WorkspaceId, _rel: RelPath): Promise<void> {
     throw new RemoteNotConfiguredError(workspaceId);
   }
+
+  async getFileHash(workspaceId: WorkspaceId, _rel: RelPath): Promise<string> {
+    throw new RemoteNotConfiguredError(workspaceId);
+  }
 }

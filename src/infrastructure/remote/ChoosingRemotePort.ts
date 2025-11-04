@@ -40,4 +40,8 @@ export class ChoosingRemotePort implements RemotePort {
   async deletePath(w: WorkspaceId, r: RelPath) { 
     return (await this.pick(w)).deletePath(w, r); 
   }
+  
+  async getFileHash(w: WorkspaceId, r: RelPath) { 
+    return (await this.pick(w)).getFileHash(w, r); 
+  }
 }

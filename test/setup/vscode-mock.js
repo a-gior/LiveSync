@@ -31,6 +31,10 @@ const workspace = {
     readFile: async () => Buffer.from(''),
     writeFile: async () => {}
   },
+  onWillCreateFiles: () => ({ dispose: () => {} }),
+  onWillDeleteFiles: () => ({ dispose: () => {} }),
+  onWillRenameFiles: () => ({ dispose: () => {} }),
+  onWillSaveTextDocument: () => ({ dispose: () => {} }),
   onDidCreateFiles: () => ({ dispose: () => {} }),
   onDidDeleteFiles: () => ({ dispose: () => {} }),
   onDidRenameFiles: () => ({ dispose: () => {} }),

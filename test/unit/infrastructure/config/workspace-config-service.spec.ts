@@ -51,7 +51,7 @@ describe('WorkspaceConfigService (Phase 3)', () => {
         port: 22,
         username: 'centos',
         password: 'centos',
-        remotePath: '/home/centos/test-workspace',
+        remotePath: '/home/centos/vscode-tests',
         ignoreList: ['.vscode', '.git']
       };
       
@@ -64,7 +64,7 @@ describe('WorkspaceConfigService (Phase 3)', () => {
       assert.equal(eff.data.hostname, '192.168.1.17');
       assert.equal(eff.data.port, 22);
       assert.equal(eff.data.username, 'centos');
-      assert.equal(eff.data.remotePath, '/home/centos/test-workspace');
+      assert.equal(eff.data.remotePath, '/home/centos/vscode-tests');
     });
 
     it('returns empty config when file does not exist', async () => {
@@ -346,7 +346,7 @@ describe('WorkspaceConfigService (Phase 3)', () => {
         port: 22,
         username: 'centos',
         password: 'centos',
-        remotePath: '/home/centos/test-workspace',
+        remotePath: '/home/centos/vscode-tests',
         actionOnUpload: 'check&upload',
         actionOnDownload: 'check&download',
         actionOnSave: 'check&save',
@@ -365,7 +365,7 @@ describe('WorkspaceConfigService (Phase 3)', () => {
       assert.equal(eff.data.port, 22);
       assert.equal(eff.data.username, 'centos');
       assert.equal(eff.data.password, 'centos');
-      assert.equal(eff.data.remotePath, '/home/centos/test-workspace');
+      assert.equal(eff.data.remotePath, '/home/centos/vscode-tests');
       assert.equal(eff.data.actionOnSave, 'check&save');
       assert.equal(eff.ignoreGlobs.length, 6); // 3 entries × 2 patterns each
     });

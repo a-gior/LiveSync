@@ -9,7 +9,7 @@ const VM_CONFIG = {
   port: 22,
   username: 'centos',
   password: 'centos',
-  remotePath: '/home/centos/test-workspace',
+  remotePath: '/home/centos/vscode-tests',
 };
 
 async function execSSH(cmd: string): Promise<string> {

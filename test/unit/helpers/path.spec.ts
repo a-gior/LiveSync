@@ -3,7 +3,13 @@ import {
   stringToRel, 
   asRel,
   dirnameRel,
-  parentsOf
+  parentsOf,
+  isUnder,
+  relFromAbs,
+  basenameRel,
+  stringToWsId,
+  wsToString,
+  relToString
 } from '../../../src/infrastructure/helpers/path';
 import type { RelPath } from '../../../src/domain/types';
 
@@ -280,6 +286,266 @@ describe('Path Helpers', () => {
       const plain: string = 'test.txt';
       const branded: RelPath = stringToRel('test.txt');
       assert.equal(typeof plain, typeof branded);
+    });
+  });
+
+  describe('relFromAbs', () => {
+    it('returns empty string for workspace root', () => {
+      const wsPath = '/home/user/workspace';
+      const absPath = '/home/user/workspace';
+      const rel = relFromAbs(wsPath, absPath);
+      assert.equal(rel as string, '');
+    });
+
+    it('returns relative path for nested file', () => {
+      const wsPath = '/home/user/workspace';
+      const absPath = '/home/user/workspace/src/app.ts';
+      const rel = relFromAbs(wsPath, absPath);
+      assert.equal(rel as string, 'src/app.ts');
+    });
+
+    it('returns relative path for deeply nested file', () => {
+      const wsPath = '/home/user/workspace';
+      const absPath = '/home/user/workspace/deep/nested/path/file.txt';
+      const rel = relFromAbs(wsPath, absPath);
+      assert.equal(rel as string, 'deep/nested/path/file.txt');
+    });
+
+    it('throws error if path not under workspace', () => {
+      const wsPath = '/home/user/workspace';
+      const absPath = '/home/user/other/file.txt';
+      
+      assert.throws(() => {
+        relFromAbs(wsPath, absPath);
+      }, /not under workspace root/);
+    });
+
+    it('handles workspace paths with trailing slash', () => {
+      const wsPath = '/home/user/workspace/';
+      const absPath = '/home/user/workspace/file.txt';
+      const rel = relFromAbs(wsPath, absPath);
+      assert.equal(rel as string, 'file.txt');
+    });
+
+    it('normalizes backslashes to forward slashes', () => {
+      const wsPath = 'C:\\Users\\user\\workspace';
+      const absPath = 'C:\\Users\\user\\workspace\\src\\app.ts';
+      const rel = relFromAbs(wsPath, absPath);
+      assert.equal(rel as string, 'src/app.ts');
+    });
+
+    it('handles paths with dots in folder names', () => {
+      const wsPath = '/home/user/my.workspace';
+      const absPath = '/home/user/my.workspace/folder.name/file.txt';
+      const rel = relFromAbs(wsPath, absPath);
+      assert.equal(rel as string, 'folder.name/file.txt');
+    });
+  });
+
+  describe('basenameRel', () => {
+    it('extracts filename from simple path', () => {
+      const base = basenameRel(stringToRel('folder/file.txt'));
+      assert.equal(base, 'file.txt');
+    });
+
+    it('extracts filename from nested path', () => {
+      const base = basenameRel(stringToRel('a/b/c/file.txt'));
+      assert.equal(base, 'file.txt');
+    });
+
+    it('returns entire path for file without folder', () => {
+      const base = basenameRel(stringToRel('file.txt'));
+      assert.equal(base, 'file.txt');
+    });
+
+    it('returns empty string for empty path', () => {
+      const base = basenameRel(stringToRel(''));
+      assert.equal(base, '');
+    });
+
+    it('handles paths with dots in filename', () => {
+      const base = basenameRel(stringToRel('folder/file.min.js'));
+      assert.equal(base, 'file.min.js');
+    });
+
+    it('handles paths with no extension', () => {
+      const base = basenameRel(stringToRel('folder/README'));
+      assert.equal(base, 'README');
+    });
+
+    it('handles folder paths (returns folder name)', () => {
+      const base = basenameRel(stringToRel('parent/folder'));
+      assert.equal(base, 'folder');
+    });
+
+    it('handles paths with special characters', () => {
+      const base = basenameRel(stringToRel('folder/file-name_123.txt'));
+      assert.equal(base, 'file-name_123.txt');
+    });
+
+    it('handles unicode filenames', () => {
+      const base = basenameRel(stringToRel('folder/ファイル.txt'));
+      assert.equal(base, 'ファイル.txt');
+    });
+  });
+
+  describe('isUnder', () => {
+    it('returns true for exact match', () => {
+      const base = stringToRel('folder');
+      const candidate = stringToRel('folder');
+      assert.equal(isUnder(base, candidate), true);
+    });
+
+    it('returns true for direct child', () => {
+      const base = stringToRel('folder');
+      const candidate = stringToRel('folder/file.txt');
+      assert.equal(isUnder(base, candidate), true);
+    });
+
+    it('returns true for nested descendant', () => {
+      const base = stringToRel('folder');
+      const candidate = stringToRel('folder/sub/deep/file.txt');
+      assert.equal(isUnder(base, candidate), true);
+    });
+
+    it('returns false for sibling', () => {
+      const base = stringToRel('folder');
+      const candidate = stringToRel('other/file.txt');
+      assert.equal(isUnder(base, candidate), false);
+    });
+
+    it('returns false for parent', () => {
+      const base = stringToRel('parent/child');
+      const candidate = stringToRel('parent');
+      assert.equal(isUnder(base, candidate), false);
+    });
+
+    it('returns false for similar prefix but not under', () => {
+      const base = stringToRel('folder');
+      const candidate = stringToRel('folder-other/file.txt');
+      assert.equal(isUnder(base, candidate), false);
+    });
+
+    it('handles empty base path (root matches everything)', () => {
+      const base = stringToRel('');
+      const candidate1 = stringToRel('file.txt');
+      const candidate2 = stringToRel('folder/file.txt');
+      assert.equal(isUnder(base, candidate1), true);
+      assert.equal(isUnder(base, candidate2), true);
+    });
+
+    it('handles base with trailing slash', () => {
+      // RelPath should be normalized without trailing slash
+      const base = stringToRel('folder/');
+      const candidate = stringToRel('folder/file.txt');
+      // After normalization, should work correctly
+      assert.ok(isUnder(base, candidate));
+    });
+
+    it('handles deeply nested base', () => {
+      const base = stringToRel('a/b/c/d');
+      const candidate = stringToRel('a/b/c/d/e/f/file.txt');
+      assert.equal(isUnder(base, candidate), true);
+    });
+
+    it('handles single character folder names', () => {
+      const base = stringToRel('a');
+      const candidate1 = stringToRel('a/b');
+      const candidate2 = stringToRel('ab');
+      assert.equal(isUnder(base, candidate1), true);
+      assert.equal(isUnder(base, candidate2), false);
+    });
+  });
+
+  describe('relToString & wsToString', () => {
+    it('relToString converts RelPath to string', () => {
+      const rel = stringToRel('path/to/file.txt');
+      const str = relToString(rel);
+      assert.equal(typeof str, 'string');
+      assert.equal(str, 'path/to/file.txt');
+    });
+
+    it('wsToString converts WorkspaceId to string', () => {
+      const ws = stringToWsId('/home/user/workspace');
+      const str = wsToString(ws);
+      assert.equal(typeof str, 'string');
+      assert.equal(str, '/home/user/workspace');
+    });
+
+    it('round-trip conversion works for RelPath', () => {
+      const original = 'path/to/file.txt';
+      const rel = stringToRel(original);
+      const back = relToString(rel);
+      assert.equal(back, original);
+    });
+
+    it('round-trip conversion works for WorkspaceId', () => {
+      const original = '/home/user/workspace';
+      const ws = stringToWsId(original);
+      const back = wsToString(ws);
+      assert.equal(back, original);
+    });
+  });
+
+  describe('asRel - Normalization Tests (fixes)', () => {
+    it('strips leading slash', () => {
+      const rel = asRel('/path/to/file.txt');
+      assert.equal(rel as string, 'path/to/file.txt');
+    });
+
+    it('strips leading ./', () => {
+      const rel = asRel('./file.txt');
+      assert.equal(rel as string, 'file.txt');
+    });
+
+    it('strips leading ./ from nested path', () => {
+      const rel = asRel('./folder/file.txt');
+      assert.equal(rel as string, 'folder/file.txt');
+    });
+
+    it('strips trailing slash', () => {
+      const rel = asRel('folder/');
+      assert.equal(rel as string, 'folder');
+    });
+
+    it('strips multiple leading slashes', () => {
+      const rel = asRel('///path/file.txt');
+      assert.equal(rel as string, 'path/file.txt');
+    });
+
+    it('normalizes backslashes to forward slashes', () => {
+      const rel = asRel('path\\to\\file.txt');
+      assert.equal(rel as string, 'path/to/file.txt');
+    });
+
+    it('collapses multiple slashes', () => {
+      const rel = asRel('path//to///file.txt');
+      assert.equal(rel as string, 'path/to/file.txt');
+    });
+
+    it('handles empty string', () => {
+      const rel = asRel('');
+      assert.equal(rel as string, '');
+    });
+
+    it('handles root path', () => {
+      const rel = asRel('/');
+      assert.equal(rel as string, '');
+    });
+
+    it('handles ./ only', () => {
+      const rel = asRel('./');
+      assert.equal(rel as string, '');
+    });
+
+    it('preserves dots in filenames', () => {
+      const rel = asRel('folder/.hidden');
+      assert.equal(rel as string, 'folder/.hidden');
+    });
+
+    it('preserves dots in folder names', () => {
+      const rel = asRel('.vscode/settings.json');
+      assert.equal(rel as string, '.vscode/settings.json');
     });
   });
 });

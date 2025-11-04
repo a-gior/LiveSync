@@ -17,7 +17,7 @@ import { WorkspaceConfigData } from '../../src/infrastructure/config/WorkspaceCo
  * - VM must be running at 192.168.1.17
  * - SSH accessible on port 22
  * - Credentials: centos/centos
- * - Remote path: /home/centos/test-workspace
+ * - Remote path: /home/centos/vscode-tests
  * 
  * WARNING: These tests will create/modify/delete files on the remote server!
  */
@@ -28,7 +28,7 @@ const VM_CONFIG = {
   port: 22,
   username: 'centos',
   password: 'centos',
-  remotePath: '/home/centos/test-workspace'
+  remotePath: '/home/centos/vscode-tests'
 };
 
 // Set to false to skip tests when VM is not available
