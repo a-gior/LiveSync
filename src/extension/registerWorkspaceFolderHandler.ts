@@ -1,15 +1,19 @@
 import * as vscode from 'vscode';
 import { WorkspaceListProvider } from '@presentation/tree/WorkspaceListProvider';
+import { ConfigStatusBar } from '@presentation/statusbar/ConfigStatusBar';
 import { ConfigValidator } from '@infra/config/ConfigValidator';
+import { WorkspaceConfigService } from '@infra/config/WorkspaceConfigService';
 import { stringToWsId } from '@helpers/path';
 
 /**
  * Registers handler for workspace folder changes (add/remove)
- * Updates workspace list view and validates new folders
+ * Updates workspace list view, config status bar, and validates new folders
  */
 export function registerWorkspaceFolderHandler(
+  config: WorkspaceConfigService,
   validator: ConfigValidator,
   workspaceListProvider: WorkspaceListProvider | undefined,
+  configStatusBar: ConfigStatusBar,
   context: vscode.ExtensionContext
 ): void {
   context.subscriptions.push(
@@ -21,6 +25,7 @@ export function registerWorkspaceFolderHandler(
         
         workspaceListProvider?.removeWorkspace(wsId);
         validator.clearCache(wsId);
+        configStatusBar.removeWorkspace(wsId);
       }
 
       // Handle added folders
@@ -37,6 +42,27 @@ export function registerWorkspaceFolderHandler(
           result.workspaceId,
           result.hasConfig,
           result.isValid
+        );
+
+        // Update config status bar
+        let hostname: string | undefined;
+        let remotePath: string | undefined;
+        
+        if (result.isValid) {
+          try {
+            const cfg = await config.get(added);
+            hostname = cfg.data.hostname;
+            remotePath = cfg.data.remotePath;
+          } catch {
+            // Ignore
+          }
+        }
+        
+        configStatusBar.updateWorkspaceStatus(
+          result.workspaceId,
+          result,
+          hostname,
+          remotePath
         );
       }
 

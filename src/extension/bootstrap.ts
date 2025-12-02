@@ -17,6 +17,8 @@ import { registerConfigChangeHandler } from './registerConfigChangeHandler';
 import { initializeInfrastructure } from './initialization';
 import { DebouncedCachePersister } from '../infrastructure/persistence/DebouncedCachePersister';
 import { registerWorkspaceFolderHandler } from './registerWorkspaceFolderHandler';
+import { NotificationStatusBar } from '../presentation/statusbar/NotificationStatusBar';
+import { ConfigStatusBar } from '../presentation/statusbar/ConfigStatusBar';
 
 export async function bootstrap(context: vscode.ExtensionContext): Promise<Services> {
   // Core domain and application services
@@ -26,6 +28,11 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   // Configuration
   const config = new WorkspaceConfigService(context);
   const validator = new ConfigValidator(config);
+
+  // Status bars
+  const progress = new ProgressService();
+  const notifications = new NotificationStatusBar();
+  const configStatus = new ConfigStatusBar();
   
   // On startup: Quick reachability check (2s timeout per host)
   // This is fast enough for startup while still catching unreachable hosts
@@ -56,21 +63,39 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   // Setup workspace views (diffs tree + workspace list if multi-root)
   const views = setupWorkspaceViews(workspaceIds, state, folderState);
 
-  // Update workspace list with initial validation status
-  if (views.listProvider) {
-    for (const result of validationResults) {
-      views.listProvider.updateConfigStatus(
-        result.workspaceId,
-        result.hasConfig,
-        result.isValid
-      );
+  // Initialize config status bar for ALL workspaces (works for both single and multi-root)
+  for (const result of validationResults) {
+    const folder = vscode.workspace.workspaceFolders?.find(
+      f => stringToWsId(f.uri.fsPath) === result.workspaceId
+    );
+    
+    if (!folder) continue;
+
+    let hostname: string | undefined;
+    let remotePath: string | undefined;
+    
+    if (result.isValid) {
+      try {
+        const cfg = await config.get(folder);
+        hostname = cfg.data.hostname;
+        remotePath = cfg.data.remotePath;
+      } catch {
+        // Ignore
+      }
     }
+    
+    configStatus.updateWorkspaceStatus(
+      result.workspaceId,
+      result,
+      hostname,
+      remotePath
+    );
   }
 
   // Register config change handler (quick validation on config changes)
-  registerConfigChangeHandler(config, validator, views.listProvider, context);
+  registerConfigChangeHandler(config, validator, views.listProvider, configStatus, context);
   // Register workspace folder changes handler (add/remove folders)
-  registerWorkspaceFolderHandler(validator, views.listProvider, context);
+  registerWorkspaceFolderHandler(config, validator, views.listProvider, configStatus, context);
 
   // Register commands
   context.subscriptions.push(
@@ -85,8 +110,6 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
     context.subscriptions.push(views.listView);
   }
 
-  const progress = new ProgressService();
-
   return {
     context,
     diffEngine,
@@ -98,7 +121,9 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
     treeView: views.diffsView,
     localCache,
     remoteCache,
-    progress,
+    progress, 
+    notifications, 
+    configStatus,
     workspaceListProvider: views.listProvider,
     cachePersister,
   };

@@ -9,6 +9,8 @@ import { IndexCacheService } from '@infra/persistence/IndexCacheService';
 import { WorkspaceListProvider } from '../presentation/tree/WorkspaceListProvider';
 import { ConfigValidator } from '@infra/config/ConfigValidator';
 import { DebouncedCachePersister } from '@infra/persistence/DebouncedCachePersister';
+import { NotificationStatusBar } from '../presentation/statusbar/NotificationStatusBar';
+import { ConfigStatusBar } from '../presentation/statusbar/ConfigStatusBar';
 
 export interface Services {
   context: vscode.ExtensionContext;
@@ -20,6 +22,8 @@ export interface Services {
   provider: ExperimentalTreeProvider;
   treeView: vscode.TreeView<ExperimentalNode>;
   progress: ProgressService;
+  notifications: NotificationStatusBar;
+  configStatus: ConfigStatusBar;
   localCache: IndexCacheService;
   remoteCache: IndexCacheService;
   workspaceListProvider?: WorkspaceListProvider;
