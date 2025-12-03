@@ -85,6 +85,7 @@ async function updateConfigStatusForWorkspace(
     result.workspaceId,
     result,
     hostname,
-    remotePath
+    remotePath,
+    folder.name
   );
 }

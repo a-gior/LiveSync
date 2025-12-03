@@ -88,7 +88,8 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
       result.workspaceId,
       result,
       hostname,
-      remotePath
+      remotePath,
+      folder.name
     );
 
     views.listProvider?.updateConfigStatus(

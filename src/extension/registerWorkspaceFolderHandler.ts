@@ -62,7 +62,8 @@ export function registerWorkspaceFolderHandler(
           result.workspaceId,
           result,
           hostname,
-          remotePath
+          remotePath,
+          added.name
         );
       }
 
