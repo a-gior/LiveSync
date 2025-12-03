@@ -90,6 +90,12 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
       hostname,
       remotePath
     );
+
+    views.listProvider?.updateConfigStatus(
+      result.workspaceId,
+      result.hasConfig,
+      result.isValid
+    );
   }
 
   // Register config change handler (quick validation on config changes)
