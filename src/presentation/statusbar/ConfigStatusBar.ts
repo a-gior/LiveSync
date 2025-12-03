@@ -201,7 +201,7 @@ export class ConfigStatusBar {
       tooltipParts.push('### $(warning) Not Configured');
       tooltipParts.push('');
       for (const ws of unconfiguredList) {
-        tooltipParts.push(`- ${ws}`);
+        tooltipParts.push(`**${ws}**`);
       }
       tooltipParts.push('');
     }
