@@ -16,7 +16,7 @@ export class NotificationStatusBar {
   /**
    * Show a temporary notification in the status bar
    */
-  notify(message: string, icon: string = 'info', duration: number = 3000): void {
+  notify(message: string, icon: string = 'info', duration: number = 5000): void {
     if (this.timeout) {
       clearTimeout(this.timeout);
     }

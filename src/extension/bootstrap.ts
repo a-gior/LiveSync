@@ -34,6 +34,11 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   const notifications = new NotificationStatusBar();
   const configStatus = new ConfigStatusBar();
   
+  // Register disposables
+  context.subscriptions.push(progress);
+  context.subscriptions.push(notifications);
+  context.subscriptions.push(configStatus);
+  
   // On startup: Quick reachability check (2s timeout per host)
   // This is fast enough for startup while still catching unreachable hosts
   const validationResults = await validator.validateAll(false, true);

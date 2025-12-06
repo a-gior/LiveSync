@@ -31,7 +31,7 @@ export async function activate(context: vscode.ExtensionContext) {
   services.provider.setShowAsTree(showAsTree);
 
   // File event auto-actions (save/create/delete/rename)
-  const bridge = new FileEventBridge(services.state, services.config, services.remote);
+  const bridge = new FileEventBridge(services.state, services.config, services.remote, services.notifications);
   bridge.register(context.subscriptions);
 
   // Commands

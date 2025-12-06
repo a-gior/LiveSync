@@ -15,6 +15,7 @@ import { logExpectedError } from '@infra/helpers/logging';
 import { FileOperationQueue } from '@infra/helpers/concurrency';
 import { restoreRemoteSubtree } from '@infra/helpers/index';
 import { RelPath, WorkspaceId } from '../../domain/types';
+import { NotificationStatusBar } from '../statusbar/NotificationStatusBar';
 
 export class FileEventBridge {
   private readonly operationQueue = new FileOperationQueue();
@@ -26,7 +27,8 @@ export class FileEventBridge {
   constructor(
     private readonly state: SyncStateManager,
     private readonly config: WorkspaceConfigService,
-    private readonly remote: RemotePort
+    private readonly remote: RemotePort,
+    private readonly notifications: NotificationStatusBar
   ) {}
 
   register(disposables: vscode.Disposable[]): void {
@@ -309,6 +311,10 @@ export class FileEventBridge {
       const eff = await this.config.getById(workspaceId);
       const policy = parseActionPolicy(eff.data.actionOnSave);
       await maybeActByPolicy(workspaceId, relPath, policy, 'save', this.state, this.remote);
+
+      if (policy.direction === 'upload') {
+        this.notifications.notify(`Saved ${path.basename(relPath)}`, 'cloud-upload');
+      }
     });
   }
 
@@ -353,6 +359,10 @@ export class FileEventBridge {
       const eff = await this.config.getById(workspaceId);
       const policy = parseActionPolicy(eff.data.actionOnCreate);
       await maybeActByPolicy(workspaceId, relPath, policy, 'create', this.state, this.remote);
+
+      if (policy.direction === 'upload') {
+        this.notifications.notify(`Created ${path.basename(relPath)}`, 'cloud-upload');
+      }
     });
   }
 
@@ -395,6 +405,8 @@ export class FileEventBridge {
         } catch (err) {
           logExpectedError(`FileEventBridge:onDelete:remote:${relPath}`, err);
         }
+
+        this.notifications.notify(`Deleted ${path.basename(relPath)}`, 'trash');
         return;
       }
 
@@ -526,6 +538,9 @@ export class FileEventBridge {
           } catch (err) {
             logExpectedError(`FileEventBridge:onRename:directionUpload:${newRel}`, err);
           }
+
+          
+          this.notifications.notify(`Moved ${path.basename(newRel)}`, 'cloud-upload');
           return;
         }
 
@@ -610,6 +625,8 @@ export class FileEventBridge {
         } catch (err) {
           logExpectedError(`FileEventBridge:onOpen:download:${relPath}`, err);
         }
+
+        this.notifications.notify(`Downloaded ${path.basename(relPath)}`, 'cloud-download');
       }
     });
   }
