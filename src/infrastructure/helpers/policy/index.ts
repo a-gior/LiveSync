@@ -234,14 +234,6 @@ export async function confirmPolicyAction(
       workspaceId,
       path: relPath,
     });
-
-    const display = oldPath ? `${oldPath} → ${relPath}` : relPath;
-    const again = await vscode.window.showInformationMessage(
-      `Proceed to ${label.toLowerCase()} "${display}"?`,
-      { modal: true },
-      'Proceed',
-    );
-    return again === 'Proceed' ? 'proceed' : 'cancel';
   }
   
   return 'cancel';

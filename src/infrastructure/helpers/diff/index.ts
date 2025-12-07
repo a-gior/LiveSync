@@ -3,7 +3,7 @@ import { isUnder as isUnderPath } from '@infra/helpers/path';
 
 /** Uploadable statuses: added | modified | conflict */
 export function isUploadable(status: DiffStatus): boolean {
-  return status === 'added' || status === 'modified' || status === 'conflict';
+  return status === 'added' || status === 'modified' || status === 'unchanged' || status === 'conflict';
 }
 /** Deletable statuses: removed */
 export function isDeletable(status: DiffStatus): boolean {
@@ -13,7 +13,7 @@ export function isDeletable(status: DiffStatus): boolean {
 export function isDownloadable(status: DiffStatus): boolean {
   // We can *pull* when the file is missing locally (removed),
   // or differs (modified/conflict).
-  return status === 'removed' || status === 'modified' || status === 'conflict';
+  return status === 'removed' || status === 'modified' || status === 'unchanged' || status === 'conflict';
 }
 
 export function isResolvable(status: DiffStatus): boolean {
