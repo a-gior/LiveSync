@@ -13,10 +13,8 @@ import { dirnameRel, parentsOf, stringToRel } from '@helpers/path';
 import { computeFolderHashFromNodeIndex } from '@helpers/hash';
 import { deleteSubtree, renameSubtree } from '@helpers/index';
 
-/** Local FS event kinds we reflect into the local snapshot. */
-export type LocalEventType  = 'create' | 'modify' | 'delete' | 'rename';
-/** Remote event kinds (used for optimistic updates after remote ops succeed). */
-export type RemoteEventType = 'create' | 'modify' | 'delete' | 'rename';
+/** FS event kinds we reflect into the snapshot. */
+export type EventType  = 'create' | 'modify' | 'delete' | 'rename';
 
 type DiffChangeEvent = {
   workspaceId: WorkspaceId;
@@ -26,7 +24,25 @@ type DiffChangeEvent = {
   changedPath?: RelPath;
 };
 
-type Listener = (event: DiffChangeEvent) => void;
+type DiffListener = (event: DiffChangeEvent) => void;
+
+
+export type ConflictType = 'remote-modified' | 'local-modified';
+
+export type ConflictEvent = {
+  workspaceId: WorkspaceId;
+  relPath: RelPath;
+  type: ConflictType;
+  reason: string;
+};
+
+type ConflictChangeEvent = {
+  type: 'added' | 'removed' | 'cleared';
+  conflict?: ConflictEvent; // Present for 'added', undefined for 'removed'/'cleared'
+  workspaceId?: WorkspaceId; // Present for 'cleared'
+};
+
+type ConflictListener = (event: ConflictChangeEvent) => void;
 
 /**
  * Framework-agnostic state manager.
@@ -46,7 +62,10 @@ export class SyncStateManager {
   // Workspaces currently batching: recompute is deferred until batch ends
   private batchingWorkspaces: Set<WorkspaceId> = new Set();
 
-  private diffListeners = new Set<Listener>();
+  private diffListeners = new Set<DiffListener>();
+
+  private ignoredConflicts = new Map<string, ConflictEvent>(); // key: workspaceId:relPath
+  private conflictListeners = new Set<ConflictListener>();
 
   constructor(private readonly diffEngine: DiffEngine) {}
 
@@ -54,7 +73,7 @@ export class SyncStateManager {
   // Subscriptions
   // ------------------------------------------------------------------------------------
 
-  subscribeToDiffChanges(listener: Listener): () => void {
+  subscribeToDiffChanges(listener: DiffListener): () => void {
     this.diffListeners.add(listener);
     return () => { this.diffListeners.delete(listener); };
   }
@@ -81,7 +100,7 @@ export class SyncStateManager {
 
   applyLocal(event: {
     workspaceId: WorkspaceId;
-    type: LocalEventType;
+    type: EventType;
     path: RelPath;
     meta?: NodeMeta;
     newPath?: RelPath;
@@ -125,7 +144,7 @@ export class SyncStateManager {
    */
   applyRemote(event: {
     workspaceId: WorkspaceId;
-    type: RemoteEventType;
+    type: EventType;
     path: RelPath;
     meta?: NodeMeta;
     newPath?: RelPath;
@@ -369,5 +388,124 @@ export class SyncStateManager {
     } else {
       index.set(rootDir, { type: 'folder', hash: rootHash });
     }
+  }
+  
+  // ============================================================================
+  // Conflict event subscription (add after diffChangeListeners methods)
+  // ============================================================================
+
+  /**
+   * Subscribe to conflict changes (added/removed/cleared)
+   * Returns unsubscribe function
+   */
+  subscribeToConflictChanges(listener: ConflictListener): () => void {
+    this.conflictListeners.add(listener);
+    return () => { this.conflictListeners.delete(listener); };
+  }
+
+  private emitConflictChange(event: ConflictChangeEvent): void {
+    for (const listener of this.conflictListeners) {
+      listener(event);
+    }
+  }
+
+  // ============================================================================
+  // Conflict tracking methods (replace existing conflict methods)
+  // ============================================================================
+
+  /**
+   * Mark a file as having an ignored conflict
+   * Emits 'added' event
+   */
+  markConflictIgnored(
+    workspaceId: WorkspaceId,
+    relPath: RelPath,
+    type: ConflictType,
+    reason: string
+  ): void {
+    const key = `${workspaceId}:${relPath}`;
+    const conflict: ConflictEvent = { workspaceId, relPath, type, reason };
+    
+    this.ignoredConflicts.set(key, conflict);
+    this.emitConflictChange({ type: 'added', conflict });
+  }
+
+  /**
+   * Check if a file has an ignored conflict
+   */
+  isConflictIgnored(workspaceId: WorkspaceId, relPath: RelPath): boolean {
+    const key = `${workspaceId}:${relPath}`;
+    return this.ignoredConflicts.has(key);
+  }
+
+  /**
+   * Get the conflict info for a file (if ignored)
+   */
+  getConflict(workspaceId: WorkspaceId, relPath: RelPath): ConflictEvent | undefined {
+    const key = `${workspaceId}:${relPath}`;
+    return this.ignoredConflicts.get(key);
+  }
+
+  /**
+   * Clear ignored conflict flag for a file
+   * Emits 'removed' event
+   */
+  clearIgnoredConflict(workspaceId: WorkspaceId, relPath: RelPath): void {
+    const key = `${workspaceId}:${relPath}`;
+    const conflict = this.ignoredConflicts.get(key);
+    
+    if (this.ignoredConflicts.delete(key) && conflict) {
+      this.emitConflictChange({ type: 'removed', conflict });
+    }
+  }
+
+  /**
+   * Clear all ignored conflicts for a workspace
+   * Emits 'cleared' event
+   */
+  clearWorkspaceIgnoredConflicts(workspaceId: WorkspaceId): void {
+    let hasChanges = false;
+    const keysToDelete: string[] = [];
+    
+    for (const key of this.ignoredConflicts.keys()) {
+      if (key.startsWith(`${workspaceId}:`)) {
+        keysToDelete.push(key);
+        hasChanges = true;
+      }
+    }
+    
+    keysToDelete.forEach(k => this.ignoredConflicts.delete(k));
+    
+    if (hasChanges) {
+      this.emitConflictChange({ type: 'cleared', workspaceId });
+    }
+  }
+
+  /**
+   * Get all ignored conflicts
+   * Useful for status bar to rebuild state
+   */
+  getAllConflicts(): ConflictEvent[] {
+    return Array.from(this.ignoredConflicts.values());
+  }
+
+  /**
+   * Get count of ignored conflicts
+   */
+  getConflictCount(): number {
+    return this.ignoredConflicts.size;
+  }
+
+  /**
+   * Get conflicts for a specific workspace
+   */
+  getWorkspaceConflicts(workspaceId: WorkspaceId): ConflictEvent[] {
+    const conflicts: ConflictEvent[] = [];
+    for (const [key, conflict] of this.ignoredConflicts.entries()) {
+      if (key.startsWith(`${workspaceId}:`)) {
+        conflicts.push(conflict);
+      }
+    }
+    return conflicts;
   }
 }

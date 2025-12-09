@@ -6,6 +6,7 @@ import type { RemotePort } from '@app/ports/RemotePort';
 import { absFs } from '@infra/helpers/path/PathJoin';
 import { sha256OfFile } from '@infra/helpers/hash/FileHash';
 import { isDownloadable, isUploadable } from '@infra/helpers/diff';
+import * as fs from 'fs';
 
 /**
  * Accepts strings like:
@@ -76,7 +77,7 @@ export function parseActionPolicy(input?: string | null): ActionPolicy {
 
 /**
  * Check if we should prompt the user based on the policy check.
- * Returns true only if the check condition is negative (conflict detected).
+ * Returns shouldPrompt=true only if a conflict is detected.
  */
 export async function checkShouldPrompt(
   workspaceId: WorkspaceId,
@@ -139,52 +140,90 @@ export async function checkShouldPrompt(
     }
 
     case 'delete': {
-      // Check: Has someone modified the remote file before we delete it?
-      if (!remoteMeta || remoteMeta.type !== 'file') {
-        return { shouldPrompt: false }; // Nothing to delete or not a file
+      // FIXED: Add comprehensive existence checks
+      
+      // 1. Check if file exists in our snapshot (was it ever synced?)
+      if (!remoteMeta) {
+        return {
+          shouldPrompt: true,
+          reason: `File was never synced or already deleted from remote`
+        };
       }
 
-      // Fetch actual remote hash
-      let actualRemoteHash: string;
+      if (remoteMeta.type !== 'file') {
+        return { shouldPrompt: false }; // Not a file, don't check
+      }
+
+      // 2. Check if file still exists remotely (did someone else delete it?)
+      let actualRemoteMeta;
       try {
         const remoteIndex = await remote.list(workspaceId);
-        const actualMeta = remoteIndex.get(relPath);
-        if (!actualMeta || actualMeta.type !== 'file') {
-          return { shouldPrompt: false }; // Already deleted
+        actualRemoteMeta = remoteIndex.get(relPath);
+        
+        if (!actualRemoteMeta) {
+          return {
+            shouldPrompt: true,
+            reason: `File no longer exists on remote (may have been deleted by someone else)`
+          };
         }
-        actualRemoteHash = actualMeta.hash;
+
+        if (actualRemoteMeta.type !== 'file') {
+          return { shouldPrompt: false }; // Type changed, handle separately
+        }
       } catch (err) {
-        return { shouldPrompt: false };
+        return { shouldPrompt: false }; // Error fetching, proceed without check
       }
 
-      const remoteWasModified = remoteMeta.hash !== actualRemoteHash;
+      // 3. Check if someone modified the remote file (existing logic)
+      const remoteWasModified = remoteMeta.hash !== actualRemoteMeta.hash;
       
       return {
         shouldPrompt: remoteWasModified,
         reason: remoteWasModified 
-          ? 'Remote file was modified before deletion' 
+          ? `Remote file was modified by someone else before deletion (expected: ${remoteMeta.hash.slice(0, 8)}..., actual: ${actualRemoteMeta.hash.slice(0, 8)}...)` 
           : undefined
       };
     }
 
     case 'download': {
-      // Check: Is local file different from what we're about to download?
-      if (!localMeta || !remoteMeta) {
-        return { shouldPrompt: false }; // One side missing
-      }
+      // NEW: Implement download check logic
       
-      if (localMeta.type !== 'file' || remoteMeta.type !== 'file') {
-        return { shouldPrompt: false };
+      // Check if local file exists
+      const absPath = absFs(workspaceId, relPath);
+      let localExists = false;
+      try {
+        await fs.promises.access(absPath);
+        localExists = true;
+      } catch {
+        localExists = false;
       }
 
-      // Local differs from remote
-      const localDifferent = localMeta.hash !== remoteMeta.hash;
-      
+      if (!localExists) {
+        return { shouldPrompt: false }; // No local file, safe to download
+      }
+
+      // File exists locally - check if it has unsaved changes
+      // Compare local file hash with our cached local hash
+      if (localMeta && localMeta.type === 'file') {
+        try {
+          const actualLocalHash = await sha256OfFile(absPath);
+          const hasUnsavedChanges = localMeta.hash !== actualLocalHash;
+          
+          if (hasUnsavedChanges) {
+            return {
+              shouldPrompt: true,
+              reason: `Local file has unsaved changes (will be overwritten)`
+            };
+          }
+        } catch (err) {
+          // Can't read local file, proceed with basic existence warning
+        }
+      }
+
+      // Local file exists but no detected changes
       return {
-        shouldPrompt: localDifferent,
-        reason: localDifferent 
-          ? `Local file differs from remote (will be overwritten)` 
-          : undefined
+        shouldPrompt: true,
+        reason: `Local file exists (will be overwritten)`
       };
     }
 
@@ -195,16 +234,15 @@ export async function checkShouldPrompt(
 
 /**
  * Prompt user to confirm policy action.
- * Returns 'proceed' | 'diff' | 'cancel'
+ * Returns 'proceed' | 'diff' | 'cancel' | 'ignore'
  */
 export async function confirmPolicyAction(
   workspaceId: WorkspaceId,
   mode: 'upload' | 'download' | 'delete' | 'move',
   allowDiff: boolean,
   relPath: RelPath,
-  oldPath?: RelPath,
   reason?: string
-): Promise<'proceed' | 'diff' | 'cancel'> {
+): Promise<'proceed' | 'diff' | 'cancel' | 'ignore'> {
   const label =
     mode === 'upload'   ? 'Upload' :
     mode === 'download' ? 'Download' :
@@ -213,10 +251,10 @@ export async function confirmPolicyAction(
   const reasonText = reason ? `\n\n${reason}` : '';
   const message = `LiveSync: ${label} "${(relPath as string) || '.'}"?${reasonText}`;
   
-  // Build buttons array based on allowDiff
+  // Build buttons array: always include Proceed and Ignore
   const buttons = allowDiff 
-    ? (['Proceed', 'Show Diff'] as const)
-    : (['Proceed'] as const);
+    ? (['Proceed', 'Show Diff', 'Ignore'] as const)
+    : (['Proceed', 'Ignore'] as const);
 
   const choice = await vscode.window.showWarningMessage(
     message, 
@@ -234,6 +272,11 @@ export async function confirmPolicyAction(
       workspaceId,
       path: relPath,
     });
+    return 'diff';
+  }
+
+  if (choice === 'Ignore') {
+    return 'ignore';
   }
   
   return 'cancel';
@@ -318,7 +361,6 @@ export async function maybeActByPolicy(
           policy.direction, 
           policy.direction === 'upload' && (hint === 'save' || hint === 'create'), // allowDiff
           relPath,
-          undefined,
           reason
         );
         if (decision !== 'proceed') {
