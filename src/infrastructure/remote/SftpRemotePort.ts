@@ -99,7 +99,6 @@ class SSHConnectionPool {
 }
 
 /**
- * ✅ KEY INSIGHT FROM OLD CODE:
  * Use p-limit library for elegant concurrency control
  * Set limit to 9 to avoid event listener warnings (from 10 onwards)
  */
@@ -173,7 +172,6 @@ export class SftpRemotePort implements RemotePort {
 
         const relPath = asRel(rel);
         
-        // ✅ FEATURE 1: Apply ignore filtering
         if (shouldIgnore(relPath, ignores)) {
           continue;
         }

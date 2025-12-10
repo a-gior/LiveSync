@@ -64,6 +64,8 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
 
     // Subscribe to targeted diff changes; refresh minimally using the RefreshPlanner
     this.state.subscribeToDiffChanges(({ workspaceId, changedPath, parentPath }) => {
+      if (this.isDisposed) return;
+
       const realizedPaths = this.getRealizedPathsSet(workspaceId);
       const entryStillExists = Boolean(changedPath && this.state.getDiffEntry(workspaceId, stringToRel(changedPath)));
 
@@ -74,14 +76,23 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
         realizedPaths: new Set<string>([...realizedPaths].map(p => p as unknown as string)),
       });
 
-      if (decision.kind === 'file') {
-        this.changeEmitter.fire(this.getOrCreateEntryNode(workspaceId, stringToRel(decision.path)));
-      } else if (decision.kind === 'parent') {
-        this.changeEmitter.fire(this.getOrCreateEntryNode(workspaceId, stringToRel(decision.path ?? '')));
-      } else {
+      // Determine target node to refresh
+      if (decision.kind === 'workspace') {
         this.changeEmitter.fire(this.getOrCreateWorkspaceNode(workspaceId));
+        return;
       }
-    });
+
+      // For 'file' or 'parent': refresh target + all ancestors
+      const targetPath = stringToRel(decision.path ?? '');
+      
+      // Refresh the target node
+      this.changeEmitter.fire(this.getOrCreateEntryNode(workspaceId, targetPath));
+      
+      // Refresh all ancestor folders to recalculate aggregate status
+      for (const ancestorPath of this.ancestorPaths(targetPath)) {
+        this.changeEmitter.fire(this.getOrCreateEntryNode(workspaceId, ancestorPath));
+      }
+});
 
     // Subscribe to diff changes with cleanup tracking
     const unsubscribe = this.state.subscribeToDiffChanges(({ workspaceId, changedPath, parentPath }) => {

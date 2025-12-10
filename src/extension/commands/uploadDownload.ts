@@ -44,7 +44,9 @@ export function registerUploadDownload(services: Services): void {
       'upload', 
       state, 
       services.remote,
-      'file'
+      'file',
+      undefined,
+      false
     );
 
     // Mark as resolved for UI
@@ -80,7 +82,9 @@ export function registerUploadDownload(services: Services): void {
       'download', 
       state, 
       services.remote,
-      'file'
+      'file',
+      undefined,
+      false
     );
 
     // Mark as resolved for UI
