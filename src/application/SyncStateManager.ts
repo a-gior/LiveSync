@@ -113,6 +113,7 @@ export class SyncStateManager {
         if (!event.meta) { return; }
         if (event.meta.type === 'file') { this.ensureAncestorFolders(local, event.path); }
         local.set(event.path, event.meta);
+        this.rehashAncestors(local, event.path);
         break;
       }
       case 'delete': {
