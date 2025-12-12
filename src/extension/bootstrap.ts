@@ -26,7 +26,7 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   const state = new SyncStateManager(diffEngine);
 
   // Configuration
-  const config = new WorkspaceConfigService(context);
+  const config = new WorkspaceConfigService();
   const validator = new ConfigValidator(config);
 
   // Status bars
@@ -42,7 +42,7 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   // On startup: Quick reachability check (2s timeout per host)
   // This is fast enough for startup while still catching unreachable hosts
   const validationResults = await validator.validateAll(false, true);
-  validator.getTracker().initialize(validationResults);
+  validator.getTracker().initialize(validationResults, config);
 
   // Remote connection
   const sftpRemote = new SftpRemotePort(config, 4);

@@ -18,7 +18,7 @@ export class IgnoreFilter {
   private readonly rules: Minimatch[];
   readonly globs: readonly string[];
   
-  constructor(patterns: string[]) {
+  constructor(patterns: readonly string[]) {
     // Always exclude .livesync directory to prevent infinite feedback loops
     const patternsWithLiveSync = ['.livesync', ...patterns];
     this.globs = expandToGlobs(patternsWithLiveSync);

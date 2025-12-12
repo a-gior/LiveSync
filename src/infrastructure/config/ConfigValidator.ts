@@ -33,20 +33,21 @@ export interface ConnectionTestResult {
  * Tracks validation state changes and determines when auto-refresh should occur
  */
 export class ConfigValidationTracker {
-  private previousState = new Map<WorkspaceId, { hasConfig: boolean; isValid: boolean }>();
+  private previousState = new Map<WorkspaceId, { hasConfig: boolean; isValid: boolean, ignoreGlobs: readonly string[] }>();
 
   /**
    * Update state and determine if auto-refresh should be triggered
    * 
    * @returns true if config just became valid (either new config or fixed invalid config)
    */
-  updateAndCheckRefresh(result: ConfigValidationResult): boolean {
+  updateAndCheckRefresh(result: ConfigValidationResult, currentIgnoreGlobs: readonly string[]): boolean {
     const previous = this.previousState.get(result.workspaceId);
     
     // Update state
     this.previousState.set(result.workspaceId, {
       hasConfig: result.hasConfig,
-      isValid: result.isValid
+      isValid: result.isValid,
+      ignoreGlobs: currentIgnoreGlobs
     });
     
     // No previous state - don't refresh (initial load)
@@ -59,27 +60,41 @@ export class ConfigValidationTracker {
       return false;
     }
     
-    // Case 1: No config before, now has valid config (new setup)
+    // No config before, now has valid config (new setup)
     if (!previous.hasConfig && result.hasConfig && result.isValid) {
       return true;
     }
     
-    // Case 2: Had config but was invalid, now valid (fixed config)
+    // Had config but was invalid, now valid (fixed config)
     if (previous.hasConfig && !previous.isValid && result.isValid) {
       return true;
     }
     
+    // Config is valid and ignore patterns changed
+    const ignoreChanged = previous.ignoreGlobs.length !== currentIgnoreGlobs.length || previous.ignoreGlobs.some((pattern, i) => pattern !== currentIgnoreGlobs[i]);
+    if(ignoreChanged) {
+      return true;
+    }
+
     return false;
   }
 
   /**
    * Initialize tracking state (call after initial validation)
    */
-  initialize(results: ConfigValidationResult[]): void {
+  initialize(results: ConfigValidationResult[], configService: WorkspaceConfigService): void {
     for (const result of results) {
+      // Get ignore globs synchronously from config service
+      const cfg = configService.getSync(
+        vscode.workspace.workspaceFolders?.find(
+          f => stringToWsId(f.uri.fsPath) === result.workspaceId
+        )!
+      );
+      
       this.previousState.set(result.workspaceId, {
         hasConfig: result.hasConfig,
-        isValid: result.isValid
+        isValid: result.isValid,
+        ignoreGlobs: cfg?.ignoreFilter.globs ?? []
       });
     }
   }

@@ -29,8 +29,9 @@ export function registerConfigChangeHandler(
       const folder = findWorkspaceFolderById(event.workspaceId);
       const result = await validator.validate(folder, false, true);
       const tracker = validator.getTracker();
+      const currentCfg = await config.get(folder);
       
-      const shouldRefresh = tracker.updateAndCheckRefresh(result);
+      const shouldRefresh = tracker.updateAndCheckRefresh(result, currentCfg.ignoreFilter.globs);
       
       // Update workspace list UI (multi-root)
       if (workspaceListProvider) {

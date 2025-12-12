@@ -8,7 +8,7 @@ import { stringToRel, relFromAbs } from '@helpers/path';
 import { IgnoreFilter } from '@helpers/ignore';
 
 export type BuildIndexOptions = {
-  excludeGlobs?: string[];
+  excludeGlobs?: readonly string[];
   concurrency?: number;
   progress?: (done: number, total: number) => void;
   token?: vscode.CancellationToken;
