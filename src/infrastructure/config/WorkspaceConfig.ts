@@ -1,3 +1,5 @@
+import { IgnoreFilter } from "../helpers/ignore/IgnoreFilter";
+
 export interface WorkspaceConfigData {
   hostname?: string;
   port?: number;
@@ -20,7 +22,7 @@ export interface WorkspaceConfigData {
 
 export interface EffectiveWorkspaceConfig {
   data: WorkspaceConfigData;
-  // convenience precomputations
-  ignoreGlobs: string[];     // resolved from ignoreList into VSCode glob patterns
+  ignoreFilter: IgnoreFilter; 
+  ignoreGlobs: readonly string[];     // resolved from ignoreList into VSCode glob patterns
   hasRemote: boolean;        // hostname && remotePath present
 }

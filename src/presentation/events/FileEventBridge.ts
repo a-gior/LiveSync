@@ -9,7 +9,6 @@ import { NotificationStatusBar } from '@presentation/statusbar/NotificationStatu
 import { RelPath, WorkspaceId } from '@domain/types';
 import { absFs, relFromAbs, stringToWsId } from '@helpers/path';
 import { sha256OfFile } from '@helpers/hash/FileHash';
-import { compile, ignored } from '@helpers/ignore/Ignore';
 import { 
   parseActionPolicy, 
   confirmPolicyAction, 
@@ -925,8 +924,7 @@ export class FileEventBridge {
    */
   private async shouldIgnore(workspaceId: WorkspaceId, relPath: RelPath): Promise<boolean> {
     const eff = await this.config.getById(workspaceId);
-    const matcher = compile(eff.data.ignoreList);
-    return ignored(relPath, matcher);
+    return eff.ignoreFilter.shouldIgnore(relPath);
   }
 
   /**

@@ -1,71 +1,122 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs/promises';
 import * as path from 'path';
-import { WorkspaceConfigData, EffectiveWorkspaceConfig } from './WorkspaceConfig';
-import { WorkspaceId } from '../../domain/types';
-import { stringToWsId } from '../helpers/path';
+import * as fs from 'fs/promises';
+import type { WorkspaceId } from '@domain/types';
+import { stringToWsId } from '@helpers/path';
+import type { WorkspaceConfigData } from './WorkspaceConfig';
+import { IgnoreFilter } from '@helpers/ignore';
 
+export interface EffectiveWorkspaceConfig {
+  data: WorkspaceConfigData;
+  ignoreFilter: IgnoreFilter;
+  ignoreGlobs: readonly string[]; // Backward compat - deprecated, use ignoreFilter instead
+  hasRemote: boolean;
+}
+
+export type ConfigChangeEvent = {
+  workspaceId: WorkspaceId;
+};
+
+/**
+ * Manages workspace-level configuration with caching and change notifications.
+ * 
+ * Each workspace folder has a `.vscode/livesync.json` file containing:
+ * - Connection settings (hostname, port, credentials, remotePath)
+ * - File event actions (actionOnSave, actionOnCreate, etc.)
+ * - Ignore patterns (ignoreList)
+ * 
+ * The service:
+ * - Loads and caches configurations
+ * - Expands ignore patterns to comprehensive globs (using IgnoreFilter)
+ * - Watches for config file changes
+ * - Emits events when configs change
+ */
 export class WorkspaceConfigService {
-  private readonly cache = new Map<string, EffectiveWorkspaceConfig>();
-  private readonly emitter = new vscode.EventEmitter<{ workspaceId: WorkspaceId }>();
-  public readonly onDidChange = this.emitter.event;
+  private cache = new Map<string, EffectiveWorkspaceConfig>();
+  private emitter = new vscode.EventEmitter<ConfigChangeEvent>();
+  private watchers: vscode.FileSystemWatcher[] = [];
 
-  constructor(private readonly ctx: vscode.ExtensionContext) {
-    // Watch each folder's livesync.json
-    const folders = vscode.workspace.workspaceFolders ?? [];
-    for (const folder of folders) {
-      const pattern = new vscode.RelativePattern(folder, '.vscode/livesync.json');
-      const watcher = vscode.workspace.createFileSystemWatcher(pattern, false, false, false);
+  readonly onConfigChange = this.emitter.event;
 
-      watcher.onDidCreate(() => { this.reload(folder); });
-      watcher.onDidChange(() => { this.reload(folder); });
-      watcher.onDidDelete(() => { this.remove(folder); });
-      this.ctx.subscriptions.push(watcher);
-    }
+  constructor() {
+    this.setupWorkspaceFolderWatching();
   }
 
-  public async get(folder: vscode.WorkspaceFolder): Promise<EffectiveWorkspaceConfig> {
-    const id = folder.uri.fsPath;
-    const cached = this.cache.get(id);
+  dispose(): void {
+    this.emitter.dispose();
+    this.watchers.forEach(w => w.dispose());
+    this.watchers = [];
+    this.cache.clear();
+  }
+
+  /**
+   * Get effective config for a workspace folder (with caching)
+   */
+  async get(folder: vscode.WorkspaceFolder): Promise<EffectiveWorkspaceConfig> {
+    const workspaceId = folder.uri.fsPath;
+    const cached = this.cache.get(workspaceId);
     if (cached) {
       return cached;
     }
-    const loaded = await this.loadFromDisk(folder);
-    this.cache.set(id, loaded);
-    return loaded;
+    return await this.loadFromDisk(folder);
   }
 
-  public async getById(workspaceId: WorkspaceId) {
+  /**
+   * Get effective config by workspace ID (with caching)
+   */
+  async getById(workspaceId: WorkspaceId): Promise<EffectiveWorkspaceConfig> {
     const cached = this.cache.get(workspaceId);
-    if (cached) { return cached; }
-    const filePath = path.join(workspaceId, '.vscode', 'livesync.json');
-    let data: any = {};
-    try { data = JSON.parse(await fs.readFile(filePath, 'utf8')); } catch {}
-    const ignoreGlobs = toExcludeGlobs(data.ignoreList ?? []);
-    const hasRemote = !!data.hostname && !!data.remotePath;
-    const eff = { data, ignoreGlobs, hasRemote };
-    this.cache.set(workspaceId, eff);
-    return eff;
+    if (cached) {
+      return cached;
+    }
+
+    const folder = vscode.workspace.workspaceFolders?.find(
+      f => f.uri.fsPath === workspaceId
+    );
+
+    if (!folder) {
+      return {
+        data: {},
+        ignoreFilter: new IgnoreFilter([]),
+        ignoreGlobs: [],
+        hasRemote: false
+      };
+    }
+
+    return await this.loadFromDisk(folder);
   }
 
-  public getSync(folder: vscode.WorkspaceFolder): EffectiveWorkspaceConfig | undefined {
+  /**
+   * Get synchronously from cache (returns undefined if not cached)
+   */
+  getSync(folder: vscode.WorkspaceFolder): EffectiveWorkspaceConfig | undefined {
     return this.cache.get(folder.uri.fsPath);
   }
 
+  /**
+   * Force reload config from disk
+   */
   private async reload(folder: vscode.WorkspaceFolder): Promise<void> {
     const eff = await this.loadFromDisk(folder);
     this.cache.set(folder.uri.fsPath, eff);
     this.emitter.fire({ workspaceId: stringToWsId(folder.uri.fsPath) });
   }
 
+  /**
+   * Remove cached config when folder is removed
+   */
   private remove(folder: vscode.WorkspaceFolder): void {
     this.cache.delete(folder.uri.fsPath);
     this.emitter.fire({ workspaceId: stringToWsId(folder.uri.fsPath) });
   }
 
+  /**
+   * Load and parse config from disk, creating IgnoreFilter
+   */
   private async loadFromDisk(folder: vscode.WorkspaceFolder): Promise<EffectiveWorkspaceConfig> {
     const filePath = path.join(folder.uri.fsPath, '.vscode', 'livesync.json');
     let data: WorkspaceConfigData = {};
+    
     try {
       const raw = await fs.readFile(filePath, 'utf8');
       data = JSON.parse(raw) as WorkspaceConfigData;
@@ -73,35 +124,46 @@ export class WorkspaceConfigService {
       // missing or malformed -> fall back to empty defaults
     }
 
-    const ignoreGlobs = toExcludeGlobs(data.ignoreList ?? []);
+    // Create IgnoreFilter which handles pattern expansion and .livesync auto-exclusion
+    const ignoreFilter = new IgnoreFilter(data.ignoreList ?? []);
     const hasRemote = !!data.hostname && !!data.remotePath;
-
-    return { data, ignoreGlobs, hasRemote };
-  }
-}
-
-function toExcludeGlobs(ignoreList: string[]): string[] {
-  // Convert ignore entries to glob patterns
-  // Examples:
-  //   ".vscode" => ["**/.vscode/**", "**/.vscode"]
-  //   "node_modules" => ["**/node_modules/**", "**/node_modules"]
-  //   "../.vscode" => ["**/.vscode/**", "**/.vscode"] (normalize relative paths)
-  //   "src/*.tmp" => ["src/*.tmp"] (keep as-is if already a pattern)
-  
-  const globs: string[] = [];
-  
-  for (const entry of ignoreList) {
-    // Remove leading "./" or "../" or "/" or "\" but PRESERVE dots in filenames like ".vscode"
-    let clean = entry.replace(/^(?:\.\.\/|\.\/|\/|\\)+/, '');
     
-    // If the entry already contains glob patterns (*, ?, [), use it as-is
-    if (clean.includes('*') || clean.includes('?') || clean.includes('[')) {
-      globs.push(clean);
-    } else {
-      // Otherwise, create glob patterns to match the name anywhere in the tree
-      globs.push(`**/${clean}/**`, `**/${clean}`);
+    const eff = {
+      data,
+      ignoreFilter,
+      ignoreGlobs: ignoreFilter.globs, // Backward compat
+      hasRemote
+    };
+    
+    this.cache.set(folder.uri.fsPath, eff);
+    return eff;
+  }
+
+  /**
+   * Watch for workspace folder additions/removals and config file changes
+   */
+  private setupWorkspaceFolderWatching(): void {
+    // Watch for workspace folder changes
+    vscode.workspace.onDidChangeWorkspaceFolders(async (e) => {
+      for (const removed of e.removed) {
+        this.remove(removed);
+      }
+      for (const added of e.added) {
+        await this.loadFromDisk(added);
+      }
+    });
+
+    // Watch for config file changes in each workspace
+    const folders = vscode.workspace.workspaceFolders ?? [];
+    for (const folder of folders) {
+      const pattern = new vscode.RelativePattern(folder, '.vscode/livesync.json');
+      const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+
+      watcher.onDidCreate(() => this.reload(folder));
+      watcher.onDidChange(() => this.reload(folder));
+      watcher.onDidDelete(() => this.reload(folder));
+
+      this.watchers.push(watcher);
     }
   }
-  
-  return globs;
 }

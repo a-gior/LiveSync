@@ -2,7 +2,6 @@ import * as fsp from 'fs/promises';
 import * as path from 'path';
 import { tmpdir } from 'os';
 import SftpClient from 'ssh2-sftp-client';
-import { Minimatch } from 'minimatch';
 import { Client as SSHClient } from 'ssh2';
 import pLimit from 'p-limit';
 
@@ -13,6 +12,7 @@ import { WorkspaceConfigService } from '../config/WorkspaceConfigService';
 import { asRel } from '@helpers/path/RelPath';
 import { logInfoMessage } from '@helpers/logging';
 import { computeAllFolderHashes, sha256OfFile } from '../helpers/hash';
+import { IgnoreFilter } from '../helpers/ignore';
 
 const p = path.posix;
 
@@ -121,15 +121,14 @@ export class SftpRemotePort implements RemotePort {
     }
 
     const root = normalize(cfg.data.remotePath);
-    const ignores = compileIgnores(cfg.ignoreGlobs);
 
-    return await this.listViaBatchedSSH(cfg, root, ignores);
+    return await this.listViaBatchedSSH(cfg, root, cfg.ignoreFilter);
   }
 
   private async listViaBatchedSSH(
     cfg: Awaited<ReturnType<WorkspaceConfigService['getById']>>,
     root: string,
-    ignores: Minimatch[]
+    ignoreFilter: IgnoreFilter 
   ): Promise<NodeIndex> {
     const sshClient = await this.sshConnectionPool.acquire(cfg);
 
@@ -172,7 +171,7 @@ export class SftpRemotePort implements RemotePort {
 
         const relPath = asRel(rel);
         
-        if (shouldIgnore(relPath, ignores)) {
+        if (ignoreFilter.shouldIgnore(relPath)) {  // ← Simplified
           continue;
         }
 
@@ -456,14 +455,6 @@ export class SftpRemotePort implements RemotePort {
 }
 
 // ---------- file-local helpers ------------------------------------------------
-
-function compileIgnores(globs: string[]): Minimatch[] {
-  return globs.map((g) => new Minimatch(g, { dot: true, nocase: true, nocomment: true }));
-}
-
-function shouldIgnore(rel: string|RelPath, rules: Minimatch[]): boolean {
-  return rules.some((mm) => mm.match(rel as string));
-}
 
 function joinRemote(root: string, rel: string): string {
   const clean = rel.replace(/^[\\/]+/, '').replace(/\\/g, '/');

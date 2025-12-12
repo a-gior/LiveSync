@@ -21,7 +21,7 @@ export function registerConfigChangeHandler(
   context: vscode.ExtensionContext
 ): void {
   context.subscriptions.push(
-    config.onDidChange(async (event: { workspaceId: WorkspaceId }) => {
+    config.onConfigChange(async (event: { workspaceId: WorkspaceId }) => {
       console.log('[ConfigChange] Config file changed for workspace:', event.workspaceId);
       
       validator.clearCache(event.workspaceId);

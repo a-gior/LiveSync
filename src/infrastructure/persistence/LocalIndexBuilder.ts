@@ -5,7 +5,7 @@ import { sha256OfFile } from '@helpers/hash/FileHash';
 import { computeAllFolderHashes } from '@helpers/hash/FolderHash';
 import { FileMeta, FolderMeta, NodeMeta, RelPath } from '@domain/types';
 import { stringToRel, relFromAbs } from '@helpers/path';
-import { compile, ignored } from '@helpers/ignore';
+import { IgnoreFilter } from '@helpers/ignore';
 
 export type BuildIndexOptions = {
   excludeGlobs?: string[];
@@ -19,6 +19,7 @@ export type BuildIndexOptions = {
  * - Files => { type:'file', hash: sha256 }
  * - Folders => { type:'folder', hash: computed from children }
  * - Includes empty folders
+ * - Respects ignore patterns (including automatic .livesync exclusion)
  */
 export async function buildLocalIndex(
   workspace: vscode.WorkspaceFolder,
@@ -28,21 +29,17 @@ export async function buildLocalIndex(
   const concurrency = Math.max(1, options.concurrency ?? 4);
   const rootPath = workspace.uri.fsPath;
 
-  // Compile ignore rules from excludeGlobs
-  const ignoreRules = compile(options.excludeGlobs ?? []);
-
-  // Convert VSCode exclude globs to fast-glob ignore patterns
-  const ignorePatterns = options.excludeGlobs?.map(g => {
-    return g.replace(/^\*\*\//, '').replace(/\/\*\*$/, '');
-  }) ?? [];
+  // Create IgnoreFilter which handles pattern expansion and .livesync auto-exclusion
+  const ignoreFilter = new IgnoreFilter(options.excludeGlobs ?? []);
 
   // Step 1: Use fast-glob to list ALL entries (files + directories) at once
+  // Pass original glob patterns without transformation - fast-glob handles them correctly
   const entries: Entry[] = await fg('**/*', {
     cwd: rootPath,
     dot: true,
     stats: true,
     onlyFiles: false,
-    ignore: ignorePatterns,
+    ignore: ignoreFilter.getFastGlobPatterns(),
     suppressErrors: true,
   });
 
@@ -59,11 +56,10 @@ export async function buildLocalIndex(
 
     const absPath = path.join(rootPath, entry.path);
     
-    // Use existing helper to get RelPath
     const relPath = relFromAbs(rootPath, absPath);
     
-    // Double-check ignore rules
-    if (ignored(relPath as string, ignoreRules)) {
+    // Double-check ignore rules (catches anything fast-glob missed)
+    if (ignoreFilter.shouldIgnore(relPath)) {
       continue;
     }
 
