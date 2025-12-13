@@ -10,11 +10,15 @@ import { logInfoMessage } from './infrastructure/helpers/logging';
 import { registerConfigurationCommands } from './extension/commands/configuration';
 import { registerTestConnectionCommand } from './extension/commands/testConnection';
 import { registerUploadDownload } from './extension/commands/uploadDownload';
+import { runMigrationCheck } from '@infra/migration/ConfigMigration';
 
 let globalServices: Awaited<ReturnType<typeof bootstrap>> | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
   logInfoMessage('LiveSync activating…');
+
+  // Auto-migrate old settings (aka 1.0.9) → .vscode/livesync.json
+  await runMigrationCheck();
 
   // Decorations
   const deco = new FileStatusDecorationProvider();
