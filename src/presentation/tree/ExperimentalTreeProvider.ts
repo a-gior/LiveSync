@@ -78,7 +78,7 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
 
       // Determine target node to refresh
       if (decision.kind === 'workspace') {
-        this.changeEmitter.fire(this.getOrCreateWorkspaceNode(workspaceId));
+        this.changeEmitter.fire(undefined);
         return;
       }
 
