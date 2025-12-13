@@ -18,7 +18,7 @@ export async function activate(context: vscode.ExtensionContext) {
   logInfoMessage('LiveSync activating…');
 
   // Auto-migrate old settings (aka 1.0.9) → .vscode/livesync.json
-  await runMigrationCheck();
+  await runMigrationCheck(context);
 
   // Decorations
   const deco = new FileStatusDecorationProvider();

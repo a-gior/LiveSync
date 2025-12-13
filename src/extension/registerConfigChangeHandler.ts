@@ -3,16 +3,10 @@ import { WorkspaceConfigService } from '@infra/config/WorkspaceConfigService';
 import { ConfigValidator } from '@infra/config/ConfigValidator';
 import { WorkspaceListProvider } from '@presentation/tree/WorkspaceListProvider';
 import { ConfigStatusBar } from '@presentation/statusbar/ConfigStatusBar';
-import { findWorkspaceFolderById } from '../infrastructure/helpers/workspaceFolder';
+import { findWorkspaceFolderById } from '@infra/helpers/workspaceFolder';
 import { WorkspaceId } from '../domain/types';
+import { logConfig, logOperation } from '@helpers/logging';
 
-/**
- * Registers config change handler that:
- * 1. Re-validates the specific workspace config that changed
- * 2. Updates workspace list UI with validation status (multi-root)
- * 3. Updates config status bar (both single and multi-root)
- * 4. Triggers auto-refresh when config becomes valid
- */
 export function registerConfigChangeHandler(
   config: WorkspaceConfigService,
   validator: ConfigValidator,
@@ -22,7 +16,7 @@ export function registerConfigChangeHandler(
 ): void {
   context.subscriptions.push(
     config.onConfigChange(async (event: { workspaceId: WorkspaceId }) => {
-      console.log('[ConfigChange] Config file changed for workspace:', event.workspaceId);
+      logConfig(event.workspaceId, 'configuration file changed');
       
       validator.clearCache(event.workspaceId);
 
@@ -33,7 +27,6 @@ export function registerConfigChangeHandler(
       
       const shouldRefresh = tracker.updateAndCheckRefresh(result, currentCfg.ignoreFilter.globs);
       
-      // Update workspace list UI (multi-root)
       if (workspaceListProvider) {
         workspaceListProvider.updateConfigStatus(
           result.workspaceId,
@@ -42,33 +35,30 @@ export function registerConfigChangeHandler(
         );
       }
 
-      // Update config status bar (both single and multi-root)
       await updateConfigStatusForWorkspace(configStatusBar, config, folder, result);
       
-      // Auto-refresh if config just became valid
       if (shouldRefresh) {
-        console.log(`[ConfigChange] Config became valid for ${result.workspaceId}, triggering auto-refresh`);
+        logConfig(result.workspaceId, 'configuration valid - triggering auto-refresh');
         
         Promise.resolve(vscode.commands.executeCommand('livesync.experimental.refresh', folder))
-          .then(() => console.log('[ConfigChange] Auto-refresh completed'))
-          .catch(err => console.error('[ConfigChange] Auto-refresh failed:', err));
+          .then(() => logOperation(result.workspaceId, 'refresh', 'completed successfully'))
+          .catch(err => {
+            const errMsg = err instanceof Error ? err.message : 'unknown error';
+            logOperation(result.workspaceId, 'refresh error', errMsg);
+          });
       } else if (!result.isValid && result.error) {
-        console.warn('[ConfigChange] Config validation failed:', result.error);
+        logConfig(result.workspaceId, `validation failed: ${result.error}`);
       }
     })
   );
 }
 
-/**
- * Helper: Update config status bar for a specific workspace
- */
 async function updateConfigStatusForWorkspace(
   configStatusBar: ConfigStatusBar,
   config: WorkspaceConfigService,
   folder: vscode.WorkspaceFolder,
   result: ReturnType<typeof ConfigValidator.prototype.getCached>
 ): Promise<void> {
-  // Get config details if valid
   let hostname: string | undefined;
   let remotePath: string | undefined;
   
@@ -78,7 +68,6 @@ async function updateConfigStatusForWorkspace(
       hostname = cfg.data.hostname;
       remotePath = cfg.data.remotePath;
     } catch {
-      // Ignore - will show as configured without details
     }
   }
 

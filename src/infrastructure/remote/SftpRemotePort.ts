@@ -10,7 +10,7 @@ import type { WorkspaceId, RelPath, NodeIndex, FolderMeta, FileMeta } from '@dom
 
 import { WorkspaceConfigService } from '../config/WorkspaceConfigService';
 import { asRel } from '@helpers/path/RelPath';
-import { logInfoMessage } from '@helpers/logging';
+import { logInfoMessage, logOperation, logSync } from '@helpers/logging';
 import { computeAllFolderHashes, sha256OfFile } from '../helpers/hash';
 import { IgnoreFilter } from '../helpers/ignore';
 
@@ -257,6 +257,7 @@ export class SftpRemotePort implements RemotePort {
         // Ensure parent directory exists
         await ensureRemoteDir(sftpClient, remoteDir);
         await sftpClient.fastPut(absLocal, remoteAbs);
+        logSync(workspaceId, 'upload', relPath as string);
       });
     });
   }
@@ -272,6 +273,7 @@ export class SftpRemotePort implements RemotePort {
         
         await fsp.mkdir(localDir, { recursive: true });
         await sftpClient.fastGet(remoteAbs, absLocal);
+        logSync(workspaceId, 'download', relPath as string);
       });
     });
   }
@@ -308,6 +310,10 @@ export class SftpRemotePort implements RemotePort {
         })
       )
     );
+
+    if (uploaded.length > 0) {
+      logOperation(workspaceId, 'upload folder', `${uploaded.length} files`);
+    }
 
     if (errors.length > 0) {
       logInfoMessage(`[LiveSync][SFTP] Upload errors: ${errors.map(e => `${e.path}: ${e.error}`).join('; ')}`);
@@ -349,6 +355,10 @@ export class SftpRemotePort implements RemotePort {
       )
     );
 
+    if (downloaded.length > 0) {
+      logOperation(workspaceId, 'download folder', `${downloaded.length} files`);
+    }
+
     if (errors.length > 0) {
       logInfoMessage(`[LiveSync][SFTP] Download errors: ${errors.map(e => `${e.path}: ${e.error}`).join('; ')}`);
     }
@@ -367,9 +377,6 @@ export class SftpRemotePort implements RemotePort {
         
         if (!items.length) return;
 
-        let fileCount = 0;
-        let folderCount = 0;
-
         // Delete deepest paths first
         const sorted = items.sort((a, b) => depth(b.path) - depth(a.path));
         
@@ -377,10 +384,8 @@ export class SftpRemotePort implements RemotePort {
           try {
             if (item.type === 'd') {
               await sftpClient.rmdir(item.path);
-              folderCount++;
             } else {
               await sftpClient.delete(item.path);
-              fileCount++;
             }
           } catch (e) {
             const msg = String(e);
@@ -390,7 +395,7 @@ export class SftpRemotePort implements RemotePort {
           }
         }
 
-        logInfoMessage(`[LiveSync][SFTP] Deleted ${fileCount} file(s), ${folderCount} folder(s) under ${relPath}`);
+        logSync(workspaceId, 'delete', relPath as string);
       });
     });
   }

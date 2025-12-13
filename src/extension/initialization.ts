@@ -4,17 +4,10 @@ import { SyncStateManager } from '@app/SyncStateManager';
 import { IndexCacheService } from '@infra/persistence/IndexCacheService';
 import { StorageService } from '@infra/storage/StorageService';
 import { ConfigErrorSuppressor } from '@infra/storage/ConfigErrorSuppressor';
-import { initLoggingDeps } from '@infra/helpers/logging';
-import { WorkspaceConfigService } from '../infrastructure/config/WorkspaceConfigService';
-import { stringToWsId } from '../infrastructure/helpers/path';
+import { initLoggingDeps, logStartup, logOperation, logCache } from '@helpers/logging';
+import { WorkspaceConfigService } from '@infra/config/WorkspaceConfigService';
+import { stringToWsId } from '@infra/helpers/path';
 
-/**
- * Initializes core infrastructure services:
- * - Storage and error suppression
- * - Logging dependencies
- * - Cache services (local and remote indexes)
- * - Workspace initialization (loads caches or triggers refresh)
- */
 export async function initializeInfrastructure(
   context: vscode.ExtensionContext,
   state: SyncStateManager,
@@ -23,24 +16,18 @@ export async function initializeInfrastructure(
   localCache: IndexCacheService;
   remoteCache: IndexCacheService;
 }> {
-  // Storage and error suppression
   const storage = new StorageService(context);
   const suppressor = new ConfigErrorSuppressor(storage);
   initLoggingDeps({ suppressor });
 
-  // Cache services
   const localCache = new IndexCacheService('index.local.json');
   const remoteCache = new IndexCacheService('index.remote.json');
 
-  // Initialize all workspaces (load from cache or trigger refresh)
   await initializeAllWorkspaces(state, localCache, remoteCache, config);
 
   return { localCache, remoteCache };
 }
 
-/**
- * Initialize all workspaces on extension activation
- */
 export async function initializeAllWorkspaces(
   state: SyncStateManager,
   localCache: IndexCacheService,
@@ -49,43 +36,36 @@ export async function initializeAllWorkspaces(
 ): Promise<void> {
   const folders = vscode.workspace.workspaceFolders ?? [];
   
-  console.log('[Initialization] ======== START ========');
-  console.log('[Initialization] Processing', folders.length, 'workspace(s)');
+  logStartup(`Initializing ${folders.length} workspace(s)`);
   
   for (const folder of folders) {
     const wsId = stringToWsId(folder.uri.fsPath);
-    console.log('[Initialization] --- Workspace:', wsId);
     
     const local = await localCache.load(wsId);
     const remote = await remoteCache.load(wsId);
     
-    console.log('[Initialization] Cache status - local:', !!local, 'remote:', !!remote);
-    
     if (local && remote) {
-      // Cache exists - load it
-      console.log('[Initialization] ✓ Loading from cache');
+      logCache(wsId, 'loaded', 'restoring indexes from cache');
       state.runBatch(wsId, undefined as any, () => {
         state.setLocalIndex(wsId, local);
         state.setRemoteIndex(wsId, remote);
       });
     } else {
-      console.log('[Initialization] ✗ No cache, checking config...');
-      
       try {
         const eff = await config.get(folder);
-        console.log('[Initialization] Config hasRemote:', eff.hasRemote);
         
         if (eff.hasRemote) {
-          console.log('[Initialization] → Triggering refresh (no cache + valid config)');
+          logOperation(wsId, 'refresh', 'no cache - triggering initial sync');
           vscode.commands.executeCommand('livesync.experimental.refresh', folder);
         } else {
-          console.log('[Initialization] → Skipping refresh (no valid config)');
+          logOperation(wsId, 'skipped', 'no valid remote configuration');
         }
       } catch (err) {
-        console.log('[Initialization] → Config load error, skipping refresh:', err);
+        const errMsg = err instanceof Error ? err.message : 'unknown error';
+        logOperation(wsId, 'error', `failed to load configuration: ${errMsg}`);
       }
     }
   }
   
-  console.log('[Initialization] ======== END ========');
+  logStartup('Workspace initialization complete');
 }

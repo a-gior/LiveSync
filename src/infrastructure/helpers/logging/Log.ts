@@ -2,14 +2,11 @@ import * as vscode from 'vscode';
 import { ConfigErrorSuppressor } from '../../storage/ConfigErrorSuppressor';
 import { stringToWsId } from '../path';
 
-
 let _suppressor: ConfigErrorSuppressor | undefined;
 export function initLoggingDeps(deps: { suppressor: ConfigErrorSuppressor }): void {
   _suppressor = deps.suppressor;
 }
-// --------------------------------------------------------------------------------------
-// Flags (kept as-is for backward compatibility)
-// --------------------------------------------------------------------------------------
+
 export const LOG_FLAGS = {
   CONSOLE_ONLY: { console: true, logManager: false, vscode: false },
   LOG_MANAGER_ONLY: { console: false, logManager: true, vscode: false },
@@ -21,12 +18,8 @@ export const LOG_FLAGS = {
 };
 export type LogFlags = (typeof LOG_FLAGS)[keyof typeof LOG_FLAGS];
 
-// For error popups that include action buttons
 export type LogErrorAction = { title: string; command: string; args?: any[] }[];
 
-// --------------------------------------------------------------------------------------
-// Serialization helper: cycle-safe, depth/size bounded, string output
-// --------------------------------------------------------------------------------------
 function safeStringify(value: unknown, maxDepth = 3, maxEntries = 50): string {
   const seen = new WeakSet<object>();
   const trunc = (s: string, lim = 2000) => (s.length > lim ? s.slice(0, lim) + '…' : s);
@@ -53,7 +46,6 @@ function safeStringify(value: unknown, maxDepth = 3, maxEntries = 50): string {
       return out;
     }
 
-    // Map / Set
     if (obj instanceof Map) {
       const out: Record<string, unknown> = {};
       let count = 0;
@@ -75,7 +67,6 @@ function safeStringify(value: unknown, maxDepth = 3, maxEntries = 50): string {
       return { '[Set]': out };
     }
 
-    // Plain object (and subclasses)
     const result: Record<string, unknown> = {};
     let count = 0;
     for (const key of Object.keys(obj)) {
@@ -99,12 +90,9 @@ function fmt(prefix: 'INFO' | 'ERROR' | 'WARN', message: string, details?: unkno
   return `${base} ${safeStringify(details)}`;
 }
 
-// --------------------------------------------------------------------------------------
-// Public logging helpers (kept API, improved internals)
-// --------------------------------------------------------------------------------------
 export function logErrorMessage(
   error: string,
-  flags: LogFlags = LOG_FLAGS.CONSOLE_ONLY,
+  flags: LogFlags = LOG_FLAGS.CONSOLE_AND_LOG_MANAGER,
   details?: unknown,
   actions?: LogErrorAction
 ): void {
@@ -130,7 +118,7 @@ export function logErrorMessage(
 
 export function logInfoMessage(
   message: string,
-  flags: LogFlags = LOG_FLAGS.CONSOLE_ONLY,
+  flags: LogFlags = LOG_FLAGS.CONSOLE_AND_LOG_MANAGER,
   details?: unknown
 ): void {
   const line = fmt('INFO', message, details);
@@ -142,14 +130,13 @@ export function logInfoMessage(
     LogManager.log(line);
   }
   if (flags.vscode) {
-    // Keep info toasts intentional; if you need default toasts, change the default flag at call sites.
     void vscode.window.showInformationMessage(message);
   }
 }
 
 export function logWarnMessage(
   message: string,
-  flags: LogFlags = LOG_FLAGS.CONSOLE_ONLY,
+  flags: LogFlags = LOG_FLAGS.CONSOLE_AND_LOG_MANAGER,
   details?: unknown
 ): void {
   const line = fmt('WARN', message, details);
@@ -165,10 +152,6 @@ export function logWarnMessage(
   }
 }
 
-/**
- * Log an error that's expected/handled but should still be recorded.
- * Use this for non-fatal errors that won't show a popup but need tracking.
- */
 export function logExpectedError(
   context: string,
   error: unknown,
@@ -188,17 +171,12 @@ export function logExpectedError(
   }
 }
 
-// --------------------------------------------------------------------------------------
-// LogManager (OutputChannel holder) – minimal, stable surface
-// --------------------------------------------------------------------------------------
 export class LogManager {
   private static outputChannel: vscode.OutputChannel | undefined;
 
   static getOutputChannel(): vscode.OutputChannel {
     if (!this.outputChannel) {
-      // If you’re on a VS Code version that supports it, you can switch to:
-      // this.outputChannel = vscode.window.createOutputChannel('LiveSync', { log: true });
-      this.outputChannel = vscode.window.createOutputChannel('LiveSync Logs');
+      this.outputChannel = vscode.window.createOutputChannel('LiveSync');
     }
     return this.outputChannel;
   }
@@ -224,16 +202,13 @@ export class LogManager {
   }
 }
 
-// --------------------------------------------------------------------------------------
-// Config error helper (kept as-is)
-// --------------------------------------------------------------------------------------
 export function logConfigError(
   flag: LogFlags = LOG_FLAGS.ALL,
   folder: vscode.WorkspaceFolder,
   errMessage: string = ''
 ): void {
   if (_suppressor?.isSuppressed(stringToWsId(folder.uri.fsPath))) {
-    return; // user chose "Don't show again" for this workspace
+    return;
   }
 
   const errorMessage = errMessage || 'The server is unreachable. Check your configuration.';
@@ -244,4 +219,56 @@ export function logConfigError(
   ];
 
   logErrorMessage(errorMessage, flag, undefined, errorActions);
+}
+
+export function logUser(message: string): void {
+  LogManager.log(`[INFO] ${message}`);
+}
+
+export function logUserError(message: string): void {
+  LogManager.log(`[ERROR] ${message}`);
+}
+
+export function logUserWarn(message: string): void {
+  LogManager.log(`[WARN] ${message}`);
+}
+
+export function logOperation(workspace: string, operation: string, details?: string): void {
+  const msg = details ? `[${workspace}] ${operation}: ${details}` : `[${workspace}] ${operation}`;
+  LogManager.log(`[INFO] ${msg}`);
+}
+
+export function logConnection(
+  workspace: string,
+  status: 'connected' | 'disconnected' | 'error',
+  details?: string
+): void {
+  const prefix = status === 'error' ? 'ERROR' : 'INFO';
+  const msg = details ? `[${workspace}] Connection ${status}: ${details}` : `[${workspace}] Connection ${status}`;
+  LogManager.log(`[${prefix}] ${msg}`);
+}
+
+export function logSync(
+  workspace: string,
+  operation: 'upload' | 'download' | 'delete' | 'skip',
+  file: string,
+  reason?: string
+): void {
+  const msg = reason
+    ? `[${workspace}] ${operation.toUpperCase()}: ${file} (${reason})`
+    : `[${workspace}] ${operation.toUpperCase()}: ${file}`;
+  LogManager.log(`[INFO] ${msg}`);
+}
+
+export function logCache(workspace: string, operation: string, details?: string): void {
+  const msg = details ? `[${workspace}] Cache ${operation}: ${details}` : `[${workspace}] Cache ${operation}`;
+  LogManager.log(`[INFO] ${msg}`);
+}
+
+export function logStartup(message: string): void {
+  LogManager.log(`[STARTUP] ${message}`);
+}
+
+export function logConfig(workspace: string, message: string): void {
+  LogManager.log(`[CONFIG] [${workspace}] ${message}`);
 }
