@@ -1,0 +1,16 @@
+{
+  "extension": [
+    "ts"
+  ],
+  "spec": [
+    "test/unit/**/*.spec.ts",
+    "test/integration/**/*.spec.ts"
+  ],
+  "require": [
+    "test/setup/mocha-setup.js"
+  ],
+  "timeout": 10000,
+  "reporter": "spec",
+  "slow": 500,
+  "exit": true
+}
