@@ -1,4 +1,3 @@
-import { ActionPolicy } from "../../../domain/types";
 import * as vscode from 'vscode';
 import type { WorkspaceId, RelPath } from '@domain/types';
 import type { SyncStateManager } from '@app/SyncStateManager';
@@ -6,73 +5,9 @@ import type { RemotePort } from '@app/ports/RemotePort';
 import { absFs } from '@infra/helpers/path/PathJoin';
 import { sha256OfFile } from '@infra/helpers/hash/FileHash';
 import { isDownloadable, isUploadable } from '@infra/helpers/diff';
+import { parseActionPolicy } from './parser';
 
-/**
- * Accepts strings like:
- *  - "check"
- *  - "save", "upload", "create"
- *  - "download"
- *  - "delete", "check&delete"
- *  - "move", "rename", "check&move"
- *  - "check&save", "check&upload", "check&download"
- *  - "none", "", undefined
- *
- * Rules:
- *  - "check" alone => info popup only, no action.
- *  - "check&<action>" => confirmation popup + perform action on Proceed.
- *  - <action> without check => perform action directly.
- *  - Actions:
- *      upload-dir:  "save" | "upload" | "create"
- *      download-dir:"download"
- *      extras:      "delete", "move"/"rename"
- */
-export function parseActionPolicy(input?: string | null): ActionPolicy {
-  const policy: ActionPolicy = { check: false, direction: undefined, extras: new Set() };
-
-  if (!input) {
-    return policy;
-  }
-  const raw = String(input).trim().toLowerCase();
-  if (!raw || raw === 'none' || raw === 'off') {
-    return policy;
-  }
-
-  // Split by & and whitespace, ignore empties
-  const tokens = raw
-    .split('&')
-    .flatMap((t) => t.split(/\s+/))
-    .map((t) => t.trim())
-    .filter(Boolean);
-
-  for (const token of tokens) {
-    if (token === 'check') {
-      policy.check = true;
-      continue;
-    }
-    // upload-ish synonyms
-    if (token === 'save' || token === 'upload' || token === 'create') {
-      policy.direction = 'upload';
-      continue;
-    }
-    // download-ish synonyms
-    if (token === 'download') {
-      policy.direction = 'download';
-      continue;
-    }
-    // destructive / structural extras
-    if (token === 'delete') {
-      policy.extras.add('delete');
-      continue;
-    }
-    if (token === 'move') {
-      policy.extras.add('rename');
-      continue;
-    }
-    // Unknown tokens are ignored
-  }
-
-  return policy;
-}
+export { parseActionPolicy } from './parser';
 
 /**
  * Check if we should prompt the user based on the policy check.

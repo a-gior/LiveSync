@@ -2,7 +2,6 @@
   "extension": ["ts"],
   "spec": ["test/**/*.spec.ts"],
   "require": [
-    "test/setup/setup.js",
     "ts-node/register/transpile-only",
     "tsconfig-paths/register"
   ],
