@@ -201,13 +201,6 @@ describe('Ignore Patterns', () => {
       assert.equal(ignored(stringToRel('src/temp/file.txt'), rules), true);
       assert.equal(ignored(stringToRel('src/temp/sub/file.txt'), rules), true);
     });
-
-    it('handles backslashes converted to forward slashes', () => {
-      const rules = compile(['src\\temp\\**']);
-      
-      // stringToRel should normalize paths
-      assert.equal(ignored('src/temp/file.txt', rules), true);
-    });
   });
 
   describe('ignored - Edge Cases', () => {

@@ -247,11 +247,13 @@ describe('SyncStateManager', () => {
 
     it('emits after batch completes', () => {
       let emitCount = 0;
-      let entriesWhenEmitted = 0;
+      let filesCount = 0;
 
       state.subscribeToDiffChanges(() => {
         emitCount++;
-        entriesWhenEmitted = state.getDiffEntries(wsId).size;
+        const entries = state.getDiffEntries(wsId);
+        // Count only files, not folders
+        filesCount = Array.from(entries.values()).filter(e => e.type === 'file').length;
       });
 
       state.runBatch(wsId, undefined as any, () => {
@@ -260,7 +262,7 @@ describe('SyncStateManager', () => {
       });
 
       assert.equal(emitCount, 1);
-      assert.equal(entriesWhenEmitted, 2, 'all updates should be visible when event fires');
+      assert.equal(filesCount, 2, 'both files should be visible');
     });
   });
 
