@@ -1,7 +1,7 @@
 {
   "extension": ["ts"],
-  "spec": ["test/**/*.spec.ts"],
   "require": [
+    "test/setup/vscode-mock.js",
     "ts-node/register/transpile-only",
     "tsconfig-paths/register"
   ],
