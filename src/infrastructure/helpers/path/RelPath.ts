@@ -10,6 +10,9 @@ function _normSlash(s: string): string {
 export function asRel(input: string): RelPath {
   // normalize slashes, strip leading "./" and "/" and trailing "/"
   let s = _normSlash(input).replace(/^\.\//, '').replace(/^\/+/, '');
+  if (s === '.') {
+    s = '';
+  }
   if (s !== '') {
     s = s.replace(/\/+$/, '');
   }
