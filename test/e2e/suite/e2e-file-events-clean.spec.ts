@@ -15,6 +15,7 @@ import {
   waitForExtension,
   cleanupTestWorkspace,
   E2E_VM_CONFIG,
+  testConnection,
 } from './helpers';
 
 describe('E2E - File Events', function() {
@@ -25,8 +26,8 @@ describe('E2E - File Events', function() {
 
   before(async function() {
     // Check VM accessibility
-    const vmOk = await isVMAccessible();
-    if (!vmOk) {
+    const connectionTest = await testConnection(E2E_VM_CONFIG);
+    if (!connectionTest.success) {
       console.log('⚠️  VM not accessible - skipping file event tests');
       this.skip();
     }
@@ -257,34 +258,6 @@ describe('E2E - File Events', function() {
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-async function isVMAccessible(): Promise<boolean> {
-  return new Promise((resolve) => {
-    const client = new SSHClient();
-    const timeout = setTimeout(() => {
-      client.end();
-      resolve(false);
-    }, 5000);
-
-    client
-      .on('ready', () => {
-        clearTimeout(timeout);
-        client.end();
-        resolve(true);
-      })
-      .on('error', () => {
-        clearTimeout(timeout);
-        resolve(false);
-      })
-      .connect({
-        host: E2E_VM_CONFIG.hostname,
-        port: E2E_VM_CONFIG.port,
-        username: E2E_VM_CONFIG.username,
-        password: E2E_VM_CONFIG.password,
-        readyTimeout: 5000,
-      });
-  });
-}
 
 async function checkRemoteFile(config: typeof E2E_VM_CONFIG, relativePath: string): Promise<boolean> {
   return new Promise((resolve) => {

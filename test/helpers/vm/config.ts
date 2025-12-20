@@ -2,6 +2,8 @@
  * VM Configuration for Integration Tests - FIXED
  */
 
+import { E2E_VM_CONFIG, testConnection } from '../../e2e/suite/helpers';
+
 export const VM_CONFIG = {
   hostname: '127.0.0.1',
   port: 2222,
@@ -27,79 +29,6 @@ export const REMOTE_PATHS = {
   cache: '/home/centos/test-cache',
   conflicts: '/home/centos/test-conflicts',
 } as const;
-
-/**
- * Check if VM is accessible - FIXED to use 'exit' event instead of 'close'
- */
-export async function isVMAccessible(): Promise<boolean> {
-  const { Client } = await import('ssh2');
-  
-  return new Promise<boolean>((resolve) => {
-    const client = new Client();
-    let resolved = false;
-    
-    const timeout = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        client.end();
-        client.destroy();
-        console.log('⚠️  VM connection timeout');
-        resolve(false);
-      }
-    }, 5000);
-
-    client
-      .on('ready', () => {
-        if (!resolved) {
-          resolved = true;
-          clearTimeout(timeout);
-          
-          client.exec('echo "test"', (err, stream) => {
-            if (err) {
-              client.end();
-              resolve(false);
-              return;
-            }
-
-            // FIXED: Use 'exit' event which is more reliable than 'close'
-            stream.on('exit', (code: number) => {
-              client.end();
-              if (code === 0) {
-                console.log('✓ VM is accessible');
-                resolve(true);
-              } else {
-                console.log('⚠️  VM command failed with code:', code);
-                resolve(false);
-              }
-            });
-            
-            // Also handle errors
-            stream.on('error', (streamErr: Error) => {
-              client.end();
-              console.log('⚠️  Stream error:', streamErr.message);
-              resolve(false);
-            });
-          });
-        }
-      })
-      .on('error', (err: Error) => {
-        if (!resolved) {
-          resolved = true;
-          clearTimeout(timeout);
-          console.log('⚠️  VM connection error:', err.message);
-          resolve(false);
-        }
-      });
-
-    client.connect({
-      host: VM_CONFIG.hostname,
-      port: VM_CONFIG.port,
-      username: VM_CONFIG.username,
-      password: VM_CONFIG.password,
-      readyTimeout: 5000,
-    });
-  });
-}
 
 /**
  * Clean up remote test directories - FIXED to use 'exit' event
@@ -190,9 +119,8 @@ export async function cleanupRemotePath(remotePath: string): Promise<void> {
  * Test suite setup helper
  */
 export async function setupVMTests(context: Mocha.Context): Promise<boolean> {
-  const accessible = await isVMAccessible();
-  
-  if (!accessible) {
+    const connectionTest = await testConnection(E2E_VM_CONFIG);
+    if (!connectionTest.success) {
     console.log('\n⚠️  VM not accessible at 127.0.0.1:2222');
     console.log('Integration tests will be skipped.');
     console.log('\nTo run integration tests:');

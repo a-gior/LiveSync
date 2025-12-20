@@ -8,6 +8,110 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 
+
+/**
+ * Test SSH connection - standalone version (no dependencies)
+ * Uses same logic as your ConfigValidator.testConnection
+ */
+export async function testConnection(config: {
+  hostname: string;
+  port: number;
+  username: string;
+  password: string;
+  privateKeyPath?: string;
+  passphrase?: string;
+}): Promise<{ success: boolean; message: string }> {
+  
+  const { Client: SSHClient } = await import('ssh2');
+
+  return new Promise((resolve) => {
+    const client = new SSHClient();
+    let resolved = false;
+    
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        try {
+          client.end();
+          client.destroy();
+        } catch {}
+        resolve({
+          success: false,
+          message: 'Connection timeout (3s)',
+        });
+      }
+    }, 3000);
+
+    client
+      .on('ready', () => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          client.end();
+          resolve({
+            success: true,
+            message: 'Connection successful',
+          });
+        }
+      })
+      .on('error', (err: Error) => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          resolve({
+            success: false,
+            message: err.message,
+          });
+        }
+      })
+      .on('close', () => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          resolve({
+            success: false,
+            message: 'Connection closed unexpectedly',
+          });
+        }
+      });
+
+    try {
+      const connectConfig: any = {
+        host: config.hostname,
+        port: config.port,
+        username: config.username,
+        readyTimeout: 3000,
+        tryKeyboard: true,
+        hostVerifier: () => true,
+      };
+
+      if (config.privateKeyPath && config.privateKeyPath.trim() !== '') {
+        // Use SSH key if provided
+        const fs = require('fs');
+        connectConfig.privateKey = fs.readFileSync(config.privateKeyPath);
+        if (config.passphrase) {
+          connectConfig.passphrase = config.passphrase;
+        }
+      } else {
+        // Use password auth
+        connectConfig.password = config.password;
+      }
+
+      client.connect(connectConfig);
+    } catch (err: any) {
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timeout);
+        resolve({
+          success: false,
+          message: err.message,
+        });
+      }
+    }
+  });
+}
+
+
 /**
  * Create a temporary test workspace
  */
@@ -24,6 +128,7 @@ export async function createTestWorkspace(name: string): Promise<string> {
   
   return tmpDir;
 }
+
 
 /**
  * Create LiveSync config in workspace
