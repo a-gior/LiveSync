@@ -2,7 +2,7 @@
  * VM Configuration for Integration Tests - FIXED
  */
 
-import { E2E_VM_CONFIG, testConnection } from '../../e2e/suite/helpers';
+import { E2E_VM_CONFIG } from '../../e2e/suite/helpers';
 
 export const VM_CONFIG = {
   hostname: '127.0.0.1',
@@ -119,17 +119,17 @@ export async function cleanupRemotePath(remotePath: string): Promise<void> {
  * Test suite setup helper
  */
 export async function setupVMTests(context: Mocha.Context): Promise<boolean> {
-    const connectionTest = await testConnection(E2E_VM_CONFIG);
-    if (!connectionTest.success) {
-    console.log('\n⚠️  VM not accessible at 127.0.0.1:2222');
-    console.log('Integration tests will be skipped.');
-    console.log('\nTo run integration tests:');
-    console.log('1. Start your CentOS VM');
-    console.log('2. Verify SSH: ssh centos@127.0.0.1 -p 2222');
-    console.log('3. Re-run tests\n');
-    context.skip();
-    return false;
-  }
+    // const connectionTest = await testConnection(E2E_VM_CONFIG);
+    // if (!connectionTest.success) {
+    //   console.log('\n⚠️  VM not accessible at 127.0.0.1:2222');
+    //   console.log('Integration tests will be skipped.');
+    //   console.log('\nTo run integration tests:');
+    //   console.log('1. Start your CentOS VM');
+    //   console.log('2. Verify SSH: ssh centos@127.0.0.1 -p 2222');
+    //   console.log('3. Re-run tests\n');
+    //   context.skip();
+    //   return false;
+    // }
   
   return true;
 }
