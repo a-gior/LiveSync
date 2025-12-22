@@ -805,7 +805,7 @@ test/
 # Unit tests only (fast)
 npm run test:unit
 
-# Integration tests (requires VM at 192.168.1.17)
+# Integration tests (requires VM at 127.0.0.1)
 npm run test:integration
 
 # E2E tests (requires VSCode test environment)
@@ -818,7 +818,7 @@ npm run test:all
 ## VM Requirements
 
 Integration and E2E tests require a VM accessible at:
-- Host: 192.168.1.17
+- Host: 127.0.0.1
 - Port: 22
 - User: centos
 - Pass: centos

@@ -13,6 +13,7 @@ export default defineConfig({
   mocha: {
     ui: 'tdd',
     timeout: 60000,
+    require: ['./out/test/e2e/globalSetup.js']
   },
   launchArgs: [
     `--user-data-dir=${userDataDir}`,

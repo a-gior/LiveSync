@@ -362,6 +362,7 @@
   "dependencies": {
     "fast-glob": "^3.3.3",
     "minimatch": "^9.0.5",
+    "module-alias": "^2.2.3",
     "net": "^1.0.2",
     "p-limit": "^3.1.0",
     "p-map": "^4.0.0",

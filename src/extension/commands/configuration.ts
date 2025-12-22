@@ -8,10 +8,12 @@ export function registerConfigurationCommands(services: Services): void {
   const { context } = services;
 
   // Main configuration command
-  cmd(context, 'livesync.configuration', async () => {
-    const mode = vscode.workspace
-      .getConfiguration('livesync')
-      .get<'prompt' | 'ui' | 'json'>('openMode', 'prompt');
+  cmd(context, 'livesync.configuration', async (mode?: 'prompt' | 'ui' | 'json') => {
+    if(!mode) {
+      mode = vscode.workspace
+            .getConfiguration('livesync')
+            .get<'prompt' | 'ui' | 'json'>('openMode', 'prompt');
+    }
 
     let selectedMode = mode;
 

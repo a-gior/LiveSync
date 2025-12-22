@@ -1,3 +1,16 @@
+import * as path from 'path';
+
+require('module-alias').addAliases({
+  '@ext': path.join(__dirname, 'extension'),
+  '@domain': path.join(__dirname, 'domain'),
+  '@app': path.join(__dirname, 'application'),
+  '@infra': path.join(__dirname, 'infrastructure'),
+  '@helpers': path.join(__dirname, 'infrastructure/helpers'),
+  '@presentation': path.join(__dirname, 'presentation'),
+  '@shared': path.join(__dirname, '../shared'),
+  '@resources': path.join(__dirname, '../resources')
+});
+
 import * as vscode from 'vscode';
 
 import { bootstrap } from './extension/bootstrap';
