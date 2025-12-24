@@ -10,8 +10,16 @@ let originalConfig: string | null = null;
 export async function mochaGlobalSetup() {
   console.log('\n=== E2E Global Setup ===');
   
-  const folders = vscode.workspace.workspaceFolders;
-  if (!folders) throw new Error('No workspace');
+  // Wait for workspace to be available
+  let folders = vscode.workspace.workspaceFolders;
+  let attempts = 0;
+  while (!folders && attempts < 30) {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    folders = vscode.workspace.workspaceFolders;
+    attempts++;
+  }
+  
+  if (!folders) throw new Error('No workspace after waiting');
   
   const workspace = folders[0];
   configPath = path.join(workspace.uri.fsPath, '.vscode', 'livesync.json');
@@ -24,7 +32,7 @@ export async function mochaGlobalSetup() {
   // Create test config
   await fs.mkdir(path.dirname(configPath), { recursive: true });
   await fs.writeFile(configPath, JSON.stringify({
-    hostname: '1127.0.0.1',
+    hostname: '127.0.0.1',
     port: 2222,
     username: 'centos',
     password: 'centos',
@@ -57,10 +65,14 @@ export async function mochaGlobalTeardown() {
   if (!configPath) return;
   
   // Restore or delete
-  if (originalConfig) {
-    await fs.writeFile(configPath, originalConfig);
-  } else {
-    await fs.unlink(configPath);
+  try {
+    if (originalConfig) {
+      await fs.writeFile(configPath, originalConfig);
+    } else {
+      await fs.unlink(configPath);
+    }
+  } catch (err) {
+    // Ignore if file doesn't exist (already cleaned up)
   }
   
   console.log('=== Teardown Complete ===\n');

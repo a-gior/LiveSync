@@ -119,10 +119,6 @@ suite('E2E - Configuration', function() {
     assert.ok(ext);
   });
 
-  test.skip('Invalid config shows error', async () => {
-    // Skipped - can't easily test error messages in E2E
-  });
-
   test('Test connection command validates credentials', async () => {
     // Create config with valid credentials
     await fs.mkdir(path.dirname(configPath), { recursive: true });

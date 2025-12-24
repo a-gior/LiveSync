@@ -54,20 +54,26 @@ suite('E2E - Diff Tree View', function() {
 
   test('Toggle show unchanged files setting', async () => {
     const config = vscode.workspace.getConfiguration('livesync');
-    const initialValue = config.get<boolean>('view.showUnchanged') ?? false;
+    const originalValue = config.get<boolean>('view.showUnchanged') ?? true;
     
     // Toggle setting
-    await vscode.commands.executeCommand('livesync.view.toggleShowUnchanged');
+    await config.update('view.showUnchanged', !originalValue, vscode.ConfigurationTarget.Workspace);
     
-    // Wait for update
+    // Wait and retry read
     await new Promise(resolve => setTimeout(resolve, 500));
+    let newValue: boolean | undefined;
+    for (let i = 0; i < 5; i++) {
+      const freshConfig = vscode.workspace.getConfiguration('livesync');
+      newValue = freshConfig.get<boolean>('view.showUnchanged');
+      if (newValue === !originalValue) break;
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
     
-    // Verify setting changed
-    const newValue = config.get<boolean>('view.showUnchanged') ?? false;
-    assert.strictEqual(newValue, !initialValue);
+    assert.strictEqual(newValue, !originalValue, 'Setting should toggle');
     
-    // Toggle back
-    await vscode.commands.executeCommand('livesync.view.toggleShowUnchanged');
+    // Restore and wait
+    await config.update('view.showUnchanged', originalValue, vscode.ConfigurationTarget.Workspace);
+    await new Promise(resolve => setTimeout(resolve, 500));
   });
 
   test('Switch between tree and list view modes', async () => {

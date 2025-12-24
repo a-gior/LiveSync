@@ -108,12 +108,23 @@ suite('E2E - Workspace Management', function() {
     // Update setting
     await config.update('view.showUnchanged', !originalValue, vscode.ConfigurationTarget.Workspace);
     
-    // Verify change
-    const newValue = config.get<boolean>('view.showUnchanged');
+    // Wait for setting to propagate (VS Code writes settings.json asynchronously)
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Retry read with fresh config instance
+    let newValue: boolean | undefined;
+    for (let i = 0; i < 5; i++) {
+      const freshConfig = vscode.workspace.getConfiguration('livesync');
+      newValue = freshConfig.get<boolean>('view.showUnchanged');
+      if (newValue === !originalValue) break;
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    
     assert.strictEqual(newValue, !originalValue, 'Setting should be updated');
     
     // Restore original
     await config.update('view.showUnchanged', originalValue, vscode.ConfigurationTarget.Workspace);
+    await new Promise(resolve => setTimeout(resolve, 500));
   });
 
   test('Multi-root context is set correctly', async () => {
