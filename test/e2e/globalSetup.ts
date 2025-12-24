@@ -24,8 +24,8 @@ export async function mochaGlobalSetup() {
   // Create test config
   await fs.mkdir(path.dirname(configPath), { recursive: true });
   await fs.writeFile(configPath, JSON.stringify({
-    hostname: '192.168.1.17',
-    port: 22,
+    hostname: '1127.0.0.1',
+    port: 2222,
     username: 'centos',
     password: 'centos',
     remotePath: '/home/centos/test-workspace',
