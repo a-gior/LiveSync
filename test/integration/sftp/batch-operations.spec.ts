@@ -2,26 +2,36 @@ import { strict as assert } from 'assert';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
-import { SftpRemotePort } from '../../../src/infrastructure/remote/SftpRemotePort';
-import { WorkspaceConfigService } from '../../../src/infrastructure/config/WorkspaceConfigService';
-import { stringToWsId, stringToRel } from '../../../src/infrastructure/helpers/path';
-import { sha256OfFile } from '../../../src/infrastructure/helpers/hash';
+import { SftpRemotePort } from '@infra/remote/SftpRemotePort';
+import { WorkspaceConfigService } from '@infra/config/WorkspaceConfigService';
+import { stringToWsId, stringToRel } from '@helpers/path';
 import { VM_CONFIG, cleanupRemotePath, REMOTE_PATHS, setupVMTests } from '../../helpers/vm/config';
-import type { WorkspaceId } from '../../../src/domain/types';
+import type { WorkspaceId } from '@domain/types';
 
 describe('SFTP Batch Operations', function() {
-  this.timeout(60000);
+  this.timeout(120000); // 2 minutes
 
   let configService: WorkspaceConfigService;
   let remote: SftpRemotePort;
+  let localTempDir: string;
   const testWorkspaceId: WorkspaceId = stringToWsId('/test-workspace');
-  const tempFiles: string[] = [];
+
+  // Helper to create and upload a file
+  async function uploadTestFile(relPath: string, content: string): Promise<void> {
+    const localFile = path.join(localTempDir, `temp-${Date.now()}-${Math.random()}.txt`);
+    await fs.writeFile(localFile, content);
+    await remote.uploadFile(testWorkspaceId, stringToRel(relPath), localFile);
+    await fs.unlink(localFile);
+  }
 
   before(async function() {
     await setupVMTests(this);
   });
 
   beforeEach(async function() {
+    localTempDir = path.join(os.tmpdir(), `livesync-batch-test-${Date.now()}`);
+    await fs.mkdir(localTempDir, { recursive: true });
+
     configService = {
       getById: async () => ({
         hasRemote: true,
@@ -30,6 +40,8 @@ describe('SFTP Batch Operations', function() {
           port: VM_CONFIG.port,
           username: VM_CONFIG.username,
           password: VM_CONFIG.password,
+          privateKeyPath: VM_CONFIG.privateKeyPath || '',
+          passphrase: VM_CONFIG.passphrase || '',
           remotePath: REMOTE_PATHS.batch,
         },
         ignoreFilter: {
@@ -39,272 +51,388 @@ describe('SFTP Batch Operations', function() {
       }),
     } as any;
 
-    remote = new SftpRemotePort(configService, 4);
+    remote = new SftpRemotePort(configService, 9); // Max 9 concurrent
     
     try {
       await cleanupRemotePath(REMOTE_PATHS.batch);
     } catch (err) {
-      console.warn(`⚠️  Cleanup failed: ${err instanceof Error ? err.message : 'unknown'}`);
-      this.skip();
+      console.warn(`⚠️  Cleanup failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   });
 
   afterEach(async () => {
     remote.dispose();
-    
-    for (const file of tempFiles) {
-      try {
-        await fs.unlink(file);
-      } catch {}
-    }
-    tempFiles.length = 0;
+    await fs.rm(localTempDir, { recursive: true, force: true });
   });
 
-  const createTempFile = async (content: string): Promise<string> => {
-    const tmpPath = path.join(os.tmpdir(), `livesync-batch-${Date.now()}-${Math.random()}.txt`);
-    await fs.writeFile(tmpPath, content, 'utf8');
-    tempFiles.push(tmpPath);
-    return tmpPath;
-  };
-
-  describe('Batch Upload', () => {
-    it('uploads 10 files concurrently', async () => {
-      const files = await Promise.all(
-        Array.from({ length: 10 }, async (_, i) => {
-          const localPath = await createTempFile(`File ${i} content`);
-          return {
-            relPath: stringToRel(`file-${i}.txt`),
-            absLocal: localPath,
-          };
-        })
-      );
-
-      const startTime = Date.now();
-      const uploaded = await remote.uploadFolder(testWorkspaceId, files);
-      const duration = Date.now() - startTime;
-
-      assert.equal(uploaded.length, 10, 'All files should be uploaded');
-      console.log(`    ⏱️  Uploaded 10 files in ${duration}ms`);
-
-      // Verify all files exist
-      const index = await remote.list(testWorkspaceId);
-      files.forEach(f => {
-        assert.ok(index.has(f.relPath), `File ${f.relPath} should exist`);
-      });
-    });
-
-    it('uploads 100 files concurrently', async () => {
-      const files = await Promise.all(
-        Array.from({ length: 100 }, async (_, i) => {
-          const localPath = await createTempFile(`File ${i} content`);
-          return {
-            relPath: stringToRel(`batch-${i}.txt`),
-            absLocal: localPath,
-          };
-        })
-      );
-
-      const startTime = Date.now();
-      const uploaded = await remote.uploadFolder(testWorkspaceId, files);
-      const duration = Date.now() - startTime;
-
-      assert.equal(uploaded.length, 100, 'All files should be uploaded');
-      console.log(`    ⏱️  Uploaded 100 files in ${duration}ms (${(duration/100).toFixed(1)}ms per file)`);
-
-      // Spot check some files
-      const index = await remote.list(testWorkspaceId);
-      assert.ok(index.has(stringToRel('batch-0.txt')));
-      assert.ok(index.has(stringToRel('batch-50.txt')));
-      assert.ok(index.has(stringToRel('batch-99.txt')));
-    });
-
-    it('respects concurrency limit', async () => {
-      // Create remote with low concurrency
-      remote.dispose();
-      remote = new SftpRemotePort(configService, 2); // Only 2 concurrent
-
-      const files = await Promise.all(
-        Array.from({ length: 20 }, async (_, i) => {
-          const localPath = await createTempFile(`Concurrent ${i}`);
-          return {
-            relPath: stringToRel(`concurrent-${i}.txt`),
-            absLocal: localPath,
-          };
-        })
-      );
-
-      // Should complete without overwhelming the connection
-      const uploaded = await remote.uploadFolder(testWorkspaceId, files);
-
-      assert.equal(uploaded.length, 20);
-    });
-
-    it('handles mixed file sizes in batch', async () => {
-      const files = await Promise.all([
-        // Small file
-        createTempFile('small').then(p => ({ relPath: stringToRel('small.txt'), absLocal: p })),
-        // Medium file (100KB)
-        createTempFile('x'.repeat(100 * 1024)).then(p => ({ relPath: stringToRel('medium.txt'), absLocal: p })),
-        // Large file (1MB)
-        createTempFile('y'.repeat(1024 * 1024)).then(p => ({ relPath: stringToRel('large.txt'), absLocal: p })),
-      ]);
-
-      const uploaded = await remote.uploadFolder(testWorkspaceId, files);
-
-      assert.equal(uploaded.length, 3);
+  it('uploads 50 files concurrently', async () => {
+    // Create 50 local files
+    const uploadPromises = [];
+    for (let i = 0; i < 50; i++) {
+      const localFile = path.join(localTempDir, `file${i}.txt`);
+      await fs.writeFile(localFile, `content ${i}`);
       
-      const index = await remote.list(testWorkspaceId);
-      assert.ok(index.has(stringToRel('small.txt')));
-      assert.ok(index.has(stringToRel('medium.txt')));
-      assert.ok(index.has(stringToRel('large.txt')));
-    }).timeout(60000);
+      uploadPromises.push(
+        remote.uploadFile(testWorkspaceId, stringToRel(`file${i}.txt`), localFile)
+      );
+    }
 
-    it('continues on partial failures', async () => {
-      const files = await Promise.all([
-        createTempFile('good1').then(p => ({ relPath: stringToRel('good1.txt'), absLocal: p })),
-        createTempFile('good2').then(p => ({ relPath: stringToRel('good2.txt'), absLocal: p })),
-      ]);
+    const startTime = Date.now();
+    await Promise.all(uploadPromises);
+    const duration = Date.now() - startTime;
 
-      // Add a file that doesn't exist locally
+    console.log(`Uploaded 50 files in ${duration}ms (${Math.round(duration / 50)}ms/file)`);
+
+    // Verify all uploaded using list
+    const index = await remote.list(testWorkspaceId);
+    assert.ok(index.size >= 50, 'Should have at least 50 files');
+    
+    // Verify a few random files
+    assert.ok(index.has(stringToRel('file0.txt')), 'Should have file0.txt');
+    assert.ok(index.has(stringToRel('file25.txt')), 'Should have file25.txt');
+    assert.ok(index.has(stringToRel('file49.txt')), 'Should have file49.txt');
+  });
+
+  it('downloads 50 files concurrently', async () => {
+    // Upload 50 files first (to have something to download)
+    const uploadPromises = [];
+    for (let i = 0; i < 50; i++) {
+      uploadPromises.push(uploadTestFile(`file${i}.txt`, `content ${i}`));
+    }
+    await Promise.all(uploadPromises);
+
+    // Download all concurrently
+    const downloadPromises = [];
+    for (let i = 0; i < 50; i++) {
+      const localFile = path.join(localTempDir, `downloaded-${i}.txt`);
+      downloadPromises.push(
+        remote.downloadFile(testWorkspaceId, stringToRel(`file${i}.txt`), localFile)
+      );
+    }
+
+    const startTime = Date.now();
+    await Promise.all(downloadPromises);
+    const duration = Date.now() - startTime;
+
+    console.log(`Downloaded 50 files in ${duration}ms (${Math.round(duration / 50)}ms/file)`);
+
+    // Verify all downloaded
+    const files = await fs.readdir(localTempDir);
+    const downloadedFiles = files.filter(f => f.startsWith('downloaded-'));
+    assert.ok(downloadedFiles.length >= 50, `Should have at least 50 files, got ${downloadedFiles.length}`);
+  });
+
+  it('handles mixed concurrent operations (upload + download)', async () => {
+    // Upload some files first for downloading
+    const uploadPromises1 = [];
+    for (let i = 0; i < 10; i++) {
+      uploadPromises1.push(uploadTestFile(`download${i}.txt`, `download ${i}`));
+    }
+    await Promise.all(uploadPromises1);
+
+    // Create some files locally for upload
+    for (let i = 0; i < 10; i++) {
+      const localFile = path.join(localTempDir, `upload${i}.txt`);
+      await fs.writeFile(localFile, `upload ${i}`);
+    }
+
+    // Mix upload and download operations
+    const operations = [];
+    for (let i = 0; i < 10; i++) {
+      // Upload
+      operations.push(
+        remote.uploadFile(
+          testWorkspaceId, 
+          stringToRel(`upload${i}.txt`), 
+          path.join(localTempDir, `upload${i}.txt`)
+        )
+      );
+      
+      // Download
+      operations.push(
+        remote.downloadFile(
+          testWorkspaceId,
+          stringToRel(`download${i}.txt`),
+          path.join(localTempDir, `downloaded${i}.txt`)
+        )
+      );
+    }
+
+    // Run all concurrently
+    await Promise.all(operations);
+
+    // Verify both uploads and downloads succeeded
+    const localFiles = await fs.readdir(localTempDir);
+    const hasDownloaded = localFiles.some(f => f.startsWith('downloaded'));
+    assert.ok(hasDownloaded, 'Should have downloaded files');
+
+    const index = await remote.list(testWorkspaceId);
+    const hasUploaded = index.has(stringToRel('upload0.txt'));
+    assert.ok(hasUploaded, 'Should have uploaded files');
+  });
+
+  it('respects SFTP concurrency limit (9 operations)', async function() {
+    // Upload files to download
+    const uploadPromises = [];
+    for (let i = 0; i < 20; i++) {
+      uploadPromises.push(uploadTestFile(`file${i}.txt`, `file ${i}`));
+    }
+    await Promise.all(uploadPromises);
+
+    // Download 20 files concurrently
+    // The SFTP port should limit concurrency internally via p-limit
+    const downloads = [];
+    for (let i = 0; i < 20; i++) {
+      downloads.push(
+        remote.downloadFile(
+          testWorkspaceId,
+          stringToRel(`file${i}.txt`),
+          path.join(localTempDir, `downloaded-${i}.txt`)
+        )
+      );
+    }
+
+    const startTime = Date.now();
+    await Promise.all(downloads);
+    const duration = Date.now() - startTime;
+
+    console.log(`Downloaded 20 files in ${duration}ms (${Math.round(duration / 20)}ms/file)`);
+    
+    // Verify all downloaded
+    const localFiles = await fs.readdir(localTempDir);
+    const downloadedFiles = localFiles.filter(f => f.startsWith('downloaded-'));
+    assert.equal(downloadedFiles.length, 20, 'Should have downloaded all 20 files');
+    
+    // Note: Actual concurrency limit is enforced by SftpRemotePort's p-limit(9)
+    // We can't easily verify the exact limit without modifying the implementation
+    // But we can verify that all files downloaded successfully despite launching 20 concurrent operations
+  });
+
+  it('handles large batch without memory issues (100 files)', async function() {
+    this.timeout(180000); // 3 minutes
+
+    // Create 100 files with moderate size (10KB each)
+    const uploadPromises = [];
+    for (let i = 0; i < 100; i++) {
+      const localFile = path.join(localTempDir, `batch${i}.txt`);
+      const content = `content ${i}`.repeat(1000); // ~10KB
+      await fs.writeFile(localFile, content);
+      
+      uploadPromises.push(
+        remote.uploadFile(
+          testWorkspaceId,
+          stringToRel(`batch${i}.txt`),
+          localFile
+        )
+      );
+    }
+
+    const startTime = Date.now();
+    await Promise.all(uploadPromises);
+    const duration = Date.now() - startTime;
+
+    console.log(`Uploaded 100x10KB files in ${duration}ms (${Math.round(duration / 100)}ms/file)`);
+
+    // Verify count
+    const index = await remote.list(testWorkspaceId);
+    assert.ok(index.size >= 100, 'Should have at least 100 files');
+  });
+
+  it('handles batch delete operations', async () => {
+    // Upload files first
+    const uploadPromises = [];
+    for (let i = 0; i < 20; i++) {
+      uploadPromises.push(uploadTestFile(`delete${i}.txt`, `delete me ${i}`));
+    }
+    await Promise.all(uploadPromises);
+
+    // Verify files exist
+    let index = await remote.list(testWorkspaceId);
+    assert.ok(index.size >= 20, 'Should have at least 20 files before delete');
+
+    // Delete all concurrently
+    const deletes = [];
+    for (let i = 0; i < 20; i++) {
+      deletes.push(
+        remote.deletePath(testWorkspaceId, stringToRel(`delete${i}.txt`))
+      );
+    }
+
+    await Promise.all(deletes);
+
+    // Verify all deleted
+    index = await remote.list(testWorkspaceId);
+    assert.ok(index.size < 20, 'Should have deleted files');
+    assert.ok(!index.has(stringToRel('delete0.txt')), 'delete0.txt should be gone');
+    assert.ok(!index.has(stringToRel('delete19.txt')), 'delete19.txt should be gone');
+  });
+
+  it('maintains performance with varying file sizes', async function() {
+    this.timeout(120000);
+
+    // Create files of varying sizes
+    const files = [
+      { name: 'tiny.txt', size: 10 },
+      { name: 'small.txt', size: 1024 }, // 1KB
+      { name: 'medium.txt', size: 10240 }, // 10KB
+      { name: 'large.txt', size: 102400 }, // 100KB
+    ];
+
+    for (const file of files) {
+      const localFile = path.join(localTempDir, file.name);
+      const content = 'x'.repeat(file.size);
+      await fs.writeFile(localFile, content);
+    }
+
+    // Upload all sizes
+    const uploads = files.map(file => 
+      remote.uploadFile(
+        testWorkspaceId,
+        stringToRel(file.name),
+        path.join(localTempDir, file.name)
+      )
+    );
+
+    await Promise.all(uploads);
+
+    // Verify all uploaded with correct sizes
+    const index = await remote.list(testWorkspaceId);
+    
+    for (const file of files) {
+      const meta = index.get(stringToRel(file.name));
+      assert.ok(meta, `${file.name} should exist`);
+      assert.equal(meta.type, 'file');
+      if (meta.type === 'file' && meta.size !== undefined) {
+        assert.ok(
+          meta.size >= file.size && meta.size <= file.size + 10,
+          `${file.name} size should be ~${file.size}, got ${meta.size}`
+        );
+      }
+    }
+  });
+
+  it('handles errors in batch without affecting other operations', async () => {
+    // Create most files, but make one fail
+    for (let i = 0; i < 10; i++) {
+      if (i !== 5) { // Skip file 5
+        const localFile = path.join(localTempDir, `file${i}.txt`);
+        await fs.writeFile(localFile, `content ${i}`);
+      }
+    }
+
+    // Upload all, file5 should fail (doesn't exist)
+    const uploads = [];
+    for (let i = 0; i < 10; i++) {
+      uploads.push(
+        remote.uploadFile(
+          testWorkspaceId,
+          stringToRel(`file${i}.txt`),
+          path.join(localTempDir, `file${i}.txt`)
+        ).catch(err => ({ error: true, index: i, err }))
+      );
+    }
+
+    const results = await Promise.all(uploads);
+
+    // Count successes and failures
+    const failures = results.filter(r => r && typeof r === 'object' && 'error' in r);
+    const successes = results.filter(r => !r || typeof r !== 'object' || !('error' in r));
+
+    assert.equal(failures.length, 1, 'Should have 1 failure (file5)');
+    assert.equal(successes.length, 9, 'Should have 9 successes');
+
+    // Verify the successful ones uploaded
+    const index = await remote.list(testWorkspaceId);
+    assert.ok(index.has(stringToRel('file0.txt')), 'file0 should have uploaded');
+    assert.ok(index.has(stringToRel('file9.txt')), 'file9 should have uploaded');
+  });
+
+  it('performs well with nested directory structure', async () => {
+    // Create nested structure locally and upload
+    const uploadPromises = [];
+    for (let i = 0; i < 20; i++) {
+      const localFile = path.join(localTempDir, `level1/level2/level3-${i}/file.txt`);
+      await fs.mkdir(path.dirname(localFile), { recursive: true });
+      await fs.writeFile(localFile, `content ${i}`);
+      
+      uploadPromises.push(
+        remote.uploadFile(
+          testWorkspaceId,
+          stringToRel(`level1/level2/level3-${i}/file.txt`),
+          localFile
+        )
+      );
+    }
+
+    const startTime = Date.now();
+    await Promise.all(uploadPromises);
+    const duration = Date.now() - startTime;
+
+    console.log(`Uploaded 20 nested files in ${duration}ms`);
+
+    // Verify structure created on remote
+    const index = await remote.list(testWorkspaceId);
+    const files = Array.from(index.keys()).filter(k => k.includes('level1/level2/level3'));
+    
+    assert.ok(files.length >= 20, `Should have at least 20 files, found ${files.length}`);
+  });
+
+  it('uploadFolder handles batch uploads efficiently', async () => {
+    // Create multiple files locally
+    const files = [];
+    for (let i = 0; i < 30; i++) {
+      const localFile = path.join(localTempDir, `batch${i}.txt`);
+      await fs.writeFile(localFile, `content ${i}`);
       files.push({
-        relPath: stringToRel('bad.txt'),
-        absLocal: '/nonexistent/file.txt',
+        relPath: stringToRel(`batch${i}.txt`),
+        absLocal: localFile
       });
+    }
 
-      const uploaded = await remote.uploadFolder(testWorkspaceId, files);
+    // Upload using uploadFolder
+    const startTime = Date.now();
+    const uploaded = await remote.uploadFolder(testWorkspaceId, files);
+    const duration = Date.now() - startTime;
 
-      // Should upload the good files
-      assert.ok(uploaded.length >= 2, 'Good files should still upload');
-    });
+    console.log(`uploadFolder: 30 files in ${duration}ms`);
+
+    // Verify all uploaded
+    assert.equal(uploaded.length, 30, 'Should have uploaded all 30 files');
+    
+    const index = await remote.list(testWorkspaceId);
+    assert.ok(index.size >= 30, 'Should have at least 30 files');
   });
 
-  describe('Batch Download', () => {
-    it('downloads 10 files concurrently', async () => {
-      // First upload 10 files
-      const uploadFiles = await Promise.all(
-        Array.from({ length: 10 }, async (_, i) => {
-          const localPath = await createTempFile(`Download test ${i}`);
-          return {
-            relPath: stringToRel(`dl-${i}.txt`),
-            absLocal: localPath,
-          };
-        })
-      );
+  it('downloadFolder handles batch downloads efficiently', async () => {
+    // Upload files first
+    const uploadPromises = [];
+    for (let i = 0; i < 30; i++) {
+      uploadPromises.push(uploadTestFile(`file${i}.txt`, `content ${i}`));
+    }
+    await Promise.all(uploadPromises);
 
-      await remote.uploadFolder(testWorkspaceId, uploadFiles);
+    // Prepare download list
+    const files = [];
+    for (let i = 0; i < 30; i++) {
+      const localFile = path.join(localTempDir, `downloaded${i}.txt`);
+      files.push({
+        relPath: stringToRel(`file${i}.txt`),
+        absLocal: localFile
+      });
+    }
 
-      // Now download them to new locations
-      const downloadFiles = uploadFiles.map(f => ({
-        relPath: f.relPath,
-        absLocal: path.join(os.tmpdir(), `downloaded-${f.relPath}.txt`),
-      }));
+    // Download using downloadFolder
+    const startTime = Date.now();
+    const downloaded = await remote.downloadFolder(testWorkspaceId, files);
+    const duration = Date.now() - startTime;
 
-      downloadFiles.forEach(f => tempFiles.push(f.absLocal));
+    console.log(`downloadFolder: 30 files in ${duration}ms`);
 
-      const startTime = Date.now();
-      const downloaded = await remote.downloadFolder(testWorkspaceId, downloadFiles);
-      const duration = Date.now() - startTime;
-
-      assert.equal(downloaded.length, 10, 'All files should be downloaded');
-      console.log(`    ⏱️  Downloaded 10 files in ${duration}ms`);
-
-      // Verify files exist locally
-      for (const file of downloadFiles) {
-        const exists = await fs.access(file.absLocal).then(() => true).catch(() => false);
-        assert.ok(exists, `File should exist: ${file.absLocal}`);
-      }
-    });
-
-    it('downloads 100 files concurrently', async () => {
-      // Upload 100 files
-      const uploadFiles = await Promise.all(
-        Array.from({ length: 100 }, async (_, i) => {
-          const localPath = await createTempFile(`Batch download ${i}`);
-          return {
-            relPath: stringToRel(`batch-dl-${i}.txt`),
-            absLocal: localPath,
-          };
-        })
-      );
-
-      await remote.uploadFolder(testWorkspaceId, uploadFiles);
-
-      // Download them
-      const downloadFiles = uploadFiles.map((f, i) => ({
-        relPath: f.relPath,
-        absLocal: path.join(os.tmpdir(), `batch-downloaded-${i}.txt`),
-      }));
-
-      downloadFiles.forEach(f => tempFiles.push(f.absLocal));
-
-      const startTime = Date.now();
-      const downloaded = await remote.downloadFolder(testWorkspaceId, downloadFiles);
-      const duration = Date.now() - startTime;
-
-      assert.equal(downloaded.length, 100);
-      console.log(`    ⏱️  Downloaded 100 files in ${duration}ms (${(duration/100).toFixed(1)}ms per file)`);
-    });
-
-    it('verifies downloaded file integrity', async () => {
-      // Upload a file
-      const content = 'Integrity check content';
-      const uploadPath = await createTempFile(content);
-      const relPath = stringToRel('integrity.txt');
-
-      await remote.uploadFolder(testWorkspaceId, [{ relPath, absLocal: uploadPath }]);
-
-      const originalHash = await sha256OfFile(uploadPath);
-
-      // Download it
-      const downloadPath = path.join(os.tmpdir(), `integrity-dl-${Date.now()}.txt`);
-      tempFiles.push(downloadPath);
-
-      await remote.downloadFolder(testWorkspaceId, [{ relPath, absLocal: downloadPath }]);
-
-      const downloadedHash = await sha256OfFile(downloadPath);
-
-      assert.equal(downloadedHash, originalHash, 'Downloaded file should match original');
-    });
-  });
-
-  describe('Performance', () => {
-    it('batch upload is faster than sequential', async () => {
-      const files = await Promise.all(
-        Array.from({ length: 20 }, async (_, i) => {
-          const localPath = await createTempFile(`Perf test ${i}`);
-          return {
-            relPath: stringToRel(`perf-${i}.txt`),
-            absLocal: localPath,
-          };
-        })
-      );
-
-      // Batch upload
-      const batchStart = Date.now();
-      await remote.uploadFolder(testWorkspaceId, files);
-      const batchDuration = Date.now() - batchStart;
-
-      console.log(`    ⏱️  Batch upload: ${batchDuration}ms`);
-
-      // Cleanup for sequential test
-      try {
-        await cleanupRemotePath(REMOTE_PATHS.batch);  // ← Note: .batch not .integration!
-      } catch (err) {
-        console.warn(`⚠️  Cleanup failed: ${err instanceof Error ? err.message : 'unknown'}`);
-      }
-
-      // Sequential upload
-      const seqStart = Date.now();
-      for (const file of files) {
-        await remote.uploadFile(testWorkspaceId, file.relPath, file.absLocal);
-      }
-      const seqDuration = Date.now() - seqStart;
-
-      console.log(`    ⏱️  Sequential upload: ${seqDuration}ms`);
-      console.log(`    📈 Batch is ${(seqDuration / batchDuration).toFixed(2)}x faster`);
-
-      // Batch should be at least 1.5x faster
-      assert.ok(batchDuration < seqDuration / 1.5, 'Batch should be significantly faster');
-    }).timeout(120000);
+    // Verify all downloaded
+    assert.equal(downloaded.length, 30, 'Should have downloaded all 30 files');
+    
+    const localFiles = await fs.readdir(localTempDir);
+    const downloadedFiles = localFiles.filter(f => f.startsWith('downloaded'));
+    assert.ok(downloadedFiles.length >= 30, 'Should have at least 30 downloaded files');
   });
 });

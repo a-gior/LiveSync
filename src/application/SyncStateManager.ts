@@ -16,7 +16,7 @@ import { deleteSubtree, renameSubtree } from '@helpers/index';
 /** FS event kinds we reflect into the snapshot. */
 export type EventType  = 'create' | 'modify' | 'delete' | 'rename';
 
-type DiffChangeEvent = {
+export type DiffChangeEvent = {
   workspaceId: WorkspaceId;
   /** Used by the TreeView to refresh only a branch (parent of changedPath). */
   parentPath?: RelPath;

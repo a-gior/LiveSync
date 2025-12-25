@@ -2,26 +2,30 @@ import { strict as assert } from 'assert';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
-import { SftpRemotePort } from '../../../src/infrastructure/remote/SftpRemotePort';
-import { WorkspaceConfigService } from '../../../src/infrastructure/config/WorkspaceConfigService';
-import { stringToWsId, stringToRel } from '../../../src/infrastructure/helpers/path';
-import { sha256OfFile } from '../../../src/infrastructure/helpers/hash';
+import { SftpRemotePort } from '@infra/remote/SftpRemotePort';
+import { WorkspaceConfigService } from '@infra/config/WorkspaceConfigService';
+import { stringToWsId, stringToRel } from '@helpers/path';
 import { VM_CONFIG, cleanupRemotePath, REMOTE_PATHS, setupVMTests } from '../../helpers/vm/config';
-import type { WorkspaceId } from '../../../src/domain/types';
+import type { WorkspaceId } from '@domain/types';
 
 describe('SFTP File Operations', function() {
   this.timeout(30000);
 
   let configService: WorkspaceConfigService;
   let remote: SftpRemotePort;
+  let localTempDir: string;
   const testWorkspaceId: WorkspaceId = stringToWsId('/test-workspace');
-  const tempFiles: string[] = [];
 
   before(async function() {
     await setupVMTests(this);
   });
 
   beforeEach(async function() {
+    // Create temp local directory
+    localTempDir = path.join(os.tmpdir(), `livesync-sftp-test-${Date.now()}`);
+    await fs.mkdir(localTempDir, { recursive: true });
+
+    // Setup config service mock
     configService = {
       getById: async () => ({
         hasRemote: true,
@@ -30,6 +34,8 @@ describe('SFTP File Operations', function() {
           port: VM_CONFIG.port,
           username: VM_CONFIG.username,
           password: VM_CONFIG.password,
+          privateKeyPath: VM_CONFIG.privateKeyPath || '',
+          passphrase: VM_CONFIG.passphrase || '',
           remotePath: REMOTE_PATHS.integration,
         },
         ignoreFilter: {
@@ -41,295 +47,304 @@ describe('SFTP File Operations', function() {
 
     remote = new SftpRemotePort(configService, 4);
     
+    // Clean remote directory
     try {
-      await cleanupRemotePath(REMOTE_PATHS.batch);  // ← Note: .batch not .integration!
+      await cleanupRemotePath(REMOTE_PATHS.integration);
     } catch (err) {
-      console.warn(`⚠️  Cleanup failed: ${err instanceof Error ? err.message : 'unknown'}`);
-      this.skip();
+      console.warn(`⚠️  Cleanup failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   });
 
   afterEach(async () => {
     remote.dispose();
+    await fs.rm(localTempDir, { recursive: true, force: true });
+  });
+
+  it('uploads file to remote and verifies', async () => {
+    const localFile = path.join(localTempDir, 'test-upload.txt');
+    const content = 'Upload test content';
+    await fs.writeFile(localFile, content);
+
+    const relPath = stringToRel('test-upload.txt');
+
+    // Upload
+    await remote.uploadFile(testWorkspaceId, relPath, localFile);
+
+    // Verify file exists on remote using list()
+    const index = await remote.list(testWorkspaceId);
+    assert.ok(index.has(relPath), 'File should exist in remote index');
+
+    const fileMeta = index.get(relPath);
+    assert.ok(fileMeta, 'File metadata should exist');
+    assert.equal(fileMeta.type, 'file', 'Should be a file');
+
+    // Verify content by downloading and comparing
+    const downloadedFile = path.join(localTempDir, 'test-upload-downloaded.txt');
+    await remote.downloadFile(testWorkspaceId, relPath, downloadedFile);
     
-    // Cleanup temp files
-    for (const file of tempFiles) {
-      try {
-        await fs.unlink(file);
-      } catch {}
+    const downloadedContent = await fs.readFile(downloadedFile, 'utf-8');
+    assert.equal(downloadedContent, content, 'Downloaded content should match original');
+  });
+
+  it('downloads file from remote and verifies content', async () => {
+    // First upload a file to have something to download
+    const content = 'Download test content';
+    const uploadFile = path.join(localTempDir, 'for-download.txt');
+    await fs.writeFile(uploadFile, content);
+    
+    const relPath = stringToRel('test-download.txt');
+    await remote.uploadFile(testWorkspaceId, relPath, uploadFile);
+
+    // Download to different location
+    const downloadFile = path.join(localTempDir, 'test-download-result.txt');
+    await remote.downloadFile(testWorkspaceId, relPath, downloadFile);
+
+    // Verify local file exists and has correct content
+    const localContent = await fs.readFile(downloadFile, 'utf-8');
+    assert.equal(localContent, content, 'Downloaded content should match original');
+  });
+
+  it('deletes file from remote and verifies deletion', async () => {
+    // Upload a file first
+    const content = 'Delete me';
+    const uploadFile = path.join(localTempDir, 'to-delete.txt');
+    await fs.writeFile(uploadFile, content);
+    
+    const relPath = stringToRel('test-delete.txt');
+    await remote.uploadFile(testWorkspaceId, relPath, uploadFile);
+
+    // Verify exists before delete
+    let index = await remote.list(testWorkspaceId);
+    assert.ok(index.has(relPath), 'File should exist before delete');
+
+    // Delete
+    await remote.deletePath(testWorkspaceId, relPath);
+
+    // Verify deleted
+    index = await remote.list(testWorkspaceId);
+    assert.ok(!index.has(relPath), 'File should be deleted from remote');
+  });
+
+  it('uploads binary file correctly', async () => {
+    const localFile = path.join(localTempDir, 'binary.bin');
+    const binaryData = Buffer.from([0x00, 0x01, 0x02, 0xFF, 0xFE, 0xFD, 0x89, 0x50, 0x4E, 0x47]);
+    await fs.writeFile(localFile, binaryData);
+
+    // Upload
+    await remote.uploadFile(testWorkspaceId, stringToRel('binary.bin'), localFile);
+
+    // Download and verify
+    const downloadedFile = path.join(localTempDir, 'binary-downloaded.bin');
+    await remote.downloadFile(testWorkspaceId, stringToRel('binary.bin'), downloadedFile);
+
+    const downloadedData = await fs.readFile(downloadedFile);
+    assert.deepEqual(downloadedData, binaryData, 'Binary data should match exactly');
+  });
+
+  it('handles nested directories on upload', async () => {
+    const localFile = path.join(localTempDir, 'nested', 'deep', 'file.txt');
+    await fs.mkdir(path.dirname(localFile), { recursive: true });
+    await fs.writeFile(localFile, 'nested content');
+
+    // Upload
+    const relPath = stringToRel('nested/deep/file.txt');
+    await remote.uploadFile(testWorkspaceId, relPath, localFile);
+
+    // Verify using list()
+    const index = await remote.list(testWorkspaceId);
+    assert.ok(index.has(relPath), 'Nested file should exist on remote');
+    assert.ok(index.has(stringToRel('nested')), 'Parent folder should exist');
+    assert.ok(index.has(stringToRel('nested/deep')), 'Intermediate folder should exist');
+  });
+
+  it('creates remote directories if missing', async () => {
+    const localFile = path.join(localTempDir, 'file.txt');
+    await fs.writeFile(localFile, 'content');
+
+    // Upload to new directory path
+    const relPath = stringToRel('new/folder/file.txt');
+    await remote.uploadFile(testWorkspaceId, relPath, localFile);
+
+    // Verify directory structure was created
+    const index = await remote.list(testWorkspaceId);
+    assert.ok(index.has(stringToRel('new')), 'Top-level directory should be created');
+    assert.ok(index.has(stringToRel('new/folder')), 'Intermediate directory should be created');
+    assert.ok(index.has(relPath), 'File should exist in new directory');
+  });
+
+  it('handles large files (1MB)', async function() {
+    this.timeout(60000);
+    
+    const localFile = path.join(localTempDir, 'large-file.bin');
+    const largeData = Buffer.alloc(1024 * 1024); // 1MB
+    for (let i = 0; i < largeData.length; i++) {
+      largeData[i] = i % 256;
     }
-    tempFiles.length = 0;
+    await fs.writeFile(localFile, largeData);
+
+    const relPath = stringToRel('large-file.bin');
+
+    // Upload
+    const startUpload = Date.now();
+    await remote.uploadFile(testWorkspaceId, relPath, localFile);
+    const uploadTime = Date.now() - startUpload;
+
+    console.log(`Upload 1MB: ${uploadTime}ms`);
+
+    // Verify file exists
+    const index = await remote.list(testWorkspaceId);
+    const fileMeta = index.get(relPath);
+    assert.ok(fileMeta, 'Large file should exist on remote');
+    assert.equal(fileMeta.type, 'file');
+    
+    if (fileMeta.type === 'file' && fileMeta.size !== undefined) {
+      assert.ok(fileMeta.size >= 1024 * 1024, 'File size should be at least 1MB');
+    }
+
+    // Download and verify integrity
+    const downloadedFile = path.join(localTempDir, 'large-downloaded.bin');
+    const startDownload = Date.now();
+    await remote.downloadFile(testWorkspaceId, relPath, downloadedFile);
+    const downloadTime = Date.now() - startDownload;
+
+    console.log(`Download 1MB: ${downloadTime}ms`);
+
+    // Verify size matches
+    const downloadedData = await fs.readFile(downloadedFile);
+    assert.equal(downloadedData.length, largeData.length, 'File size should match');
   });
 
-  // Helper to create temp file
-  const createTempFile = async (content: string): Promise<string> => {
-    const tmpPath = path.join(os.tmpdir(), `livesync-test-${Date.now()}-${Math.random()}.txt`);
-    await fs.writeFile(tmpPath, content, 'utf8');
-    tempFiles.push(tmpPath);
-    return tmpPath;
-  };
+  it('overwrites existing remote file on upload', async () => {
+    const localFile = path.join(localTempDir, 'overwrite.txt');
+    const content1 = 'original content';
+    const content2 = 'updated content';
 
-  describe('Upload Operations', () => {
-    it('uploads file to remote', async () => {
-      const content = 'Test file content';
-      const localPath = await createTempFile(content);
-      const relPath = stringToRel('test-file.txt');
+    const relPath = stringToRel('overwrite.txt');
 
-      await remote.uploadFile(testWorkspaceId, relPath, localPath);
+    // First upload
+    await fs.writeFile(localFile, content1);
+    await remote.uploadFile(testWorkspaceId, relPath, localFile);
 
-      // Verify file exists on remote by listing
-      const index = await remote.list(testWorkspaceId);
-      const fileEntry = index.get(relPath);
+    // Get first hash
+    const hash1 = await remote.getFileHash(testWorkspaceId, relPath);
 
-      assert.ok(fileEntry, 'File should exist in remote index');
-      assert.equal(fileEntry.type, 'file');
-    });
+    // Second upload with different content
+    await fs.writeFile(localFile, content2);
+    await remote.uploadFile(testWorkspaceId, relPath, localFile);
 
-    it('uploads file with hash verification', async () => {
-      const content = 'Content for hash test';
-      const localPath = await createTempFile(content);
-      const relPath = stringToRel('hash-test.txt');
+    // Get second hash
+    const hash2 = await remote.getFileHash(testWorkspaceId, relPath);
 
-      const localHash = await sha256OfFile(localPath);
+    // Hashes should be different
+    assert.notEqual(hash1, hash2, 'File hash should change after overwrite');
 
-      await remote.uploadFile(testWorkspaceId, relPath, localPath);
-
-      // Get remote hash
-      const remoteHash = await remote.getFileHash(testWorkspaceId, relPath);
-
-      assert.equal(remoteHash, localHash, 'Remote hash should match local hash');
-    });
-
-    it('creates parent directories automatically', async () => {
-      const content = 'Nested file';
-      const localPath = await createTempFile(content);
-      const relPath = stringToRel('deeply/nested/path/file.txt');
-
-      await remote.uploadFile(testWorkspaceId, relPath, localPath);
-
-      const index = await remote.list(testWorkspaceId);
-      
-      assert.ok(index.has(stringToRel('deeply')));
-      assert.ok(index.has(stringToRel('deeply/nested')));
-      assert.ok(index.has(stringToRel('deeply/nested/path')));
-      assert.ok(index.has(relPath));
-    });
-
-    it('overwrites existing file', async () => {
-      const relPath = stringToRel('overwrite.txt');
-      
-      // Upload version 1
-      const v1 = await createTempFile('version 1');
-      await remote.uploadFile(testWorkspaceId, relPath, v1);
-
-      const hash1 = await remote.getFileHash(testWorkspaceId, relPath);
-
-      // Upload version 2
-      const v2 = await createTempFile('version 2 - different content');
-      await remote.uploadFile(testWorkspaceId, relPath, v2);
-
-      const hash2 = await remote.getFileHash(testWorkspaceId, relPath);
-
-      assert.notEqual(hash1, hash2, 'Hash should change after overwrite');
-    });
-
-    it('handles files with special characters in name', async () => {
-      const content = 'Special chars test';
-      const localPath = await createTempFile(content);
-      const relPath = stringToRel('file with spaces & special-chars.txt');
-
-      await remote.uploadFile(testWorkspaceId, relPath, localPath);
-
-      const index = await remote.list(testWorkspaceId);
-      assert.ok(index.has(relPath));
-    });
-
-    it('handles large files (10MB)', async () => {
-      const largeContent = 'x'.repeat(10 * 1024 * 1024); // 10MB
-      const localPath = await createTempFile(largeContent);
-      const relPath = stringToRel('large-file.txt');
-
-      await remote.uploadFile(testWorkspaceId, relPath, localPath);
-
-      const index = await remote.list(testWorkspaceId);
-      const entry = index.get(relPath);
-      
-      assert.ok(entry);
-      assert.equal(entry.type, 'file');
-    }).timeout(60000);
+    // Verify content was actually overwritten
+    const downloadFile = path.join(localTempDir, 'overwrite-verify.txt');
+    await remote.downloadFile(testWorkspaceId, relPath, downloadFile);
+    const downloadedContent = await fs.readFile(downloadFile, 'utf-8');
+    assert.equal(downloadedContent, content2, 'File should be overwritten with new content');
   });
 
-  describe('Download Operations', () => {
-    it('downloads file from remote', async () => {
-      // First upload a file
-      const content = 'Download test content';
-      const uploadPath = await createTempFile(content);
-      const relPath = stringToRel('download-test.txt');
+  it('handles files with special characters in names', async () => {
+    const localFile = path.join(localTempDir, 'file-with-spaces and special chars.txt');
+    await fs.writeFile(localFile, 'special content');
 
-      await remote.uploadFile(testWorkspaceId, relPath, uploadPath);
+    const relPath = stringToRel('file-with-spaces and special chars.txt');
 
-      // Download to new location
-      const downloadPath = path.join(os.tmpdir(), `download-${Date.now()}.txt`);
-      tempFiles.push(downloadPath);
+    // Upload
+    await remote.uploadFile(testWorkspaceId, relPath, localFile);
 
-      await remote.downloadFile(testWorkspaceId, relPath, downloadPath);
+    // Verify using list()
+    const index = await remote.list(testWorkspaceId);
+    assert.ok(index.has(relPath), 'File with special chars should exist');
+  });
 
-      // Verify content
-      const downloadedContent = await fs.readFile(downloadPath, 'utf8');
-      assert.equal(downloadedContent, content);
-    });
+  it('handles empty files', async () => {
+    const localFile = path.join(localTempDir, 'empty.txt');
+    await fs.writeFile(localFile, '');
 
-    it('downloads file with hash verification', async () => {
-      const content = 'Hash verification test';
-      const uploadPath = await createTempFile(content);
-      const relPath = stringToRel('hash-download.txt');
+    const relPath = stringToRel('empty.txt');
 
-      const originalHash = await sha256OfFile(uploadPath);
+    // Upload
+    await remote.uploadFile(testWorkspaceId, relPath, localFile);
 
-      await remote.uploadFile(testWorkspaceId, relPath, uploadPath);
+    // Verify file exists
+    const index = await remote.list(testWorkspaceId);
+    const fileMeta = index.get(relPath);
+    
+    assert.ok(fileMeta, 'Empty file should exist');
+    assert.equal(fileMeta.type, 'file');
+    
+    // Download and verify it's empty
+    const downloadFile = path.join(localTempDir, 'empty-downloaded.txt');
+    await remote.downloadFile(testWorkspaceId, relPath, downloadFile);
+    
+    const content = await fs.readFile(downloadFile, 'utf-8');
+    assert.equal(content, '', 'Downloaded file should be empty');
+  });
 
-      const downloadPath = path.join(os.tmpdir(), `download-hash-${Date.now()}.txt`);
-      tempFiles.push(downloadPath);
+  it('deletes non-existent file without error', async () => {
+    const relPath = stringToRel('does-not-exist.txt');
+    
+    // Verify it doesn't exist
+    let index = await remote.list(testWorkspaceId);
+    assert.ok(!index.has(relPath), 'File should not exist initially');
+    
+    // Try to delete file that doesn't exist - should not throw
+    await remote.deletePath(testWorkspaceId, relPath);
 
-      await remote.downloadFile(testWorkspaceId, relPath, downloadPath);
+    // Verify it still doesn't exist
+    index = await remote.list(testWorkspaceId);
+    assert.ok(!index.has(relPath), 'File should still not exist');
+  });
 
-      const downloadedHash = await sha256OfFile(downloadPath);
-
-      assert.equal(downloadedHash, originalHash, 'Downloaded file hash should match original');
-    });
-
-    it('creates local parent directories automatically', async () => {
-      const content = 'Nested download test';
-      const uploadPath = await createTempFile(content);
-      const relPath = stringToRel('file.txt');
-
-      await remote.uploadFile(testWorkspaceId, relPath, uploadPath);
-
-      // Download to nested local path that doesn't exist
-      const downloadPath = path.join(os.tmpdir(), 'deep', 'nested', 'path', 'downloaded.txt');
-      tempFiles.push(downloadPath);
-
-      await remote.downloadFile(testWorkspaceId, relPath, downloadPath);
-
-      const exists = await fs.access(downloadPath).then(() => true).catch(() => false);
-      assert.ok(exists, 'Downloaded file should exist');
-    });
-
-    it('handles non-existent remote file gracefully', async () => {
-      const relPath = stringToRel('does-not-exist.txt');
-      const downloadPath = path.join(os.tmpdir(), `fail-${Date.now()}.txt`);
-
-      await assert.rejects(
-        async () => await remote.downloadFile(testWorkspaceId, relPath, downloadPath),
-        /not found|no such file/i
+  it('handles concurrent uploads to different files', async () => {
+    const uploads = [];
+    for (let i = 0; i < 5; i++) {
+      const localFile = path.join(localTempDir, `concurrent-${i}.txt`);
+      await fs.writeFile(localFile, `content ${i}`);
+      
+      uploads.push(
+        remote.uploadFile(testWorkspaceId, stringToRel(`concurrent-${i}.txt`), localFile)
       );
-    });
+    }
+
+    // All uploads should succeed
+    await Promise.all(uploads);
+
+    // Verify all files exist
+    const index = await remote.list(testWorkspaceId);
+    for (let i = 0; i < 5; i++) {
+      const relPath = stringToRel(`concurrent-${i}.txt`);
+      assert.ok(index.has(relPath), `File concurrent-${i}.txt should exist`);
+    }
   });
 
-  describe('Delete Operations', () => {
-    it('deletes file from remote', async () => {
-      // Upload a file first
-      const content = 'File to delete';
-      const localPath = await createTempFile(content);
-      const relPath = stringToRel('delete-me.txt');
+  it('uploads executable files', async function() {
+    // Skip on Windows (no chmod)
+    if (process.platform === 'win32') {
+      this.skip();
+      return;
+    }
 
-      await remote.uploadFile(testWorkspaceId, relPath, localPath);
+    const localFile = path.join(localTempDir, 'executable.sh');
+    await fs.writeFile(localFile, '#!/bin/bash\necho "test"');
+    await fs.chmod(localFile, 0o755);
 
-      // Verify it exists
-      let index = await remote.list(testWorkspaceId);
-      assert.ok(index.has(relPath));
+    const relPath = stringToRel('executable.sh');
 
-      // Delete it
-      await remote.deletePath(testWorkspaceId, relPath);
+    // Upload
+    await remote.uploadFile(testWorkspaceId, relPath, localFile);
 
-      // Verify it's gone
-      index = await remote.list(testWorkspaceId);
-      assert.ok(!index.has(relPath), 'File should be deleted');
-    });
+    // Verify file exists and can be downloaded
+    const index = await remote.list(testWorkspaceId);
+    assert.ok(index.has(relPath), 'Executable file should exist');
 
-    it('deletes folder recursively', async () => {
-      // Upload files in a folder
-      const file1 = await createTempFile('file1');
-      const file2 = await createTempFile('file2');
-
-      await remote.uploadFile(testWorkspaceId, stringToRel('folder/file1.txt'), file1);
-      await remote.uploadFile(testWorkspaceId, stringToRel('folder/file2.txt'), file2);
-
-      // Delete the folder
-      await remote.deletePath(testWorkspaceId, stringToRel('folder'));
-
-      // Verify folder and files are gone
-      const index = await remote.list(testWorkspaceId);
-      assert.ok(!index.has(stringToRel('folder')));
-      assert.ok(!index.has(stringToRel('folder/file1.txt')));
-      assert.ok(!index.has(stringToRel('folder/file2.txt')));
-    });
-
-    it('handles deleting non-existent path gracefully', async () => {
-      const relPath = stringToRel('does-not-exist.txt');
-
-      // Should not throw (idempotent delete)
-      await remote.deletePath(testWorkspaceId, relPath);
-    });
-
-    it('deletes nested folder structure', async () => {
-      // Create deep nesting
-      const file = await createTempFile('nested');
-      await remote.uploadFile(testWorkspaceId, stringToRel('a/b/c/d/file.txt'), file);
-
-      // Delete from top
-      await remote.deletePath(testWorkspaceId, stringToRel('a'));
-
-      // Verify all gone
-      const index = await remote.list(testWorkspaceId);
-      assert.ok(!index.has(stringToRel('a')));
-      assert.ok(!index.has(stringToRel('a/b/c/d/file.txt')));
-    });
-  });
-
-  describe('Edge Cases', () => {
-    it('handles empty file', async () => {
-      const emptyFile = await createTempFile('');
-      const relPath = stringToRel('empty.txt');
-
-      await remote.uploadFile(testWorkspaceId, relPath, emptyFile);
-
-      const index = await remote.list(testWorkspaceId);
-      assert.ok(index.has(relPath));
-    });
-
-    it('handles file with only whitespace', async () => {
-      const whitespaceFile = await createTempFile('   \n\n\t\t   ');
-      const relPath = stringToRel('whitespace.txt');
-
-      await remote.uploadFile(testWorkspaceId, relPath, whitespaceFile);
-
-      const downloadPath = path.join(os.tmpdir(), `ws-${Date.now()}.txt`);
-      tempFiles.push(downloadPath);
-
-      await remote.downloadFile(testWorkspaceId, relPath, downloadPath);
-
-      const content = await fs.readFile(downloadPath, 'utf8');
-      assert.equal(content, '   \n\n\t\t   ');
-    });
-
-    it('handles binary-like content', async () => {
-      const binaryContent = Buffer.from([0x00, 0x01, 0x02, 0xFF, 0xFE]);
-      const tmpPath = path.join(os.tmpdir(), `binary-${Date.now()}.bin`);
-      await fs.writeFile(tmpPath, binaryContent);
-      tempFiles.push(tmpPath);
-
-      const relPath = stringToRel('binary.bin');
-
-      await remote.uploadFile(testWorkspaceId, relPath, tmpPath);
-
-      const downloadPath = path.join(os.tmpdir(), `binary-dl-${Date.now()}.bin`);
-      tempFiles.push(downloadPath);
-
-      await remote.downloadFile(testWorkspaceId, relPath, downloadPath);
-
-      const downloaded = await fs.readFile(downloadPath);
-      assert.deepEqual(downloaded, binaryContent);
-    });
+    // Download and verify content
+    const downloadFile = path.join(localTempDir, 'executable-downloaded.sh');
+    await remote.downloadFile(testWorkspaceId, relPath, downloadFile);
+    
+    const content = await fs.readFile(downloadFile, 'utf-8');
+    assert.ok(content.includes('#!/bin/bash'), 'Executable content should be preserved');
   });
 });

@@ -1,5 +1,5 @@
-import { parseActionPolicy } from '@infra/helpers/policy/parser';
 import { strict as assert } from 'assert';
+import { parseActionPolicy } from '@helpers/policy';
 
 describe('Policy Parser', () => {
   describe('No Action Cases', () => {
@@ -36,28 +36,6 @@ describe('Policy Parser', () => {
       assert.equal(policy.check, false);
       assert.equal(policy.direction, undefined);
       assert.equal(policy.extras.size, 0);
-    });
-
-    it('returns empty policy for whitespace', () => {
-      const policy = parseActionPolicy('   \t\n  ');
-      assert.equal(policy.check, false);
-      assert.equal(policy.direction, undefined);
-      assert.equal(policy.extras.size, 0);
-    });
-  });
-
-  describe('Check-Only Policy', () => {
-    it('parses "check" as check-only policy', () => {
-      const policy = parseActionPolicy('check');
-      assert.equal(policy.check, true);
-      assert.equal(policy.direction, undefined);
-      assert.equal(policy.extras.size, 0);
-    });
-
-    it('handles case insensitive "CHECK"', () => {
-      const policy = parseActionPolicy('CHECK');
-      assert.equal(policy.check, true);
-      assert.equal(policy.direction, undefined);
     });
   });
 
@@ -124,8 +102,16 @@ describe('Policy Parser', () => {
       assert.ok(policy.extras.has('rename'));
     });
 
+    it('parses "rename" as rename extra', () => {
+      const policy = parseActionPolicy('rename');
+      assert.equal(policy.check, false);
+      assert.equal(policy.direction, undefined);
+      assert.ok(policy.extras.has('rename'));
+    });
+
     it('handles case insensitivity', () => {
       assert.ok(parseActionPolicy('MOVE').extras.has('rename'));
+      assert.ok(parseActionPolicy('RENAME').extras.has('rename'));
     });
   });
 
@@ -243,6 +229,48 @@ describe('Policy Parser', () => {
       // "123" doesn't match any patterns
       assert.equal(policy.check, false);
       assert.equal(policy.direction, undefined);
+    });
+
+    it('handles mixed case', () => {
+      const policy = parseActionPolicy('ChEcK&SaVe');
+      assert.equal(policy.check, true);
+      assert.equal(policy.direction, 'upload');
+    });
+
+    it('handles extra whitespace', () => {
+      const policy = parseActionPolicy('  check  &  save  ');
+      assert.equal(policy.check, true);
+      assert.equal(policy.direction, 'upload');
+    });
+
+    it('none/off overrides everything else', () => {
+      const policy = parseActionPolicy('check&save&none');
+      assert.equal(policy.check, false);
+      assert.equal(policy.direction, undefined);
+    });
+  });
+
+  describe('Check-Only Policy', () => {
+    it('parses "check" alone as check-only', () => {
+      const policy = parseActionPolicy('check');
+      assert.equal(policy.check, true);
+      assert.equal(policy.direction, undefined);
+      assert.equal(policy.extras.size, 0);
+    });
+  });
+
+  describe('Multiple Extras', () => {
+    it('parses "delete&move" with both extras', () => {
+      const policy = parseActionPolicy('delete&move');
+      assert.ok(policy.extras.has('delete'));
+      assert.ok(policy.extras.has('rename'));
+    });
+
+    it('parses "check&delete&move" with check and both extras', () => {
+      const policy = parseActionPolicy('check&delete&move');
+      assert.equal(policy.check, true);
+      assert.ok(policy.extras.has('delete'));
+      assert.ok(policy.extras.has('rename'));
     });
   });
 });
