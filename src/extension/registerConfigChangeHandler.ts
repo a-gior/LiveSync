@@ -40,7 +40,7 @@ export function registerConfigChangeHandler(
       if (shouldRefresh) {
         logConfig(result.workspaceId, 'configuration valid - triggering auto-refresh');
         
-        Promise.resolve(vscode.commands.executeCommand('livesync.experimental.refresh', folder))
+        Promise.resolve(vscode.commands.executeCommand('livesync.refresh', folder))
           .then(() => logOperation(result.workspaceId, 'refresh', 'completed successfully'))
           .catch(err => {
             const errMsg = err instanceof Error ? err.message : 'unknown error';

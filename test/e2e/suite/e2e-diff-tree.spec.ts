@@ -106,7 +106,7 @@ suite('E2E - Diff Tree View', function() {
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     // Execute manual refresh
-    await vscode.commands.executeCommand('livesync.experimental.refresh');
+    await vscode.commands.executeCommand('livesync.refresh');
     
     // Wait for refresh
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -174,7 +174,7 @@ suite('E2E - Diff Tree View', function() {
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     // Refresh view
-    await vscode.commands.executeCommand('livesync.experimental.refresh');
+    await vscode.commands.executeCommand('livesync.refresh');
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     // Only changed files should appear (can't easily verify in E2E)

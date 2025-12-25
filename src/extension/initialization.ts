@@ -56,7 +56,7 @@ export async function initializeAllWorkspaces(
         
         if (eff.hasRemote) {
           logOperation(wsId, 'refresh', 'no cache - triggering initial sync');
-          vscode.commands.executeCommand('livesync.experimental.refresh', folder);
+          vscode.commands.executeCommand('livesync.refresh', folder);
         } else {
           logOperation(wsId, 'skipped', 'no valid remote configuration');
         }

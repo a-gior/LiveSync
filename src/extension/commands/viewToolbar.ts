@@ -37,7 +37,7 @@ export function registerViewToolbar(services: Services): void {
   // ════════════════════════════════════════════════════════════════════════════
 
   // Refresh remote index for the CURRENT workspace shown in Diff view
-  cmd(context, 'livesync.experimental.refreshRemoteIndex', async () => {
+  cmd(context, 'livesync.refreshRemoteIndex', async () => {
     const currentWsId = provider.getCurrentWorkspace();
     if (!currentWsId) {
       void vscode.window.showWarningMessage('LiveSync: no workspace selected.');
@@ -61,7 +61,7 @@ export function registerViewToolbar(services: Services): void {
   });
 
   // Refresh both local & remote for the CURRENT workspace shown in Diff view
-  cmd(context, 'livesync.experimental.refresh', async () => {
+  cmd(context, 'livesync.refresh', async () => {
     const currentWsId = provider.getCurrentWorkspace();
     if (!currentWsId) {
       void vscode.window.showWarningMessage('LiveSync: no workspace selected.');
@@ -144,7 +144,7 @@ export function registerViewToolbar(services: Services): void {
   // ════════════════════════════════════════════════════════════════════════════
 
   // Refresh ALL workspaces (for use in Workspaces view)
-  cmd(context, 'livesync.experimental.refreshAll', async (arg?: unknown) => {
+  cmd(context, 'livesync.refreshAll', async (arg?: unknown) => {
     const folders = resolveWorkspaceFolders(arg);
     if (!folders.length) {
       void vscode.window.showWarningMessage('LiveSync: no workspace folders.');

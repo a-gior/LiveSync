@@ -106,13 +106,13 @@
         "icon": "$(eye)"
       },
       {
-        "command": "livesync.experimental.refresh",
+        "command": "livesync.refresh",
         "title": "Refresh",
         "category": "LiveSync",
         "icon": "$(refresh)"
       },
       {
-        "command": "livesync.experimental.refreshAll",
+        "command": "livesync.refreshAll",
         "title": "Refresh All",
         "category": "LiveSync",
         "icon": "$(sync)"
@@ -192,12 +192,12 @@
           "icon": "$(eye)"
         },
         {
-          "command": "livesync.experimental.refresh",
+          "command": "livesync.refresh",
           "when": "view == livesync.diffs",
           "group": "navigation@2"
         },
         {
-          "command": "livesync.experimental.refreshAll",
+          "command": "livesync.refreshAll",
           "when": "view == livesync.workspaces && livesync.multiRoot",
           "group": "navigation@1"
         },
