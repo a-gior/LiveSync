@@ -124,7 +124,6 @@ export function registerUploadDownload(services: Services): void {
     const label = relToString(folderPath) || '.';
     const confirmed = await vscode.window.showWarningMessage(
       `Upload ${toUpload.length} file(s) under "${label}"?`,
-      { modal: true },
       'Upload'
     );
     if (confirmed !== 'Upload') { return; }
@@ -185,7 +184,6 @@ export function registerUploadDownload(services: Services): void {
     const label = relToString(folderPath) || '.';
     const confirmed = await vscode.window.showWarningMessage(
       `Download ${toDownload.length} file(s) under "${label}"?`,
-      { modal: true },
       'Download'
     );
     if (confirmed !== 'Download') { return; }

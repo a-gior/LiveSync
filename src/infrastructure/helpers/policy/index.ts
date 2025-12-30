@@ -6,6 +6,7 @@ import { absFs } from '@infra/helpers/path/PathJoin';
 import { sha256OfFile } from '@infra/helpers/hash/FileHash';
 import { isDownloadable, isUploadable } from '@infra/helpers/diff';
 import { parseActionPolicy } from './parser';
+import { getTestConflictResponse, isTestMode } from '../test';
 
 export { parseActionPolicy } from './parser';
 
@@ -141,6 +142,15 @@ export async function confirmPolicyAction(
   reason?: string,
   allowIgnore: boolean = true
 ): Promise<'proceed' | 'diff' | 'cancel' | 'ignore'> {
+  // Check for test mode auto-response
+  if (isTestMode()) {
+    const testResponse = getTestConflictResponse();
+    if (testResponse) {
+      console.log(`[TEST MODE] Auto-responding with: ${testResponse}`);
+      return testResponse;
+    }
+  }
+  
   const label =
     mode === 'upload'   ? 'Upload' :
     mode === 'download' ? 'Download' :
@@ -156,7 +166,6 @@ export async function confirmPolicyAction(
 
   const choice = await vscode.window.showWarningMessage(
     message, 
-    { modal: true }, 
     ...buttons
   );
 

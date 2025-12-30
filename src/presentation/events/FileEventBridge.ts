@@ -279,7 +279,6 @@ export class FileEventBridge {
    * Handle file save (actionOnSave)
    */
   private async onSave(doc: vscode.TextDocument): Promise<void> {
-    console.log('[onSave] START:', doc.uri.fsPath);
     if (doc.isUntitled) return;
 
     const info = this.getWorkspaceInfo(doc.uri);
@@ -395,7 +394,6 @@ export class FileEventBridge {
       this.inFlightOps.delete(key);
     }, 100);
 
-    console.log('[onSave] END:', doc.uri.fsPath);
   }
 
   /**

@@ -25,7 +25,7 @@ export class RemoteStateVerifier {
     
     try {
       const result = await this.executeCommand(command);
-      return result.includes('EXISTS');
+      return result.trim() === 'EXISTS';
     } catch (err) {
       return false;
     }
@@ -42,7 +42,7 @@ export class RemoteStateVerifier {
     
     try {
       const result = await this.executeCommand(command);
-      return result.includes('EXISTS');
+      return result.trim() === 'EXISTS';
     } catch (err) {
       return false;
     }
@@ -97,7 +97,8 @@ export class RemoteStateVerifier {
     
     // Escape content for shell
     const escapedContent = content.replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/`/g, '\\`');
-    await this.executeCommand(`mkdir -p "${dir}" && echo "${escapedContent}" > "${fullPath}"`);
+    const cmd = `mkdir -p "${dir}" && echo "${escapedContent}" > "${fullPath}"`;
+    await this.executeCommand(cmd);
   }
 
   /**
@@ -189,5 +190,5 @@ export const E2E_VM_CONFIG: RemoteConfig = {
   port: 2222,
   username: 'centos',
   password: 'centos',
-  remotePath: '/home/centos/test-workspace',
+  remotePath: '/home/centos/e2e-test-workspace',
 };
