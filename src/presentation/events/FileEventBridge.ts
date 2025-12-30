@@ -146,9 +146,9 @@ export class FileEventBridge {
    */
   private async onCreate(e: vscode.FileCreateEvent): Promise<void> {
     await this.processFileArray(e.files, async ({ workspaceId, relPath, uri }) => {
-      const queueKey = `${workspaceId}:${relPath}:create`;
+      const queueKey = `${workspaceId}:${relPath}`;
       
-      await this.operationQueue.enqueue(queueKey, async () => {
+      await this.operationQueue.enqueue(queueKey, 'create', async () => {
         // 1) Determine if file or folder
         let isDir = false;
         try {
@@ -285,9 +285,9 @@ export class FileEventBridge {
     if (!info) return;
 
     const { workspaceId, relPath } = info;
-    const queueKey = `${workspaceId}:${relPath}:save`;
+    const queueKey = `${workspaceId}:${relPath}`;
 
-    await this.operationQueue.enqueue(queueKey, async () => {
+    await this.operationQueue.enqueue(queueKey, 'save', async () => {
       // 1) Update local snapshot (hash INSIDE queue for latest content)
       let hash: string;
       try {
@@ -401,9 +401,9 @@ export class FileEventBridge {
    */
   private async onDelete(e: vscode.FileDeleteEvent): Promise<void> {
     await this.processFileArray(e.files, async ({ workspaceId, relPath }) => {
-      const queueKey = `${workspaceId}:${relPath}:delete`;
+      const queueKey = `${workspaceId}:${relPath}`;
       
-      await this.operationQueue.enqueue(queueKey, async () => {
+      await this.operationQueue.enqueue(queueKey, 'delete', async () => {
         // 1) Update local snapshot
         const hadChildren = this.state.hasLocalChildren(workspaceId, relPath);
         if (hadChildren) {
@@ -522,9 +522,9 @@ export class FileEventBridge {
       const workspaceId = stringToWsId(folder.uri.fsPath);
       const oldRel = relFromAbs(workspaceId, oldUri.fsPath);
       const newRel = relFromAbs(workspaceId, newUri.fsPath);
-      const queueKey = `${workspaceId}:${newRel}:rename`;
+      const queueKey = `${workspaceId}:${newRel}`;
 
-      await this.operationQueue.enqueue(queueKey, async () => {
+      await this.operationQueue.enqueue(queueKey, 'rename', async () => {
         // 1) Determine if file or folder
         let isDir = false;
         try {
@@ -684,13 +684,19 @@ export class FileEventBridge {
   private async onOpen(doc: vscode.TextDocument): Promise<void> {
     if (doc.isUntitled) return;
 
+
+
     const info = this.getWorkspaceInfo(doc.uri);
     if (!info) return;
 
     const { workspaceId, relPath } = info;
-    const queueKey = `${workspaceId}:${relPath}:open`;
+    const queueKey = `${workspaceId}:${relPath}`;
+    if (this.operationQueue.hadRecentOperationAny(queueKey, ['create'])) {
+      console.log(`Skipping onOpen for recently created file: ${relPath}`);
+      return;
+    }
 
-    await this.operationQueue.enqueue(queueKey, async () => {
+    await this.operationQueue.enqueue(queueKey, 'open', async () => {
       // 1) Check if conflict is ignored
       if (this.state.isConflictIgnored(workspaceId, relPath)) {
         return;
