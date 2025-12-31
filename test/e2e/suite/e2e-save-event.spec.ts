@@ -30,7 +30,7 @@ suite('E2E - Save Event', function() {
   const testFileName = 'save-test.txt';
   const initialContent = 'Initial content for save test';
   const modifiedContent = 'Modified content after save';
-  const conflictContent = 'Remote was modified by someone else';
+  const conflictContent = 'Remote was modified';
 
   suiteSetup(async () => {
     const setup = await setupE2ESuite();

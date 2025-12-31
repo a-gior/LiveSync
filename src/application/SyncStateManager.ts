@@ -118,6 +118,7 @@ export class SyncStateManager {
       }
       case 'delete': {
         deleteSubtree(local, event.path, /*includeRoot*/ true);
+        this.rehashAncestors(local, event.path);
         break;
       }
       case 'rename': {
@@ -127,6 +128,7 @@ export class SyncStateManager {
               this.ensureAncestorFolders(index, path);
             }
           });
+          this.rehashAncestors(local, event.newPath);
         }
         break;
       }

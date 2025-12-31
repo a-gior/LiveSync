@@ -2,17 +2,15 @@
  * Action Executors
  * 
  * Pure execution functions that perform file operations.
- * No conflict checking, no prompting - just execute the action.
- * 
- * These update both the remote state AND the local/remote snapshots.
+ * Updates both local and remote snapshots to keep them in sync.
  */
 
 import type { WorkspaceId, RelPath } from '@domain/types';
 import type { SyncStateManager } from '@app/SyncStateManager';
 import type { RemotePort } from '@app/ports/RemotePort';
 import { absFs } from '@helpers/path';
-import { sha256OfFile } from '@helpers/hash/FileHash';
 import { logExpectedError } from '@helpers/logging';
+import { syncBothSnapshots, removeFromRemoteSnapshot } from '@helpers/snapshot/update';
 
 /**
  * Execute file upload to remote
@@ -34,14 +32,8 @@ export async function executeUpload(
   // Upload file
   await remote.uploadFile(workspaceId, relPath, absPath);
   
-  // Update remote snapshot
-  const hash = await sha256OfFile(absPath);
-  state.applyRemote({
-    workspaceId,
-    type: 'modify',
-    path: relPath,
-    meta: { type: 'file', hash }
-  });
+  // Sync both snapshots (hash once, update both)
+  await syncBothSnapshots(state, workspaceId, relPath, absPath);
 }
 
 /**
@@ -64,18 +56,12 @@ export async function executeDownload(
   // Download file
   await remote.downloadFile(workspaceId, relPath, absPath);
   
-  // Update local snapshot
-  const hash = await sha256OfFile(absPath);
-  state.applyLocal({
-    workspaceId,
-    type: 'modify',
-    path: relPath,
-    meta: { type: 'file', hash }
-  });
+  // Sync both snapshots (hash once, update both)
+  await syncBothSnapshots(state, workspaceId, relPath, absPath);
 }
 
 /**
- * Execute file deletion on remote
+ * Execute file deletion from remote
  * 
  * @param remote - Remote port
  * @param state - State manager
@@ -93,11 +79,7 @@ export async function executeDelete(
   await remote.deletePath(workspaceId, relPath);
   
   // Update remote snapshot
-  state.applyRemote({
-    workspaceId,
-    type: 'delete',
-    path: relPath
-  });
+  removeFromRemoteSnapshot(state, workspaceId, relPath);
 }
 
 /**
@@ -108,6 +90,7 @@ export async function executeDelete(
  * @param workspaceId - Workspace containing the file
  * @param oldPath - Original path
  * @param newPath - New path
+ * @param isDir - Whether this is a directory
  * @throws Error if rename fails
  */
 export async function executeRename(
@@ -118,27 +101,19 @@ export async function executeRename(
   newPath: RelPath,
   isDir: boolean
 ): Promise<void> {
-  // Delete old path on remote
-  await remote.deletePath(workspaceId, oldPath);
-  
-  // Upload to new path
   if (isDir) {
-    // For folders, would need to upload entire subtree
-    // This is complex - log error for now
-    logExpectedError(`executeRename:folder:${newPath}`, 
-      new Error('Folder rename not fully implemented'));
-  } else {
-    const absPath = absFs(workspaceId, newPath);
-    await remote.uploadFile(workspaceId, newPath, absPath);
-    
-    const hash = await sha256OfFile(absPath);
-    state.applyRemote({
-      workspaceId,
-      type: 'modify',
-      path: newPath,
-      meta: { type: 'file', hash }
-    });
+    throw new Error('Folder rename not yet implemented');
   }
+  
+  const absPath = absFs(workspaceId, newPath);
+  
+  // Delete old path, upload to new path
+  await remote.deletePath(workspaceId, oldPath);
+  await remote.uploadFile(workspaceId, newPath, absPath);
+  
+  // Update remote snapshot (delete old + add new)
+  removeFromRemoteSnapshot(state, workspaceId, oldPath);
+  await syncBothSnapshots(state, workspaceId, newPath, absPath);
 }
 
 /**
@@ -157,19 +132,13 @@ export async function executeUploadFolder(
 ): Promise<void> {
   const uploaded = await remote.uploadFolder(workspaceId, files);
   
-  // Update remote snapshot for all uploaded files
+  // Sync both snapshots for all uploaded files
   for (const relPath of uploaded) {
     const absPath = absFs(workspaceId, relPath);
     try {
-      const hash = await sha256OfFile(absPath);
-      state.applyRemote({
-        workspaceId,
-        type: 'modify',
-        path: relPath,
-        meta: { type: 'file', hash }
-      });
+      await syncBothSnapshots(state, workspaceId, relPath, absPath);
     } catch (err) {
-      logExpectedError(`executeUploadFolder:hash:${relPath}`, err);
+      logExpectedError(`executeUploadFolder:sync:${relPath}`, err);
     }
   }
 }
@@ -190,19 +159,13 @@ export async function executeDownloadFolder(
 ): Promise<void> {
   const downloaded = await remote.downloadFolder(workspaceId, files);
   
-  // Update local snapshot for all downloaded files
+  // Sync both snapshots for all downloaded files
   for (const relPath of downloaded) {
     const absPath = absFs(workspaceId, relPath);
     try {
-      const hash = await sha256OfFile(absPath);
-      state.applyLocal({
-        workspaceId,
-        type: 'modify',
-        path: relPath,
-        meta: { type: 'file', hash }
-      });
+      await syncBothSnapshots(state, workspaceId, relPath, absPath);
     } catch (err) {
-      logExpectedError(`executeDownloadFolder:hash:${relPath}`, err);
+      logExpectedError(`executeDownloadFolder:sync:${relPath}`, err);
     }
   }
 }

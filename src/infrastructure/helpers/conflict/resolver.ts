@@ -6,7 +6,7 @@
  */
 
 import * as vscode from 'vscode';
-import type { RelPath } from '@domain/types';
+import type { RelPath, WorkspaceId } from '@domain/types';
 import type { ConflictInfo } from './detector';
 import { getTestConflictResponse, isTestMode } from '@helpers/test';
 
@@ -27,6 +27,8 @@ export type Resolution =
  */
 export async function resolveConflict(
   conflict: ConflictInfo,
+  workspaceId: WorkspaceId,
+  relPath: RelPath
 ): Promise<Resolution> {
   // Test mode: return pre-configured response
   if (isTestMode()) {
@@ -48,6 +50,16 @@ export async function resolveConflict(
     conflict.allowDiff,
     conflict.reason
   );
+    
+  if (decision === 'diff') {
+    // Show diff
+    await vscode.commands.executeCommand('livesync.experimental.node.showDiff', {
+      workspaceId,
+      relPath
+    });
+
+    return { action: 'cancel' };
+  }
 
   return { action: decision };
 }
@@ -67,7 +79,7 @@ async function promptUser(
   reason: string
 ): Promise<'proceed' | 'diff' | 'cancel' | 'ignore'> {
   const actionLabel = getActionLabel(mode);
-  const message = `${reason}. ${actionLabel}?`;
+  const message = `${reason}. \n${actionLabel}?`;
 
   // Build options
   const options: string[] = [];
@@ -76,12 +88,11 @@ async function promptUser(
     options.push('Show Diff');
   }
   
-  options.push('Proceed', 'Ignore', 'Cancel');
+  options.push('Proceed', 'Ignore');
 
   // Show modal prompt
   const response = await vscode.window.showWarningMessage(
     message,
-    { modal: true },
     ...options
   );
 
@@ -91,8 +102,6 @@ async function promptUser(
   }
 
   if (response === 'Show Diff') {
-    // TODO: Show diff, then re-prompt
-    // For now, just return diff action
     return 'diff';
   }
 
@@ -105,6 +114,31 @@ async function promptUser(
   }
 
   return 'cancel'; // Default fallback
+}
+
+/**
+ * Show info-only notification for check-only policies
+ * 
+ * @param operation - Type of operation
+ * @param relPath - File path
+ * @param oldPath - Old path (for rename operations)
+ * @param conflict - Optional conflict info (if detected)
+ */
+export async function showCheckInfo(
+  conflict?: ConflictInfo | null
+): Promise<void> {
+  let message: string;
+  
+  if (conflict) {
+    // Show conflict details
+    message = `LiveSync (check): ${conflict.reason}.`;
+  } else {
+    // Show generic success message
+    message = `LiveSync (check): No action taken.`;
+  }
+  
+  // Show info notification (non-blocking)
+  vscode.window.showInformationMessage(message);
 }
 
 /**
@@ -123,27 +157,4 @@ function getActionLabel(mode: 'upload' | 'download' | 'delete' | 'move'): string
     default:
       return 'Proceed anyway';
   }
-}
-
-/**
- * Show info-only notification for check-only policies
- * (no action will be taken, just informing user of the check result)
- */
-export async function showCheckInfo(
-  operation: 'save' | 'create' | 'delete' | 'rename' | 'open',
-  relPath: RelPath,
-  oldPath?: RelPath
-): Promise<void> {
-  const verb = operation === 'save' ? 'Saved' :
-    operation === 'create' ? 'Created' :
-    operation === 'delete' ? 'Deleted' :
-    operation === 'open' ? 'Opened' :
-    'Renamed';
-
-  const display = oldPath ? `${oldPath} → ${relPath}` : relPath;
-
-  const message = `LiveSync (check): ${verb} "${display}". No sync action taken (policy = check).`;
-  
-  // Show info notification (non-blocking)
-  vscode.window.showInformationMessage(message);
 }

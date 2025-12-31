@@ -56,20 +56,18 @@ export function registerUploadDownload(services: Services): void {
     // 3. Detect conflict
     let conflict = null;
     if (policy.check) {
-      conflict = detectConflict('save', workspaceId, relPath, state); // ✅ Use 'save' for upload
+      conflict = detectConflict('save', workspaceId, relPath, state);
     }
     
     // 4. Handle check-only
     if (isCheckOnlyPolicy(policy)) {
-      if (conflict) {
-        showCheckInfo('save', relPath); // ✅ Use 'save' for upload
-      }
+      showCheckInfo(conflict);
       return;
     }
     
     // 5. Resolve conflict
     if (conflict) {
-      const resolution = await resolveConflict(conflict);
+      const resolution = await resolveConflict(conflict, workspaceId, relPath);
       
       if (resolution.action === 'cancel') {
         return;
@@ -129,20 +127,18 @@ export function registerUploadDownload(services: Services): void {
     // 3. Detect conflict
     let conflict = null;
     if (policy.check) {
-      conflict = detectConflict('open', workspaceId, relPath, state); // ✅ Use 'open' for download
+      conflict = detectConflict('open', workspaceId, relPath, state);
     }
     
     // 4. Handle check-only
     if (isCheckOnlyPolicy(policy)) {
-      if (conflict) {
-        showCheckInfo('open', relPath); // ✅ Use 'open' for download
-      }
+      showCheckInfo(conflict);
       return;
     }
     
     // 5. Resolve conflict
     if (conflict) {
-      const resolution = await resolveConflict(conflict);
+      const resolution = await resolveConflict(conflict, workspaceId, relPath);
       
       if (resolution.action === 'cancel') {
         return;

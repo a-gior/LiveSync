@@ -5,8 +5,9 @@
  * No side effects - just reads state and returns conflict info.
  */
 
-import type { WorkspaceId, RelPath } from '@domain/types';
+import type { WorkspaceId, RelPath, NodeMeta } from '@domain/types';
 import type { SyncStateManager } from '@app/SyncStateManager';
+import { basenameRel } from '../path';
 
 export type ConflictType = 
   | 'upload-conflict'      // Remote modified, trying to upload
@@ -37,10 +38,12 @@ export function detectConflict(
   operation: 'save' | 'create' | 'delete' | 'rename' | 'open',
   workspaceId: WorkspaceId,
   relPath: RelPath,
-  state: SyncStateManager
+  state: SyncStateManager,
+  oldLocalMeta?: NodeMeta
 ): ConflictInfo | null {
-  const localMeta = state.getLocalMeta(workspaceId, relPath);
+  const localMeta = state.getLocalMeta(workspaceId, relPath) || oldLocalMeta;
   const remoteMeta = state.getRemoteMeta(workspaceId, relPath);
+  const fileName = basenameRel(relPath);
 
   switch (operation) {
     case 'save': {
@@ -58,7 +61,7 @@ export function detectConflict(
       if (remoteModified) {
         return {
           type: 'upload-conflict',
-          reason: `Remote file was modified by someone else (local: ${localMeta.hash.slice(0, 8)}..., remote: ${remoteMeta.hash.slice(0, 8)}...)`,
+          reason: `Remote file ${fileName} was modified`,
           allowDiff: true,
           suggestedAction: 'upload'
         };
@@ -74,7 +77,7 @@ export function detectConflict(
         return {
           type: 'exists-conflict',
           reason: operation === 'create' 
-            ? 'File already exists on remote server'
+            ? `File ${fileName} already exists on remote server`
             : 'Target path already exists on remote server',
           allowDiff: remoteMeta.type === 'file',
           suggestedAction: 'download' // Suggest downloading existing remote file
@@ -87,12 +90,7 @@ export function detectConflict(
     case 'delete': {
       // Deleting file - check if remote was modified or deleted
       if (!remoteMeta) {
-        return {
-          type: 'delete-conflict',
-          reason: 'File no longer exists on remote (may have been deleted by someone else)',
-          allowDiff: false,
-          suggestedAction: 'skip'
-        };
+        return null;
       }
 
       if (remoteMeta.type !== 'file') {
@@ -106,7 +104,7 @@ export function detectConflict(
         if (remoteModified) {
           return {
             type: 'delete-conflict',
-            reason: 'Remote file was modified by someone else before deletion',
+            reason: `Remote ${fileName} file was modified before deletion`,
             allowDiff: true,
             suggestedAction: 'skip' // Suggest keeping modified file
           };
@@ -131,7 +129,7 @@ export function detectConflict(
       if (localModified) {
         return {
           type: 'download-conflict',
-          reason: `Local file was modified (local: ${localMeta.hash.slice(0, 8)}..., remote: ${remoteMeta.hash.slice(0, 8)}...)`,
+          reason: `Local file ${fileName} was modified`,
           allowDiff: true,
           suggestedAction: 'download'
         };

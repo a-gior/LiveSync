@@ -117,25 +117,17 @@ export class FileEventBridge {
       const queueKey = `${workspaceId}:${relPath}`;
       
       await this.operationQueue.enqueue(queueKey, 'create', async () => {
-        // 1. Update local snapshot
-        try {
-          await updateLocalSnapshot(this.state, workspaceId, relPath, uri);
-        } catch (err) {
-          logExpectedError(`onCreate:updateSnapshot:${relPath}`, err);
-          return;
-        }
-        
-        // 2. Check if conflict already ignored
+        // 1. Check if conflict already ignored
         if (hasIgnoredConflict(this.state, workspaceId, relPath)) {
           return;
         }
         
-        // 3. Check ignore patterns
+        // 2. Check ignore patterns
         if (await this.shouldIgnore(workspaceId, relPath)) {
           return;
         }
         
-        // 4. Parse policy
+        // 3. Parse policy
         const config = await this.config.getById(workspaceId);
         const policy = parseActionPolicy(config.data.actionOnCreate);
         
@@ -143,28 +135,34 @@ export class FileEventBridge {
           return;
         }
         
-        // 5. Refresh remote snapshot (if needed)
+        // 4. Refresh remote snapshot (if needed) - BEFORE updating local
         if (requiresRemoteSnapshot(policy)) {
           await ensureFreshRemoteSnapshot(this.state, this.remote, workspaceId, relPath);
         }
         
-        // 6. Detect conflict
+        // 5. Detect conflict - BEFORE updating local snapshot
         let conflict = null;
         if (policy.check) {
           conflict = detectConflict('create', workspaceId, relPath, this.state);
         }
         
+        // 6. Update local snapshot (after conflict check)
+        try {
+          await updateLocalSnapshot(this.state, workspaceId, relPath, uri);
+        } catch (err) {
+          logExpectedError(`onCreate:updateSnapshot:${relPath}`, err);
+          return;
+        }
+        
         // 7. Handle check-only
         if (isCheckOnlyPolicy(policy)) {
-          if (conflict) {
-            showCheckInfo('create', relPath);
-          }
+          showCheckInfo(conflict);
           return;
         }
         
         // 8. Resolve conflict
         if (conflict) {
-          const resolution = await resolveConflict(conflict);
+          const resolution = await resolveConflict(conflict, workspaceId, relPath);
           
           if (resolution.action === 'cancel') {
             return;
@@ -213,7 +211,36 @@ export class FileEventBridge {
     const queueKey = `${workspaceId}:${relPath}`;
 
     await this.operationQueue.enqueue(queueKey, 'save', async () => {
-      // 1. Update local snapshot (hash INSIDE queue for latest content)
+      // 1. Check if conflict already ignored
+      if (hasIgnoredConflict(this.state, workspaceId, relPath)) {
+        return;
+      }
+      
+      // 2. Check ignore patterns
+      if (await this.shouldIgnore(workspaceId, relPath)) {
+        return;
+      }
+      
+      // 3. Parse policy
+      const config = await this.config.getById(workspaceId);
+      const policy = parseActionPolicy(config.data.actionOnSave);
+      
+      if (isNoOpPolicy(policy)) {
+        return;
+      }
+      
+      // 4. Refresh remote snapshot (if needed) - BEFORE updating local
+      if (requiresRemoteSnapshot(policy)) {
+        await ensureFreshRemoteSnapshot(this.state, this.remote, workspaceId, relPath);
+      }
+      
+      // 5. Detect conflict - BEFORE updating local snapshot
+      let conflict = null;
+      if (policy.check) {
+        conflict = detectConflict('save', workspaceId, relPath, this.state);
+      }
+      
+      // 6. Update local snapshot (after conflict check)
       try {
         const hash = await sha256OfFile(doc.uri.fsPath);
         this.state.applyLocal({
@@ -227,46 +254,15 @@ export class FileEventBridge {
         return;
       }
       
-      // 2. Check if conflict already ignored
-      if (hasIgnoredConflict(this.state, workspaceId, relPath)) {
-        return;
-      }
-      
-      // 3. Check ignore patterns
-      if (await this.shouldIgnore(workspaceId, relPath)) {
-        return;
-      }
-      
-      // 4. Parse policy
-      const config = await this.config.getById(workspaceId);
-      const policy = parseActionPolicy(config.data.actionOnSave);
-      
-      if (isNoOpPolicy(policy)) {
-        return;
-      }
-      
-      // 5. Refresh remote snapshot (if needed)
-      if (requiresRemoteSnapshot(policy)) {
-        await ensureFreshRemoteSnapshot(this.state, this.remote, workspaceId, relPath);
-      }
-      
-      // 6. Detect conflict
-      let conflict = null;
-      if (policy.check) {
-        conflict = detectConflict('save', workspaceId, relPath, this.state);
-      }
-      
       // 7. Handle check-only
       if (isCheckOnlyPolicy(policy)) {
-        if (conflict) {
-          showCheckInfo('save', relPath);
-        }
+        showCheckInfo(conflict);
         return;
       }
       
       // 8. Resolve conflict
       if (conflict) {
-        const resolution = await resolveConflict(conflict);
+        const resolution = await resolveConflict(conflict, workspaceId, relPath);
         
         if (resolution.action === 'cancel') {
           return;
@@ -299,7 +295,6 @@ export class FileEventBridge {
 
   /**
    * Handle file deletion (actionOnDelete)
-   * REFACTORED: Uses new helper structure
    */
   private async onDelete(e: vscode.FileDeleteEvent): Promise<void> {
     await this.processFileArray(e.files, async ({ workspaceId, relPath }) => {
@@ -307,6 +302,7 @@ export class FileEventBridge {
       
       await this.operationQueue.enqueue(queueKey, 'delete', async () => {
         // 1. Update local snapshot (remove from local)
+        const oldLocalMeta = this.state.getLocalMeta(workspaceId, relPath);
         const hadChildren = this.state.hasLocalChildren(workspaceId, relPath);
         if (hadChildren) {
           this.state.removeLocalSubtree(workspaceId, relPath);
@@ -345,20 +341,18 @@ export class FileEventBridge {
         // 6. Detect conflict
         let conflict = null;
         if (policy.check) {
-          conflict = detectConflict('delete', workspaceId, relPath, this.state);
+          conflict = detectConflict('delete', workspaceId, relPath, this.state, oldLocalMeta);
         }
         
         // 7. Handle check-only
         if (isCheckOnlyPolicy(policy)) {
-          if (conflict) {
-            showCheckInfo('delete', relPath);
-          }
+          showCheckInfo(conflict);
           return;
         }
         
         // 8. Resolve conflict
         if (conflict) {
-          const resolution = await resolveConflict(conflict);
+          const resolution = await resolveConflict(conflict, workspaceId, relPath);
           
           if (resolution.action === 'cancel') {
             return;
@@ -468,15 +462,13 @@ export class FileEventBridge {
         
         // 7. Handle check-only
         if (isCheckOnlyPolicy(policy)) {
-          if (conflict) {
-            showCheckInfo('rename', newRel, oldRel);
-          }
+          showCheckInfo(conflict);
           return;
         }
         
         // 8. Resolve conflict
         if (conflict) {
-          const resolution = await resolveConflict(conflict);
+          const resolution = await resolveConflict(conflict, workspaceId, newRel);
           
           if (resolution.action === 'cancel') {
             return;
@@ -514,7 +506,6 @@ export class FileEventBridge {
 
   /**
    * Handle file open (actionOnOpen)
-   * REFACTORED: Uses new helper structure
    */
   private async onOpen(doc: vscode.TextDocument): Promise<void> {
     if (doc.isUntitled) return;
@@ -570,15 +561,13 @@ export class FileEventBridge {
       
       // 7. Handle check-only
       if (isCheckOnlyPolicy(policy)) {
-        if (conflict) {
-          showCheckInfo('open', relPath);
-        }
+        showCheckInfo(conflict);
         return;
       }
       
       // 8. Resolve conflict
       if (conflict) {
-        const resolution = await resolveConflict(conflict);
+        const resolution = await resolveConflict(conflict, workspaceId, relPath);
         
         if (resolution.action === 'cancel') {
           return;
@@ -620,6 +609,9 @@ export class FileEventBridge {
     const { workspaceId, relPath } = info;
     const key = `${workspaceId}:${relPath}`;
 
+    if (await this.shouldIgnore(workspaceId, relPath)) {
+      return;
+    }
     if (this.inFlightOps.has(key)) {
       return; // Skip - internal operation in progress
     }
@@ -642,6 +634,10 @@ export class FileEventBridge {
       return;
     }
 
+    if (await this.shouldIgnore(workspaceId, relPath)) {
+      return;
+    }
+
     try {
       await updateLocalSnapshot(this.state, workspaceId, relPath, uri);
     } catch (err) {
@@ -657,6 +653,10 @@ export class FileEventBridge {
     const key = `${workspaceId}:${relPath}`;
 
     if (this.inFlightOps.has(key)) {
+      return;
+    }
+
+    if (await this.shouldIgnore(workspaceId, relPath)) {
       return;
     }
 

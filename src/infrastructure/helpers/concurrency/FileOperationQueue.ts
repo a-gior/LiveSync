@@ -40,7 +40,7 @@ export class FileOperationQueue {
   ): Promise<T> {
     // Mark operation to prevent race conditions
     this.activeOperations.set(key, operationType);
-    this.markRecentOperation(key, operationType); // Mark as recent NOW
+    this.markRecentOperation(key, operationType); // Mark as recent
     
     // Get the existing queue (or start with resolved promise)
     const existing = this.queues.get(key) ?? Promise.resolve();
