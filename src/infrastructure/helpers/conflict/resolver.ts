@@ -32,6 +32,7 @@ export async function resolveConflict(
   if (isTestMode()) {
     const testResponse = getTestConflictResponse();
     if (testResponse) {
+      console.log(`[Test Mode] Auto-resolving conflict with action: ${testResponse}`);
       return { action: testResponse };
     }
   }

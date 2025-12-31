@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert';
-import { parseActionPolicy } from '@helpers/policy';
+import { parseActionPolicy } from '@helpers/policy/parser';
 
 describe('Policy Parser', () => {
   describe('No Action Cases', () => {

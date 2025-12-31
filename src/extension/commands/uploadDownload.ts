@@ -6,21 +6,30 @@ import type { RelPath } from '@domain/types';
 import { absFs, relToString, stringToWsId } from '@helpers/path';
 import { isDownloadable, isUploadable } from '@helpers/diff';
 import { requireValidRemoteConfig } from '@infra/helpers/config';
-import { maybeActByPolicy, parseActionPolicy } from '@infra/helpers/policy';
+import { parseActionPolicy } from '@helpers/policy/parser';
+
+// New helper imports (same as FileEventBridge)
+import { ensureFreshRemoteSnapshot } from '@helpers/snapshot';
+import { detectConflict } from '@helpers/conflict/detector';
+import { resolveConflict, showCheckInfo } from '@helpers/conflict/resolver';
+import { isCheckOnlyPolicy, isNoOpPolicy, requiresRemoteSnapshot } from '@helpers/policy/utils';
+import { markConflictIgnored, clearIgnoredConflictIfResolved } from '@helpers/conflict/tracker';
+import { executeUpload, executeDownload, executeUploadFolder, executeDownloadFolder } from '@helpers/action/executor';
+import { notifySuccess, notifyError } from '@helpers/notification';
+import { logExpectedError } from '@helpers/logging';
 
 /**
  * Register all upload/download commands.
- * Uses centralized policy helpers and folder methods for consistency.
  */
 export function registerUploadDownload(services: Services): void {
-  const { context, state, config, provider } = services;
+  const { context, state, config, provider, remote, notifications } = services;
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Single file upload
   // ─────────────────────────────────────────────────────────────────────────────
   cmd(context, 'livesync.upload', async (arg?: unknown) => {
     const target = resolveEntryTarget(arg);
-    if (!target) { return; }
+    if (!target) return;
     
     if (!await requireValidRemoteConfig(services, target.workspaceId)) {
       return;
@@ -30,27 +39,62 @@ export function registerUploadDownload(services: Services): void {
     const entry = state.getDiffEntry(workspaceId, relPath);
 
     // Check if entry is uploadable
-    if (entry && entry.type !== 'file') { return; }
-    if (entry && !isUploadable(entry.status)) { return; }
+    if (entry && entry.type !== 'file') return;
+    if (entry && !isUploadable(entry.status)) return;
 
-    // Get policy and use centralized helper
+    // 1. Parse policy
     const cfg = await config.getById(workspaceId);
     const policy = parseActionPolicy(cfg.data.actionOnUpload);
     
-    await maybeActByPolicy(
-      workspaceId, 
-      relPath, 
-      policy, 
-      'upload', 
-      state, 
-      services.remote,
-      'file',
-      undefined,
-      false
-    );
-
-    // Mark as resolved for UI
-    provider.markRecentlyResolvedBatch(stringToWsId(workspaceId), [relPath]);
+    if (isNoOpPolicy(policy)) return;
+    
+    // 2. Refresh remote snapshot (if needed)
+    if (requiresRemoteSnapshot(policy)) {
+      await ensureFreshRemoteSnapshot(state, remote, workspaceId, relPath);
+    }
+    
+    // 3. Detect conflict
+    let conflict = null;
+    if (policy.check) {
+      conflict = detectConflict('save', workspaceId, relPath, state); // ✅ Use 'save' for upload
+    }
+    
+    // 4. Handle check-only
+    if (isCheckOnlyPolicy(policy)) {
+      if (conflict) {
+        showCheckInfo('save', relPath); // ✅ Use 'save' for upload
+      }
+      return;
+    }
+    
+    // 5. Resolve conflict
+    if (conflict) {
+      const resolution = await resolveConflict(conflict);
+      
+      if (resolution.action === 'cancel') {
+        return;
+      }
+      
+      if (resolution.action === 'ignore') {
+        markConflictIgnored(state, workspaceId, relPath, conflict);
+        return;
+      }
+    }
+    
+    // 6. Execute action
+    try {
+      await executeUpload(remote, state, workspaceId, relPath);
+      notifySuccess(notifications, 'upload', relPath);
+      
+      // Mark as resolved for UI
+      provider.markRecentlyResolvedBatch(stringToWsId(workspaceId), [relPath]);
+      
+      // Clear ignored conflict
+      clearIgnoredConflictIfResolved(state, workspaceId, relPath);
+    } catch (err) {
+      logExpectedError(`upload:${relPath}`, err);
+      notifyError(notifications, 'upload', relPath);
+    }
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -58,7 +102,7 @@ export function registerUploadDownload(services: Services): void {
   // ─────────────────────────────────────────────────────────────────────────────
   cmd(context, 'livesync.download', async (arg?: unknown) => {
     const target = resolveEntryTarget(arg);
-    if (!target) { return; }
+    if (!target) return;
 
     if (!await requireValidRemoteConfig(services, target.workspaceId)) {
       return;
@@ -68,27 +112,62 @@ export function registerUploadDownload(services: Services): void {
     const entry = state.getDiffEntry(workspaceId, relPath);
 
     // Check if entry is downloadable
-    if (entry && entry.type !== 'file') { return; }
-    if (entry && !isDownloadable(entry.status)) { return; }
+    if (entry && entry.type !== 'file') return;
+    if (entry && !isDownloadable(entry.status)) return;
 
-    // Get policy and use centralized helper
+    // 1. Parse policy
     const cfg = await config.getById(workspaceId);
     const policy = parseActionPolicy(cfg.data.actionOnDownload);
     
-    await maybeActByPolicy(
-      workspaceId, 
-      relPath, 
-      policy, 
-      'download', 
-      state, 
-      services.remote,
-      'file',
-      undefined,
-      false
-    );
-
-    // Mark as resolved for UI
-    provider.markRecentlyResolvedBatch(stringToWsId(workspaceId), [relPath]);
+    if (isNoOpPolicy(policy)) return;
+    
+    // 2. Refresh remote snapshot (if needed)
+    if (requiresRemoteSnapshot(policy)) {
+      await ensureFreshRemoteSnapshot(state, remote, workspaceId, relPath);
+    }
+    
+    // 3. Detect conflict
+    let conflict = null;
+    if (policy.check) {
+      conflict = detectConflict('open', workspaceId, relPath, state); // ✅ Use 'open' for download
+    }
+    
+    // 4. Handle check-only
+    if (isCheckOnlyPolicy(policy)) {
+      if (conflict) {
+        showCheckInfo('open', relPath); // ✅ Use 'open' for download
+      }
+      return;
+    }
+    
+    // 5. Resolve conflict
+    if (conflict) {
+      const resolution = await resolveConflict(conflict);
+      
+      if (resolution.action === 'cancel') {
+        return;
+      }
+      
+      if (resolution.action === 'ignore') {
+        markConflictIgnored(state, workspaceId, relPath, conflict);
+        return;
+      }
+    }
+    
+    // 6. Execute action
+    try {
+      await executeDownload(remote, state, workspaceId, relPath);
+      notifySuccess(notifications, 'download', relPath);
+      
+      // Mark as resolved for UI
+      provider.markRecentlyResolvedBatch(stringToWsId(workspaceId), [relPath]);
+      
+      // Clear ignored conflict
+      clearIgnoredConflictIfResolved(state, workspaceId, relPath);
+    } catch (err) {
+      logExpectedError(`download:${relPath}`, err);
+      notifyError(notifications, 'download', relPath);
+    }
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -96,7 +175,7 @@ export function registerUploadDownload(services: Services): void {
   // ─────────────────────────────────────────────────────────────────────────────
   cmd(context, 'livesync.uploadFolder', async (arg?: unknown) => {
     const target = resolveFolderTarget(arg);
-    if (!target) { return; }
+    if (!target) return;
     
     if (!await requireValidRemoteConfig(services, target.workspaceId)) {
       return;
@@ -108,8 +187,8 @@ export function registerUploadDownload(services: Services): void {
     // Collect uploadable files
     const toUpload: Array<{ relPath: RelPath; absLocal: string }> = [];
     for (const [p, e] of diff.entries()) {
-      if (!(p as string).startsWith(folderPath as string)) { continue; }
-      if (e.type !== 'file') { continue; }
+      if (!(p as string).startsWith(folderPath as string)) continue;
+      if (e.type !== 'file') continue;
       if (isUploadable(e.status)) {
         toUpload.push({ relPath: p, absLocal: absFs(workspaceId, p) });
       }
@@ -126,29 +205,37 @@ export function registerUploadDownload(services: Services): void {
       `Upload ${toUpload.length} file(s) under "${label}"?`,
       'Upload'
     );
-    if (confirmed !== 'Upload') { return; }
+    if (confirmed !== 'Upload') return;
 
-    // Get policy
+    // 1. Parse policy
     const cfg = await config.getById(workspaceId);
     const policy = parseActionPolicy(cfg.data.actionOnUpload);
-
-    // Use centralized helper with folder mode
-    await maybeActByPolicy(
-      workspaceId,
-      folderPath,
-      policy,
-      'upload',
-      state,
-      services.remote,
-      'folder',
-      toUpload
-    );
-
-    provider.markRecentlyResolvedBatch(
-      stringToWsId(workspaceId), 
-      toUpload.map(f => f.relPath)
-    );
-    void vscode.window.showInformationMessage(`LiveSync: uploaded ${toUpload.length} file(s).`);
+    
+    if (isNoOpPolicy(policy)) return;
+    
+    // Note: For folder operations, we skip conflict detection
+    // since we already confirmed with user and they can see the diff tree
+    
+    // 2. Execute batch upload
+    try {
+      await executeUploadFolder(remote, state, workspaceId, toUpload);
+      
+      // Mark all as resolved for UI
+      provider.markRecentlyResolvedBatch(
+        stringToWsId(workspaceId), 
+        toUpload.map(f => f.relPath)
+      );
+      
+      // Clear any ignored conflicts for uploaded files
+      for (const { relPath } of toUpload) {
+        clearIgnoredConflictIfResolved(state, workspaceId, relPath);
+      }
+      
+      void vscode.window.showInformationMessage(`LiveSync: uploaded ${toUpload.length} file(s).`);
+    } catch (err) {
+      logExpectedError(`uploadFolder:${folderPath}`, err);
+      void vscode.window.showErrorMessage(`LiveSync: failed to upload folder`);
+    }
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -156,7 +243,7 @@ export function registerUploadDownload(services: Services): void {
   // ─────────────────────────────────────────────────────────────────────────────
   cmd(context, 'livesync.downloadFolder', async (arg?: unknown) => {
     const target = resolveFolderTarget(arg);
-    if (!target) { return; }
+    if (!target) return;
     
     if (!await requireValidRemoteConfig(services, target.workspaceId)) {
       return;
@@ -168,8 +255,8 @@ export function registerUploadDownload(services: Services): void {
     // Collect downloadable files
     const toDownload: Array<{ relPath: RelPath; absLocal: string }> = [];
     for (const [p, e] of diff.entries()) {
-      if (!(p as string).startsWith(folderPath as string)) { continue; }
-      if (e.type !== 'file') { continue; }
+      if (!(p as string).startsWith(folderPath as string)) continue;
+      if (e.type !== 'file') continue;
       if (isDownloadable(e.status)) {
         toDownload.push({ relPath: p, absLocal: absFs(workspaceId, p) });
       }
@@ -186,28 +273,36 @@ export function registerUploadDownload(services: Services): void {
       `Download ${toDownload.length} file(s) under "${label}"?`,
       'Download'
     );
-    if (confirmed !== 'Download') { return; }
+    if (confirmed !== 'Download') return;
 
-    // Get policy
+    // 1. Parse policy
     const cfg = await config.getById(workspaceId);
     const policy = parseActionPolicy(cfg.data.actionOnDownload);
-
-    // Use centralized helper with folder mode
-    await maybeActByPolicy(
-      workspaceId,
-      folderPath,
-      policy,
-      'download',
-      state,
-      services.remote,
-      'folder',
-      toDownload
-    );
-
-    provider.markRecentlyResolvedBatch(
-      stringToWsId(workspaceId), 
-      toDownload.map(f => f.relPath)
-    );
-    void vscode.window.showInformationMessage(`LiveSync: downloaded ${toDownload.length} file(s).`);
+    
+    if (isNoOpPolicy(policy)) return;
+    
+    // Note: For folder operations, we skip conflict detection
+    // since we already confirmed with user and they can see the diff tree
+    
+    // 2. Execute batch download
+    try {
+      await executeDownloadFolder(remote, state, workspaceId, toDownload);
+      
+      // Mark all as resolved for UI
+      provider.markRecentlyResolvedBatch(
+        stringToWsId(workspaceId), 
+        toDownload.map(f => f.relPath)
+      );
+      
+      // Clear any ignored conflicts for downloaded files
+      for (const { relPath } of toDownload) {
+        clearIgnoredConflictIfResolved(state, workspaceId, relPath);
+      }
+      
+      void vscode.window.showInformationMessage(`LiveSync: downloaded ${toDownload.length} file(s).`);
+    } catch (err) {
+      logExpectedError(`downloadFolder:${folderPath}`, err);
+      void vscode.window.showErrorMessage(`LiveSync: failed to download folder`);
+    }
   });
 }
