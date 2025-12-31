@@ -185,6 +185,7 @@ export class FileEventBridge {
 
         // 3) Check if conflict is ignored
         if (this.state.isConflictIgnored(workspaceId, relPath)) {
+          console.log('[DIAGNOSTIC-CREATE] Conflict ignored, returning');
           return;
         }
 
@@ -217,7 +218,7 @@ export class FileEventBridge {
           );
           
           if (shouldPrompt) {
-            await showCheckInfo('create', relPath);
+            showCheckInfo('create', relPath);
           }
           return;
         }
@@ -346,7 +347,7 @@ export class FileEventBridge {
         );
         
         if (shouldPrompt) {
-          await showCheckInfo('save', relPath);
+          showCheckInfo('save', relPath);
         }
         return;
       }
@@ -432,21 +433,21 @@ export class FileEventBridge {
           });
         }
 
-        // 2) Check if conflict is ignored
+        // Clear any ignored conflict when file is deleted
         if (this.state.isConflictIgnored(workspaceId, relPath)) {
-          return;
+          this.state.clearIgnoredConflict(workspaceId, relPath);
         }
 
-        // 3) Check ignore patterns
+        // Check ignore patterns
         if (await this.shouldIgnore(workspaceId, relPath)) {
           return;
         }
 
-        // 4) Apply policy
+        // Apply policy
         const eff = await this.config.getById(workspaceId);
         const policy = parseActionPolicy(eff.data.actionOnDelete);
 
-        // ✅ NEW: Refresh remote snapshot before any check
+        // Refresh remote snapshot before any check
         if (policy.check) {
           await ensureFreshRemoteSnapshot(
             this.state,
@@ -466,7 +467,7 @@ export class FileEventBridge {
           );
           
           if (shouldPrompt) {
-            await showCheckInfo('delete', relPath);
+            showCheckInfo('delete', relPath);
           }
           return;
         }
@@ -618,7 +619,7 @@ export class FileEventBridge {
           );
           
           if (shouldPrompt) {
-            await showCheckInfo('rename', newRel, oldRel);
+            showCheckInfo('rename', newRel, oldRel);
           }
           return;
         }
@@ -772,7 +773,7 @@ export class FileEventBridge {
         );
         
         if (shouldPrompt) {
-          await showCheckInfo('open', relPath);
+          showCheckInfo('open', relPath);
         }
         return;
       }
