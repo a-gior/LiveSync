@@ -16,7 +16,8 @@ import {
   setTestResponse,
   refresh,
   wait,
-  type E2ETestContext
+  type E2ETestContext,
+  assertLocalContent
 } from './e2e-shared-helpers';
 
 suite('E2E - Create Event', function() {
@@ -104,15 +105,14 @@ suite('E2E - Create Event', function() {
     await ctx.remoteVerifier!.createFile(testFileName, conflictContent);
     await wait(500);
     
-    // Verify remote has conflict content
-    await assertRemoteContent(ctx.remoteVerifier!, testFileName, conflictContent);
+    await assertRemoteContent(ctx.remoteVerifier!, testFileName, conflictContent, "Remote file should exist before local create");
     
     // Step 2: Create file locally (triggers conflict detection)
     await createFileWithEvent(testFile);
-    await wait(2000);
+    await wait(1000);
     
     // Step 3: Verify behavior based on response
-    await assertRemoteContent(ctx.remoteVerifier!, testFileName, expectedRemoteContentAfter);
+    await assertLocalContent(testFile, expectedRemoteContentAfter, "Local content should match expected after conflict resolution");
     
     // Verify file status after conflict handling
     if (userResponse === 'proceed' && policy === 'check&create') {
@@ -157,14 +157,19 @@ suite('E2E - Create Event', function() {
   // ==========================================================================
 
   test('Conflict with check&create - user clicks Proceed', async () => {
-    await testConflictBehavior('check&create', 'proceed', initialContent, false);
+    await testConflictBehavior('check&create', 'proceed', conflictContent+"\n", false);
   });
 
   test('Conflict with check&create - user clicks Cancel', async () => {
-    await testConflictBehavior('check&create', 'cancel', conflictContent, false);
+    await testConflictBehavior('check&create', 'cancel', initialContent, false);
   });
 
   test('Conflict with check&create - user clicks Ignore', async () => {
-    await testConflictBehavior('check&create', 'ignore', conflictContent, true);
+    await testConflictBehavior('check&create', 'ignore', initialContent, true);
   });
+
+  test('Conflict with check - user clicks Cancel', async () => {
+    await testConflictBehavior('check', 'cancel', initialContent, false);
+  });
+
 });

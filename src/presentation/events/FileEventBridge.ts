@@ -19,6 +19,13 @@ import {
 import { logExpectedError } from '@helpers/logging';
 import { FileOperationQueue } from '@helpers/concurrency';
 import { ensureFreshRemoteSnapshot, ensureFreshLocalSnapshot } from '@helpers/snapshot'; // ✅ NEW IMPORT
+import { updateLocalSnapshot } from '../../infrastructure/helpers/snapshot/update';
+import { detectConflict, hasIgnoredConflict } from '../../infrastructure/helpers/conflict/detector';
+import { isCheckOnlyPolicy, isNoOpPolicy, requiresRemoteSnapshot } from '../../infrastructure/helpers/policy/utils';
+import { resolveConflict } from '../../infrastructure/helpers/conflict/resolver';
+import { clearIgnoredConflictIfResolved, markConflictIgnored } from '../../infrastructure/helpers/conflict/tracker';
+import { executeDownload, executeUpload } from '../../infrastructure/helpers/action/executor';
+import { notifyError, notifySuccess } from '../../infrastructure/helpers/notification';
 
 /**
  * FileEventBridge - Central event handler for file operations
@@ -150,56 +157,33 @@ export class FileEventBridge {
       const queueKey = `${workspaceId}:${relPath}`;
       
       await this.operationQueue.enqueue(queueKey, 'create', async () => {
-        // 1) Determine if file or folder
-        let isDir = false;
+        
+        // Update local snapshot
         try {
-          const stat = await vscode.workspace.fs.stat(uri);
-          isDir = (stat.type & vscode.FileType.Directory) !== 0;
+          await updateLocalSnapshot(this.state, workspaceId, relPath, uri);
         } catch (err) {
-          logExpectedError(`FileEventBridge:onCreate:stat:${relPath}`, err);
+          logExpectedError(`onCreate:updateSnapshot:${relPath}`, err);
           return;
         }
-
-        // 2) Update local snapshot (hash files inside queue for freshness)
-        if (isDir) {
-          this.state.applyLocal({
-            workspaceId,
-            type: 'modify',
-            path: relPath,
-            meta: { type: 'folder', hash: '' }
-          });
-        } else {
-          try {
-            const hash = await sha256OfFile(uri.fsPath);
-            this.state.applyLocal({
-              workspaceId,
-              type: 'modify',
-              path: relPath,
-              meta: { type: 'file', hash }
-            });
-          } catch (err) {
-            logExpectedError(`FileEventBridge:onCreate:hash:${relPath}`, err);
-            return;
-          }
+        
+        // Check if conflict is already ignored
+        if (hasIgnoredConflict(this.state, workspaceId, relPath)) {
+          return; // Skip processing
         }
-
-        // 3) Check if conflict is ignored
-        if (this.state.isConflictIgnored(workspaceId, relPath)) {
-          console.log('[DIAGNOSTIC-CREATE] Conflict ignored, returning');
-          return;
-        }
-
-        // 4) Check ignore patterns
+        // Check ignore patterns
         if (await this.shouldIgnore(workspaceId, relPath)) {
           return;
         }
-
-        // 5) Apply policy
-        const eff = await this.config.getById(workspaceId);
-        const policy = parseActionPolicy(eff.data.actionOnCreate);
-
-        // ✅ NEW: Refresh remote snapshot before any check
-        if (policy.check) {
+         // Parse policy
+        const config = await this.config.getById(workspaceId);
+        const policy = parseActionPolicy(config.data.actionOnCreate);
+        
+        if (isNoOpPolicy(policy)) {
+          return; // Policy does nothing
+        }
+        
+        // Refresh remote snapshot (if policy needs it)
+        if (requiresRemoteSnapshot(policy)) {
           await ensureFreshRemoteSnapshot(
             this.state,
             this.remote,
@@ -207,80 +191,66 @@ export class FileEventBridge {
             relPath
           );
         }
-
+        
+        // Detect conflict (if policy checks)
+        let conflict = null;
+        if (policy.check) {
+          conflict = detectConflict('create', workspaceId, relPath, this.state);
+        }
+        
         // Handle check-only policy
-        if (policy.check && !policy.direction && policy.extras.size === 0) {
-          const { shouldPrompt } = await checkShouldPrompt(
-            workspaceId,
-            relPath,
-            'create',
-            this.state
+        if (isCheckOnlyPolicy(policy)) {
+          if (conflict) {
+            showCheckInfo('create', relPath); // Non-blocking
+          }
+          return; // No action to execute
+        }
+
+        // Resolve conflict (if detected)
+        if (conflict) {
+          const resolution = await resolveConflict(
+            conflict
           );
           
-          if (shouldPrompt) {
-            showCheckInfo('create', relPath);
+          if (resolution.action === 'cancel') {
+            return;
           }
+          
+          if (resolution.action === 'ignore') {
+            markConflictIgnored(this.state, workspaceId, relPath, conflict);
+            return;
+          }
+          
+          // User chose 'proceed' - continue to action
+        }
+        
+        // Execute action
+        try {
+          if (conflict) {
+            // Conflict exists - download remote file (don't overwrite it)
+            await executeDownload(this.remote, this.state, workspaceId, relPath);
+            notifySuccess(this.notifications, 'download', relPath);
+          } else if (policy.direction === 'upload') {
+            // No conflict - upload local file
+            await executeUpload(this.remote, this.state, workspaceId, relPath);
+            notifySuccess(this.notifications, 'upload', relPath);
+          }
+        } catch (err) {
+          logExpectedError(`onCreate:execute:${relPath}`, err);
+          notifyError(
+            this.notifications,
+            conflict ? 'download' : 'upload',
+            relPath
+          );
           return;
         }
-
-        // Handle check + action policy
-        if (policy.check && policy.direction === 'upload') {
-          const { shouldPrompt, reason } = await checkShouldPrompt(
-            workspaceId,
-            relPath,
-            'create',
-            this.state
-          );
-
-          if (shouldPrompt) {
-            const decision = await confirmPolicyAction(
-              workspaceId,
-              'upload',
-              !isDir,
-              relPath,
-              reason
-            );
-
-            if (decision === 'ignore') {
-              this.state.markConflictIgnored(
-                workspaceId,
-                relPath,
-                'remote-modified',
-                reason || 'File already exists remotely'
-              );
-              return;
-            }
-
-            if (decision !== 'proceed') {
-              return;
-            }
-          }
-        }
-
-        // Execute policy action
-        await maybeActByPolicy(
-          workspaceId,
-          relPath,
-          policy,
-          'create',
-          this.state,
-          this.remote
-        );
-
-        // Show notification and clear conflict on success
-        if (policy.direction === 'upload') {
-          this.notifications.notify(`Created ${path.basename(relPath)}`, 'cloud-upload');
-          
-          if (this.state.isConflictIgnored(workspaceId, relPath)) {
-            this.state.clearIgnoredConflict(workspaceId, relPath);
-          }
-        }
+        
+        clearIgnoredConflictIfResolved(this.state, workspaceId, relPath);
       });
-
-      // Clear in-flight marker after short delay (allow external watcher to see it)
+      
+      // Clear in-flight marker
       setTimeout(() => {
-        const key = `${workspaceId}:${relPath}`;
-        this.inFlightOps.delete(key);
+        this.inFlightOps.delete(queueKey);
       }, 100);
     });
   }
