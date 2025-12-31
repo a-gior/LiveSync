@@ -11,57 +11,79 @@ import { getTestConflictResponse, isTestMode } from '../test';
 export { parseActionPolicy } from './parser';
 
 /**
- * Check if we should prompt the user based on the policy check.
+ * Check if we should prompt the user based on snapshot comparison.
  * Returns shouldPrompt=true only if a conflict is detected.
  * 
+ * IMPORTANT: This function assumes snapshots are fresh!
+ * Callers MUST call ensureFreshRemoteSnapshot() or ensureFreshLocalSnapshot()
+ * before calling this function to ensure accurate conflict detection.
+ * 
  * Check types by hint:
- * - 'save'/'open'/'upload' → Check: Remote file changed?
+ * - 'save'/'open'/'upload' → Check: Remote file different from local?
+ * - 'download' → Check: Local file different from remote?
  * - 'create'/'move' → Check: File exists remotely?
- * - 'delete' → Check: Remote file changed?
+ * - 'delete' → Check: File exists remotely?
+ * 
+ * @param workspaceId - Workspace containing the file
+ * @param relPath - Relative path to check
+ * @param hint - Operation type (determines what to check)
+ * @param state - State manager with fresh snapshots
+ * @param remote - Remote port (kept for backward compat, not used)
  */
 export async function checkShouldPrompt(
   workspaceId: WorkspaceId,
   relPath: RelPath,
   hint: 'save' | 'create' | 'open' | 'delete' | 'move' | 'upload' | 'download',
-  state: SyncStateManager,
-  remote: RemotePort
+  state: SyncStateManager
 ): Promise<{ shouldPrompt: boolean; reason?: string }> {
   const remoteMeta = state.getRemoteMeta(workspaceId, relPath);
+  const localMeta = state.getLocalMeta(workspaceId, relPath);
 
   switch (hint) {
     case 'save':
     case 'open':
-    case 'upload':
-    case 'download': { // All these check remote file changes
-      // Check: Has the remote file been modified by someone else?
-      if (!remoteMeta) {
+    case 'upload': {
+      // Check: Has remote file been modified? (upload conflict)
+      // Requires: ensureFreshRemoteSnapshot() called before this
+      
+      if (!remoteMeta || remoteMeta.type !== 'file') {
         return { shouldPrompt: false }; // No remote file, no conflict
       }
       
-      if (remoteMeta.type !== 'file' || !remoteMeta.hash) {
-        return { shouldPrompt: false };
+      if (!localMeta || localMeta.type !== 'file') {
+        return { shouldPrompt: false }; // No local file, no conflict
       }
-
-      // Fetch the ACTUAL current remote hash
-      let actualRemoteHash: string;
-      try {
-        const remoteIndex = await remote.list(workspaceId);
-        const actualMeta = remoteIndex.get(relPath);
-        if (!actualMeta || actualMeta.type !== 'file') {
-          return { shouldPrompt: false }; // Remote file disappeared
-        }
-        actualRemoteHash = actualMeta.hash;
-      } catch (err) {
-        return { shouldPrompt: false };
-      }
-
-      // Compare: known vs actual
-      const remoteWasModified = remoteMeta.hash !== actualRemoteHash;
+      
+      // Compare hashes
+      const remoteWasModified = remoteMeta.hash !== localMeta.hash;
       
       return {
         shouldPrompt: remoteWasModified,
         reason: remoteWasModified 
-          ? `Remote file was modified by someone else (expected: ${remoteMeta.hash.slice(0, 8)}..., actual: ${actualRemoteHash.slice(0, 8)}...)` 
+          ? `Remote file was modified by someone else (local: ${localMeta.hash.slice(0, 8)}..., remote: ${remoteMeta.hash.slice(0, 8)}...)` 
+          : undefined
+      };
+    }
+
+    case 'download': {
+      // Check: Has local file been modified? (download conflict)
+      // Requires: ensureFreshLocalSnapshot() called before this
+      
+      if (!localMeta || localMeta.type !== 'file') {
+        return { shouldPrompt: false }; // No local file, no conflict
+      }
+      
+      if (!remoteMeta || remoteMeta.type !== 'file') {
+        return { shouldPrompt: false }; // No remote file, no conflict
+      }
+      
+      // Compare hashes
+      const localWasModified = localMeta.hash !== remoteMeta.hash;
+      
+      return {
+        shouldPrompt: localWasModified,
+        reason: localWasModified 
+          ? `Local file was modified (local: ${localMeta.hash.slice(0, 8)}..., remote: ${remoteMeta.hash.slice(0, 8)}...)` 
           : undefined
       };
     }
@@ -69,24 +91,26 @@ export async function checkShouldPrompt(
     case 'create':
     case 'move': {
       // Check: Does file already exist remotely?
-      if (!remoteMeta) {
-        return { shouldPrompt: false }; // Doesn't exist, OK to create
+      // Requires: ensureFreshRemoteSnapshot() called before this
+      
+      if (remoteMeta) {
+        return {
+          shouldPrompt: true,
+          reason: `File already exists remotely`
+        };
       }
       
-      return {
-        shouldPrompt: true,
-        reason: `File already exists remotely`
-      };
+      return { shouldPrompt: false }; // File doesn't exist, OK to create/move
     }
 
     case 'delete': {
-      // Check: Remote file changed or doesn't exist?
+      // Check: Does file still exist remotely? Was it modified?
+      // Requires: ensureFreshRemoteSnapshot() called before this
       
-      // 1. Check if file exists in our snapshot (was it ever synced?)
       if (!remoteMeta) {
         return {
           shouldPrompt: true,
-          reason: `File was never synced or already deleted from remote`
+          reason: `File no longer exists on remote (may have been deleted by someone else)`
         };
       }
 
@@ -94,35 +118,20 @@ export async function checkShouldPrompt(
         return { shouldPrompt: false }; // Not a file, don't check
       }
 
-      // 2. Check if file still exists remotely (did someone else delete it?)
-      let actualRemoteMeta;
-      try {
-        const remoteIndex = await remote.list(workspaceId);
-        actualRemoteMeta = remoteIndex.get(relPath);
+      // If local snapshot shows the file existed, we can detect if remote changed
+      if (localMeta && localMeta.type === 'file') {
+        const remoteWasModified = remoteMeta.hash !== localMeta.hash;
         
-        if (!actualRemoteMeta) {
-          return {
-            shouldPrompt: true,
-            reason: `File no longer exists on remote (may have been deleted by someone else)`
-          };
-        }
-
-        if (actualRemoteMeta.type !== 'file') {
-          return { shouldPrompt: false }; // Type changed, handle separately
-        }
-      } catch (err) {
-        return { shouldPrompt: false }; // Error fetching, proceed without check
+        return {
+          shouldPrompt: remoteWasModified,
+          reason: remoteWasModified 
+            ? `Remote file was modified by someone else before deletion` 
+            : undefined
+        };
       }
-
-      // 3. Check if someone modified the remote file
-      const remoteWasModified = remoteMeta.hash !== actualRemoteMeta.hash;
       
-      return {
-        shouldPrompt: remoteWasModified,
-        reason: remoteWasModified 
-          ? `Remote file was modified by someone else before deletion (expected: ${remoteMeta.hash.slice(0, 8)}..., actual: ${actualRemoteMeta.hash.slice(0, 8)}...)` 
-          : undefined
-      };
+      // No local reference, can't detect modification
+      return { shouldPrompt: false };
     }
 
     default:
@@ -231,7 +240,7 @@ export async function maybeActByPolicy(
   if (!policy.direction && policy.extras.size === 0) {
     if (policy.check) {
       // Check-only: show info if check is negative
-      const { shouldPrompt, reason } = await checkShouldPrompt(workspaceId, relPath, hint, state, remote);
+      const { shouldPrompt, reason } = await checkShouldPrompt(workspaceId, relPath, hint, state);
       if (shouldPrompt) {
         await vscode.window.showInformationMessage(
           `LiveSync (check): ${reason || 'Check failed'} for "${relPath as string}". No sync action taken.`
@@ -254,13 +263,7 @@ export async function maybeActByPolicy(
 
     // If check is enabled, verify condition (only for file mode)
     if (policy.check && mode === 'file') {
-      const { shouldPrompt, reason } = await checkShouldPrompt(
-        workspaceId, 
-        relPath, 
-        hint, // FIXED: Use original hint - don't override based on direction
-        state,
-        remote
-      );
+      const { shouldPrompt, reason } = await checkShouldPrompt(workspaceId, relPath, hint, state);
       
       if (shouldPrompt) {
         // Prompt user to confirm action

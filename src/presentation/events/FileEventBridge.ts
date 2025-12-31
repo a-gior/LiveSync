@@ -18,6 +18,7 @@ import {
 } from '@helpers/policy';
 import { logExpectedError } from '@helpers/logging';
 import { FileOperationQueue } from '@helpers/concurrency';
+import { ensureFreshRemoteSnapshot, ensureFreshLocalSnapshot } from '@helpers/snapshot'; // ✅ NEW IMPORT
 
 /**
  * FileEventBridge - Central event handler for file operations
@@ -196,14 +197,23 @@ export class FileEventBridge {
         const eff = await this.config.getById(workspaceId);
         const policy = parseActionPolicy(eff.data.actionOnCreate);
 
+        // ✅ NEW: Refresh remote snapshot before any check
+        if (policy.check) {
+          await ensureFreshRemoteSnapshot(
+            this.state,
+            this.remote,
+            workspaceId,
+            relPath
+          );
+        }
+
         // Handle check-only policy
         if (policy.check && !policy.direction && policy.extras.size === 0) {
           const { shouldPrompt } = await checkShouldPrompt(
             workspaceId,
             relPath,
             'create',
-            this.state,
-            this.remote
+            this.state
           );
           
           if (shouldPrompt) {
@@ -218,8 +228,7 @@ export class FileEventBridge {
             workspaceId,
             relPath,
             'create',
-            this.state,
-            this.remote
+            this.state
           );
 
           if (shouldPrompt) {
@@ -317,14 +326,23 @@ export class FileEventBridge {
       const eff = await this.config.getById(workspaceId);
       const policy = parseActionPolicy(eff.data.actionOnSave);
 
+      // ✅ NEW: Refresh remote snapshot before any check
+      if (policy.check) {
+        await ensureFreshRemoteSnapshot(
+          this.state,
+          this.remote,
+          workspaceId,
+          relPath
+        );
+      }
+
       // Handle check-only policy
       if (policy.check && !policy.direction && policy.extras.size === 0) {
         const { shouldPrompt } = await checkShouldPrompt(
           workspaceId,
           relPath,
           'save',
-          this.state,
-          this.remote
+          this.state
         );
         
         if (shouldPrompt) {
@@ -339,8 +357,7 @@ export class FileEventBridge {
           workspaceId,
           relPath,
           'save',
-          this.state,
-          this.remote
+          this.state
         );
 
         if (shouldPrompt) {
@@ -393,7 +410,6 @@ export class FileEventBridge {
       const key = `${workspaceId}:${relPath}`;
       this.inFlightOps.delete(key);
     }, 100);
-
   }
 
   /**
@@ -430,14 +446,23 @@ export class FileEventBridge {
         const eff = await this.config.getById(workspaceId);
         const policy = parseActionPolicy(eff.data.actionOnDelete);
 
+        // ✅ NEW: Refresh remote snapshot before any check
+        if (policy.check) {
+          await ensureFreshRemoteSnapshot(
+            this.state,
+            this.remote,
+            workspaceId,
+            relPath
+          );
+        }
+
         // Handle check-only policy
         if (policy.check && !policy.direction && policy.extras.size === 0) {
           const { shouldPrompt } = await checkShouldPrompt(
             workspaceId,
             relPath,
             'delete',
-            this.state,
-            this.remote
+            this.state
           );
           
           if (shouldPrompt) {
@@ -452,8 +477,7 @@ export class FileEventBridge {
             workspaceId,
             relPath,
             'delete',
-            this.state,
-            this.remote
+            this.state
           );
 
           if (shouldPrompt) {
@@ -574,14 +598,23 @@ export class FileEventBridge {
         const eff = await this.config.getById(workspaceId);
         const policy = parseActionPolicy(eff.data.actionOnMove);
 
+        // ✅ NEW: Refresh remote snapshot for target path before any check
+        if (policy.check) {
+          await ensureFreshRemoteSnapshot(
+            this.state,
+            this.remote,
+            workspaceId,
+            newRel
+          );
+        }
+
         // Handle check-only policy
         if (policy.check && !policy.direction && !policy.extras.has('rename')) {
           const { shouldPrompt } = await checkShouldPrompt(
             workspaceId,
             newRel,
             'move',
-            this.state,
-            this.remote
+            this.state
           );
           
           if (shouldPrompt) {
@@ -596,8 +629,7 @@ export class FileEventBridge {
             workspaceId,
             newRel,
             'move',
-            this.state,
-            this.remote
+            this.state
           );
 
           if (shouldPrompt) {
@@ -684,13 +716,13 @@ export class FileEventBridge {
   private async onOpen(doc: vscode.TextDocument): Promise<void> {
     if (doc.isUntitled) return;
 
-
-
     const info = this.getWorkspaceInfo(doc.uri);
     if (!info) return;
 
     const { workspaceId, relPath } = info;
     const queueKey = `${workspaceId}:${relPath}`;
+    
+    // Skip if file was just created (prevents create→open collision)
     if (this.operationQueue.hadRecentOperationAny(queueKey, ['create'])) {
       console.log(`Skipping onOpen for recently created file: ${relPath}`);
       return;
@@ -711,14 +743,32 @@ export class FileEventBridge {
       const eff = await this.config.getById(workspaceId);
       const policy = parseActionPolicy(eff.data.actionOnOpen);
 
+      // ✅ NEW: Refresh snapshots before any check
+      if (policy.check) {
+        // For download direction, refresh local to detect external changes
+        if (policy.direction === 'download') {
+          await ensureFreshLocalSnapshot(
+            this.state,
+            workspaceId,
+            relPath
+          );
+        }
+        // Always refresh remote
+        await ensureFreshRemoteSnapshot(
+          this.state,
+          this.remote,
+          workspaceId,
+          relPath
+        );
+      }
+
       // Handle check-only policy
       if (policy.check && !policy.direction && policy.extras.size === 0) {
         const { shouldPrompt } = await checkShouldPrompt(
           workspaceId,
           relPath,
           'open',
-          this.state,
-          this.remote
+          this.state
         );
         
         if (shouldPrompt) {
@@ -733,8 +783,7 @@ export class FileEventBridge {
           workspaceId,
           relPath,
           'open',
-          this.state,
-          this.remote
+          this.state
         );
 
         if (shouldPrompt) {
