@@ -1,0 +1,157 @@
+/**
+ * Conflict Detection
+ * 
+ * Pure functions to detect conflicts based on current state.
+ * No side effects - just reads state and returns conflict info.
+ */
+
+import type { WorkspaceId, RelPath } from '@domain/types';
+import type { SyncStateManager } from '@app/SyncStateManager';
+
+export type ConflictType = 
+  | 'upload-conflict'      // Remote modified, trying to upload
+  | 'download-conflict'    // Local modified, trying to download
+  | 'exists-conflict'      // File exists remotely, trying to create
+  | 'delete-conflict';     // Remote modified, trying to delete
+
+export interface ConflictInfo {
+  type: ConflictType;
+  reason: string;
+  allowDiff: boolean;
+  suggestedAction: 'upload' | 'download' | 'delete' | 'skip';
+}
+
+/**
+ * Detect conflict for a specific operation
+ * 
+ * IMPORTANT: Assumes snapshots are already fresh!
+ * Call ensureFreshRemoteSnapshot() or ensureFreshLocalSnapshot() before this.
+ * 
+ * @param operation - Type of file operation
+ * @param workspaceId - Workspace containing the file
+ * @param relPath - Relative path to check
+ * @param state - State manager with fresh snapshots
+ * @returns ConflictInfo if conflict detected, null otherwise
+ */
+export function detectConflict(
+  operation: 'save' | 'create' | 'delete' | 'rename' | 'open',
+  workspaceId: WorkspaceId,
+  relPath: RelPath,
+  state: SyncStateManager
+): ConflictInfo | null {
+  const localMeta = state.getLocalMeta(workspaceId, relPath);
+  const remoteMeta = state.getRemoteMeta(workspaceId, relPath);
+
+  switch (operation) {
+    case 'save': {
+      // Uploading local changes - check if remote was modified
+      if (!remoteMeta || remoteMeta.type !== 'file') {
+        return null; // No remote file, no conflict
+      }
+      
+      if (!localMeta || localMeta.type !== 'file') {
+        return null; // No local file, no conflict
+      }
+      
+      const remoteModified = remoteMeta.hash !== localMeta.hash;
+      
+      if (remoteModified) {
+        return {
+          type: 'upload-conflict',
+          reason: `Remote file was modified by someone else (local: ${localMeta.hash.slice(0, 8)}..., remote: ${remoteMeta.hash.slice(0, 8)}...)`,
+          allowDiff: true,
+          suggestedAction: 'upload'
+        };
+      }
+      
+      return null;
+    }
+
+    case 'create':
+    case 'rename': {
+      // Creating/moving file - check if it already exists remotely
+      if (remoteMeta) {
+        return {
+          type: 'exists-conflict',
+          reason: operation === 'create' 
+            ? 'File already exists on remote server'
+            : 'Target path already exists on remote server',
+          allowDiff: remoteMeta.type === 'file',
+          suggestedAction: 'download' // Suggest downloading existing remote file
+        };
+      }
+      
+      return null;
+    }
+
+    case 'delete': {
+      // Deleting file - check if remote was modified or deleted
+      if (!remoteMeta) {
+        return {
+          type: 'delete-conflict',
+          reason: 'File no longer exists on remote (may have been deleted by someone else)',
+          allowDiff: false,
+          suggestedAction: 'skip'
+        };
+      }
+
+      if (remoteMeta.type !== 'file') {
+        return null; // Not a file, no conflict check
+      }
+
+      // Check if remote was modified since last sync
+      if (localMeta && localMeta.type === 'file') {
+        const remoteModified = remoteMeta.hash !== localMeta.hash;
+        
+        if (remoteModified) {
+          return {
+            type: 'delete-conflict',
+            reason: 'Remote file was modified by someone else before deletion',
+            allowDiff: true,
+            suggestedAction: 'skip' // Suggest keeping modified file
+          };
+        }
+      }
+      
+      return null;
+    }
+
+    case 'open': {
+      // Downloading file - check if local was modified
+      if (!localMeta || localMeta.type !== 'file') {
+        return null; // No local file, no conflict
+      }
+      
+      if (!remoteMeta || remoteMeta.type !== 'file') {
+        return null; // No remote file, no conflict
+      }
+      
+      const localModified = localMeta.hash !== remoteMeta.hash;
+      
+      if (localModified) {
+        return {
+          type: 'download-conflict',
+          reason: `Local file was modified (local: ${localMeta.hash.slice(0, 8)}..., remote: ${remoteMeta.hash.slice(0, 8)}...)`,
+          allowDiff: true,
+          suggestedAction: 'download'
+        };
+      }
+      
+      return null;
+    }
+
+    default:
+      return null;
+  }
+}
+
+/**
+ * Check if a file is currently marked as having an ignored conflict
+ */
+export function hasIgnoredConflict(
+  state: SyncStateManager,
+  workspaceId: WorkspaceId,
+  relPath: RelPath
+): boolean {
+  return state.isConflictIgnored(workspaceId, relPath);
+}

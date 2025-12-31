@@ -175,4 +175,8 @@ suite('E2E - Save Event', function() {
   test('Conflict with check&save - user clicks Ignore', async () => {
     await testConflictBehavior('check&save', 'ignore', conflictContent, modifiedContent, true);
   });
+
+  test('Conflict with check - user clicks Cancel', async () => {
+    await testConflictBehavior('check', 'cancel', conflictContent, modifiedContent, false);
+  });
 });
