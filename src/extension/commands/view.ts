@@ -46,4 +46,11 @@ export function registerViewCommands(services: Services): void {
     }
   });
   context.subscriptions.push(expandDisp, collapseDisp);
+
+  // Open file from the view
+  cmd(context, 'livesync.openFile', async (filePath: string) => {
+    const uri = vscode.Uri.file(filePath);
+    vscode.window.showTextDocument(uri, { preview: true });
+  });
+
 }
