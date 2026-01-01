@@ -17,7 +17,8 @@ import {
   setTestResponse,
   refresh,
   wait,
-  type E2ETestContext
+  type E2ETestContext,
+  cleanAllTestFiles
 } from './e2e-shared-helpers';
 
 suite('E2E - Delete Event', function() {
@@ -33,6 +34,8 @@ suite('E2E - Delete Event', function() {
     const setup = await setupE2ESuite();
     Object.assign(ctx, setup);
     testFile = vscode.Uri.joinPath(ctx.testWorkspace!.uri, testFileName);
+    
+    await cleanAllTestFiles(ctx.remoteVerifier!);
   });
 
   suiteTeardown(async () => {

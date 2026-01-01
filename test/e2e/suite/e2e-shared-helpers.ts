@@ -188,6 +188,27 @@ export async function cleanTestFile(
   }
 }
 
+export async function cleanAllTestFiles(remoteVerifier: RemoteStateVerifier): Promise<void> {
+  // Clean local .txt files
+  const files = await vscode.workspace.findFiles('*.txt', '.livesync/**');
+  for (const file of files) {
+    try {
+      await vscode.workspace.fs.delete(file);
+    } catch (err) {
+      // Ignore errors
+    }
+  }
+  
+  // Clean remote .txt files
+  try {
+    await remoteVerifier.executeCommand('rm -f /home/centos/test-workspace/*.txt');
+  } catch (err) {
+    // Ignore errors
+  }
+  
+  await wait(500);
+}
+
 // ==========================================================================
 // Assertions
 // ==========================================================================

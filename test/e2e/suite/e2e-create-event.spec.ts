@@ -17,7 +17,8 @@ import {
   refresh,
   wait,
   type E2ETestContext,
-  assertLocalContent
+  assertLocalContent,
+  cleanAllTestFiles
 } from './e2e-shared-helpers';
 
 suite('E2E - Create Event', function() {
@@ -33,6 +34,8 @@ suite('E2E - Create Event', function() {
     const setup = await setupE2ESuite();
     Object.assign(ctx, setup);
     testFile = vscode.Uri.joinPath(ctx.testWorkspace!.uri, testFileName);
+
+    await cleanAllTestFiles(ctx.remoteVerifier!);
   });
 
   suiteTeardown(async () => {
@@ -157,7 +160,7 @@ suite('E2E - Create Event', function() {
   // ==========================================================================
 
   test('Conflict with check&create - user clicks Proceed', async () => {
-    await testConflictBehavior('check&create', 'proceed', conflictContent+"\n", false);
+    await testConflictBehavior('check&create', 'proceed', conflictContent, false);
   });
 
   test('Conflict with check&create - user clicks Cancel', async () => {

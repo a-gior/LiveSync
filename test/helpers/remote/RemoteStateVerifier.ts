@@ -96,8 +96,10 @@ export class RemoteStateVerifier {
     const dir = fullPath.substring(0, fullPath.lastIndexOf('/'));
     
     // Escape content for shell
-    const escapedContent = content.replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/`/g, '\\`');
-    const cmd = `mkdir -p "${dir}" && echo "${escapedContent}" > "${fullPath}"`;
+    const escapedContent = content.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/`/g, '\\`');
+    
+    // Use printf instead of echo to avoid automatic newline
+    const cmd = `mkdir -p "${dir}" && printf "%s" "${escapedContent}" > "${fullPath}"`;
     await this.executeCommand(cmd);
   }
 

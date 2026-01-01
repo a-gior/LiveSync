@@ -518,6 +518,7 @@ export class FileEventBridge {
     
     // Skip if file was just created (prevents create→open collision)
     if (this.operationQueue.hadRecentOperationAny(queueKey, ['create'])) {
+      console.log(`onOpen: Skipping for recently created file: ${relPath}`);
       return;
     }
 
