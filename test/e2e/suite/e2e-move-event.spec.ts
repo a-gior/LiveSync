@@ -618,12 +618,12 @@ suite('E2E - Rename/Move Event', function() {
     await setTestResponse(null);
   }
 
-  test.skip('[Folder Dirty State] check&move - detects dirty folder before rename', async () => {
+  test('[Folder Dirty State] check&move - detects dirty folder before rename', async () => {
     // TODO: Implement folder status check in detectConflict() for 'rename' event
     await testFolderRenameDirtyState('folder-dirty-check', 'folder-dirty-check-new', 'check&move', 'proceed');
   });
 
-  test.skip('[Folder Dirty State] check - shows prompt for dirty folder', async () => {
+  test('[Folder Dirty State] check - shows prompt for dirty folder', async () => {
     // TODO: Implement folder status check in detectConflict() for 'rename' event
     await testFolderRenameDirtyState('folder-dirty-onlycheck', 'folder-dirty-onlycheck-new', 'check', 'cancel');
   });

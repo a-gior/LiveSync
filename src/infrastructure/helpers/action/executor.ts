@@ -100,9 +100,23 @@ export async function executeRename(
   oldPath: RelPath,
   newPath: RelPath
 ): Promise<void> {
-  // Use native rename - works for both files AND folders!
+  // Check if target exists on remote (conflict case where user chose "Proceed")
+  const newRemoteMeta = state.getDiffEntry(workspaceId, newPath);
+  
+  if (newRemoteMeta && newRemoteMeta.status !== 'removed') {
+    // Target exists - delete it first (user already chose "Proceed" to overwrite)
+    try {
+      await remote.deletePath(workspaceId, newPath);
+    } catch (err) {
+      logExpectedError(`executeRename:deleteTarget:${newPath}`, err);
+      // Continue anyway - target might not exist on remote
+    }
+  }
+  
+  // Now safe to rename (works for both files AND folders)
   await remote.rename(workspaceId, oldPath, newPath);
   
+  // Update remote snapshot
   renameInRemoteSnapshot(state, workspaceId, oldPath, newPath);
 }
 

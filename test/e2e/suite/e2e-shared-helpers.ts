@@ -189,6 +189,8 @@ export async function cleanTestFile(
 }
 
 export async function cleanAllTestFiles(remoteVerifier: RemoteStateVerifier): Promise<void> {
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
+  
   // Clean local .txt files
   const files = await vscode.workspace.findFiles('*.txt', '.livesync/**');
   for (const file of files) {
@@ -199,9 +201,35 @@ export async function cleanAllTestFiles(remoteVerifier: RemoteStateVerifier): Pr
     }
   }
   
-  // Clean remote .txt files
+  // Clean local test folders
+  if (workspaceRoot) {
+    try {
+      const entries = await vscode.workspace.fs.readDirectory(workspaceRoot);
+      for (const [name, type] of entries) {
+        if (type === vscode.FileType.Directory) {
+          // Delete folders used in tests
+          if (name.startsWith('folder-') || name === 'moved' || name === 'subdir') {
+            const folderUri = vscode.Uri.joinPath(workspaceRoot, name);
+            try {
+              await vscode.workspace.fs.delete(folderUri, { recursive: true });
+            } catch (err) {
+              // Ignore errors
+            }
+          }
+        }
+      }
+    } catch (err) {
+      // Ignore errors
+    }
+  }
+  
+  // Clean remote .txt files and test folders
   try {
-    await remoteVerifier.executeCommand('rm -f /home/centos/test-workspace/*.txt');
+    await remoteVerifier.executeCommand(
+      'cd /home/centos/test-workspace && ' +
+      'rm -f *.txt && ' +
+      'rm -rf folder-* moved subdir'
+    );
   } catch (err) {
     // Ignore errors
   }
