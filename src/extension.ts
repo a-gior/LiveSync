@@ -25,6 +25,7 @@ import { registerTestConnectionCommand } from './extension/commands/testConnecti
 import { registerUploadDownload } from './extension/commands/uploadDownload';
 import { runMigrationCheck } from '@infra/migration/ConfigMigration';
 import { registerTestCommands } from './extension/commands/test';
+import { registerDelete } from './extension/commands/delete';
 
 let globalServices: Awaited<ReturnType<typeof bootstrap>> | undefined;
 
@@ -59,6 +60,7 @@ export async function activate(context: vscode.ExtensionContext) {
   registerConfigurationCommands(services);
   registerTestConnectionCommand(services);
   registerUploadDownload(services);
+  registerDelete(services);
   registerTestCommands(services);
 
   logInfoMessage('LiveSync activated.');

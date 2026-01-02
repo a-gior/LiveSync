@@ -307,6 +307,29 @@ export async function assertRemoteContent(
 }
 
 /**
+ * Assert file/folder exists/doesn't exist locally
+ */
+export async function assertLocalExists(
+  fileUri: vscode.Uri,
+  shouldExist: boolean,
+  message?: string
+): Promise<void> {
+  let exists = false;
+  try {
+    await vscode.workspace.fs.stat(fileUri);
+    exists = true;
+  } catch {
+    exists = false;
+  }
+  
+  assert.strictEqual(
+    exists,
+    shouldExist,
+    message || `File should ${shouldExist ? '' : 'not '}exist locally`
+  );
+}
+
+/**
  * Assert local file content
  */
 export async function assertLocalContent(

@@ -140,6 +140,18 @@
         "title": "Test Connection",
         "category": "LiveSync",
         "icon": "$(plug)"
+      },
+      {
+        "command": "livesync.delete",
+        "title": "Delete",
+        "category": "LiveSync",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "livesync.deleteFolder",
+        "title": "Delete Folder",
+        "category": "LiveSync",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -168,6 +180,16 @@
           "command": "livesync.downloadFolder",
           "when": "view == livesync.diffs && viewItem =~ /fileEntry-directory-(removed|modified|conflict)$/",
           "group": "inline@1"
+        },
+          {
+          "command": "livesync.delete",
+          "when": "view == livesync.diffs && viewItem =~ /fileEntry-file-/",
+          "group": "inline@3"
+        },
+        {
+          "command": "livesync.deleteFolder",
+          "when": "view == livesync.diffs && viewItem =~ /fileEntry-directory-/",
+          "group": "inline@3"
         }
       ],
       "editor/context": [
@@ -182,6 +204,10 @@
         {
           "command": "livesync.experimental.node.showDiff",
           "group": "LiveSync@3"
+        },
+        {
+          "command": "livesync.delete",
+          "group": "LiveSync@4"
         }
       ],
       "view/title": [
@@ -224,6 +250,10 @@
         {
           "command": "livesync.experimental.node.showDiff",
           "group": "LiveSync@3"
+        },
+        {
+          "command": "livesync.delete",
+          "group": "LiveSync@4"
         }
       ]
     },
