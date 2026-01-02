@@ -18,7 +18,7 @@ import type { NotificationStatusBar } from '@presentation/statusbar/Notification
  */
 export function notifySuccess(
   notifications: NotificationStatusBar,
-  action: 'upload' | 'download' | 'delete' | 'rename',
+  action: 'upload' | 'download' | 'delete' | 'move',
   relPath: RelPath
 ): void {
   const fileName = path.basename(relPath as string);
@@ -33,7 +33,7 @@ export function notifySuccess(
     case 'delete':
       notifications.notify(`Deleted ${fileName}`, 'trash');
       break;
-    case 'rename':
+    case 'move':
       notifications.notify(`Renamed ${fileName}`, 'edit');
       break;
   }
@@ -48,7 +48,7 @@ export function notifySuccess(
  */
 export function notifyError(
   notifications: NotificationStatusBar,
-  action: 'upload' | 'download' | 'delete' | 'rename',
+  action: 'upload' | 'download' | 'delete' | 'move',
   relPath: RelPath
 ): void {
   const fileName = path.basename(relPath as string);

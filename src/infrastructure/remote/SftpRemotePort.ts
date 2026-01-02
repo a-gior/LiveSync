@@ -366,7 +366,7 @@ export class SftpRemotePort implements RemotePort {
     return downloaded;
   }
 
-  async rename(
+  async move(
     workspaceId: WorkspaceId,
     oldPath: RelPath,
     newPath: RelPath

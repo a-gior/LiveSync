@@ -128,14 +128,14 @@ export function removeFromRemoteSnapshot(
 }
 
 /**
- * Update local snapshot for a rename operation
+ * Update local snapshot for a move operation
  * 
  * @param state - State manager
  * @param workspaceId - Workspace containing the file
  * @param oldPath - Original path
  * @param newPath - New path
  */
-export function renameInLocalSnapshot(
+export function moveInLocalSnapshot(
   state: SyncStateManager,
   workspaceId: WorkspaceId,
   oldPath: RelPath,
@@ -143,21 +143,21 @@ export function renameInLocalSnapshot(
 ): void {
   state.applyLocal({
     workspaceId,
-    type: 'rename',
+    type: 'move',
     path: oldPath,
     newPath: newPath
   });
 }
 
 /**
- * Update remote snapshot for a rename operation
+ * Update remote snapshot for a move operation
  * 
  * @param state - State manager
  * @param workspaceId - Workspace containing the file
  * @param oldPath - Original path
  * @param newPath - New path
  */
-export function renameInRemoteSnapshot(
+export function moveInRemoteSnapshot(
   state: SyncStateManager,
   workspaceId: WorkspaceId,
   oldPath: RelPath,
@@ -165,7 +165,7 @@ export function renameInRemoteSnapshot(
 ): void {
   state.applyRemote({
     workspaceId,
-    type: 'rename',
+    type: 'move',
     path: oldPath,
     newPath: newPath
   });

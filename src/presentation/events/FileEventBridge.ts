@@ -385,7 +385,7 @@ export class FileEventBridge {
   }
 
   /**
-   * Handle file rename/move (actionOnMove)
+   * Handle file move/move (actionOnMove)
    */
   private async onRename(e: vscode.FileRenameEvent): Promise<void> {
     await Promise.all(e.files.map(async ({ oldUri, newUri }) => {
@@ -398,7 +398,7 @@ export class FileEventBridge {
       const newRel = relFromAbs(workspaceId, newUri.fsPath);
       const queueKey = `${workspaceId}:${newRel}`;
 
-      await this.operationQueue.enqueue(queueKey, 'rename', async () => {
+      await this.operationQueue.enqueue(queueKey, 'move', async () => {
         // 1. Update local snapshot
         let isDir = false;
         try {
@@ -408,7 +408,7 @@ export class FileEventBridge {
           if (isDir) {
             this.state.applyLocal({
               workspaceId,
-              type: 'rename',
+              type: 'move',
               path: oldRel,
               newPath: newRel,
               meta: { type: 'folder', hash: '' }
@@ -417,7 +417,7 @@ export class FileEventBridge {
             const hash = await sha256OfFile(newUri.fsPath);
             this.state.applyLocal({
               workspaceId,
-              type: 'rename',
+              type: 'move',
               path: oldRel,
               newPath: newRel,
               meta: { type: 'file', hash }
@@ -457,7 +457,7 @@ export class FileEventBridge {
         // 6. Detect conflict (check if target path exists)
         let conflict = null;
         if (policy.check) {
-          conflict = detectConflict('rename', workspaceId, newRel, this.state);
+          conflict = detectConflict('move', workspaceId, newRel, this.state);
         }
         
         // 7. Handle check-only
@@ -482,13 +482,13 @@ export class FileEventBridge {
         
         // 9. Execute action
         try {
-          if (policy.extras.has('rename')) {
+          if (policy.extras.has('move')) {
             await executeRename(this.remote, this.state, workspaceId, oldRel, newRel);
-            notifySuccess(this.notifications, 'rename', newRel);
+            notifySuccess(this.notifications, 'move', newRel);
           }
         } catch (err) {
           logExpectedError(`onRename:execute:${newRel}`, err);
-          notifyError(this.notifications, 'rename', newRel);
+          notifyError(this.notifications, 'move', newRel);
           return;
         }
         

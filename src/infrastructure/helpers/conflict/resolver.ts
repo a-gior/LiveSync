@@ -121,7 +121,7 @@ async function promptUser(
  * 
  * @param operation - Type of operation
  * @param relPath - File path
- * @param oldPath - Old path (for rename operations)
+ * @param oldPath - Old path (for move operations)
  * @param conflict - Optional conflict info (if detected)
  */
 export async function showCheckInfo(

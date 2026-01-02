@@ -11,10 +11,10 @@ import { DiffEngine } from '@domain/diff/DiffEngine';
 
 import { dirnameRel, parentsOf, stringToRel } from '@helpers/path';
 import { computeFolderHashFromNodeIndex } from '@helpers/hash';
-import { deleteSubtree, renameSubtree } from '@helpers/index';
+import { deleteSubtree, moveSubtree } from '@helpers/index';
 
 /** FS event kinds we reflect into the snapshot. */
-export type EventType  = 'create' | 'modify' | 'delete' | 'rename';
+export type EventType  = 'create' | 'modify' | 'delete' | 'move';
 
 export type DiffChangeEvent = {
   workspaceId: WorkspaceId;
@@ -49,7 +49,7 @@ type ConflictListener = (event: ConflictChangeEvent) => void;
  * - Holds per-workspace local/remote NodeIndex snapshots and the computed DiffMap.
  * - Emits targeted change events whenever a recompute happens.
  * - Provides optimistic mutation helpers for the *remote* snapshot so the UI updates instantly
- *   after we perform a remote action (upload/delete/rename), without a full rescan.
+ *   after we perform a remote action (upload/delete/move), without a full rescan.
  */
 export class SyncStateManager {
   // Per-workspace snapshots (files + folders, with hashes)
@@ -93,7 +93,7 @@ export class SyncStateManager {
   }
 
   // ------------------------------------------------------------------------------------
-  // Incremental *local* mutations (from FS events): create/modify/delete/rename
+  // Incremental *local* mutations (from FS events): create/modify/delete/move
   // These update the local snapshot and trigger a recompute.
   // meta: NodeMeta for 'file' (with content hash) or 'folder' (with folder hash)
   // ------------------------------------------------------------------------------------
@@ -121,9 +121,9 @@ export class SyncStateManager {
         this.rehashAncestors(local, event.path);
         break;
       }
-      case 'rename': {
+      case 'move': {
         if (event.newPath) {
-          renameSubtree(local, event.path, event.newPath, (index, path, meta) => {
+          moveSubtree(local, event.path, event.newPath, (index, path, meta) => {
             if (meta.type === 'file') {
               this.ensureAncestorFolders(index, path);
             }
@@ -170,9 +170,9 @@ export class SyncStateManager {
         this.rehashAncestors(remote, event.path);
         break;
       }
-      case 'rename': {
+      case 'move': {
         if (event.newPath) {
-          renameSubtree(remote, event.path, event.newPath, (index, path, meta) => {
+          moveSubtree(remote, event.path, event.newPath, (index, path, meta) => {
             if (meta.type === 'file') {
               this.ensureAncestorFolders(index, path);
             }

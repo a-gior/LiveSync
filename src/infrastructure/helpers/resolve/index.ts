@@ -13,7 +13,7 @@ export interface EntryNodeArg {
   kind: 'entry';
   workspaceId: WorkspaceId | string; // tree may pass plain string, we’ll brand it
   path?: RelPath | string;
-  paths?: Array<RelPath | string>;   // optional [old, new] for rename flows
+  paths?: Array<RelPath | string>;   // optional [old, new] for move flows
 }
 
 function asUri(arg: unknown): vscode.Uri | undefined {

@@ -23,7 +23,7 @@ export function deleteSubtree(index: NodeIndex, root: RelPath, includeRoot: bool
 /**
  * Rename a path and all its descendants in a NodeIndex.
  */
-export function renameSubtree(
+export function moveSubtree(
   index: NodeIndex,
   oldPath: RelPath,
   newPath: RelPath,

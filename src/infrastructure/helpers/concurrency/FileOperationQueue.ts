@@ -1,6 +1,6 @@
 import { logExpectedError } from '@helpers/logging';
 
-export type OperationType = 'create' | 'save' | 'open' | 'delete' | 'rename';
+export type OperationType = 'create' | 'save' | 'open' | 'delete' | 'move';
 
 interface OperationMetadata {
   type: OperationType;

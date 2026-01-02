@@ -10,7 +10,7 @@ import type { SyncStateManager } from '@app/SyncStateManager';
 import type { RemotePort as SftpRemotePort } from '@app/ports/RemotePort';
 import { absFs } from '@helpers/path';
 import { logExpectedError } from '@helpers/logging';
-import { syncBothSnapshots, removeFromRemoteSnapshot, renameInRemoteSnapshot } from '@helpers/snapshot/update';
+import { syncBothSnapshots, removeFromRemoteSnapshot, moveInRemoteSnapshot } from '@helpers/snapshot/update';
 
 /**
  * Execute file upload to remote
@@ -83,7 +83,7 @@ export async function executeDelete(
 }
 
 /**
- * Execute file/folder rename on remote
+ * Execute file/folder move on remote
  * 
  * @param remote - Remote port
  * @param state - State manager
@@ -91,7 +91,7 @@ export async function executeDelete(
  * @param oldPath - Original path
  * @param newPath - New path
  * @param isDir - Whether this is a directory
- * @throws Error if rename fails
+ * @throws Error if move fails
  */
 export async function executeRename(
   remote: SftpRemotePort,
@@ -113,11 +113,11 @@ export async function executeRename(
     }
   }
   
-  // Now safe to rename (works for both files AND folders)
-  await remote.rename(workspaceId, oldPath, newPath);
+  // Now safe to move (works for both files AND folders)
+  await remote.move(workspaceId, oldPath, newPath);
   
   // Update remote snapshot
-  renameInRemoteSnapshot(state, workspaceId, oldPath, newPath);
+  moveInRemoteSnapshot(state, workspaceId, oldPath, newPath);
 }
 
 /**

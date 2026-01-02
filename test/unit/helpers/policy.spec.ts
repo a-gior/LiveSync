@@ -95,23 +95,23 @@ describe('Policy Parser', () => {
   });
 
   describe('Move/Rename Extra', () => {
-    it('parses "move" as rename extra', () => {
+    it('parses "move" as move extra', () => {
       const policy = parseActionPolicy('move');
       assert.equal(policy.check, false);
       assert.equal(policy.direction, undefined);
-      assert.ok(policy.extras.has('rename'));
+      assert.ok(policy.extras.has('move'));
     });
 
-    it('parses "rename" as rename extra', () => {
-      const policy = parseActionPolicy('rename');
+    it('parses "move" as move extra', () => {
+      const policy = parseActionPolicy('move');
       assert.equal(policy.check, false);
       assert.equal(policy.direction, undefined);
-      assert.ok(policy.extras.has('rename'));
+      assert.ok(policy.extras.has('move'));
     });
 
     it('handles case insensitivity', () => {
-      assert.ok(parseActionPolicy('MOVE').extras.has('rename'));
-      assert.ok(parseActionPolicy('RENAME').extras.has('rename'));
+      assert.ok(parseActionPolicy('MOVE').extras.has('move'));
+      assert.ok(parseActionPolicy('RENAME').extras.has('move'));
     });
   });
 
@@ -141,10 +141,10 @@ describe('Policy Parser', () => {
       assert.ok(policy.extras.has('delete'));
     });
 
-    it('parses "check&move" as check + rename', () => {
+    it('parses "check&move" as check + move', () => {
       const policy = parseActionPolicy('check&move');
       assert.equal(policy.check, true);
-      assert.ok(policy.extras.has('rename'));
+      assert.ok(policy.extras.has('move'));
     });
 
     it('handles order independence: "save&check"', () => {
@@ -189,7 +189,7 @@ describe('Policy Parser', () => {
     it('parses actionOnMove: "check&move"', () => {
       const policy = parseActionPolicy('check&move');
       assert.equal(policy.check, true);
-      assert.ok(policy.extras.has('rename'));
+      assert.ok(policy.extras.has('move'));
     });
 
     it('parses direct upload: "upload"', () => {
@@ -263,14 +263,14 @@ describe('Policy Parser', () => {
     it('parses "delete&move" with both extras', () => {
       const policy = parseActionPolicy('delete&move');
       assert.ok(policy.extras.has('delete'));
-      assert.ok(policy.extras.has('rename'));
+      assert.ok(policy.extras.has('move'));
     });
 
     it('parses "check&delete&move" with check and both extras', () => {
       const policy = parseActionPolicy('check&delete&move');
       assert.equal(policy.check, true);
       assert.ok(policy.extras.has('delete'));
-      assert.ok(policy.extras.has('rename'));
+      assert.ok(policy.extras.has('move'));
     });
   });
 });

@@ -65,5 +65,5 @@ export const isFolderMeta = (m: NodeMeta): m is FolderMeta => m.type === 'folder
 export type ActionPolicy = {
   check: boolean;
   direction?: 'upload' | 'download';
-  extras: Set<'delete' | 'rename'>;
+  extras: Set<'delete' | 'move'>;
 };

@@ -81,6 +81,6 @@ export function getPrimaryDirection(policy: ActionPolicy): 'upload' | 'download'
  * @param extra - Extra action to check for
  * @returns true if extra is included
  */
-export function hasExtra(policy: ActionPolicy, extra: 'rename' | 'delete'): boolean {
+export function hasExtra(policy: ActionPolicy, extra: 'move' | 'delete'): boolean {
   return policy.extras.has(extra);
 }

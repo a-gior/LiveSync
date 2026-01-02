@@ -6,7 +6,7 @@ import { ActionPolicy } from "@domain/types";
  *  - "save", "upload", "create"
  *  - "download"
  *  - "delete", "check&delete"
- *  - "move", "rename", "check&move"
+ *  - "move", "move", "check&move"
  *  - "check&save", "check&upload", "check&download"
  *  - "none", "", undefined
  *
@@ -17,7 +17,7 @@ import { ActionPolicy } from "@domain/types";
  *  - Actions:
  *      upload-dir:  "save" | "upload" | "create"
  *      download-dir:"download"
- *      extras:      "delete", "move"/"rename"
+ *      extras:      "delete", "move"/"move"
  */
 export function parseActionPolicy(raw: string | null | undefined): ActionPolicy {
   const policy: ActionPolicy = {
@@ -45,8 +45,8 @@ export function parseActionPolicy(raw: string | null | undefined): ActionPolicy 
       policy.direction = 'download';
     } else if (token === 'delete') {
       policy.extras.add('delete');
-    } else if (token === 'move' || token === 'rename') {
-      policy.extras.add('rename');
+    } else if (token === 'move' || token === 'move') {
+      policy.extras.add('move');
     }
   }
 

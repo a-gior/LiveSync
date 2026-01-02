@@ -13,7 +13,7 @@ export type ConflictType =
   | 'upload-conflict'      // Remote modified, trying to upload
   | 'download-conflict'    // Local modified, trying to download
   | 'exists-conflict'      // File exists remotely, trying to create
-  | 'rename-conflict'     // File exists remotely, trying to rename or move
+  | 'move-conflict'     // File exists remotely, trying to move or move
   | 'delete-conflict';     // Remote modified, trying to delete
 
 export interface ConflictInfo {
@@ -36,7 +36,7 @@ export interface ConflictInfo {
  * @returns ConflictInfo if conflict detected, null otherwise
  */
 export function detectConflict(
-  operation: 'save' | 'create' | 'delete' | 'rename' | 'open',
+  operation: 'save' | 'create' | 'delete' | 'move' | 'open',
   workspaceId: WorkspaceId,
   relPath: RelPath,
   state: SyncStateManager,
@@ -72,7 +72,7 @@ export function detectConflict(
     }
 
     case 'create':
-    case 'rename': {
+    case 'move': {
       // For folders: check if status is NOT 'unchanged' or 'added'
       if (localMeta && localMeta.type === 'folder') {
         const folderEntry = state.getDiffEntry(workspaceId, relPath);
@@ -80,7 +80,7 @@ export function detectConflict(
             folderEntry.status !== 'unchanged' && 
             folderEntry.status !== 'added') {
           return {
-            type: 'rename-conflict',
+            type: 'move-conflict',
             reason: `Folder ${fileName} has uncommitted changes`,
             allowDiff: false,
             suggestedAction: 'skip'

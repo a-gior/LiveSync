@@ -23,7 +23,7 @@ export interface RemotePort {
   ): Promise<RelPath[]>;
 
   /** Rename/move a file or folder on remote (atomic operation) */
-  rename(
+  move(
     workspaceId: WorkspaceId, 
     oldPath: RelPath, 
     newPath: RelPath

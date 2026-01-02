@@ -5,14 +5,14 @@
  * Test Structure:
  * 1. File Rename (same directory, different name) - 8 tests
  * 2. File Move (different directory) - 4 tests
- * 3. Folder Rename (rename parent folder containing files/subfolders) - 4 tests
+ * 3. Folder Rename (move parent folder containing files/subfolders) - 4 tests
  * 4. Folder Move (move parent folder to different location) - 4 tests
  * 5. Folder Dirty State Detection (skipped - requires code implementation) - 2 tests
  * 
  * Total: 22 tests (20 active, 2 skipped)
  * 
  * CODE CHANGE NEEDED for folder conflict tests:
- * In src/infrastructure/helpers/conflict/detector.ts, detectConflict() for 'rename' event:
+ * In src/infrastructure/helpers/conflict/detector.ts, detectConflict() for 'move' event:
  * - When renaming a folder, check if folder status is NOT 'unchanged' or 'added'
  * - If folder is 'modified' or in dirty state, return conflict
  * - This prompts user when policy contains 'check'
@@ -74,9 +74,9 @@ suite('E2E - Rename/Move Event', function() {
   }
 
   /**
-   * Helper to rename/move file using WorkspaceEdit (triggers internal VS Code rename event)
+   * Helper to move/move file using WorkspaceEdit (triggers internal VS Code move event)
    */
-  async function renameFileWithEvent(oldUri: vscode.Uri, newUri: vscode.Uri): Promise<void> {
+  async function moveFileWithEvent(oldUri: vscode.Uri, newUri: vscode.Uri): Promise<void> {
     const edit = new vscode.WorkspaceEdit();
     edit.renameFile(oldUri, newUri);
     await vscode.workspace.applyEdit(edit);
@@ -88,7 +88,7 @@ suite('E2E - Rename/Move Event', function() {
   // ==========================================================================
 
   /**
-   * Test helper: Create, upload, rename file (no conflict)
+   * Test helper: Create, upload, move file (no conflict)
    */
   async function testFileRename(
     oldFileName: string,
@@ -123,14 +123,14 @@ suite('E2E - Rename/Move Event', function() {
     assertFileStatus(ctx.services!, ctx.testWorkspace!, oldFile, 'unchanged');
     
     // Step 2: Rename file locally (same directory)
-    await renameFileWithEvent(oldFile, newFile);
+    await moveFileWithEvent(oldFile, newFile);
     await wait(2000);
     
     // Step 3: Verify local state
     // Old file should not exist locally
     try {
       await vscode.workspace.fs.stat(oldFile);
-      throw new Error('Old file should not exist locally after rename');
+      throw new Error('Old file should not exist locally after move');
     } catch (err: any) {
       if (err.message?.includes('should not exist')) throw err;
     }
@@ -194,7 +194,7 @@ suite('E2E - Rename/Move Event', function() {
     await assertRemoteContent(ctx.remoteVerifier!, newFileName, conflictContent);
     
     // Step 3: Rename file locally (triggers conflict)
-    await renameFileWithEvent(oldFile, newFile);
+    await moveFileWithEvent(oldFile, newFile);
     await wait(2000);
     
     // Step 4: Verify behavior
@@ -212,26 +212,26 @@ suite('E2E - Rename/Move Event', function() {
     await setTestResponse(null);
   }
 
-  test('[File Rename] actionOnMove=none - no remote rename', async () => {
-    await testFileRename('rename-none-old.txt', 'rename-none-new.txt', 'none', true, false);
+  test('[File Rename] actionOnMove=none - no remote move', async () => {
+    await testFileRename('move-none-old.txt', 'move-none-new.txt', 'none', true, false);
   });
 
-  test('[File Rename] actionOnMove=move - renames on remote', async () => {
-    await testFileRename('rename-move-old.txt', 'rename-move-new.txt', 'move', false, true);
+  test('[File Rename] actionOnMove=move - moves on remote', async () => {
+    await testFileRename('move-move-old.txt', 'move-move-new.txt', 'move', false, true);
   });
 
-  test('[File Rename] actionOnMove=check&move - renames when no conflict', async () => {
-    await testFileRename('rename-check-old.txt', 'rename-check-new.txt', 'check&move', false, true);
+  test('[File Rename] actionOnMove=check&move - moves when no conflict', async () => {
+    await testFileRename('move-check-old.txt', 'move-check-new.txt', 'check&move', false, true);
   });
 
-  test('[File Rename] actionOnMove=check - only checks, no rename', async () => {
-    await testFileRename('rename-onlycheck-old.txt', 'rename-onlycheck-new.txt', 'check', true, false);
+  test('[File Rename] actionOnMove=check - only checks, no move', async () => {
+    await testFileRename('move-onlycheck-old.txt', 'move-onlycheck-new.txt', 'check', true, false);
   });
 
   test('[File Rename Conflict] check&move + Proceed - overwrites target', async () => {
     await testFileRenameConflict(
-      'rename-conflict-proceed-old.txt',
-      'rename-conflict-proceed-new.txt',
+      'move-conflict-proceed-old.txt',
+      'move-conflict-proceed-new.txt',
       'check&move',
       'proceed',
       false,        // Old removed
@@ -243,8 +243,8 @@ suite('E2E - Rename/Move Event', function() {
 
   test('[File Rename Conflict] check&move + Cancel - keeps both', async () => {
     await testFileRenameConflict(
-      'rename-conflict-cancel-old.txt',
-      'rename-conflict-cancel-new.txt',
+      'move-conflict-cancel-old.txt',
+      'move-conflict-cancel-new.txt',
       'check&move',
       'cancel',
       true,             // Old remains
@@ -256,8 +256,8 @@ suite('E2E - Rename/Move Event', function() {
 
   test('[File Rename Conflict] check&move + Ignore - keeps both + marks ignored', async () => {
     await testFileRenameConflict(
-      'rename-conflict-ignore-old.txt',
-      'rename-conflict-ignore-new.txt',
+      'move-conflict-ignore-old.txt',
+      'move-conflict-ignore-new.txt',
       'check&move',
       'ignore',
       true,             // Old remains
@@ -269,8 +269,8 @@ suite('E2E - Rename/Move Event', function() {
 
   test('[File Rename Conflict] check - shows prompt, no action', async () => {
     await testFileRenameConflict(
-      'rename-conflict-check-old.txt',
-      'rename-conflict-check-new.txt',
+      'move-conflict-check-old.txt',
+      'move-conflict-check-new.txt',
       'check',
       'proceed',
       true,             // Old remains
@@ -326,7 +326,7 @@ suite('E2E - Rename/Move Event', function() {
     assertFileStatus(ctx.services!, ctx.testWorkspace!, oldFile, 'unchanged');
     
     // Step 2: Move file to different directory
-    await renameFileWithEvent(oldFile, newFile);
+    await moveFileWithEvent(oldFile, newFile);
     await wait(2000);
     
     // Step 3: Verify remote state
@@ -355,7 +355,7 @@ suite('E2E - Rename/Move Event', function() {
   });
 
   // ==========================================================================
-  // FOLDER RENAME TESTS (rename parent folder with nested structure)
+  // FOLDER RENAME TESTS (move parent folder with nested structure)
   // ==========================================================================
 
   /**
@@ -420,7 +420,7 @@ suite('E2E - Rename/Move Event', function() {
     const newFolder = vscode.Uri.joinPath(ctx.testWorkspace!.uri, newFolderName);
     
     // Step 2: Rename folder
-    await renameFileWithEvent(oldFolder, newFolder);
+    await moveFileWithEvent(oldFolder, newFolder);
     await wait(2000);
     
     // Step 3: Verify remote state for all files
@@ -449,20 +449,20 @@ suite('E2E - Rename/Move Event', function() {
     }
   }
 
-  test('[Folder Rename] actionOnMove=none - no remote rename', async () => {
-    await testFolderRename('folder-rename-none', 'folder-rename-none-new', 'none', true, false);
+  test('[Folder Rename] actionOnMove=none - no remote move', async () => {
+    await testFolderRename('folder-move-none', 'folder-move-none-new', 'none', true, false);
   });
 
-  test('[Folder Rename] actionOnMove=move - renames folder on remote', async () => {
-    await testFolderRename('folder-rename-move', 'folder-rename-move-new', 'move', false, true);
+  test('[Folder Rename] actionOnMove=move - moves folder on remote', async () => {
+    await testFolderRename('folder-move-move', 'folder-move-move-new', 'move', false, true);
   });
 
-  test('[Folder Rename] actionOnMove=check&move - renames when clean', async () => {
-    await testFolderRename('folder-rename-check', 'folder-rename-check-new', 'check&move', false, true);
+  test('[Folder Rename] actionOnMove=check&move - moves when clean', async () => {
+    await testFolderRename('folder-move-check', 'folder-move-check-new', 'check&move', false, true);
   });
 
   test('[Folder Rename] actionOnMove=check - only checks', async () => {
-    await testFolderRename('folder-rename-onlycheck', 'folder-rename-onlycheck-new', 'check', true, false);
+    await testFolderRename('folder-move-onlycheck', 'folder-move-onlycheck-new', 'check', true, false);
   });
 
   // ==========================================================================
@@ -498,7 +498,7 @@ suite('E2E - Rename/Move Event', function() {
     }
     
     // Step 2: Move folder
-    await renameFileWithEvent(oldFolder, newFolder);
+    await moveFileWithEvent(oldFolder, newFolder);
     await wait(2000);
     
     // Step 3: Verify remote state
@@ -545,7 +545,7 @@ suite('E2E - Rename/Move Event', function() {
 
   // ==========================================================================
   // FOLDER CONFLICT TESTS (dirty state detection)
-  // Note: Requires code update in detectConflict() for 'rename' event to:
+  // Note: Requires code update in detectConflict() for 'move' event to:
   // - Check if folder status is NOT 'unchanged' or 'added'
   // - If dirty, show conflict prompt when policy contains 'check'
   // ==========================================================================
@@ -581,11 +581,11 @@ suite('E2E - Rename/Move Event', function() {
     // assertFileStatus(ctx.services!, ctx.testWorkspace!, oldFolder, 'modified');
     
     // Step 3: Rename folder (should trigger conflict due to dirty state)
-    await renameFileWithEvent(oldFolder, newFolder);
+    await moveFileWithEvent(oldFolder, newFolder);
     await wait(2000);
     
     // Step 4: Verify behavior based on response
-    // For 'proceed': folder should be renamed despite dirty state
+    // For 'proceed': folder should be moved despite dirty state
     // For 'cancel': folder should remain at old path
     // For 'ignore': folder should remain at old path + marked ignored
     
@@ -618,13 +618,13 @@ suite('E2E - Rename/Move Event', function() {
     await setTestResponse(null);
   }
 
-  test('[Folder Dirty State] check&move - detects dirty folder before rename', async () => {
-    // TODO: Implement folder status check in detectConflict() for 'rename' event
+  test('[Folder Dirty State] check&move - detects dirty folder before move', async () => {
+    // TODO: Implement folder status check in detectConflict() for 'move' event
     await testFolderRenameDirtyState('folder-dirty-check', 'folder-dirty-check-new', 'check&move', 'proceed');
   });
 
   test('[Folder Dirty State] check - shows prompt for dirty folder', async () => {
-    // TODO: Implement folder status check in detectConflict() for 'rename' event
+    // TODO: Implement folder status check in detectConflict() for 'move' event
     await testFolderRenameDirtyState('folder-dirty-onlycheck', 'folder-dirty-onlycheck-new', 'check', 'cancel');
   });
 });
