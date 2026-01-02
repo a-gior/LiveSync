@@ -7,10 +7,10 @@
 
 import type { WorkspaceId, RelPath } from '@domain/types';
 import type { SyncStateManager } from '@app/SyncStateManager';
-import type { RemotePort } from '@app/ports/RemotePort';
+import type { RemotePort as SftpRemotePort } from '@app/ports/RemotePort';
 import { absFs } from '@helpers/path';
 import { logExpectedError } from '@helpers/logging';
-import { syncBothSnapshots, removeFromRemoteSnapshot } from '@helpers/snapshot/update';
+import { syncBothSnapshots, removeFromRemoteSnapshot, renameInRemoteSnapshot } from '@helpers/snapshot/update';
 
 /**
  * Execute file upload to remote
@@ -22,7 +22,7 @@ import { syncBothSnapshots, removeFromRemoteSnapshot } from '@helpers/snapshot/u
  * @throws Error if upload fails
  */
 export async function executeUpload(
-  remote: RemotePort,
+  remote: SftpRemotePort,
   state: SyncStateManager,
   workspaceId: WorkspaceId,
   relPath: RelPath
@@ -46,7 +46,7 @@ export async function executeUpload(
  * @throws Error if download fails
  */
 export async function executeDownload(
-  remote: RemotePort,
+  remote: SftpRemotePort,
   state: SyncStateManager,
   workspaceId: WorkspaceId,
   relPath: RelPath
@@ -70,7 +70,7 @@ export async function executeDownload(
  * @throws Error if deletion fails
  */
 export async function executeDelete(
-  remote: RemotePort,
+  remote: SftpRemotePort,
   state: SyncStateManager,
   workspaceId: WorkspaceId,
   relPath: RelPath
@@ -94,26 +94,16 @@ export async function executeDelete(
  * @throws Error if rename fails
  */
 export async function executeRename(
-  remote: RemotePort,
+  remote: SftpRemotePort,
   state: SyncStateManager,
   workspaceId: WorkspaceId,
   oldPath: RelPath,
-  newPath: RelPath,
-  isDir: boolean
+  newPath: RelPath
 ): Promise<void> {
-  if (isDir) {
-    throw new Error('Folder rename not yet implemented');
-  }
+  // Use native rename - works for both files AND folders!
+  await remote.rename(workspaceId, oldPath, newPath);
   
-  const absPath = absFs(workspaceId, newPath);
-  
-  // Delete old path, upload to new path
-  await remote.deletePath(workspaceId, oldPath);
-  await remote.uploadFile(workspaceId, newPath, absPath);
-  
-  // Update remote snapshot (delete old + add new)
-  removeFromRemoteSnapshot(state, workspaceId, oldPath);
-  await syncBothSnapshots(state, workspaceId, newPath, absPath);
+  renameInRemoteSnapshot(state, workspaceId, oldPath, newPath);
 }
 
 /**
@@ -125,7 +115,7 @@ export async function executeRename(
  * @param files - Array of files to upload
  */
 export async function executeUploadFolder(
-  remote: RemotePort,
+  remote: SftpRemotePort,
   state: SyncStateManager,
   workspaceId: WorkspaceId,
   files: Array<{ relPath: RelPath; absLocal: string }>
@@ -152,7 +142,7 @@ export async function executeUploadFolder(
  * @param files - Array of files to download
  */
 export async function executeDownloadFolder(
-  remote: RemotePort,
+  remote: SftpRemotePort,
   state: SyncStateManager,
   workspaceId: WorkspaceId,
   files: Array<{ relPath: RelPath; absLocal: string }>

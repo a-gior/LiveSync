@@ -483,7 +483,7 @@ export class FileEventBridge {
         // 9. Execute action
         try {
           if (policy.extras.has('rename')) {
-            await executeRename(this.remote, this.state, workspaceId, oldRel, newRel, isDir);
+            await executeRename(this.remote, this.state, workspaceId, oldRel, newRel);
             notifySuccess(this.notifications, 'rename', newRel);
           }
         } catch (err) {

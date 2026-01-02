@@ -22,6 +22,13 @@ export interface RemotePort {
     files: Array<{ relPath: RelPath; absLocal: string }>
   ): Promise<RelPath[]>;
 
+  /** Rename/move a file or folder on remote (atomic operation) */
+  rename(
+    workspaceId: WorkspaceId, 
+    oldPath: RelPath, 
+    newPath: RelPath
+  ): Promise<void>;
+
   /** Delete a file or folder subtree at RelPath (recursive for folders). */
   deletePath(workspaceId: WorkspaceId, relativePath: RelPath): Promise<void>;
 

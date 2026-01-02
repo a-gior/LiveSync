@@ -13,6 +13,7 @@ export type ConflictType =
   | 'upload-conflict'      // Remote modified, trying to upload
   | 'download-conflict'    // Local modified, trying to download
   | 'exists-conflict'      // File exists remotely, trying to create
+  | 'rename-conflict'     // File exists remotely, trying to rename or move
   | 'delete-conflict';     // Remote modified, trying to delete
 
 export interface ConflictInfo {
@@ -72,6 +73,21 @@ export function detectConflict(
 
     case 'create':
     case 'rename': {
+      // For folders: check if status is NOT 'unchanged' or 'added'
+      if (localMeta && localMeta.type === 'folder') {
+        const folderEntry = state.getDiffEntry(workspaceId, relPath);
+        if (folderEntry && 
+            folderEntry.status !== 'unchanged' && 
+            folderEntry.status !== 'added') {
+          return {
+            type: 'rename-conflict',
+            reason: `Folder ${fileName} has uncommitted changes`,
+            allowDiff: false,
+            suggestedAction: 'skip'
+          };
+        }
+      }
+      
       // Creating/moving file - check if it already exists remotely
       if (remoteMeta) {
         return {

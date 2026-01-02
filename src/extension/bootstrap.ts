@@ -3,7 +3,6 @@ import { DefaultDiffEngine } from '../domain/diff/DiffEngine';
 import { SyncStateManager } from '../application/SyncStateManager';
 import { WorkspaceConfigService } from '../infrastructure/config/WorkspaceConfigService';
 import { SftpRemotePort } from '../infrastructure/remote/SftpRemotePort';
-import { ChoosingRemotePort } from '../infrastructure/remote/ChoosingRemotePort';
 import type { RemotePort } from '../application/ports/RemotePort';
 import { FolderStateStore } from '../presentation/tree/FolderStateStore';
 import { ProgressService } from '../presentation/statusbar/ProgressService';
@@ -45,8 +44,7 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   validator.getTracker().initialize(validationResults, config);
 
   // Remote connection
-  const sftpRemote = new SftpRemotePort(config, 4);
-  const remote: RemotePort = new ChoosingRemotePort(config, sftpRemote);
+  const remote: RemotePort = new SftpRemotePort(config, 4);
 
   // Workspace setup
   const workspaceIds = (vscode.workspace.workspaceFolders ?? []).map(f => stringToWsId(f.uri.fsPath));

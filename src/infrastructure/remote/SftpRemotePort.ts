@@ -366,6 +366,29 @@ export class SftpRemotePort implements RemotePort {
     return downloaded;
   }
 
+  async rename(
+    workspaceId: WorkspaceId,
+    oldPath: RelPath,
+    newPath: RelPath
+  ): Promise<void> {
+    const cfg = await this.configService.getById(workspaceId);
+    if (!cfg.hasRemote) return;
+    
+    // Use p-limit to control concurrency (max 9 concurrent operations)
+    await sftpLimit(async () => {
+      await this.withSFTP(cfg, async (sftpClient) => {
+        const oldRemoteAbs = joinRemote(cfg.data.remotePath!, oldPath);
+        const newRemoteAbs = joinRemote(cfg.data.remotePath!, newPath);
+        const remoteDir = p.dirname(newRemoteAbs);
+
+        // Ensure parent directory exists
+        await ensureRemoteDir(sftpClient, remoteDir);
+        await sftpClient.rename(oldRemoteAbs, newRemoteAbs);
+        logSync(workspaceId, 'upload', newPath);
+      });
+    });
+  }
+
   async deletePath(workspaceId: WorkspaceId, relPath: RelPath): Promise<void> {
     const cfg = await this.configService.getById(workspaceId);
     if (!cfg.hasRemote) return;
