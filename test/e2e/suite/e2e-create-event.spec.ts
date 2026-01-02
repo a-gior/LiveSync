@@ -44,6 +44,7 @@ suite('E2E - Create Event', function() {
 
   setup(async () => {
     await cleanTestFile(testFile, testFileName, ctx.remoteVerifier!, ctx.services!, ctx.testWorkspace!);
+    await wait(500);
   });
 
   /**
@@ -53,14 +54,14 @@ suite('E2E - Create Event', function() {
     const edit = new vscode.WorkspaceEdit();
     edit.createFile(uri, { overwrite: false, ignoreIfExists: false });
     await vscode.workspace.applyEdit(edit);
-    await wait(500);
+    await wait(1000);
     
     // Write content
     // await vscode.workspace.fs.writeFile(uri, Buffer.from(content));
     
     // Open the file
     const doc = await vscode.workspace.openTextDocument(uri);
-    await vscode.window.showTextDocument(doc);
+    await vscode.window.showTextDocument(doc, { preview: false });
   }
 
   /**

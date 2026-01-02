@@ -131,10 +131,6 @@ export class FileEventBridge {
         const config = await this.config.getById(workspaceId);
         const policy = parseActionPolicy(config.data.actionOnCreate);
         
-        if (isNoOpPolicy(policy)) {
-          return;
-        }
-        
         // 4. Refresh remote snapshot (if needed) - BEFORE updating local
         if (requiresRemoteSnapshot(policy)) {
           await ensureFreshRemoteSnapshot(this.state, this.remote, workspaceId, relPath);
@@ -151,6 +147,11 @@ export class FileEventBridge {
           await updateLocalSnapshot(this.state, workspaceId, relPath, uri);
         } catch (err) {
           logExpectedError(`onCreate:updateSnapshot:${relPath}`, err);
+          return;
+        }
+
+        
+        if (isNoOpPolicy(policy)) {
           return;
         }
         

@@ -182,19 +182,19 @@ suite('E2E - Upload Command', function() {
   }
 
   test('Upload Folder with actionOnUpload=none - no upload occurs', async () => {
-    await testUploadFolder('upload-folder-none', 'none', false);
+    await testUploadFolder('folder-upload-none', 'none', false);
   });
 
   test('Upload Folder with actionOnUpload=upload - direct upload without check', async () => {
-    await testUploadFolder('upload-folder-upload', 'upload', true);
+    await testUploadFolder('folder-upload-upload', 'upload', true);
   });
 
   test('Upload Folder with actionOnUpload=check - no upload when check passes', async () => {
-    await testUploadFolder('upload-folder-check', 'check', false);
+    await testUploadFolder('folder-upload-check', 'check', false);
   });
 
   test('Upload Folder with actionOnUpload=check&upload - upload when no conflict', async () => {
-    await testUploadFolder('upload-folder-check-upload', 'check&upload', true);
+    await testUploadFolder('folder-upload-check-upload', 'check&upload', true);
   });
 
   // ==========================================================================
