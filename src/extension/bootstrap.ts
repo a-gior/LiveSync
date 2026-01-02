@@ -66,6 +66,14 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   // Setup workspace views (diffs tree + workspace list if multi-root)
   const views = setupWorkspaceViews(workspaceIds, state, folderState);
 
+  const showAsTree = context.workspaceState.get<boolean>('livesync.view.showAsTree', true);
+  const showUnchanged = context.workspaceState.get<boolean>('livesync.view.showUnchanged', false);
+  
+  // Initialize view preferences from workspace state
+  await vscode.commands.executeCommand('setContext', 'livesyncViewMode', showAsTree ? 'tree' : 'list');
+  views.diffsProvider.setShowAsTree(showAsTree);
+  views.diffsProvider.setShowUnchanged(showUnchanged);
+
   // Initialize config status bar for ALL workspaces (works for both single and multi-root)
   for (const result of validationResults) {
     const folder = vscode.workspace.workspaceFolders?.find(

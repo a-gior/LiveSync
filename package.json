@@ -118,12 +118,6 @@
         "icon": "$(sync)"
       },
       {
-        "command": "livesync.focusExperimentalView",
-        "title": "Focus LiveSync View",
-        "category": "LiveSync",
-        "icon": "$(telescope)"
-      },
-      {
         "command": "livesync.view.switchToTree",
         "title": "Switch to Tree View",
         "category": "LiveSync",
@@ -268,11 +262,6 @@
           "maximum": 32,
           "markdownDescription": "Number of files hashed in parallel during local indexing. Higher = faster but more disk I/O."
         },
-        "livesync.view.showUnchanged": {
-          "type": "boolean",
-          "default": false,
-          "description": "Show unchanged items in the LiveSync tree. When disabled, unchanged files/folders are hidden."
-        },
         "livesync.view.recentlyResolvedRetentionMs": {
           "type": "number",
           "default": 800,
@@ -321,11 +310,6 @@
             ]
           },
           "uniqueItems": true
-        },
-        "livesync.view.showAsTree": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show files in tree structure (true) or flat list (false)"
         }
       }
     }

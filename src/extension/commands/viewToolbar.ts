@@ -9,25 +9,25 @@ import { refreshRemoteSnapshot } from '@helpers/remote';
 export function registerViewToolbar(services: Services): void {
   const { context, state, config, remote, progress, provider } = services;
 
-  // Toggle "show unchanged"
+  // Toggle "show unchanged" - use workspace state
   cmd(context, 'livesync.view.toggleShowUnchanged', async () => {
-    const cfg = vscode.workspace.getConfiguration('livesync');
-    const current = cfg.get<boolean>('view.showUnchanged') ?? false;
-    await cfg.update('view.showUnchanged', !current, vscode.ConfigurationTarget.Workspace);
+    const current = context.workspaceState.get<boolean>('livesync.view.showUnchanged', false);
+    const newValue = !current;
+    
+    await context.workspaceState.update('livesync.view.showUnchanged', newValue);
+    provider.setShowUnchanged(newValue);
   });
 
-  // Switch to tree view
+  // Switch to tree view - use workspace state
   cmd(context, 'livesync.view.switchToTree', async () => {
-    const cfg = vscode.workspace.getConfiguration('livesync');
-    await cfg.update('view.showAsTree', true, vscode.ConfigurationTarget.Workspace);
+    await context.workspaceState.update('livesync.view.showAsTree', true);
     await vscode.commands.executeCommand('setContext', 'livesyncViewMode', 'tree');
     provider.setShowAsTree(true);
   });
 
-  // Switch to list view
+  // Switch to list view - use workspace state
   cmd(context, 'livesync.view.switchToList', async () => {
-    const cfg = vscode.workspace.getConfiguration('livesync');
-    await cfg.update('view.showAsTree', false, vscode.ConfigurationTarget.Workspace);
+    await context.workspaceState.update('livesync.view.showAsTree', false);
     await vscode.commands.executeCommand('setContext', 'livesyncViewMode', 'list');
     provider.setShowAsTree(false);
   });

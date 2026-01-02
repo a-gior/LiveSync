@@ -439,6 +439,11 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     this.bumpExpandEpochAndRefreshAll();
   }
 
+  setShowUnchanged(value: boolean): void {
+    this.showUnchanged = value;
+    this.changeEmitter.fire(undefined); // refresh tree
+  }
+
   setCollapseAll(value: boolean): void {
     this.collapseAll = value;
     this.bumpExpandEpochAndRefreshAll();

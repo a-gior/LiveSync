@@ -43,12 +43,6 @@ export async function activate(context: vscode.ExtensionContext) {
   const services = await bootstrap(context);
   globalServices = services;
 
-  // Initialize view mode context and provider
-  const cfg = vscode.workspace.getConfiguration('livesync');
-  const showAsTree = cfg.get<boolean>('view.showAsTree') ?? true;
-  await vscode.commands.executeCommand('setContext', 'livesyncViewMode', showAsTree ? 'tree' : 'list');
-  services.provider.setShowAsTree(showAsTree);
-
   // File event auto-actions (save/create/delete/move)
   const bridge = new FileEventBridge(services.state, services.config, services.remote, services.notifications);
   bridge.register(context.subscriptions);
