@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { WorkspaceId } from '@domain/types';
-import { stringToWsId } from '../path';
+import { RelPath, WorkspaceId } from '@domain/types';
+import { relToString, stringToWsId } from '../path';
 
 /**
  * Find a workspace folder by its WorkspaceId (which is the fsPath)
@@ -20,4 +20,16 @@ export function findWorkspaceFolderById(workspaceId: WorkspaceId): vscode.Worksp
 /** Return the WorkspaceId for a given workspace folder */
 export function getWorkspaceId(folder: vscode.WorkspaceFolder): WorkspaceId {
   return stringToWsId(folder.uri.fsPath);
+}
+
+export function getFolderLabel(workspaceId: WorkspaceId, folderPath: RelPath): string {
+  const pathStr = relToString(folderPath);
+  
+  if (!pathStr) {
+    // Empty path = workspace root, use workspace name
+    const folder = findWorkspaceFolderById(workspaceId);
+    return folder.name;
+  }
+  
+  return pathStr;
 }

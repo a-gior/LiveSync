@@ -36,7 +36,7 @@ export async function mochaGlobalSetup() {
     port: 2222,
     username: 'centos',
     password: 'centos',
-    remotePath: '/home/centos/test-workspace',
+    remotePath: '/home/centos/e2e-test-workspace',
     actionOnUpload: 'upload',
     actionOnDownload: 'download',
     actionOnSave: 'save',

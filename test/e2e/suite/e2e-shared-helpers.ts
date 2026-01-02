@@ -226,7 +226,7 @@ export async function cleanAllTestFiles(remoteVerifier: RemoteStateVerifier): Pr
   // Clean remote .txt files and test folders
   try {
     await remoteVerifier.executeCommand(
-      'cd /home/centos/test-workspace && ' +
+      'cd /home/centos/e2e-test-workspace && ' +
       'rm -f *.txt && ' +
       'rm -rf folder-* moved subdir'
     );

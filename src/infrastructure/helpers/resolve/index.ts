@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { WorkspaceId, RelPath } from '../../../domain/types';
-import { asRel, dirnameRel, relFromAbs } from '../path/RelPath';
+import { asRel, relFromAbs } from '../path/RelPath';
 import { stringToWsId } from '../path';
 import { findWorkspaceFolderById } from '../workspaceFolder';
 
@@ -99,8 +99,7 @@ export function resolveDiffTarget(arg?: unknown): ResolvedTarget | undefined {
 export function resolveFolderTarget(arg?: unknown): { workspaceId: WorkspaceId; folderPath: RelPath } | undefined {
   const base = resolveEntryTarget(arg);
   if (!base) { return undefined; }
-  const folderPath = dirnameRel(base.relPath);
-  return { workspaceId: base.workspaceId, folderPath };
+  return { workspaceId: base.workspaceId, folderPath: base.relPath };
 }
 
 // Resolve one or more workspace folders from an optional argument.

@@ -11,7 +11,7 @@ export const VM_CONFIG = {
   password: 'centos',
   privateKeyPath: '',
   passphrase: '',
-  remotePath: '/home/centos/test-workspace',
+  remotePath: '/home/centos/e2e-test-workspace',
   actionOnUpload: 'check&upload',
   actionOnDownload: 'check&download',
   actionOnSave: 'check&save',

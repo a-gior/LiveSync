@@ -442,8 +442,8 @@ suite('E2E - Rename/Move Event', function() {
     // Cleanup
     try {
       await vscode.workspace.fs.delete(newFolder, { recursive: true });
-      await ctx.remoteVerifier!.executeCommand(`rm -rf /home/centos/test-workspace/${oldFolderName}`);
-      await ctx.remoteVerifier!.executeCommand(`rm -rf /home/centos/test-workspace/${newFolderName}`);
+      await ctx.remoteVerifier!.executeCommand(`rm -rf /home/centos/e2e-test-workspace/${oldFolderName}`);
+      await ctx.remoteVerifier!.executeCommand(`rm -rf /home/centos/e2e-test-workspace/${newFolderName}`);
     } catch {
       // Ignore cleanup errors
     }
@@ -520,8 +520,8 @@ suite('E2E - Rename/Move Event', function() {
     // Cleanup
     try {
       await vscode.workspace.fs.delete(newFolder, { recursive: true });
-      await ctx.remoteVerifier!.executeCommand(`rm -rf /home/centos/test-workspace/${folderName}`);
-      await ctx.remoteVerifier!.executeCommand(`rm -rf /home/centos/test-workspace/${newFolderPath}`);
+      await ctx.remoteVerifier!.executeCommand(`rm -rf /home/centos/e2e-test-workspace/${folderName}`);
+      await ctx.remoteVerifier!.executeCommand(`rm -rf /home/centos/e2e-test-workspace/${newFolderPath}`);
     } catch {
       // Ignore cleanup errors
     }
@@ -609,8 +609,8 @@ suite('E2E - Rename/Move Event', function() {
     try {
       const finalFolder = shouldMove ? newFolder : oldFolder;
       await vscode.workspace.fs.delete(finalFolder, { recursive: true });
-      await ctx.remoteVerifier!.executeCommand(`rm -rf /home/centos/test-workspace/${folderName}`);
-      await ctx.remoteVerifier!.executeCommand(`rm -rf /home/centos/test-workspace/${newFolderName}`);
+      await ctx.remoteVerifier!.executeCommand(`rm -rf /home/centos/e2e-test-workspace/${folderName}`);
+      await ctx.remoteVerifier!.executeCommand(`rm -rf /home/centos/e2e-test-workspace/${newFolderName}`);
     } catch {
       // Ignore cleanup errors
     }
