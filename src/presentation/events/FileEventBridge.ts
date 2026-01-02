@@ -16,7 +16,7 @@ import { ensureFreshRemoteSnapshot, ensureFreshLocalSnapshot } from '@helpers/sn
 import { updateLocalSnapshot } from '@helpers/snapshot/update';
 import { detectConflict, hasIgnoredConflict } from '@helpers/conflict/detector';
 import { resolveConflict, showCheckInfo } from '@helpers/conflict/resolver';
-import { isCheckOnlyPolicy, isNoOpPolicy, requiresRemoteSnapshot } from '@helpers/policy/utils';
+import { isCheckOnlyPolicy, isNoOpPolicy, requiresLocalSnapshot, requiresRemoteSnapshot } from '@helpers/policy/utils';
 import { markConflictIgnored, clearIgnoredConflictIfResolved } from '@helpers/conflict/tracker';
 import { executeUpload, executeDownload, executeDelete, executeRename } from '@helpers/action/executor';
 import { notifySuccess, notifyError } from '@helpers/notification';
@@ -546,12 +546,10 @@ export class FileEventBridge {
       }
       
       // 5. Refresh snapshots (if needed)
-      if (policy.check) {
-        // Refresh LOCAL if downloading (to detect external changes)
-        if (policy.direction === 'download') {
-          await ensureFreshLocalSnapshot(this.state, workspaceId, relPath);
-        }
-        // Always refresh REMOTE
+      if (requiresLocalSnapshot(policy)) {
+        await ensureFreshLocalSnapshot(this.state, workspaceId, relPath);
+      }
+      if (requiresRemoteSnapshot(policy)) {
         await ensureFreshRemoteSnapshot(this.state, this.remote, workspaceId, relPath);
       }
       

@@ -58,19 +58,3 @@ export function notifyError(
     'error'
   );
 }
-
-/**
- * Notify user of conflict detection (for check-only policies)
- * 
- * @param notifications - Notification service
- * @param reason - Conflict reason
- */
-export function notifyConflict(
-  notifications: NotificationStatusBar,
-  reason: string
-): void {
-  notifications.notify(
-    `Conflict detected: ${reason}`,
-    'warning'
-  );
-}

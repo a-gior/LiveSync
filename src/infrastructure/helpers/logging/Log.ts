@@ -238,16 +238,6 @@ export function logOperation(workspace: string, operation: string, details?: str
   LogManager.log(`[INFO] ${msg}`);
 }
 
-export function logConnection(
-  workspace: string,
-  status: 'connected' | 'disconnected' | 'error',
-  details?: string
-): void {
-  const prefix = status === 'error' ? 'ERROR' : 'INFO';
-  const msg = details ? `[${workspace}] Connection ${status}: ${details}` : `[${workspace}] Connection ${status}`;
-  LogManager.log(`[${prefix}] ${msg}`);
-}
-
 export function logSync(
   workspace: string,
   operation: 'upload' | 'download' | 'delete' | 'skip',
