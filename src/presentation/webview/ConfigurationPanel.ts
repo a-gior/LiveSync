@@ -95,7 +95,7 @@ export class ConfigurationPanel {
         break;
 
       case 'loadConfig':
-        await this.sendInitialConfiguration();
+        await this.loadConfigForFolder(message.selectedFolder);
         break;
     }
   }
@@ -275,6 +275,27 @@ export class ConfigurationPanel {
         <script nonce="${nonce}" src="${scriptUri}"></script>
       </body>
       </html>`;
+  }
+
+  private async loadConfigForFolder(selectedFolder: any): Promise<void> {
+    if (!selectedFolder?.uri) {
+      return;
+    }
+
+    // Find the actual workspace folder
+    const folder = vscode.workspace.workspaceFolders?.find(
+      f => f.uri.toString() === selectedFolder.uri
+    );
+
+    if (!folder) {
+      return;
+    }
+
+    // Update the panel's workspace folder
+    this.workspaceFolder = folder;
+
+    // Send config for this folder
+    await this.sendInitialConfiguration();
   }
 }
 
