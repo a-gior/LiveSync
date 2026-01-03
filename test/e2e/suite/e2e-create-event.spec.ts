@@ -72,11 +72,12 @@ suite('E2E - Create Event', function() {
     expectedStatusAfterCreate: 'added' | 'unchanged',
     shouldExistRemotelyAfterCreate: boolean
   ): Promise<void> {
-    await refresh();
     
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnCreate: policy
     });
+    
+    await refresh();
     
     // Create file
     await createFileWithEvent(testFile);
@@ -96,11 +97,11 @@ suite('E2E - Create Event', function() {
     expectedRemoteContentAfter: string,
     shouldBeIgnored: boolean = false
   ): Promise<void> {
-    await refresh();
     
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnCreate: policy
     });
+    await refresh();
     
     // Set test response before triggering conflict
     await setTestResponse(userResponse);

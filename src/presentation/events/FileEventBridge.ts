@@ -2,16 +2,17 @@ import * as vscode from 'vscode';
 
 import { SyncStateManager } from '@app/SyncStateManager';
 import { WorkspaceConfigService } from '@infra/config/WorkspaceConfigService';
+import { ConfigValidator } from '@infra/config/ConfigValidator';
 import type { RemotePort } from '@app/ports/RemotePort';
 import { NotificationStatusBar } from '@presentation/statusbar/NotificationStatusBar';
 
-import { RelPath, WorkspaceId } from '@domain/types';
+import { ActionPolicy, RelPath, WorkspaceId } from '@domain/types';
 import { relFromAbs, stringToWsId } from '@helpers/path';
 import { sha256OfFile } from '@helpers/hash/FileHash';
 import { logExpectedError } from '@helpers/logging';
-import { FileOperationQueue, OperationType } from '@helpers/concurrency';
+import { FileOperationQueue } from '@helpers/concurrency';
 
-// New helper imports
+// Helper imports
 import { ensureFreshRemoteSnapshot, ensureFreshLocalSnapshot } from '@helpers/snapshot';
 import { updateLocalSnapshot } from '@helpers/snapshot/update';
 import { detectConflict, hasIgnoredConflict } from '@helpers/conflict/detector';
@@ -20,8 +21,7 @@ import { isCheckOnlyPolicy, isNoOpPolicy, requiresLocalSnapshot, requiresRemoteS
 import { markConflictIgnored, clearIgnoredConflictIfResolved } from '@helpers/conflict/tracker';
 import { executeUpload, executeDownload, executeDelete, executeRename } from '@helpers/action/executor';
 import { notifySuccess, notifyError } from '@helpers/notification';
-import { parseActionPolicy } from '../../infrastructure/helpers/policy/parser';
-import { ConfigValidator } from '../../infrastructure/config/ConfigValidator';
+import { parseActionPolicy } from '@helpers/policy/parser';
 
 /**
  * FileEventBridge - Central event handler for file operations
@@ -118,52 +118,37 @@ export class FileEventBridge {
     await this.processFileArray(e.files, async ({ workspaceId, relPath, uri }) => {
       const queueKey = `${workspaceId}:${relPath}`;
       
-      await this.enqueueIfValid(workspaceId, queueKey, 'create', async () => {
-        // 1. Check if conflict already ignored
-        if (hasIgnoredConflict(this.state, workspaceId, relPath)) {
-          return;
-        }
+      await this.operationQueue.enqueue(queueKey, 'create', async () => {
+        // Pre-flight checks
+        const policy = await this.shouldProceedWithEvent(workspaceId, relPath, 'actionOnCreate');
+        if (!policy) return;
         
-        // 2. Check ignore patterns
-        if (await this.shouldIgnore(workspaceId, relPath)) {
-          return;
-        }
-        
-        // 3. Parse policy
-        const config = await this.config.getById(workspaceId);
-        const policy = parseActionPolicy(config.data.actionOnCreate);
-        
-        // 4. Refresh remote snapshot (if needed) - BEFORE updating local
+        // Refresh remote snapshot (if needed) - BEFORE updating local
         if (requiresRemoteSnapshot(policy)) {
           await ensureFreshRemoteSnapshot(this.state, this.remote, workspaceId, relPath);
         }
         
-        // 5. Detect conflict - BEFORE updating local snapshot
+        // Detect conflict - BEFORE updating local snapshot
         let conflict = null;
         if (policy.check) {
           conflict = detectConflict('create', workspaceId, relPath, this.state);
         }
         
-        // 6. Update local snapshot (after conflict check)
+        // Update local snapshot (after conflict check)
         try {
           await updateLocalSnapshot(this.state, workspaceId, relPath, uri);
         } catch (err) {
           logExpectedError(`onCreate:updateSnapshot:${relPath}`, err);
           return;
         }
-
         
-        if (isNoOpPolicy(policy)) {
-          return;
-        }
-        
-        // 7. Handle check-only
+        // Handle check-only
         if (isCheckOnlyPolicy(policy)) {
           showCheckInfo(conflict);
           return;
         }
         
-        // 8. Resolve conflict
+        // Resolve conflict
         if (conflict) {
           const resolution = await resolveConflict(conflict, workspaceId, relPath);
           
@@ -177,7 +162,7 @@ export class FileEventBridge {
           }
         }
         
-        // 9. Execute action
+        // Execute action
         try {
           if (conflict) {
             // Download remote file (safer than overwriting)
@@ -193,7 +178,7 @@ export class FileEventBridge {
           return;
         }
         
-        // 10. Clear ignored conflict
+        // Clear ignored conflict
         clearIgnoredConflictIfResolved(this.state, workspaceId, relPath);
       });
       
@@ -213,37 +198,23 @@ export class FileEventBridge {
     const { workspaceId, relPath } = info;
     const queueKey = `${workspaceId}:${relPath}`;
 
-    await this.enqueueIfValid(workspaceId, queueKey, 'save', async () => {
-      // 1. Check if conflict already ignored
-      if (hasIgnoredConflict(this.state, workspaceId, relPath)) {
-        return;
-      }
+    await this.operationQueue.enqueue(queueKey, 'save', async () => {
+      // Pre-flight checks
+      const policy = await this.shouldProceedWithEvent(workspaceId, relPath, 'actionOnSave');
+      if (!policy) return;
       
-      // 2. Check ignore patterns
-      if (await this.shouldIgnore(workspaceId, relPath)) {
-        return;
-      }
-      
-      // 3. Parse policy
-      const config = await this.config.getById(workspaceId);
-      const policy = parseActionPolicy(config.data.actionOnSave);
-      
-      if (isNoOpPolicy(policy)) {
-        return;
-      }
-      
-      // 4. Refresh remote snapshot (if needed) - BEFORE updating local
+      // Refresh remote snapshot (if needed) - BEFORE updating local
       if (requiresRemoteSnapshot(policy)) {
         await ensureFreshRemoteSnapshot(this.state, this.remote, workspaceId, relPath);
       }
       
-      // 5. Detect conflict - BEFORE updating local snapshot
+      // Detect conflict - BEFORE updating local snapshot
       let conflict = null;
       if (policy.check) {
         conflict = detectConflict('save', workspaceId, relPath, this.state);
       }
       
-      // 6. Update local snapshot (after conflict check)
+      // Update local snapshot (after conflict check)
       try {
         const hash = await sha256OfFile(doc.uri.fsPath);
         this.state.applyLocal({
@@ -257,13 +228,13 @@ export class FileEventBridge {
         return;
       }
       
-      // 7. Handle check-only
+      // Handle check-only
       if (isCheckOnlyPolicy(policy)) {
         showCheckInfo(conflict);
         return;
       }
       
-      // 8. Resolve conflict
+      // Resolve conflict
       if (conflict) {
         const resolution = await resolveConflict(conflict, workspaceId, relPath);
         
@@ -277,7 +248,7 @@ export class FileEventBridge {
         }
       }
       
-      // 9. Execute action
+      // Execute action
       try {
         if (policy.direction === 'upload') {
           await executeUpload(this.remote, this.state, workspaceId, relPath);
@@ -289,7 +260,7 @@ export class FileEventBridge {
         return;
       }
       
-      // 10. Clear ignored conflict
+      // Clear ignored conflict
       clearIgnoredConflictIfResolved(this.state, workspaceId, relPath);
     });
     
@@ -298,12 +269,13 @@ export class FileEventBridge {
 
   /**
    * Handle file deletion (actionOnDelete)
+   * Note: Updates local snapshot FIRST, then checks policy
    */
   private async onDelete(e: vscode.FileDeleteEvent): Promise<void> {
     await this.processFileArray(e.files, async ({ workspaceId, relPath }) => {
       const queueKey = `${workspaceId}:${relPath}`;
       
-      await this.enqueueIfValid(workspaceId, queueKey, 'delete', async () => {
+      await this.operationQueue.enqueue(queueKey, 'delete', async () => {
         // 1. Update local snapshot (remove from local)
         const oldLocalMeta = this.state.getLocalMeta(workspaceId, relPath);
         const hadChildren = this.state.hasLocalChildren(workspaceId, relPath);
@@ -329,31 +301,37 @@ export class FileEventBridge {
         }
         
         // 4. Parse policy
-        const config = await this.config.getById(workspaceId);
-        const policy = parseActionPolicy(config.data.actionOnDelete);
+        const cfg = await this.config.getById(workspaceId);
+        const policy = parseActionPolicy(cfg.data.actionOnDelete);
         
         if (isNoOpPolicy(policy)) {
           return;
         }
         
-        // 5. Refresh remote snapshot (if needed)
+        // 5. Config validity check (AFTER policy check)
+        const validationResult = this.validator.getCached(workspaceId);
+        if (!validationResult.isValid || !validationResult.hasConfig) {
+          return;
+        }
+        
+        // 6. Refresh remote snapshot (if needed)
         if (requiresRemoteSnapshot(policy)) {
           await ensureFreshRemoteSnapshot(this.state, this.remote, workspaceId, relPath);
         }
         
-        // 6. Detect conflict
+        // 7. Detect conflict
         let conflict = null;
         if (policy.check) {
           conflict = detectConflict('delete', workspaceId, relPath, this.state, oldLocalMeta);
         }
         
-        // 7. Handle check-only
+        // 8. Handle check-only
         if (isCheckOnlyPolicy(policy)) {
           showCheckInfo(conflict);
           return;
         }
         
-        // 8. Resolve conflict
+        // 9. Resolve conflict
         if (conflict) {
           const resolution = await resolveConflict(conflict, workspaceId, relPath);
           
@@ -367,7 +345,7 @@ export class FileEventBridge {
           }
         }
         
-        // 9. Execute action
+        // 10. Execute action
         try {
           if (policy.extras.has('delete')) {
             await executeDelete(this.remote, this.state, workspaceId, relPath);
@@ -379,7 +357,7 @@ export class FileEventBridge {
           return;
         }
         
-        // 10. Clear ignored conflict (redundant but consistent)
+        // 11. Clear ignored conflict (redundant but consistent)
         clearIgnoredConflictIfResolved(this.state, workspaceId, relPath);
       });
       
@@ -388,7 +366,8 @@ export class FileEventBridge {
   }
 
   /**
-   * Handle file move/move (actionOnMove)
+   * Handle file move/rename (actionOnMove)
+   * Note: Updates local snapshot FIRST, then checks policy
    */
   private async onRename(e: vscode.FileRenameEvent): Promise<void> {
     await Promise.all(e.files.map(async ({ oldUri, newUri }) => {
@@ -401,7 +380,7 @@ export class FileEventBridge {
       const newRel = relFromAbs(workspaceId, newUri.fsPath);
       const queueKey = `${workspaceId}:${newRel}`;
 
-      await this.enqueueIfValid(workspaceId, queueKey, 'move', async () => {
+      await this.operationQueue.enqueue(queueKey, 'move', async () => {
         // 1. Update local snapshot
         let isDir = false;
         try {
@@ -445,31 +424,37 @@ export class FileEventBridge {
         }
         
         // 4. Parse policy
-        const config = await this.config.getById(workspaceId);
-        const policy = parseActionPolicy(config.data.actionOnMove);
+        const cfg = await this.config.getById(workspaceId);
+        const policy = parseActionPolicy(cfg.data.actionOnMove);
         
         if (isNoOpPolicy(policy)) {
           return;
         }
         
-        // 5. Refresh remote snapshot (if needed) - check NEW path
+        // 5. Config validity check (AFTER policy check)
+        const validationResult = this.validator.getCached(workspaceId);
+        if (!validationResult.isValid || !validationResult.hasConfig) {
+          return;
+        }
+        
+        // 6. Refresh remote snapshot (if needed) - check NEW path
         if (requiresRemoteSnapshot(policy)) {
           await ensureFreshRemoteSnapshot(this.state, this.remote, workspaceId, newRel);
         }
         
-        // 6. Detect conflict (check if target path exists)
+        // 7. Detect conflict (check if target path exists)
         let conflict = null;
         if (policy.check) {
           conflict = detectConflict('move', workspaceId, newRel, this.state);
         }
         
-        // 7. Handle check-only
+        // 8. Handle check-only
         if (isCheckOnlyPolicy(policy)) {
           showCheckInfo(conflict);
           return;
         }
         
-        // 8. Resolve conflict
+        // 9. Resolve conflict
         if (conflict) {
           const resolution = await resolveConflict(conflict, workspaceId, newRel);
           
@@ -483,7 +468,7 @@ export class FileEventBridge {
           }
         }
         
-        // 9. Execute action
+        // 10. Execute action
         try {
           if (policy.extras.has('move')) {
             await executeRename(this.remote, this.state, workspaceId, oldRel, newRel);
@@ -495,7 +480,7 @@ export class FileEventBridge {
           return;
         }
         
-        // 10. Clear ignored conflicts
+        // 11. Clear ignored conflicts
         clearIgnoredConflictIfResolved(this.state, workspaceId, oldRel);
         clearIgnoredConflictIfResolved(this.state, workspaceId, newRel);
       });
@@ -525,29 +510,12 @@ export class FileEventBridge {
       return;
     }
 
-    await this.enqueueIfValid(workspaceId, queueKey, 'open', async () => {
-      // 1. Local snapshot already up-to-date (file just opened)
-      // No need to updateLocalSnapshot here
+    await this.operationQueue.enqueue(queueKey, 'open', async () => {
+      // Pre-flight checks
+      const policy = await this.shouldProceedWithEvent(workspaceId, relPath, 'actionOnOpen');
+      if (!policy) return;
       
-      // 2. Check if conflict already ignored
-      if (hasIgnoredConflict(this.state, workspaceId, relPath)) {
-        return;
-      }
-      
-      // 3. Check ignore patterns
-      if (await this.shouldIgnore(workspaceId, relPath)) {
-        return;
-      }
-      
-      // 4. Parse policy
-      const config = await this.config.getById(workspaceId);
-      const policy = parseActionPolicy(config.data.actionOnOpen);
-      
-      if (isNoOpPolicy(policy)) {
-        return;
-      }
-      
-      // 5. Refresh snapshots (if needed)
+      // Refresh snapshots (if needed)
       if (requiresLocalSnapshot(policy)) {
         await ensureFreshLocalSnapshot(this.state, workspaceId, relPath);
       }
@@ -555,19 +523,19 @@ export class FileEventBridge {
         await ensureFreshRemoteSnapshot(this.state, this.remote, workspaceId, relPath);
       }
       
-      // 6. Detect conflict
+      // Detect conflict
       let conflict = null;
       if (policy.check) {
         conflict = detectConflict('open', workspaceId, relPath, this.state);
       }
       
-      // 7. Handle check-only
+      // Handle check-only
       if (isCheckOnlyPolicy(policy)) {
         showCheckInfo(conflict);
         return;
       }
       
-      // 8. Resolve conflict
+      // Resolve conflict
       if (conflict) {
         const resolution = await resolveConflict(conflict, workspaceId, relPath);
         
@@ -581,7 +549,7 @@ export class FileEventBridge {
         }
       }
       
-      // 9. Execute action
+      // Execute action
       try {
         if (policy.direction === 'download') {
           await executeDownload(this.remote, this.state, workspaceId, relPath);
@@ -593,7 +561,7 @@ export class FileEventBridge {
         return;
       }
       
-      // 10. Clear ignored conflict
+      // Clear ignored conflict
       clearIgnoredConflictIfResolved(this.state, workspaceId, relPath);
     });
     
@@ -674,6 +642,43 @@ export class FileEventBridge {
   // ==========================================================================
 
   /**
+   * Pre-flight checks before remote operations (for event handlers)
+   * Returns policy if all checks pass, null if operation should be cancelled
+   */
+  private async shouldProceedWithEvent(
+    workspaceId: WorkspaceId,
+    relPath: RelPath,
+    policyField: 'actionOnSave' | 'actionOnCreate' | 'actionOnDelete' | 'actionOnMove' | 'actionOnOpen'
+  ): Promise<ActionPolicy | null> {
+    // 1. Check if conflict already ignored
+    if (hasIgnoredConflict(this.state, workspaceId, relPath)) {
+      return null;
+    }
+    
+    // 2. Check ignore patterns
+    if (await this.shouldIgnore(workspaceId, relPath)) {
+      return null;
+    }
+    
+    // 3. Get config and parse policy
+    const config = await this.config.getById(workspaceId);
+    const policy = parseActionPolicy(config.data[policyField]);
+    
+    // 4. No-op policy?
+    if (isNoOpPolicy(policy)) {
+      return null;
+    }
+    
+    // 5. Config validity check (AFTER policy check - "none" policies don't need valid config)
+    const validationResult = this.validator.getCached(workspaceId);
+    if (!validationResult.isValid || !validationResult.hasConfig) {
+      return null;
+    }
+    
+    return policy;
+  }
+
+  /**
    * Process array of files from VSCode events
    */
   private async processFileArray(
@@ -706,24 +711,5 @@ export class FileEventBridge {
   private async shouldIgnore(workspaceId: WorkspaceId, relPath: RelPath): Promise<boolean> {
     const config = await this.config.getById(workspaceId);
     return config.ignoreFilter.shouldIgnore(relPath as string);
-  }
-
-    /**
-   * Enqueue operation only if config is valid
-   * Returns early if config is invalid (prevents remote connection attempts)
-   */
-  private async enqueueIfValid(
-    workspaceId: WorkspaceId,
-    queueKey: string,
-    operation: OperationType,
-    handler: () => Promise<void>
-  ): Promise<void> {
-    const validationResult = this.validator.getCached(workspaceId);
-    
-    if (!validationResult.isValid || !validationResult.hasConfig) {
-      return;
-    }
-    
-    await this.operationQueue.enqueue(queueKey, operation, handler);
   }
 }

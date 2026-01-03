@@ -57,11 +57,11 @@ suite('E2E - Save Event', function() {
     expectedStatusAfterSave: 'added' | 'unchanged' | 'modified',
     shouldExistRemotelyAfterSave: boolean
   ): Promise<void> {
-    await refresh();
     
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnSave: policy
     });
+    await refresh();
     
     // Create file and open in editor
     const editor = await createAndOpenFile(testFile, initialContent);
@@ -89,11 +89,11 @@ suite('E2E - Save Event', function() {
     expectedLocalContentAfter: string,
     shouldBeIgnored: boolean = false
   ): Promise<void> {
-    await refresh();
     
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnSave: policy
     });
+    await refresh();
     
     // Set test response before triggering conflict
     await setTestResponse(userResponse);

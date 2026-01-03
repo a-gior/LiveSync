@@ -104,11 +104,11 @@ suite('E2E - Rename/Move Event', function() {
     await cleanTestFile(oldFile, oldFileName, ctx.remoteVerifier!, ctx.services!, ctx.testWorkspace!);
     await cleanTestFile(newFile, newFileName, ctx.remoteVerifier!, ctx.services!, ctx.testWorkspace!);
     
-    await refresh();
     
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnMove: policy
     });
+    await refresh();
     
     // Step 1: Create and upload file
     await vscode.workspace.fs.writeFile(oldFile, Buffer.from(fileContent));
@@ -167,11 +167,11 @@ suite('E2E - Rename/Move Event', function() {
     await cleanTestFile(oldFile, oldFileName, ctx.remoteVerifier!, ctx.services!, ctx.testWorkspace!);
     await cleanTestFile(newFile, newFileName, ctx.remoteVerifier!, ctx.services!, ctx.testWorkspace!);
     
-    await refresh();
     
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnMove: policy
     });
+    await refresh();
     
     await setTestResponse(userResponse);
     
@@ -308,11 +308,11 @@ suite('E2E - Rename/Move Event', function() {
       // Directory might already exist
     }
     
-    await refresh();
     
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnMove: policy
     });
+    await refresh();
     
     // Step 1: Create and upload file
     await vscode.workspace.fs.writeFile(oldFile, Buffer.from(fileContent));
@@ -409,11 +409,11 @@ suite('E2E - Rename/Move Event', function() {
     shouldExistAtOldPath: boolean,
     shouldExistAtNewPath: boolean
   ): Promise<void> {
-    await refresh();
     
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnMove: policy
     });
+    await refresh();
     
     // Step 1: Create and upload folder structure
     const oldFolder = await createAndUploadFolderStructure(oldFolderName);
@@ -479,11 +479,11 @@ suite('E2E - Rename/Move Event', function() {
     shouldExistAtOldPath: boolean,
     shouldExistAtNewPath: boolean
   ): Promise<void> {
-    await refresh();
     
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnMove: policy
     });
+    await refresh();
     
     // Step 1: Create and upload folder structure
     const oldFolder = await createAndUploadFolderStructure(folderName);
@@ -560,11 +560,11 @@ suite('E2E - Rename/Move Event', function() {
     policy: 'check&move' | 'check',
     userResponse: 'proceed' | 'cancel' | 'ignore'
   ): Promise<void> {
-    await refresh();
     
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnMove: policy
     });
+    await refresh();
     
     await setTestResponse(userResponse);
     

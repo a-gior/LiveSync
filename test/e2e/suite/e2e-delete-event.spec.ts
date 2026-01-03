@@ -63,11 +63,11 @@ suite('E2E - Delete Event', function() {
     policy: string,
     shouldExistRemotelyAfterDelete: boolean
   ): Promise<void> {
-    await refresh();
     
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnDelete: policy
     });
+    await refresh();
     
     // Step 1: Create file locally and upload to remote
     await createAndOpenFile(testFile, initialContent);
@@ -113,11 +113,11 @@ suite('E2E - Delete Event', function() {
     shouldExistRemotelyAfterDelete: boolean,
     shouldBeIgnored: boolean = false
   ): Promise<void> {
-    await refresh();
     
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnDelete: policy
     });
+    await refresh();
     
     // Set test response before triggering conflict
     await setTestResponse(userResponse);

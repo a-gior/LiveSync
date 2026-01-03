@@ -72,11 +72,11 @@ suite('E2E - Download Command', function() {
     const testFile = vscode.Uri.joinPath(ctx.testWorkspace!.uri, testFileName);
     
     await cleanTestFile(testFile, testFileName, ctx.remoteVerifier!, ctx.services!, ctx.testWorkspace!);
-    await refresh();
     
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnDownload: policy
     });
+    await refresh();
     
     // Create file on remote
     await ctx.remoteVerifier!.createFile(testFileName, fileContent);
@@ -228,11 +228,11 @@ suite('E2E - Download Command', function() {
     const testFile = vscode.Uri.joinPath(ctx.testWorkspace!.uri, testFileName);
     
     await cleanTestFile(testFile, testFileName, ctx.remoteVerifier!, ctx.services!, ctx.testWorkspace!);
-    await refresh();
     
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnDownload: 'check&download'
     });
+    await refresh();
     
     // Set test response before triggering conflict
     await setTestResponse(userResponse);

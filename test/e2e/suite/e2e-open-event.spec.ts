@@ -70,11 +70,11 @@ suite('E2E - Open Event', function() {
     // Clean this specific test file
     await cleanTestFile(testFile, testFileName, ctx.remoteVerifier!, ctx.services!, ctx.testWorkspace!);
     
-    await refresh();
     
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnOpen: policy
     });
+    await refresh();
     
     // Step 1: Create file locally with initial content
     await vscode.workspace.fs.writeFile(testFile, Buffer.from(localContent));
@@ -121,11 +121,11 @@ suite('E2E - Open Event', function() {
     // Clean this specific test file
     await cleanTestFile(testFile, testFileName, ctx.remoteVerifier!, ctx.services!, ctx.testWorkspace!);
     
-    await refresh();
     
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnOpen: policy
     });
+    await refresh();
     
     // Set test response before triggering conflict
     await setTestResponse(userResponse);

@@ -73,11 +73,11 @@ suite('E2E - Upload Command', function() {
     const testFile = vscode.Uri.joinPath(ctx.testWorkspace!.uri, testFileName);
     
     await cleanTestFile(testFile, testFileName, ctx.remoteVerifier!, ctx.services!, ctx.testWorkspace!);
-    await refresh();
     
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnUpload: policy
     });
+    await refresh();
     
     // Create file locally
     await createAndOpenFile(testFile, fileContent);
@@ -143,11 +143,11 @@ suite('E2E - Upload Command', function() {
     } catch {}
     await wait(500);
     
-    await refresh();
     
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnUpload: policy
     });
+    await refresh();
     
     // Create folder with files locally
     await vscode.workspace.fs.createDirectory(testFolder);
@@ -213,11 +213,11 @@ suite('E2E - Upload Command', function() {
     const testFile = vscode.Uri.joinPath(ctx.testWorkspace!.uri, testFileName);
     
     await cleanTestFile(testFile, testFileName, ctx.remoteVerifier!, ctx.services!, ctx.testWorkspace!);
-    await refresh();
     
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnUpload: 'check&upload'
     });
+    await refresh();
     
     // Set test response before triggering conflict
     await setTestResponse(userResponse);
