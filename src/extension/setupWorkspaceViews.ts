@@ -18,7 +18,8 @@ interface WorkspaceViews {
 export function setupWorkspaceViews(
   workspaceIds: WorkspaceId[],
   state: SyncStateManager,
-  folderState: FolderStateStore
+  folderState: FolderStateStore,
+  workspaceState: vscode.Memento
 ): WorkspaceViews {
   const isMultiRoot = workspaceIds.length > 1;
   
@@ -38,7 +39,8 @@ export function setupWorkspaceViews(
       workspaceIds,
       (selectedWsId) => {
         diffsProvider.setCurrentWorkspace(selectedWsId);
-      }
+      },
+      workspaceState
     );
 
     listView = vscode.window.createTreeView('livesync.workspaces', {
@@ -46,10 +48,8 @@ export function setupWorkspaceViews(
       showCollapseAll: false,
     });
 
-    // Select first workspace by default
-    if (workspaceIds.length > 0) {
-      listProvider.selectWorkspace(workspaceIds[0]);
-    }
+    // Restore last selected workspace (or select first if none saved)
+    listProvider.restoreSelection();
   }
 
   return {

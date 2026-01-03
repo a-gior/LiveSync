@@ -1,25 +1,28 @@
 import * as vscode from 'vscode';
-import { WorkspaceId } from '@domain/types';
-import { wsToString } from '@helpers/path';
+import { WorkspaceId } from '../../domain/types';
+import { wsToString } from '../../infrastructure/helpers/path';
 
-type WorkspaceNode = {
+interface WorkspaceNode {
   kind: 'workspace';
   workspaceId: WorkspaceId;
   label: string;
   hasConfig: boolean;
   configValid: boolean;
-};
+}
+
+const SELECTED_WORKSPACE_KEY = 'livesync.selectedWorkspaceId';
 
 export class WorkspaceListProvider implements vscode.TreeDataProvider<WorkspaceNode> {
   private readonly changeEmitter = new vscode.EventEmitter<WorkspaceNode | undefined>();
-  public readonly onDidChangeTreeData = this.changeEmitter.event;
+  readonly onDidChangeTreeData = this.changeEmitter.event;
 
-  private workspaces: Map<WorkspaceId, WorkspaceNode> = new Map();
-  private selectedWorkspaceId?: WorkspaceId;
+  private workspaces = new Map<WorkspaceId, WorkspaceNode>();
+  private selectedWorkspaceId: WorkspaceId | undefined;
 
   constructor(
     initialWorkspaces: WorkspaceId[],
-    private readonly onWorkspaceSelected: (wsId: WorkspaceId) => void
+    private readonly onWorkspaceSelected: (wsId: WorkspaceId) => void,
+    private readonly state?: vscode.Memento
   ) {
     for (const wsId of initialWorkspaces) {
       this.addWorkspace(wsId);
@@ -44,6 +47,7 @@ export class WorkspaceListProvider implements vscode.TreeDataProvider<WorkspaceN
     this.workspaces.delete(workspaceId);
     if (this.selectedWorkspaceId === workspaceId) {
       this.selectedWorkspaceId = undefined;
+      this.clearPersistedSelection();
     }
     this.refresh();
   }
@@ -61,12 +65,52 @@ export class WorkspaceListProvider implements vscode.TreeDataProvider<WorkspaceN
     if (this.selectedWorkspaceId !== workspaceId) {
       this.selectedWorkspaceId = workspaceId;
       this.onWorkspaceSelected(workspaceId);
+      this.persistSelection(workspaceId);
       this.refresh();
     }
   }
 
   public getSelectedWorkspace(): WorkspaceId | undefined {
     return this.selectedWorkspaceId;
+  }
+
+  /**
+   * Restore last selected workspace from state if available and valid.
+   * Returns the workspace ID that was selected (either restored or first available).
+   */
+  public restoreSelection(): WorkspaceId | undefined {
+    if (!this.state) {
+      return this.selectFirstAvailable();
+    }
+
+    const stored = this.state.get<string>(SELECTED_WORKSPACE_KEY);
+    
+    if (stored && this.workspaces.has(stored as WorkspaceId)) {
+      this.selectWorkspace(stored as WorkspaceId);
+      return this.selectedWorkspaceId;
+    }
+
+    return this.selectFirstAvailable();
+  }
+
+  private selectFirstAvailable(): WorkspaceId | undefined {
+    const firstWsId = Array.from(this.workspaces.keys())[0];
+    if (firstWsId) {
+      this.selectWorkspace(firstWsId);
+    }
+    return firstWsId;
+  }
+
+  private persistSelection(workspaceId: WorkspaceId): void {
+    if (this.state) {
+      void this.state.update(SELECTED_WORKSPACE_KEY, workspaceId);
+    }
+  }
+
+  private clearPersistedSelection(): void {
+    if (this.state) {
+      void this.state.update(SELECTED_WORKSPACE_KEY, undefined);
+    }
   }
 
   public refresh(): void {

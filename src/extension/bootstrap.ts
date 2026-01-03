@@ -63,7 +63,7 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   });
 
   // Setup workspace views (diffs tree + workspace list if multi-root)
-  const views = setupWorkspaceViews(workspaceIds, state, folderState);
+  const views = setupWorkspaceViews(workspaceIds, state, folderState, context.workspaceState);
 
   const showAsTree = context.workspaceState.get<boolean>('livesync.view.showAsTree', true);
   const showUnchanged = context.workspaceState.get<boolean>('livesync.view.showUnchanged', false);
