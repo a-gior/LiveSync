@@ -163,7 +163,7 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
   public setCurrentWorkspace(workspaceId: WorkspaceId): void {
     if (this.currentWorkspaceId !== workspaceId) {
       this.currentWorkspaceId = workspaceId;
-      this.refreshAll();
+      this.refresh();
     }
   }
 
@@ -252,7 +252,7 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
   // vscode.TreeDataProvider<T>
   // =====================================================================================
 
-  public refreshAll(): void {
+  public refresh(): void {
     this.changeEmitter.fire(undefined);
   }
 

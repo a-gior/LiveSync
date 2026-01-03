@@ -39,7 +39,6 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   context.subscriptions.push(configStatus);
   
   // On startup: Quick reachability check (2s timeout per host)
-  // This is fast enough for startup while still catching unreachable hosts
   const validationResults = await validator.validateAll(false, true);
   validator.getTracker().initialize(validationResults, config);
 
@@ -54,7 +53,7 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   const folderState = new FolderStateStore(context.workspaceState);
 
   // Initialize infrastructure (storage, caching, logging)
-  const { localCache, remoteCache } = await initializeInfrastructure(context, state, config);
+  const { localCache, remoteCache } = await initializeInfrastructure(context, state, validator);
 
   const cachePersister = new DebouncedCachePersister(state, localCache, remoteCache, 1000);
   context.subscriptions.push({

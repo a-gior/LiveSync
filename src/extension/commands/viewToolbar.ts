@@ -7,7 +7,7 @@ import { stringToWsId } from '@helpers/path';
 import { refreshRemoteSnapshot } from '@helpers/remote';
 
 export function registerViewToolbar(services: Services): void {
-  const { context, state, config, remote, progress, provider } = services;
+  const { context, state, config, remote, progress, provider, validator } = services;
 
   // Toggle "show unchanged" - use workspace state
   cmd(context, 'livesync.view.toggleShowUnchanged', async () => {
@@ -74,6 +74,32 @@ export function registerViewToolbar(services: Services): void {
 
     if (!folder) {
       void vscode.window.showWarningMessage('LiveSync: workspace folder not found.');
+      return;
+    }
+
+    // Check config validity before attempting refresh
+    const validationResult = validator.getCached(currentWsId);
+  
+    if (!validationResult.hasConfig) {
+      const choice = await vscode.window.showWarningMessage(
+        `Cannot refresh ${folder.name}: No remote configuration found`,
+        'Configure'
+      );
+      if (choice === 'Configure') {
+        await vscode.commands.executeCommand('livesync.configuration', folder);
+      }
+      return;
+    }
+    
+    if (!validationResult.isValid) {
+      const errorMsg = validationResult.error || 'Invalid configuration';
+      const choice = await vscode.window.showErrorMessage(
+        `Cannot refresh ${folder.name}: ${errorMsg}`,
+        'Fix Configuration'
+      );
+      if (choice === 'Fix Configuration') {
+        await vscode.commands.executeCommand('livesync.configuration', folder);
+      }
       return;
     }
 
@@ -148,6 +174,22 @@ export function registerViewToolbar(services: Services): void {
     const folders = resolveWorkspaceFolders(arg);
     if (!folders.length) {
       void vscode.window.showWarningMessage('LiveSync: no workspace folders.');
+      return;
+    }
+
+    const invalidFolders: string[] = [];
+    for (const folder of folders) {
+      const wsId = stringToWsId(folder.uri.fsPath);
+      const result = validator.getCached(wsId);
+      if (!result.hasConfig || !result.isValid) {
+        invalidFolders.push(`${folder.name}: ${result.error || 'No config'}`);
+      }
+    }
+    
+    if (invalidFolders.length > 0) {
+      void vscode.window.showErrorMessage(
+        `Cannot refresh all: ${invalidFolders.length} workspace(s) have invalid configs:\n${invalidFolders.join('\n')}`
+      );
       return;
     }
 

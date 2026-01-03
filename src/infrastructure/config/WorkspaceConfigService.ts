@@ -34,7 +34,7 @@ export type ConfigChangeEvent = {
 export class WorkspaceConfigService {
   private cache = new Map<string, EffectiveWorkspaceConfig>();
   private emitter = new vscode.EventEmitter<ConfigChangeEvent>();
-  private watchers: vscode.FileSystemWatcher[] = [];
+  private watchers: Array<{ watcher: vscode.FileSystemWatcher; folderUri: string }> = [];
 
   readonly onConfigChange = this.emitter.event;
 
@@ -44,7 +44,7 @@ export class WorkspaceConfigService {
 
   dispose(): void {
     this.emitter.dispose();
-    this.watchers.forEach(w => w.dispose());
+    this.watchers.forEach(item => item.watcher.dispose());
     this.watchers = [];
     this.cache.clear();
   }
@@ -147,23 +147,50 @@ export class WorkspaceConfigService {
     vscode.workspace.onDidChangeWorkspaceFolders(async (e) => {
       for (const removed of e.removed) {
         this.remove(removed);
+        this.removeWatcherForFolder(removed);
       }
       for (const added of e.added) {
         await this.loadFromDisk(added);
+        this.createWatcherForFolder(added);
       }
     });
 
     // Watch for config file changes in each workspace
     const folders = vscode.workspace.workspaceFolders ?? [];
     for (const folder of folders) {
-      const pattern = new vscode.RelativePattern(folder, '.vscode/livesync.json');
-      const watcher = vscode.workspace.createFileSystemWatcher(pattern);
-
-      watcher.onDidCreate(() => this.reload(folder));
-      watcher.onDidChange(() => this.reload(folder));
-      watcher.onDidDelete(() => this.reload(folder));
-
-      this.watchers.push(watcher);
+      this.createWatcherForFolder(folder);
     }
+  }
+
+  /**
+   * Create a config file watcher for a specific folder
+   */
+  private createWatcherForFolder(folder: vscode.WorkspaceFolder): void {
+    const pattern = new vscode.RelativePattern(folder, '.vscode/livesync.json');
+    const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+
+    watcher.onDidCreate(() => this.reload(folder));
+    watcher.onDidChange(() => this.reload(folder));
+    watcher.onDidDelete(() => this.reload(folder));
+
+    this.watchers.push({ watcher, folderUri: folder.uri.toString() });
+  }
+
+  /**
+   * Remove watcher for a specific folder
+   */
+  private removeWatcherForFolder(folder: vscode.WorkspaceFolder): void {
+    const folderUri = folder.uri.toString();
+    const remaining: typeof this.watchers = [];
+    
+    for (const item of this.watchers) {
+      if (item.folderUri === folderUri) {
+        item.watcher.dispose();
+      } else {
+        remaining.push(item);
+      }
+    }
+    
+    this.watchers = remaining;
   }
 }
