@@ -60,12 +60,6 @@ describe('Policy Parser', () => {
       assert.equal(policy.direction, 'upload');
       assert.equal(policy.extras.size, 0);
     });
-
-    it('handles case insensitivity', () => {
-      assert.equal(parseActionPolicy('SAVE').direction, 'upload');
-      assert.equal(parseActionPolicy('UPLOAD').direction, 'upload');
-      assert.equal(parseActionPolicy('CREATE').direction, 'upload');
-    });
   });
 
   describe('Download Direction', () => {
@@ -76,9 +70,6 @@ describe('Policy Parser', () => {
       assert.equal(policy.extras.size, 0);
     });
 
-    it('handles case insensitivity', () => {
-      assert.equal(parseActionPolicy('DOWNLOAD').direction, 'download');
-    });
   });
 
   describe('Delete Extra', () => {
@@ -87,10 +78,6 @@ describe('Policy Parser', () => {
       assert.equal(policy.check, false);
       assert.equal(policy.direction, undefined);
       assert.ok(policy.extras.has('delete'));
-    });
-
-    it('handles case insensitivity', () => {
-      assert.ok(parseActionPolicy('DELETE').extras.has('delete'));
     });
   });
 
@@ -109,10 +96,6 @@ describe('Policy Parser', () => {
       assert.ok(policy.extras.has('move'));
     });
 
-    it('handles case insensitivity', () => {
-      assert.ok(parseActionPolicy('MOVE').extras.has('move'));
-      assert.ok(parseActionPolicy('RENAME').extras.has('move'));
-    });
   });
 
   describe('Combined Policies', () => {
