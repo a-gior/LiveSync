@@ -390,4 +390,5 @@ export async function setTestResponse(
  */
 export async function refresh(): Promise<void> {
   await vscode.commands.executeCommand('livesync.refresh');
+  await wait(1000);
 }
