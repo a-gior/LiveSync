@@ -9,7 +9,7 @@ import { RelPath, WorkspaceId } from '@domain/types';
 import { relFromAbs, stringToWsId } from '@helpers/path';
 import { sha256OfFile } from '@helpers/hash/FileHash';
 import { logExpectedError } from '@helpers/logging';
-import { FileOperationQueue } from '@helpers/concurrency';
+import { FileOperationQueue, OperationType } from '@helpers/concurrency';
 
 // New helper imports
 import { ensureFreshRemoteSnapshot, ensureFreshLocalSnapshot } from '@helpers/snapshot';
@@ -21,6 +21,7 @@ import { markConflictIgnored, clearIgnoredConflictIfResolved } from '@helpers/co
 import { executeUpload, executeDownload, executeDelete, executeRename } from '@helpers/action/executor';
 import { notifySuccess, notifyError } from '@helpers/notification';
 import { parseActionPolicy } from '../../infrastructure/helpers/policy/parser';
+import { ConfigValidator } from '../../infrastructure/config/ConfigValidator';
 
 /**
  * FileEventBridge - Central event handler for file operations
@@ -36,6 +37,7 @@ export class FileEventBridge {
   constructor(
     private readonly state: SyncStateManager,
     private readonly config: WorkspaceConfigService,
+    private readonly validator: ConfigValidator,
     private readonly remote: RemotePort,
     private readonly notifications: NotificationStatusBar
   ) {}
@@ -116,7 +118,7 @@ export class FileEventBridge {
     await this.processFileArray(e.files, async ({ workspaceId, relPath, uri }) => {
       const queueKey = `${workspaceId}:${relPath}`;
       
-      await this.operationQueue.enqueue(queueKey, 'create', async () => {
+      await this.enqueueIfValid(workspaceId, queueKey, 'create', async () => {
         // 1. Check if conflict already ignored
         if (hasIgnoredConflict(this.state, workspaceId, relPath)) {
           return;
@@ -211,7 +213,7 @@ export class FileEventBridge {
     const { workspaceId, relPath } = info;
     const queueKey = `${workspaceId}:${relPath}`;
 
-    await this.operationQueue.enqueue(queueKey, 'save', async () => {
+    await this.enqueueIfValid(workspaceId, queueKey, 'save', async () => {
       // 1. Check if conflict already ignored
       if (hasIgnoredConflict(this.state, workspaceId, relPath)) {
         return;
@@ -301,7 +303,7 @@ export class FileEventBridge {
     await this.processFileArray(e.files, async ({ workspaceId, relPath }) => {
       const queueKey = `${workspaceId}:${relPath}`;
       
-      await this.operationQueue.enqueue(queueKey, 'delete', async () => {
+      await this.enqueueIfValid(workspaceId, queueKey, 'delete', async () => {
         // 1. Update local snapshot (remove from local)
         const oldLocalMeta = this.state.getLocalMeta(workspaceId, relPath);
         const hadChildren = this.state.hasLocalChildren(workspaceId, relPath);
@@ -399,7 +401,7 @@ export class FileEventBridge {
       const newRel = relFromAbs(workspaceId, newUri.fsPath);
       const queueKey = `${workspaceId}:${newRel}`;
 
-      await this.operationQueue.enqueue(queueKey, 'move', async () => {
+      await this.enqueueIfValid(workspaceId, queueKey, 'move', async () => {
         // 1. Update local snapshot
         let isDir = false;
         try {
@@ -523,7 +525,7 @@ export class FileEventBridge {
       return;
     }
 
-    await this.operationQueue.enqueue(queueKey, 'open', async () => {
+    await this.enqueueIfValid(workspaceId, queueKey, 'open', async () => {
       // 1. Local snapshot already up-to-date (file just opened)
       // No need to updateLocalSnapshot here
       
@@ -704,5 +706,24 @@ export class FileEventBridge {
   private async shouldIgnore(workspaceId: WorkspaceId, relPath: RelPath): Promise<boolean> {
     const config = await this.config.getById(workspaceId);
     return config.ignoreFilter.shouldIgnore(relPath as string);
+  }
+
+    /**
+   * Enqueue operation only if config is valid
+   * Returns early if config is invalid (prevents remote connection attempts)
+   */
+  private async enqueueIfValid(
+    workspaceId: WorkspaceId,
+    queueKey: string,
+    operation: OperationType,
+    handler: () => Promise<void>
+  ): Promise<void> {
+    const validationResult = this.validator.getCached(workspaceId);
+    
+    if (!validationResult.isValid || !validationResult.hasConfig) {
+      return;
+    }
+    
+    await this.enqueueIfValid(workspaceId, queueKey, operation, handler);
   }
 }
