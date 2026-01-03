@@ -98,6 +98,12 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     const unsubscribe = this.state.subscribeToDiffChanges(({ workspaceId, changedPath, parentPath }) => {
       if (this.isDisposed) {return;} // Guard against post-disposal events
 
+      // In list mode, always refresh from workspace root
+      if (!this.showAsTree) {
+        this.changeEmitter.fire(this.getOrCreateWorkspaceNode(workspaceId));
+        return;
+      }
+
       const realizedPaths = this.getRealizedPathsSet(workspaceId);
       const entryStillExists = Boolean(changedPath && this.state.getDiffEntry(workspaceId, stringToRel(changedPath)));
 
