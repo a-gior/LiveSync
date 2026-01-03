@@ -724,6 +724,6 @@ export class FileEventBridge {
       return;
     }
     
-    await this.enqueueIfValid(workspaceId, queueKey, operation, handler);
+    await this.operationQueue.enqueue(queueKey, operation, handler);
   }
 }
