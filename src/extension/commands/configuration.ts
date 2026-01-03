@@ -4,44 +4,48 @@ import { Services } from '../services';
 import { ConfigurationPanel } from '../../presentation/webview/ConfigurationPanel';
 import { ConfigWriter } from '../../infrastructure/config/ConfigWriter';
 
+interface ConfigurationOptions {
+  mode?: 'prompt' | 'ui' | 'json';
+  folder?: vscode.WorkspaceFolder;
+}
+
 export function registerConfigurationCommands(services: Services): void {
   const { context } = services;
 
   // Main configuration command
-  cmd(context, 'livesync.configuration', async (mode?: 'prompt' | 'ui' | 'json') => {
-    if(!mode) {
-      mode = vscode.workspace
-            .getConfiguration('livesync')
-            .get<'prompt' | 'ui' | 'json'>('openMode', 'prompt');
-    }
+  cmd(context, 'livesync.configuration', async (options?: ConfigurationOptions) => {
+    // use optional chaining
+    let mode: 'prompt' | 'ui' | 'json' = 
+      options?.mode ?? 
+      vscode.workspace.getConfiguration('livesync').get('openMode', 'prompt');
+    
+    let targetFolder = options?.folder;
 
-    let selectedMode = mode;
-
+    // Handle prompt mode
     if (mode === 'prompt') {
-      const items = [
+      const choice = await vscode.window.showQuickPick([
         { label: '$(gear) UI Panel', id: 'ui' as const },
         { label: '$(file-code) JSON', id: 'json' as const }
-      ];
-
-      const choice = await vscode.window.showQuickPick(items, {
+      ], {
         placeHolder: 'Edit via UI or JSON?'
       });
 
       if (!choice) return;
-      selectedMode = choice.id;
+      mode = choice.id;
     }
 
-    // Get target workspace folder
-    const folder = await pickTargetFolder();
-    if (!folder) return;
+    // Get target folder if not provided
+    if (!targetFolder) {
+      targetFolder = await pickTargetFolder();
+      if (!targetFolder) return;
+    }
 
-    // Ensure config file exists
-    await ConfigWriter.ensureConfigExists(folder);
+    await ConfigWriter.ensureConfigExists(targetFolder);
 
-    if (selectedMode === 'ui') {
-      ConfigurationPanel.show(context.extensionUri, services, folder);
+    if (mode === 'ui') {
+      ConfigurationPanel.show(context.extensionUri, services, targetFolder);
     } else {
-      await openJsonConfig(folder);
+      await openJsonConfig(targetFolder);
     }
   });
 

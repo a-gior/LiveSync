@@ -86,7 +86,7 @@ export function registerViewToolbar(services: Services): void {
         'Configure'
       );
       if (choice === 'Configure') {
-        await vscode.commands.executeCommand('livesync.configuration', folder);
+        await vscode.commands.executeCommand('livesync.configuration', { folder });
       }
       return;
     }
@@ -98,7 +98,7 @@ export function registerViewToolbar(services: Services): void {
         'Fix Configuration'
       );
       if (choice === 'Fix Configuration') {
-        await vscode.commands.executeCommand('livesync.configuration', folder);
+        await vscode.commands.executeCommand('livesync.configuration', { folder });
       }
       return;
     }

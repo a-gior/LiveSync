@@ -25,7 +25,7 @@ export async function requireValidRemoteConfig(
     );
     
     if (choice === 'Configure') {
-      await vscode.commands.executeCommand('livesync.configuration', folder);
+      await vscode.commands.executeCommand('livesync.configuration', { folder });
     }
     return false;
   }
@@ -38,7 +38,7 @@ export async function requireValidRemoteConfig(
     );
     
     if (choice === 'Fix Configuration') {
-      await vscode.commands.executeCommand('livesync.configuration', folder);
+      await vscode.commands.executeCommand('livesync.configuration', { folder });
     }
     return false;
   }
