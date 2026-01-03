@@ -45,7 +45,7 @@ export function dirnameRel(p: RelPath): RelPath {
 
 /** basename for RelPath (works with '' → ''). */
 export function basenameRel(p: RelPath|WorkspaceId): string {
-  const s = pathToString(p);
+  const s = pathToString(p).replace(/\\/g, '/');
   const i = s.lastIndexOf('/');
   return i < 0 ? s : s.slice(i + 1);
 }
