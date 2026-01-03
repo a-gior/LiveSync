@@ -2,8 +2,7 @@ import { strict as assert } from 'assert';
 import {
   stringToRel,
   stringToWsId,
-  relToString,
-  wsToString,
+  pathToString,
   absFs,
   asRel,
   relFromAbs,
@@ -23,18 +22,18 @@ describe('Path Utilities', () => {
 
     it('converts RelPath back to string', () => {
       const rel = stringToRel('src/app.ts');
-      const str = relToString(rel);
+      const str = pathToString(rel);
       assert.equal(str, 'src/app.ts');
     });
 
     it('round-trips correctly', () => {
       const original = 'src/utils/helper.ts';
-      const roundtrip = relToString(stringToRel(original));
+      const roundtrip = pathToString(stringToRel(original));
       assert.equal(roundtrip, original);
     });
   });
 
-  describe('stringToWsId / wsToString', () => {
+  describe('stringToWsId / pathToString', () => {
     it('converts string to WorkspaceId', () => {
       const wsId = stringToWsId('/home/user/project');
       assert.equal(typeof wsId, 'string');
@@ -43,13 +42,13 @@ describe('Path Utilities', () => {
 
     it('converts WorkspaceId back to string', () => {
       const wsId = stringToWsId('/home/user/project');
-      const str = wsToString(wsId);
+      const str = pathToString(wsId);
       assert.equal(str, '/home/user/project');
     });
 
     it('round-trips correctly', () => {
       const original = '/home/user/workspace';
-      const roundtrip = wsToString(stringToWsId(original));
+      const roundtrip = pathToString(stringToWsId(original));
       assert.equal(roundtrip, original);
     });
   });

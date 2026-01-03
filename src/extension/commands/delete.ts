@@ -3,7 +3,7 @@ import type { Services } from '../services';
 import { cmd } from '../cmd';
 import { resolveEntryTarget, resolveFolderTarget } from '@infra/helpers/resolve';
 import type { RelPath } from '@domain/types';
-import { absFs, relToString, stringToWsId } from '@helpers/path';
+import { absFs, pathToString, stringToWsId } from '@helpers/path';
 import { requireValidRemoteConfig } from '@infra/helpers/config';
 import { executeDelete } from '@helpers/action/executor';
 import { logExpectedError } from '@helpers/logging';
@@ -91,7 +91,7 @@ export function registerDelete(services: Services): void {
     const diff = state.getDiffEntries(workspaceId);
 
     // Collect all files/folders under this path
-    const prefix = relToString(folderPath);
+    const prefix = pathToString(folderPath);
     const entries: RelPath[] = [];
     
     for (const [p, ] of diff.entries()) {

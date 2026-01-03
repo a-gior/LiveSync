@@ -3,7 +3,7 @@ import type { Services } from '../services';
 import { cmd } from '../cmd';
 import { resolveEntryTarget, resolveFolderTarget } from '@infra/helpers/resolve';
 import type { RelPath, WorkspaceId } from '@domain/types';
-import { absFs, relToString, stringToWsId } from '@helpers/path';
+import { absFs, pathToString, stringToWsId } from '@helpers/path';
 import { isDownloadable, isUploadable } from '@helpers/diff';
 import { requireValidRemoteConfig } from '@infra/helpers/config';
 import { parseActionPolicy } from '@helpers/policy/parser';
@@ -86,7 +86,7 @@ export function registerUploadDownload(services: Services): void {
 
     // Collect uploadable files
     const toUpload: Array<{ relPath: RelPath; absLocal: string }> = [];
-    const prefix = relToString(folderPath);
+    const prefix = pathToString(folderPath);
     
     for (const [p, e] of diff.entries()) {
       // Check if file is in this folder (empty prefix = root, include all)
@@ -163,7 +163,7 @@ export function registerUploadDownload(services: Services): void {
 
     // Collect downloadable files
     const toDownload: Array<{ relPath: RelPath; absLocal: string }> = [];
-    const prefix = relToString(folderPath);
+    const prefix = pathToString(folderPath);
     
     for (const [p, e] of diff.entries()) {
       // Check if file is in this folder (empty prefix = root, include all)

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { WorkspaceId } from '../../domain/types';
-import { wsToString } from '../../infrastructure/helpers/path';
+import { basenameRel } from '../../infrastructure/helpers/path';
 
 interface WorkspaceNode {
   kind: 'workspace';
@@ -32,7 +32,7 @@ export class WorkspaceListProvider implements vscode.TreeDataProvider<WorkspaceN
   public addWorkspace(workspaceId: WorkspaceId): void {
     if (this.workspaces.has(workspaceId)) return;
 
-    const label = this.labelOf(workspaceId);
+    const label = basenameRel(workspaceId);
     this.workspaces.set(workspaceId, {
       kind: 'workspace',
       workspaceId,
@@ -149,11 +149,5 @@ export class WorkspaceListProvider implements vscode.TreeDataProvider<WorkspaceN
 
   getChildren(): WorkspaceNode[] {
     return Array.from(this.workspaces.values());
-  }
-
-  private labelOf(workspaceId: WorkspaceId): string {
-    const norm = wsToString(workspaceId).replace(/\\/g, '/');
-    const i = norm.lastIndexOf('/');
-    return i < 0 ? norm : norm.slice(i + 1);
   }
 }

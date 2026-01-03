@@ -1,5 +1,5 @@
-import type { RelPath } from '@domain/types';
-import { relToString, stringToRel } from './PathCast';
+import type { RelPath, WorkspaceId } from '@domain/types';
+import { pathToString, stringToRel } from './PathCast';
 
 /** Internal: normalize all slashes and collapse multiple. */
 function _normSlash(s: string): string {
@@ -38,16 +38,26 @@ export function relFromAbs(workspaceFsPath: string, absFsPath: string): RelPath 
 
 /** dirname for RelPath ('' if none). */
 export function dirnameRel(p: RelPath): RelPath {
-  const s = relToString(p);
+  const s = pathToString(p);
   const i = s.lastIndexOf('/');
   return stringToRel(i < 0 ? '' : s.slice(0, i));
 }
 
 /** basename for RelPath (works with '' → ''). */
-export function basenameRel(p: RelPath): string {
-  const s = relToString(p);
+export function basenameRel(p: RelPath|WorkspaceId): string {
+  const s = pathToString(p);
   const i = s.lastIndexOf('/');
   return i < 0 ? s : s.slice(i + 1);
+}
+
+
+export function getParentPath(pathString: RelPath): RelPath | undefined {
+  const s = pathString as string;
+  const i = s.lastIndexOf('/');
+  if (i < 0) {
+    return undefined;
+  }
+  return stringToRel(s.slice(0, i));
 }
 
 /**
@@ -67,8 +77,8 @@ export function parentsOf(p: RelPath): RelPath[] {
 
 /** Returns true if candidate is exactly base or under base/<...> */
 export function isUnder(base: RelPath, candidate: RelPath): boolean {
-  const b = relToString(base).replace(/\/+$/, '');
-  const c = relToString(candidate);
+  const b = pathToString(base).replace(/\/+$/, '');
+  const c = pathToString(candidate);
   if (b.length === 0) { return true; }
   return c === b || c.startsWith(b + '/');
 }

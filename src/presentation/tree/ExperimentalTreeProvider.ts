@@ -4,7 +4,7 @@ import { FolderStateStore } from '@presentation/tree/FolderStateStore';
 import { computeRefreshTarget } from './refresh/RefreshPlanner';
 
 import type { WorkspaceId, RelPath, DiffStatus } from '@domain/types';
-import { stringToRel } from '@helpers/path';
+import { basenameRel, getParentPath, stringToRel } from '@helpers/path';
 
 // -------------------------------------------------------------------------------------
 // Public node identities emitted by this provider (used by commands/context menus)
@@ -231,7 +231,7 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
         store.delete(path);
       }
 
-      const parentPath = this.parentPath(path);
+      const parentPath = getParentPath(path);
       const nodeToRefresh = parentPath
         ? this.getOrCreateEntryNode(workspaceId, parentPath)
         : this.getOrCreateWorkspaceNode(workspaceId);
@@ -266,7 +266,7 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     }
 
     // Entry nodes: find their parent based on path
-    const parentRelPath = this.parentPath(element.path);
+    const parentRelPath = getParentPath(element.path);
     
     // If no parent path, this is a root-level entry under the workspace
     if (!parentRelPath || parentRelPath.length === 0) {
@@ -347,10 +347,10 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
           if (childChildren.length > 0) {
             foldersWithContent.add(child);
             // Mark all parent folders as having content too
-            let parentPath = this.parentPath(child);
+            let parentPath = getParentPath(child);
             while (parentPath && parentPath.length > 0) {
               foldersWithContent.add(parentPath);
-              parentPath = this.parentPath(parentPath);
+              parentPath = getParentPath(parentPath);
             }
           }
         }
@@ -394,7 +394,7 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
 
     // Label: basename when showAsTree=true; full relPath otherwise
     const label = this.showAsTree 
-      ? this.basename(element.path) 
+      ? basenameRel(element.path) 
       : (element.path as string);
 
     // Collapsible state
@@ -466,7 +466,7 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
   private getOrCreateWorkspaceNode(workspaceId: WorkspaceId): WorkspaceNode {
     let node = this.workspaceNodeById.get(workspaceId);
     if (!node) {
-      node = { kind: 'workspace', workspaceId, label: this.labelOf(workspaceId) };
+      node = { kind: 'workspace', workspaceId, label: basenameRel(workspaceId) };
       this.workspaceNodeById.set(workspaceId, node);
     }
     return node;
@@ -530,44 +530,17 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     return `${root}/${rel}`;
   }
 
-  private basename(relPath: RelPath): string {
-    const s = relPath as string;
-    const i = s.lastIndexOf('/');
-    if (i < 0) {
-      return s;
-    }
-    return s.slice(i + 1);
-  }
-
-  private labelOf(workspaceId: WorkspaceId): string {
-    const norm = (workspaceId as string).replace(/\\/g, '/');
-    const i = norm.lastIndexOf('/');
-    if (i < 0) {
-      return norm;
-    }
-    return norm.slice(i + 1);
-  }
-
   private bumpExpandEpochAndRefreshAll(): void {
     this.expandEpoch += 1;
     this.changeEmitter.fire(undefined);
   }
 
-  private parentPath(pathString: RelPath): RelPath | undefined {
-    const s = pathString as string;
-    const i = s.lastIndexOf('/');
-    if (i < 0) {
-      return undefined;
-    }
-    return stringToRel(s.slice(0, i));
-  }
-
   private ancestorPaths(pathString: RelPath): RelPath[] {
     const ancestors: RelPath[] = [];
-    let current = this.parentPath(pathString);
+    let current = getParentPath(pathString);
     while (current && current.length > 0) {
       ancestors.push(current);
-      current = this.parentPath(current);
+      current = getParentPath(current);
     }
     return ancestors;
   }

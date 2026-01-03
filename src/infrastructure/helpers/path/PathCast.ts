@@ -1,6 +1,6 @@
 import { RelPath, WorkspaceId } from "@domain/types";
 
-export function relToString(p: RelPath): string {
+export function pathToString(p: RelPath|WorkspaceId): string {
   return p as string;
 }
 
