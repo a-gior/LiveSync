@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - Complete Architecture Overhaul 🏗️⚡
+
+### 🎉 Major Changes
+
+- **Complete code rewrite** from scratch with clean hexagonal architecture for better maintainability and testability
+- **Multi-workspace support** — Each workspace folder can now have its own independent LiveSync configuration
+- **Configuration migration** — Settings automatically moved from `.vscode/settings.json` to `.vscode/livesync.json` on first activation (no manual action required)
+- **Comprehensive test suite** — 395+ automated tests (unit, integration, E2E) ensuring stability and reliability
+
+### 🎨 UI Improvements
+
+- **Enhanced status bar** — Three status items showing config, notifications, and real-time progress
+- **Auto-refresh on tree updates** — Differences refresh automatically when files change
+
+### 🎯 Enhanced Features
+
+- **Interactive conflict resolution** — Smart detection with three resolution options (download, upload, ignore)
+- **Check-only mode** — New `check` action mode that detects conflicts and informs without taking action
+- **Persistent conflict ignore list** — Suppress warnings for specific files you don't want to sync
+
+### 🔧 Revamped New VSCode Settings (removed old ones)
+
+- `livesync.openMode` — Choose how configuration opens (prompt, UI panel, or JSON file)
+- `livesync.refreshOnConfigSave` — Auto-refresh differences after saving configuration
+- `livesync.statusBar.visibleItems` — Control which status bar items are shown
+- `livesync.index.concurrency` — Configure parallel hashing workers (1-32)
+
+### 🐛 Fixed
+
+- Event deduplication preventing race conditions between VS Code events and FileSystemWatcher
+- Cache persistence file locking during rapid file saves
+- Memory leaks from improper event listener cleanup
+- Numerous edge cases with empty directories, symlinks, and special characters
+
+### 💡 Improvements
+
+- Better error messages with actionable suggestions and links to documentation
+- Enhanced logging with detailed operation traces and performance metrics
+- Real-time configuration validation with helpful error messages
+- Improved network error handling with automatic connection recovery
+- More consistent and reliable sync state management
+
 ## [1.0.9] - Tree Commands & Sync State Update 🛠️
 
 ### Fixed

@@ -4,7 +4,7 @@ const path = require("path");
 
 const vscodeIgnorePath = ".vscodeignore";
 const webviewPath = path.join(process.cwd(), "webview-ui"); // Full path to webview-ui
-const startMarker = "#### Include only production dependencies ####\r";
+const startMarker = "#### Include only production dependencies ####";
 const endMarker = "##############################################";
 
 try {

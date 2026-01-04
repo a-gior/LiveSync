@@ -3,10 +3,11 @@
 
 # Explicitly include necessary folders and files
 !out/shared
-!out/src/managers
-!out/src/panels
-!out/src/services
-!out/src/utilities
+!out/src/application
+!out/src/domain
+!out/src/extension
+!out/src/infrastructure
+!out/src/presentation
 !out/src/extension.js*
 
 !resources/
@@ -22,6 +23,7 @@
 # 📌 Main Extension Dependencies
 !node_modules/fast-glob
 !node_modules/minimatch
+!node_modules/module-alias
 !node_modules/net
 !node_modules/p-limit
 !node_modules/p-map

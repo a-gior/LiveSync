@@ -3,15 +3,7 @@
 **LiveSync** is a Visual Studio Code extension that lets you **instantly sync your local workspace with a remote folder over SSH/SFTP** — with **real-time difference tracking**, **customizable sync events**, and an **intuitive visual interface**.
 
 It’s perfect for developers working with remote servers or any SSH-accessible machine.  
-No more manual uploads, terminal back-and-forth, or wondering if a file is out of sync.
-
-
----
-
-## ⚠️ Warning
-
-> **Single-folder support only:** LiveSync currently works with a single workspace folder at a time.  
-> Multi-root workspace support (with per-folder configuration) is coming in **v1.1.0**.
+No more manual uploads, terminal back-and-forth, wondering if a file is out of sync or not notice when someone else changed a file on the VM.
 
 ---
 
@@ -25,6 +17,7 @@ No more manual uploads, terminal back-and-forth, or wondering if a file is out o
 - 🖱️ **Context Menu Integration** – Sync directly from the file explorer via right-click.
 - 🌲 **Tree/List Views** – Choose how to visualize and act on changed files.
 - 🎛️ **Visual Configuration Panel** – Set up without touching JSON files (but you still can).
+- 🎨 Multi-Workspace - Independent configs per workspace folder
 
 ---
 
@@ -60,40 +53,64 @@ No more manual uploads, terminal back-and-forth, or wondering if a file is out o
 
 ## ⚙️ Configuration Options
 
-### Option 1: Use the Configuration Panel (Recommended)
+LiveSync is configured per workspace folder, either through a visual interface or a dedicated JSON file.
+
+### Option 1: Use the Configuration Command
 
 The configuration panel is the easiest way to get started — no need to edit files manually.
 
-**How to Access It:**
+**How to access it:**
 
-- Open Command Palette → `LiveSync: Open Configuration Panel`
+- Open the Command Palette → `LiveSync: Configure Workspace`
 - Or click the **LiveSync icon** in the status bar (bottom-left corner)
 
 📸 _Example:_  
 ![LiveSync Status Bar Icon](./documentation/screenshots/status_bar_livesync_config.png)
 
+If you are working in a **multi-root workspace**, LiveSync will first ask you to select the workspace folder you want to configure.
+
+After that, LiveSync will open either:
+- the visual configuration panel (webview), or
+- the raw configuration file (`.vscode/livesync.json`)
+
+This behavior is controlled by the VS Code setting `livesync.openMode`, which lets you:
+- always open the UI,
+- always open the JSON file,
+- or be prompted to choose each time.
+
 ---
 
-### Option 2: Manual `.vscode/settings.json` Setup
+### Option 2: Manual `.vscode/livesync.json` Setup
 
-If you prefer to edit your workspace settings manually:
+If you prefer to create or edit the configuration manually, LiveSync stores its workspace configuration in:
+
+`.vscode/livesync.json`
+
+Example:
 
 ```json
 {
-  "LiveSync.hostname": "your.server.com",
-  "LiveSync.port": 22,
-  "LiveSync.username": "your-username",
-  "LiveSync.privateKeyPath": "/path/to/private/key",
-  "LiveSync.remotePath": "/remote/path/to/sync",
-  "LiveSync.ignoreList": [".vscode", ".git", "node_modules"],
+  "hostname": "your.server.com",
+  "port": 2222,
+  "username": "your-username",
+  "password": "your-password",
+  "privateKeyPath": "/path/to/private/key",
+  "passphrase": "",
+  "remotePath": "/remote/path/to/sync",
 
-  "LiveSync.actionOnUpload": "check&upload",
-  "LiveSync.actionOnDownload": "check&download",
-  "LiveSync.actionOnSave": "check&save",
-  "LiveSync.actionOnDelete": "none",
-  "LiveSync.actionOnMove": "check&move",
-  "LiveSync.actionOnCreate": "create",
-  "LiveSync.actionOnOpen": "check&download"
+  "actionOnUpload": "check&upload",
+  "actionOnDownload": "check&download",
+  "actionOnSave": "check&save",
+  "actionOnCreate": "check",
+  "actionOnDelete": "check",
+  "actionOnMove": "check&move",
+  "actionOnOpen": "check&download",
+
+  "ignoreList": [
+    ".vscode",
+    ".svn",
+    ".git"
+  ]
 }
 ```
 
