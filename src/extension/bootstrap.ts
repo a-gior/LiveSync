@@ -79,7 +79,7 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
       f => stringToWsId(f.uri.fsPath) === result.workspaceId
     );
     
-    if (!folder) continue;
+    if (!folder) {continue;}
 
     let hostname: string | undefined;
     let remotePath: string | undefined;

@@ -64,7 +64,7 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
 
     // Subscribe to targeted diff changes; refresh minimally using the RefreshPlanner
     this.state.subscribeToDiffChanges(({ workspaceId, changedPath, parentPath }) => {
-      if (this.isDisposed) return;
+      if (this.isDisposed) {return;}
 
       const realizedPaths = this.getRealizedPathsSet(workspaceId);
       const entryStillExists = Boolean(changedPath && this.state.getDiffEntry(workspaceId, stringToRel(changedPath)));
@@ -207,7 +207,7 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
   }
 
   private markRecentlyResolved(workspaceId: WorkspaceId, path: RelPath): void {
-    if (this.isDisposed) return;
+    if (this.isDisposed) {return;}
     
     let mapForWs = this.recentlyResolvedByWs.get(workspaceId);
     if (!mapForWs) {
@@ -224,7 +224,7 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
 
     // Start retention timer and refresh parent on expiry so the item can vanish
     const timeout = setTimeout(() => {
-      if (this.isDisposed) return;
+      if (this.isDisposed) {return;}
 
       const store = this.recentlyResolvedByWs.get(workspaceId);
       if (store) {

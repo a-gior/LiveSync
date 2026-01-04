@@ -1,6 +1,7 @@
 import * as path from 'path';
 
-require('module-alias').addAliases({
+import moduleAlias from 'module-alias';
+moduleAlias.addAliases({
   '@ext': path.join(__dirname, 'extension'),
   '@domain': path.join(__dirname, 'domain'),
   '@app': path.join(__dirname, 'application'),

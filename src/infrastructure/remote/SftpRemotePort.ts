@@ -152,10 +152,10 @@ export class SftpRemotePort implements RemotePort {
       
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        if (!line) continue;
+        if (!line) {continue;}
         
         const parts = line.split('|');
-        if (parts.length < 4) continue;
+        if (parts.length < 4) {continue;}
 
         const fullPath = parts[0];
         const type = parts[1];
@@ -189,10 +189,10 @@ export class SftpRemotePort implements RemotePort {
       
       for (let i = 0; i < hashLines.length; i++) {
         const line = hashLines[i];
-        if (!line) continue;
+        if (!line) {continue;}
         
         const commaIdx = line.indexOf(',');
-        if (commaIdx === -1) continue;
+        if (commaIdx === -1) {continue;}
         
         const hash = line.substring(0, commaIdx);
         const relPath = line.substring(commaIdx + 1);
@@ -229,7 +229,7 @@ export class SftpRemotePort implements RemotePort {
     return new Promise((resolve, reject) => {
       let output = '';
       client.exec(cmd, (err, stream) => {
-        if (err) return reject(err);
+        if (err) {return reject(err);}
 
         stream
           .on('data', (chunk: Buffer) => { output += chunk.toString(); })
@@ -246,7 +246,7 @@ export class SftpRemotePort implements RemotePort {
    */
   async uploadFile(workspaceId: WorkspaceId, relPath: RelPath, absLocal: string): Promise<void> {
     const cfg = await this.configService.getById(workspaceId);
-    if (!cfg.hasRemote) return;
+    if (!cfg.hasRemote) {return;}
 
     // Use p-limit to control concurrency (max 9 concurrent operations)
     await sftpLimit(async () => {
@@ -264,7 +264,7 @@ export class SftpRemotePort implements RemotePort {
 
   async downloadFile(workspaceId: WorkspaceId, relPath: RelPath, absLocal: string): Promise<void> {
     const cfg = await this.configService.getById(workspaceId);
-    if (!cfg.hasRemote) return;
+    if (!cfg.hasRemote) {return;}
 
     await sftpLimit(async () => {
       await this.withSFTP(cfg, async (sftpClient) => {
@@ -287,7 +287,7 @@ export class SftpRemotePort implements RemotePort {
     files: Array<{ relPath: RelPath; absLocal: string }>
   ): Promise<RelPath[]> {
     const cfg = await this.configService.getById(workspaceId);
-    if (!cfg.hasRemote) return [];
+    if (!cfg.hasRemote) {return [];}
 
     const uploaded: RelPath[] = [];
     const errors: Array<{ path: RelPath; error: string }> = [];
@@ -331,7 +331,7 @@ export class SftpRemotePort implements RemotePort {
     files: Array<{ relPath: RelPath; absLocal: string }>
   ): Promise<RelPath[]> {
     const cfg = await this.configService.getById(workspaceId);
-    if (!cfg.hasRemote) return [];
+    if (!cfg.hasRemote) {return [];}
 
     const downloaded: RelPath[] = [];
     const errors: Array<{ path: RelPath; error: string }> = [];
@@ -372,7 +372,7 @@ export class SftpRemotePort implements RemotePort {
     newPath: RelPath
   ): Promise<void> {
     const cfg = await this.configService.getById(workspaceId);
-    if (!cfg.hasRemote) return;
+    if (!cfg.hasRemote) {return;}
     
     // Use p-limit to control concurrency (max 9 concurrent operations)
     await sftpLimit(async () => {
@@ -391,14 +391,14 @@ export class SftpRemotePort implements RemotePort {
 
   async deletePath(workspaceId: WorkspaceId, relPath: RelPath): Promise<void> {
     const cfg = await this.configService.getById(workspaceId);
-    if (!cfg.hasRemote) return;
+    if (!cfg.hasRemote) {return;}
 
     await sftpLimit(async () => {
       await this.withSFTP(cfg, async (sftpClient) => {
         const remoteAbs = joinRemote(cfg.data.remotePath!, relPath as string);
         const items = await collectRecursive(sftpClient, remoteAbs);
         
-        if (!items.length) return;
+        if (!items.length) {return;}
 
         // Delete deepest paths first
         const sorted = items.sort((a, b) => depth(b.path) - depth(a.path));
@@ -425,7 +425,7 @@ export class SftpRemotePort implements RemotePort {
 
   async getFileHash(workspaceId: WorkspaceId, relPath: RelPath): Promise<string> {
     const cfg = await this.configService.getById(workspaceId);
-    if (!cfg.hasRemote) throw new Error('No remote config');
+    if (!cfg.hasRemote) {throw new Error('No remote config');}
 
     return await this.withSFTP(cfg, async (sftpClient) => {
       const remoteAbs = joinRemote(cfg.data.remotePath!, relPath as string);

@@ -52,7 +52,7 @@ export async function buildLocalIndex(
       return index;
     }
 
-    if (!entry.stats) continue;
+    if (!entry.stats) {continue;}
 
     const absPath = path.join(rootPath, entry.path);
     
@@ -94,10 +94,10 @@ export async function buildLocalIndex(
     workers.push(
       (async () => {
         while (true) {
-          if (options.token?.isCancellationRequested) return;
+          if (options.token?.isCancellationRequested) {return;}
           
           const file = queue.shift();
-          if (!file) return;
+          if (!file) {return;}
 
           try {
             const hash = await sha256OfFile(file.absPath);

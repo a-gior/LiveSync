@@ -15,7 +15,7 @@ export function computeFolderHashFromNodeIndex(index: NodeIndex, folderRel: RelP
 
   // Collect all descendant FILES
   for (const [rel, meta] of index) {
-    if (meta.type !== 'file') continue;
+    if (meta.type !== 'file') {continue;}
     
     const s = rel as string;
     const isUnder = !base || s === base || (prefix && s.startsWith(prefix));

@@ -67,7 +67,7 @@ export async function executeDownload(
  * @param state - State manager
  * @param workspaceId - Workspace containing the file
  * @param relPath - Relative path to delete
- * @throws Error if deletion fails
+ * @throws Error if delete fails
  */
 export async function executeDelete(
   remote: SftpRemotePort,
@@ -75,23 +75,19 @@ export async function executeDelete(
   workspaceId: WorkspaceId,
   relPath: RelPath
 ): Promise<void> {
-  // Delete from remote
   await remote.deletePath(workspaceId, relPath);
-  
-  // Update remote snapshot
   removeFromRemoteSnapshot(state, workspaceId, relPath);
 }
 
 /**
- * Execute file/folder move on remote
+ * Execute file/folder rename/move on remote
  * 
  * @param remote - Remote port
  * @param state - State manager
  * @param workspaceId - Workspace containing the file
  * @param oldPath - Original path
  * @param newPath - New path
- * @param isDir - Whether this is a directory
- * @throws Error if move fails
+ * @throws Error if rename fails
  */
 export async function executeRename(
   remote: SftpRemotePort,
@@ -100,20 +96,6 @@ export async function executeRename(
   oldPath: RelPath,
   newPath: RelPath
 ): Promise<void> {
-  // Check if target exists on remote (conflict case where user chose "Proceed")
-  const newRemoteMeta = state.getDiffEntry(workspaceId, newPath);
-  
-  if (newRemoteMeta && newRemoteMeta.status !== 'removed') {
-    // Target exists - delete it first (user already chose "Proceed" to overwrite)
-    try {
-      await remote.deletePath(workspaceId, newPath);
-    } catch (err) {
-      logExpectedError(`executeRename:deleteTarget:${newPath}`, err);
-      // Continue anyway - target might not exist on remote
-    }
-  }
-  
-  // Now safe to move (works for both files AND folders)
   await remote.move(workspaceId, oldPath, newPath);
   
   // Update remote snapshot
@@ -127,12 +109,14 @@ export async function executeRename(
  * @param state - State manager
  * @param workspaceId - Workspace containing the files
  * @param files - Array of files to upload
+ * @param onProgress - Optional callback called after each file completes
  */
 export async function executeUploadFolder(
   remote: SftpRemotePort,
   state: SyncStateManager,
   workspaceId: WorkspaceId,
-  files: Array<{ relPath: RelPath; absLocal: string }>
+  files: Array<{ relPath: RelPath; absLocal: string }>,
+  onProgress?: (relPath: RelPath) => void
 ): Promise<void> {
   const uploaded = await remote.uploadFolder(workspaceId, files);
   
@@ -141,6 +125,11 @@ export async function executeUploadFolder(
     const absPath = absFs(workspaceId, relPath);
     try {
       await syncBothSnapshots(state, workspaceId, relPath, absPath);
+      
+      // Report progress after successful sync
+      if (onProgress) {
+        onProgress(relPath);
+      }
     } catch (err) {
       logExpectedError(`executeUploadFolder:sync:${relPath}`, err);
     }
@@ -154,12 +143,14 @@ export async function executeUploadFolder(
  * @param state - State manager
  * @param workspaceId - Workspace containing the files
  * @param files - Array of files to download
+ * @param onProgress - Optional callback called after each file completes
  */
 export async function executeDownloadFolder(
   remote: SftpRemotePort,
   state: SyncStateManager,
   workspaceId: WorkspaceId,
-  files: Array<{ relPath: RelPath; absLocal: string }>
+  files: Array<{ relPath: RelPath; absLocal: string }>,
+  onProgress?: (relPath: RelPath) => void
 ): Promise<void> {
   const downloaded = await remote.downloadFolder(workspaceId, files);
   
@@ -168,6 +159,11 @@ export async function executeDownloadFolder(
     const absPath = absFs(workspaceId, relPath);
     try {
       await syncBothSnapshots(state, workspaceId, relPath, absPath);
+      
+      // Report progress after successful sync
+      if (onProgress) {
+        onProgress(relPath);
+      }
     } catch (err) {
       logExpectedError(`executeDownloadFolder:sync:${relPath}`, err);
     }

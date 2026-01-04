@@ -30,7 +30,7 @@ export class WorkspaceListProvider implements vscode.TreeDataProvider<WorkspaceN
   }
 
   public addWorkspace(workspaceId: WorkspaceId): void {
-    if (this.workspaces.has(workspaceId)) return;
+    if (this.workspaces.has(workspaceId)) {return;}
 
     const label = basenameRel(workspaceId);
     this.workspaces.set(workspaceId, {

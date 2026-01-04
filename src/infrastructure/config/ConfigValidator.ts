@@ -84,11 +84,13 @@ export class ConfigValidationTracker {
    */
   initialize(results: ConfigValidationResult[], configService: WorkspaceConfigService): void {
     for (const result of results) {
+      if(!vscode.workspace.workspaceFolders) { continue; }
+      
       // Get ignore globs synchronously from config service
       const cfg = configService.getSync(
         vscode.workspace.workspaceFolders?.find(
           f => stringToWsId(f.uri.fsPath) === result.workspaceId
-        )!
+        ) ?? vscode.workspace.workspaceFolders[0]
       );
       
       this.previousState.set(result.workspaceId, {

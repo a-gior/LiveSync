@@ -30,14 +30,14 @@ export function registerConfigurationCommands(services: Services): void {
         placeHolder: 'Edit via UI or JSON?'
       });
 
-      if (!choice) return;
+      if (!choice) {return;}
       mode = choice.id;
     }
 
     // Get target folder if not provided
     if (!targetFolder) {
       targetFolder = await pickTargetFolder();
-      if (!targetFolder) return;
+      if (!targetFolder) {return;}
     }
 
     await ConfigWriter.ensureConfigExists(targetFolder);
@@ -52,7 +52,7 @@ export function registerConfigurationCommands(services: Services): void {
   // Refresh configuration panel (for development)
   cmd(context, 'livesync.refreshConfig', async () => {
     const folder = await pickTargetFolder();
-    if (!folder) return;
+    if (!folder) {return;}
 
     ConfigurationPanel.kill();
     ConfigurationPanel.show(context.extensionUri, services, folder);

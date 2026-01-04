@@ -26,7 +26,7 @@ export function parseActionPolicy(raw: string | null | undefined): ActionPolicy 
     extras: new Set(),
   };
 
-  if (!raw) return policy;
+  if (!raw) {return policy;}
 
   const tokens = String(raw)
     .toLowerCase()

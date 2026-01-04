@@ -22,7 +22,7 @@ export function registerDelete(services: Services): void {
   // ═══════════════════════════════════════════════════════════════════════════
   cmd(context, 'livesync.delete', async (arg?: unknown) => {
     const target = resolveEntryTarget(arg);
-    if (!target) return;
+    if (!target) {return;}
     
     if (!await requireValidRemoteConfig(services, target.workspaceId)) {
       return;
@@ -30,7 +30,7 @@ export function registerDelete(services: Services): void {
 
     const { workspaceId, relPath } = target;
     const entry = state.getDiffEntry(workspaceId, relPath);
-    if (!entry) return;
+    if (!entry) {return;}
 
     // Confirm deletion
     if (!isTestMode()) {
@@ -39,7 +39,7 @@ export function registerDelete(services: Services): void {
         `Delete ${label} "${relPath}"?`,
         'Delete'
       );
-      if (confirmed !== 'Delete') return;
+      if (confirmed !== 'Delete') {return;}
     }
 
     // Determine what exists
@@ -81,7 +81,7 @@ export function registerDelete(services: Services): void {
   // ═══════════════════════════════════════════════════════════════════════════
   cmd(context, 'livesync.deleteFolder', async (arg?: unknown) => {
     const target = resolveFolderTarget(arg);
-    if (!target) return;
+    if (!target) {return;}
     
     if (!await requireValidRemoteConfig(services, target.workspaceId)) {
       return;
@@ -113,7 +113,7 @@ export function registerDelete(services: Services): void {
         `Delete folder "${label}" with ${entries.length} item(s)?`,
         'Delete'
       );
-      if (confirmed !== 'Delete') return;
+      if (confirmed !== 'Delete') {return;}
     }
 
     try {

@@ -68,6 +68,7 @@ async function updateConfigStatusForWorkspace(
       hostname = cfg.data.hostname;
       remotePath = cfg.data.remotePath;
     } catch {
+       // Ignore - validation errors already logged
     }
   }
 

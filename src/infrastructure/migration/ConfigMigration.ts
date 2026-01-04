@@ -140,7 +140,7 @@ export async function cleanupOldCache(context: vscode.ExtensionContext): Promise
  */
 export async function runMigrationCheck(context: vscode.ExtensionContext): Promise<void> {
   const folders = vscode.workspace.workspaceFolders;
-  if (!folders) return;
+  if (!folders) {return;}
 
   const migrated: string[] = [];
 
@@ -151,7 +151,7 @@ export async function runMigrationCheck(context: vscode.ExtensionContext): Promi
     }
   }
 
-  if (migrated.length === 0) return;
+  if (migrated.length === 0) {return;}
 
   // Show notification
   const message = migrated.length === 1

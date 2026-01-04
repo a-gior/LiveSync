@@ -78,7 +78,7 @@ export class FileEventBridge {
   private preTrackCreate(e: vscode.FileWillCreateEvent): void {
     for (const uri of e.files) {
       const info = this.getWorkspaceInfo(uri);
-      if (!info) continue;
+      if (!info) {continue;}
       this.inFlightOps.add(`${info.workspaceId}:${info.relPath}`);
     }
   }
@@ -86,7 +86,7 @@ export class FileEventBridge {
   private preTrackDelete(e: vscode.FileWillDeleteEvent): void {
     for (const uri of e.files) {
       const info = this.getWorkspaceInfo(uri);
-      if (!info) continue;
+      if (!info) {continue;}
       this.inFlightOps.add(`${info.workspaceId}:${info.relPath}`);
     }
   }
@@ -95,15 +95,15 @@ export class FileEventBridge {
     for (const { oldUri, newUri } of e.files) {
       const oldInfo = this.getWorkspaceInfo(oldUri);
       const newInfo = this.getWorkspaceInfo(newUri);
-      if (oldInfo) this.inFlightOps.add(`${oldInfo.workspaceId}:${oldInfo.relPath}`);
-      if (newInfo) this.inFlightOps.add(`${newInfo.workspaceId}:${newInfo.relPath}`);
+      if (oldInfo) {this.inFlightOps.add(`${oldInfo.workspaceId}:${oldInfo.relPath}`);}
+      if (newInfo) {this.inFlightOps.add(`${newInfo.workspaceId}:${newInfo.relPath}`);}
     }
   }
 
   private preTrackSave(e: vscode.TextDocumentWillSaveEvent): void {
-    if (e.document.isUntitled) return;
+    if (e.document.isUntitled) {return;}
     const info = this.getWorkspaceInfo(e.document.uri);
-    if (!info) return;
+    if (!info) {return;}
     this.inFlightOps.add(`${info.workspaceId}:${info.relPath}`);
   }
 
@@ -121,7 +121,7 @@ export class FileEventBridge {
       await this.operationQueue.enqueue(queueKey, 'create', async () => {
         // Pre-flight checks
         const policy = await this.shouldProceedWithEvent(workspaceId, relPath, 'actionOnCreate');
-        if (!policy) return;
+        if (!policy) {return;}
         
         // Refresh remote snapshot (if needed) - BEFORE updating local
         if (requiresRemoteSnapshot(policy)) {
@@ -190,10 +190,10 @@ export class FileEventBridge {
    * Handle file save (actionOnSave)
    */
   private async onSave(doc: vscode.TextDocument): Promise<void> {
-    if (doc.isUntitled) return;
+    if (doc.isUntitled) {return;}
 
     const info = this.getWorkspaceInfo(doc.uri);
-    if (!info) return;
+    if (!info) {return;}
 
     const { workspaceId, relPath } = info;
     const queueKey = `${workspaceId}:${relPath}`;
@@ -201,7 +201,7 @@ export class FileEventBridge {
     await this.operationQueue.enqueue(queueKey, 'save', async () => {
       // Pre-flight checks
       const policy = await this.shouldProceedWithEvent(workspaceId, relPath, 'actionOnSave');
-      if (!policy) return;
+      if (!policy) {return;}
       
       // Refresh remote snapshot (if needed) - BEFORE updating local
       if (requiresRemoteSnapshot(policy)) {
@@ -373,7 +373,7 @@ export class FileEventBridge {
     await Promise.all(e.files.map(async ({ oldUri, newUri }) => {
       const folder = vscode.workspace.getWorkspaceFolder(newUri) ?? 
                      vscode.workspace.getWorkspaceFolder(oldUri);
-      if (!folder) return;
+      if (!folder) {return;}
 
       const workspaceId = stringToWsId(folder.uri.fsPath);
       const oldRel = relFromAbs(workspaceId, oldUri.fsPath);
@@ -496,10 +496,10 @@ export class FileEventBridge {
    * Handle file open (actionOnOpen)
    */
   private async onOpen(doc: vscode.TextDocument): Promise<void> {
-    if (doc.isUntitled) return;
+    if (doc.isUntitled) {return;}
 
     const info = this.getWorkspaceInfo(doc.uri);
-    if (!info) return;
+    if (!info) {return;}
 
     const { workspaceId, relPath } = info;
     const queueKey = `${workspaceId}:${relPath}`;
@@ -513,7 +513,7 @@ export class FileEventBridge {
     await this.operationQueue.enqueue(queueKey, 'open', async () => {
       // Pre-flight checks
       const policy = await this.shouldProceedWithEvent(workspaceId, relPath, 'actionOnOpen');
-      if (!policy) return;
+      if (!policy) {return;}
       
       // Refresh snapshots (if needed)
       if (requiresLocalSnapshot(policy)) {
@@ -574,7 +574,7 @@ export class FileEventBridge {
 
   private async onExternalCreate(uri: vscode.Uri): Promise<void> {
     const info = this.getWorkspaceInfo(uri);
-    if (!info) return;
+    if (!info) {return;}
 
     const { workspaceId, relPath } = info;
     const key = `${workspaceId}:${relPath}`;
@@ -595,7 +595,7 @@ export class FileEventBridge {
 
   private async onExternalChange(uri: vscode.Uri): Promise<void> {
     const info = this.getWorkspaceInfo(uri);
-    if (!info) return;
+    if (!info) {return;}
 
     const { workspaceId, relPath } = info;
     const key = `${workspaceId}:${relPath}`;
@@ -617,7 +617,7 @@ export class FileEventBridge {
 
   private async onExternalDelete(uri: vscode.Uri): Promise<void> {
     const info = this.getWorkspaceInfo(uri);
-    if (!info) return;
+    if (!info) {return;}
 
     const { workspaceId, relPath } = info;
     const key = `${workspaceId}:${relPath}`;
@@ -687,7 +687,7 @@ export class FileEventBridge {
   ): Promise<void> {
     await Promise.all(files.map(async (uri) => {
       const info = this.getWorkspaceInfo(uri);
-      if (!info) return;
+      if (!info) {return;}
       await handler({ ...info, uri });
     }));
   }
@@ -697,7 +697,7 @@ export class FileEventBridge {
    */
   private getWorkspaceInfo(uri: vscode.Uri): { workspaceId: WorkspaceId; relPath: RelPath } | null {
     const folder = vscode.workspace.getWorkspaceFolder(uri);
-    if (!folder) return null;
+    if (!folder) {return null;}
 
     const workspaceId = stringToWsId(folder.uri.fsPath);
     const relPath = relFromAbs(workspaceId, uri.fsPath);
