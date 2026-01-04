@@ -7,6 +7,7 @@ import { absFs, pathToString, stringToWsId } from '@helpers/path';
 import { isDownloadable, isUploadable } from '@helpers/diff';
 import { requireValidRemoteConfig } from '@infra/helpers/config';
 import { parseActionPolicy } from '@helpers/policy/parser';
+import pLimit from 'p-limit';
 
 // New helper imports (same as FileEventBridge)
 import { ensureFreshRemoteSnapshot } from '@helpers/snapshot';
@@ -14,24 +15,28 @@ import { detectConflict } from '@helpers/conflict/detector';
 import { resolveConflict, showCheckInfo } from '@helpers/conflict/resolver';
 import { isCheckOnlyPolicy, isNoOpPolicy, requiresRemoteSnapshot } from '@helpers/policy/utils';
 import { markConflictIgnored, clearIgnoredConflictIfResolved } from '@helpers/conflict/tracker';
-import { executeUpload, executeDownload, executeUploadFolder, executeDownloadFolder } from '@helpers/action/executor';
+import { executeUpload, executeDownload } from '@helpers/action/executor';
 import { notifySuccess, notifyError } from '@helpers/notification';
 import { logExpectedError, logSync } from '@helpers/logging';
 import { isTestMode } from '../../infrastructure/helpers/test';
 import { getFolderLabel } from '../../infrastructure/helpers/workspaceFolder';
 
+// Concurrency limits
+const BATCH_CONCURRENCY = 25; // For folder upload/download commands
+const PROGRESS_THROTTLE_MS = 250; // Report progress max 4x per second (smooth animation)
+
 /**
  * Register all upload/download commands.
  */
 export function registerUploadDownload(services: Services): void {
-  const { context, state, config, provider, remote, progress } = services;
+  const { context, state, config, provider, remote, notifications, progress } = services;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Single File Upload
   // ═══════════════════════════════════════════════════════════════════════════
   cmd(context, 'livesync.upload', async (arg?: unknown) => {
     const target = resolveEntryTarget(arg);
-    if (!target) {return;}
+    if (!target) return;
     
     if (!await requireValidRemoteConfig(services, target.workspaceId)) {
       return;
@@ -41,8 +46,8 @@ export function registerUploadDownload(services: Services): void {
     const entry = state.getDiffEntry(workspaceId, relPath);
 
     // Validate entry is uploadable
-    if (entry && entry.type !== 'file') {return;}
-    if (entry && !isUploadable(entry.status)) {return;}
+    if (entry && entry.type !== 'file') return;
+    if (entry && !isUploadable(entry.status)) return;
 
     // Use command handler
     await handleFileCommand('upload', workspaceId, relPath, 'actionOnUpload', services);
@@ -53,7 +58,7 @@ export function registerUploadDownload(services: Services): void {
   // ═══════════════════════════════════════════════════════════════════════════
   cmd(context, 'livesync.download', async (arg?: unknown) => {
     const target = resolveEntryTarget(arg);
-    if (!target) {return;}
+    if (!target) return;
 
     if (!await requireValidRemoteConfig(services, target.workspaceId)) {
       return;
@@ -63,19 +68,19 @@ export function registerUploadDownload(services: Services): void {
     const entry = state.getDiffEntry(workspaceId, relPath);
 
     // Validate entry is downloadable
-    if (entry && entry.type !== 'file') {return;}
-    if (entry && !isDownloadable(entry.status)) {return;}
+    if (entry && entry.type !== 'file') return;
+    if (entry && !isDownloadable(entry.status)) return;
 
     // Use command handler
     await handleFileCommand('download', workspaceId, relPath, 'actionOnDownload', services);
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // Folder Upload (Batch)
+  // Folder Upload (Streaming with Throttled Progress + Cancellation)
   // ═══════════════════════════════════════════════════════════════════════════
   cmd(context, 'livesync.uploadFolder', async (arg?: unknown) => {
     const target = resolveFolderTarget(arg);
-    if (!target) {return;}
+    if (!target) return;
     
     if (!await requireValidRemoteConfig(services, target.workspaceId)) {
       return;
@@ -92,8 +97,8 @@ export function registerUploadDownload(services: Services): void {
       // Check if file is in this folder (empty prefix = root, include all)
       const inFolder = !prefix || (p as string).startsWith(prefix + '/');
       
-      if (!inFolder) {continue;}
-      if (e.type !== 'file') {continue;}
+      if (!inFolder) continue;
+      if (e.type !== 'file') continue;
       if (isUploadable(e.status)) {
         toUpload.push({ relPath: p, absLocal: absFs(workspaceId, p) });
       }
@@ -111,14 +116,14 @@ export function registerUploadDownload(services: Services): void {
         `Upload ${toUpload.length} file(s) under "${label}"?`,
         'Upload'
       );
-      if (confirmed !== 'Upload') {return;}
+      if (confirmed !== 'Upload') return;
     }
 
     // Parse policy
     const cfg = await config.getById(workspaceId);
     const policy = parseActionPolicy(cfg.data.actionOnUpload);
     
-    if (isNoOpPolicy(policy)) {return;}
+    if (isNoOpPolicy(policy)) return;
 
     // Handle check-only policy
     if (isCheckOnlyPolicy(policy)) {
@@ -126,28 +131,80 @@ export function registerUploadDownload(services: Services): void {
       return;
     }
     
-    // Execute batch upload with progress tracking
+    // ⚡ FAST UPLOAD with Throttled Progress + Cancellation Support
     try {
-      await progress.withTask(
-        `Uploading ${toUpload.length} files`,
-        async (report) => {
-          let done = 0;
-          
-          await executeUploadFolder(
-            remote,
-            state,
-            workspaceId,
-            toUpload,
-            (relPath) => {
-              done++;
-              report(`${done}/${toUpload.length}`);
-              logSync(stringToWsId(workspaceId), 'upload', relPath as string);
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: `Uploading ${toUpload.length} files`,
+          cancellable: true // Enable cancel button
+        },
+        async (progress, token) => {
+          const limit = pLimit(BATCH_CONCURRENCY);
+          let completed = 0;
+          let cancelled = false;
+          let lastReportTime = 0;
+          const errors: Array<{ relPath: RelPath; error: string }> = [];
+
+          // Listen for cancellation
+          token.onCancellationRequested(() => {
+            cancelled = true;
+          });
+
+          const uploadPromises = toUpload.map(file => limit(async () => {
+            // Check if cancelled before starting this file
+            if (cancelled) return;
+
+            try {
+              // Upload file (no snapshot sync for speed)
+              await remote.uploadFile(workspaceId, file.relPath, file.absLocal);
+              
+              completed++;
+              
+              // Throttled progress reporting (smooth animation)
+              const now = Date.now();
+              if (now - lastReportTime > PROGRESS_THROTTLE_MS || completed === toUpload.length) {
+                progress.report({
+                  message: `${completed}/${toUpload.length}`,
+                  increment: ((completed / toUpload.length) * 100) - ((completed - 1) / toUpload.length) * 100
+                });
+                lastReportTime = now;
+              }
+              
+              logSync(stringToWsId(workspaceId), 'upload', file.relPath as string);
+              
+            } catch (err) {
+              const errorMsg = err instanceof Error ? err.message : String(err);
+              errors.push({ relPath: file.relPath, error: errorMsg });
+              logExpectedError(`uploadFolder:${file.relPath}`, err);
             }
-          );
+          }));
+
+          // Wait for all uploads (or cancellation)
+          await Promise.all(uploadPromises);
+
+          // Handle cancellation
+          if (cancelled) {
+            void vscode.window.showWarningMessage(
+              `LiveSync: upload cancelled. Uploaded ${completed}/${toUpload.length} file(s).`
+            );
+          } else if (errors.length > 0) {
+            console.warn(`LiveSync: ${errors.length} file(s) failed to upload`);
+            void vscode.window.showWarningMessage(
+              `LiveSync: uploaded ${completed - errors.length}/${toUpload.length} file(s). ${errors.length} failed.`
+            );
+          } else {
+            void vscode.window.showInformationMessage(
+              `LiveSync: uploaded ${completed} file(s).`
+            );
+          }
+
+          // Always refresh to ensure correct state
+          void vscode.commands.executeCommand('livesync.refresh', { workspaceId, folderPath });
         }
       );
       
-      // Cleanup
+      // Cleanup - mark resolved
       provider.markRecentlyResolvedBatch(
         stringToWsId(workspaceId), 
         toUpload.map(f => f.relPath)
@@ -157,19 +214,21 @@ export function registerUploadDownload(services: Services): void {
         clearIgnoredConflictIfResolved(state, workspaceId, relPath);
       }
       
-      void vscode.window.showInformationMessage(`LiveSync: uploaded ${toUpload.length} file(s).`);
     } catch (err) {
       logExpectedError(`uploadFolder:${folderPath}`, err);
       void vscode.window.showErrorMessage(`LiveSync: failed to upload folder`);
+      
+      // Refresh on error to ensure correct state
+      void vscode.commands.executeCommand('livesync.refresh', { workspaceId, folderPath });
     }
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // Folder Download (Batch)
+  // Folder Download (Streaming with Throttled Progress + Cancellation)
   // ═══════════════════════════════════════════════════════════════════════════
   cmd(context, 'livesync.downloadFolder', async (arg?: unknown) => {
     const target = resolveFolderTarget(arg);
-    if (!target) {return;}
+    if (!target) return;
     
     if (!await requireValidRemoteConfig(services, target.workspaceId)) {
       return;
@@ -186,8 +245,8 @@ export function registerUploadDownload(services: Services): void {
       // Check if file is in this folder (empty prefix = root, include all)
       const inFolder = !prefix || (p as string).startsWith(prefix + '/');
       
-      if (!inFolder) {continue;}
-      if (e.type !== 'file') {continue;}
+      if (!inFolder) continue;
+      if (e.type !== 'file') continue;
       if (isDownloadable(e.status)) {
         toDownload.push({ relPath: p, absLocal: absFs(workspaceId, p) });
       }
@@ -205,14 +264,14 @@ export function registerUploadDownload(services: Services): void {
         `Download ${toDownload.length} file(s) under "${label}"?`,
         'Download'
       );
-      if (confirmed !== 'Download') {return;}
+      if (confirmed !== 'Download') return;
     }
 
     // Parse policy
     const cfg = await config.getById(workspaceId);
     const policy = parseActionPolicy(cfg.data.actionOnDownload);
     
-    if (isNoOpPolicy(policy)) {return;}
+    if (isNoOpPolicy(policy)) return;
 
     // Handle check-only policy
     if (isCheckOnlyPolicy(policy)) {
@@ -220,28 +279,80 @@ export function registerUploadDownload(services: Services): void {
       return;
     }
     
-    // Execute batch download with progress tracking
+    // ⚡ FAST DOWNLOAD with Throttled Progress + Cancellation Support
     try {
-      await progress.withTask(
-        `Downloading ${toDownload.length} files`,
-        async (report) => {
-          let done = 0;
-          
-          await executeDownloadFolder(
-            remote,
-            state,
-            workspaceId,
-            toDownload,
-            (relPath) => {
-              done++;
-              report(`${done}/${toDownload.length}`);
-              logSync(stringToWsId(workspaceId), 'download', relPath as string);
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: `Downloading ${toDownload.length} files`,
+          cancellable: true // Enable cancel button
+        },
+        async (progress, token) => {
+          const limit = pLimit(BATCH_CONCURRENCY);
+          let completed = 0;
+          let cancelled = false;
+          let lastReportTime = 0;
+          const errors: Array<{ relPath: RelPath; error: string }> = [];
+
+          // Listen for cancellation
+          token.onCancellationRequested(() => {
+            cancelled = true;
+          });
+
+          const downloadPromises = toDownload.map(file => limit(async () => {
+            // Check if cancelled before starting this file
+            if (cancelled) return;
+
+            try {
+              // Download file (no snapshot sync for speed)
+              await remote.downloadFile(workspaceId, file.relPath, file.absLocal);
+              
+              completed++;
+              
+              // Throttled progress reporting (smooth animation)
+              const now = Date.now();
+              if (now - lastReportTime > PROGRESS_THROTTLE_MS || completed === toDownload.length) {
+                progress.report({
+                  message: `${completed}/${toDownload.length}`,
+                  increment: ((completed / toDownload.length) * 100) - ((completed - 1) / toDownload.length) * 100
+                });
+                lastReportTime = now;
+              }
+              
+              logSync(stringToWsId(workspaceId), 'download', file.relPath as string);
+              
+            } catch (err) {
+              const errorMsg = err instanceof Error ? err.message : String(err);
+              errors.push({ relPath: file.relPath, error: errorMsg });
+              logExpectedError(`downloadFolder:${file.relPath}`, err);
             }
-          );
+          }));
+
+          // Wait for all downloads (or cancellation)
+          await Promise.all(downloadPromises);
+
+          // Handle cancellation
+          if (cancelled) {
+            void vscode.window.showWarningMessage(
+              `LiveSync: download cancelled. Downloaded ${completed}/${toDownload.length} file(s).`
+            );
+          } else if (errors.length > 0) {
+            console.warn(`LiveSync: ${errors.length} file(s) failed to download`);
+            void vscode.window.showWarningMessage(
+              `LiveSync: downloaded ${completed - errors.length}/${toDownload.length} file(s). ${errors.length} failed.`
+            );
+          } else {
+            void vscode.window.showInformationMessage(
+              `LiveSync: downloaded ${completed} file(s).`
+            );
+          }
+
+          // Always refresh to ensure correct state
+          void vscode.commands.executeCommand('livesync.refresh', { workspaceId, folderPath });
         }
       );
       
-      // Cleanup
+      // Cleanup - mark resolved
       provider.markRecentlyResolvedBatch(
         stringToWsId(workspaceId), 
         toDownload.map(f => f.relPath)
@@ -251,10 +362,12 @@ export function registerUploadDownload(services: Services): void {
         clearIgnoredConflictIfResolved(state, workspaceId, relPath);
       }
       
-      void vscode.window.showInformationMessage(`LiveSync: downloaded ${toDownload.length} file(s).`);
     } catch (err) {
       logExpectedError(`downloadFolder:${folderPath}`, err);
       void vscode.window.showErrorMessage(`LiveSync: failed to download folder`);
+      
+      // Refresh on error to ensure correct state
+      void vscode.commands.executeCommand('livesync.refresh', { workspaceId, folderPath });
     }
   });
 }
@@ -284,7 +397,7 @@ async function handleFileCommand(
     const cfg = await config.getById(workspaceId);
     const policy = parseActionPolicy(cfg.data[policyKey]);
     
-    if (isNoOpPolicy(policy)) {return false;}
+    if (isNoOpPolicy(policy)) return false;
     
     // 2. Ensure remote snapshot if policy requires it
     if (requiresRemoteSnapshot(policy)) {

@@ -7,20 +7,8 @@ export interface RemotePort {
   /** Upload a single file at RelPath from an absolute local path. */
   uploadFile(workspaceId: WorkspaceId, relativePath: RelPath, absoluteLocalPath: string): Promise<void>;
 
-  /** Upload multiple files concurrently. Returns successfully uploaded RelPaths. */
-  uploadFolder(
-    workspaceId: WorkspaceId,
-    files: Array<{ relPath: RelPath; absLocal: string }>
-  ): Promise<RelPath[]>;
-
   /** Download a single file at RelPath to an absolute local path. */
   downloadFile(workspaceId: WorkspaceId, relativePath: RelPath, absoluteLocalPath: string): Promise<void>;
-
-  /** Download multiple files concurrently. Returns successfully downloaded RelPaths. */
-  downloadFolder(
-    workspaceId: WorkspaceId,
-    files: Array<{ relPath: RelPath; absLocal: string }>
-  ): Promise<RelPath[]>;
 
   /** Rename/move a file or folder on remote (atomic operation) */
   move(
