@@ -36,7 +36,7 @@ export function registerUploadDownload(services: Services): void {
   // ═══════════════════════════════════════════════════════════════════════════
   cmd(context, 'livesync.upload', async (arg?: unknown) => {
     const target = resolveEntryTarget(arg);
-    if (!target) return;
+    if (!target) {return;}
     
     if (!await requireValidRemoteConfig(services, target.workspaceId)) {
       return;
@@ -46,8 +46,8 @@ export function registerUploadDownload(services: Services): void {
     const entry = state.getDiffEntry(workspaceId, relPath);
 
     // Validate entry is uploadable
-    if (entry && entry.type !== 'file') return;
-    if (entry && !isUploadable(entry.status)) return;
+    if (entry && entry.type !== 'file') {return;}
+    if (entry && !isUploadable(entry.status)) {return;}
 
     // Use command handler
     await handleFileCommand('upload', workspaceId, relPath, 'actionOnUpload', services);
@@ -58,7 +58,7 @@ export function registerUploadDownload(services: Services): void {
   // ═══════════════════════════════════════════════════════════════════════════
   cmd(context, 'livesync.download', async (arg?: unknown) => {
     const target = resolveEntryTarget(arg);
-    if (!target) return;
+    if (!target) {return;}
 
     if (!await requireValidRemoteConfig(services, target.workspaceId)) {
       return;
@@ -68,8 +68,8 @@ export function registerUploadDownload(services: Services): void {
     const entry = state.getDiffEntry(workspaceId, relPath);
 
     // Validate entry is downloadable
-    if (entry && entry.type !== 'file') return;
-    if (entry && !isDownloadable(entry.status)) return;
+    if (entry && entry.type !== 'file') {return;}
+    if (entry && !isDownloadable(entry.status)) {return;}
 
     // Use command handler
     await handleFileCommand('download', workspaceId, relPath, 'actionOnDownload', services);
@@ -80,7 +80,7 @@ export function registerUploadDownload(services: Services): void {
   // ═══════════════════════════════════════════════════════════════════════════
   cmd(context, 'livesync.uploadFolder', async (arg?: unknown) => {
     const target = resolveFolderTarget(arg);
-    if (!target) return;
+    if (!target) {return;}
     
     if (!await requireValidRemoteConfig(services, target.workspaceId)) {
       return;
@@ -97,8 +97,8 @@ export function registerUploadDownload(services: Services): void {
       // Check if file is in this folder (empty prefix = root, include all)
       const inFolder = !prefix || (p as string).startsWith(prefix + '/');
       
-      if (!inFolder) continue;
-      if (e.type !== 'file') continue;
+      if (!inFolder) {continue;}
+      if (e.type !== 'file') {continue;}
       if (isUploadable(e.status)) {
         toUpload.push({ relPath: p, absLocal: absFs(workspaceId, p) });
       }
@@ -116,14 +116,14 @@ export function registerUploadDownload(services: Services): void {
         `Upload ${toUpload.length} file(s) under "${label}"?`,
         'Upload'
       );
-      if (confirmed !== 'Upload') return;
+      if (confirmed !== 'Upload') {return;}
     }
 
     // Parse policy
     const cfg = await config.getById(workspaceId);
     const policy = parseActionPolicy(cfg.data.actionOnUpload);
     
-    if (isNoOpPolicy(policy)) return;
+    if (isNoOpPolicy(policy)) {return;}
 
     // Handle check-only policy
     if (isCheckOnlyPolicy(policy)) {
@@ -153,7 +153,7 @@ export function registerUploadDownload(services: Services): void {
 
           const uploadPromises = toUpload.map(file => limit(async () => {
             // Check if cancelled before starting this file
-            if (cancelled) return;
+            if (cancelled) {return;}
 
             try {
               // Upload file (no snapshot sync for speed)
@@ -228,7 +228,7 @@ export function registerUploadDownload(services: Services): void {
   // ═══════════════════════════════════════════════════════════════════════════
   cmd(context, 'livesync.downloadFolder', async (arg?: unknown) => {
     const target = resolveFolderTarget(arg);
-    if (!target) return;
+    if (!target) {return;}
     
     if (!await requireValidRemoteConfig(services, target.workspaceId)) {
       return;
@@ -245,8 +245,8 @@ export function registerUploadDownload(services: Services): void {
       // Check if file is in this folder (empty prefix = root, include all)
       const inFolder = !prefix || (p as string).startsWith(prefix + '/');
       
-      if (!inFolder) continue;
-      if (e.type !== 'file') continue;
+      if (!inFolder) {continue;}
+      if (e.type !== 'file') {continue;}
       if (isDownloadable(e.status)) {
         toDownload.push({ relPath: p, absLocal: absFs(workspaceId, p) });
       }
@@ -264,14 +264,14 @@ export function registerUploadDownload(services: Services): void {
         `Download ${toDownload.length} file(s) under "${label}"?`,
         'Download'
       );
-      if (confirmed !== 'Download') return;
+      if (confirmed !== 'Download') {return;}
     }
 
     // Parse policy
     const cfg = await config.getById(workspaceId);
     const policy = parseActionPolicy(cfg.data.actionOnDownload);
     
-    if (isNoOpPolicy(policy)) return;
+    if (isNoOpPolicy(policy)) {return;}
 
     // Handle check-only policy
     if (isCheckOnlyPolicy(policy)) {
@@ -301,7 +301,7 @@ export function registerUploadDownload(services: Services): void {
 
           const downloadPromises = toDownload.map(file => limit(async () => {
             // Check if cancelled before starting this file
-            if (cancelled) return;
+            if (cancelled) {return;}
 
             try {
               // Download file (no snapshot sync for speed)
@@ -397,7 +397,7 @@ async function handleFileCommand(
     const cfg = await config.getById(workspaceId);
     const policy = parseActionPolicy(cfg.data[policyKey]);
     
-    if (isNoOpPolicy(policy)) return false;
+    if (isNoOpPolicy(policy)) {return false;}
     
     // 2. Ensure remote snapshot if policy requires it
     if (requiresRemoteSnapshot(policy)) {
