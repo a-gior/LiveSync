@@ -155,24 +155,16 @@ export async function runMigrationCheck(context: vscode.ExtensionContext): Promi
 
   // Show notification
   const message = migrated.length === 1
-    ? `LiveSync: Migrated configuration for "${migrated[0]}" to new format (.vscode/livesync.json)`
-    : `LiveSync: Migrated ${migrated.length} workspace(s) to new format (.vscode/livesync.json)`;
+    ? `LiveSync: Configuration updated for "${migrated[0]}". Settings are now in .vscode/livesync.json`
+    : `LiveSync: Updated ${migrated.length} workspace(s). Settings are now in .vscode/livesync.json`;
 
   const choice = await vscode.window.showInformationMessage(
-    message,
-    'View Config',
-    'Clean Old Data',
+    message + ". Do you want to clean up old settings?",
+    'Yes',
     'Dismiss'
   );
 
-  if (choice === 'View Config') {
-    const firstFolder = folders.find(f => migrated.includes(f.name));
-    if (firstFolder) {
-      const configPath = path.join(firstFolder.uri.fsPath, '.vscode', 'livesync.json');
-      const doc = await vscode.workspace.openTextDocument(configPath);
-      await vscode.window.showTextDocument(doc);
-    }
-  } else if (choice === 'Clean Old Data') {
+  if (choice === 'Yes') {
     // Clean settings from .vscode/settings.json
     for (const folder of folders) {
       if (migrated.includes(folder.name)) {
