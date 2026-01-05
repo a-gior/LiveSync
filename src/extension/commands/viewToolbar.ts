@@ -62,7 +62,7 @@ export function registerViewToolbar(services: Services): void {
 
   // Refresh both local & remote for the CURRENT workspace shown in Diff view
   cmd(context, 'livesync.refresh', async (arg?: vscode.WorkspaceFolder) => {
-    let folder: vscode.WorkspaceFolder | undefined;
+    let folder: vscode.WorkspaceFolder;
     let workspaceId: WorkspaceId;
 
     if (arg && 'uri' in arg) {
@@ -77,14 +77,15 @@ export function registerViewToolbar(services: Services): void {
         return;
       }
 
-      folder = vscode.workspace.workspaceFolders?.find(
+      const tmpFolder = vscode.workspace.workspaceFolders?.find(
         f => stringToWsId(f.uri.fsPath) === currentWsId
       );
 
-      if (!folder) {
+      if (!tmpFolder) {
         void vscode.window.showWarningMessage('LiveSync: workspace folder not found.');
         return;
       }
+      folder = tmpFolder;
       
       workspaceId = currentWsId;
     }
