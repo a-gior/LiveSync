@@ -370,6 +370,52 @@ export function registerUploadDownload(services: Services): void {
       void vscode.commands.executeCommand('livesync.refresh', { workspaceId, folderPath });
     }
   });
+
+    // ════════════════════════════════════════════════════════════════════════════
+  // GLOBAL WORKSPACE UPLOAD/DOWNLOAD COMMANDS
+  // ════════════════════════════════════════════════════════════════════════════
+
+  // Upload entire workspace - just calls uploadFolder with workspace root
+  cmd(context, 'livesync.uploadWorkspace', async () => {
+    const currentWsId = provider.getCurrentWorkspace();
+    if (!currentWsId) {
+      void vscode.window.showWarningMessage('LiveSync: no workspace selected.');
+      return;
+    }
+
+    const folder = vscode.workspace.workspaceFolders?.find(
+      f => stringToWsId(f.uri.fsPath) === currentWsId
+    );
+
+    if (!folder) {
+      void vscode.window.showWarningMessage('LiveSync: workspace folder not found.');
+      return;
+    }
+
+    // Just call the existing folder upload command with workspace root
+    await vscode.commands.executeCommand('livesync.uploadFolder', folder.uri);
+  });
+
+  // Download entire workspace - just calls downloadFolder with workspace root
+  cmd(context, 'livesync.downloadWorkspace', async () => {
+    const currentWsId = provider.getCurrentWorkspace();
+    if (!currentWsId) {
+      void vscode.window.showWarningMessage('LiveSync: no workspace selected.');
+      return;
+    }
+
+    const folder = vscode.workspace.workspaceFolders?.find(
+      f => stringToWsId(f.uri.fsPath) === currentWsId
+    );
+
+    if (!folder) {
+      void vscode.window.showWarningMessage('LiveSync: workspace folder not found.');
+      return;
+    }
+
+    // Just call the existing folder download command with workspace root
+    await vscode.commands.executeCommand('livesync.downloadFolder', folder.uri);
+  });
 }
 
 /**

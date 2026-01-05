@@ -146,6 +146,24 @@
         "title": "Delete Folder",
         "category": "LiveSync",
         "icon": "$(trash)"
+      },
+      {
+        "command": "livesync.uploadWorkspace",
+        "title": "Upload Workspace",
+        "category": "LiveSync",
+        "icon": "$(repo-push)"
+      },
+      {
+        "command": "livesync.downloadWorkspace",
+        "title": "Download Workspace",
+        "category": "LiveSync",
+        "icon": "$(repo-pull)"
+      },
+      {
+        "command": "livesync.showLogs",
+        "title": "Show Logs",
+        "category": "LiveSync",
+        "icon": "$(output)"
       }
     ],
     "menus": {
@@ -230,6 +248,18 @@
           "command": "livesync.view.switchToList",
           "when": "view == livesync.diffs && livesyncViewMode == tree",
           "group": "navigation@3"
+        },
+        {
+          "command": "livesync.uploadWorkspace",
+          "when": "view == livesync.diffs",
+          "group": "navigation@4",
+          "icon": "$(repo-push)"
+        },
+        {
+          "command": "livesync.downloadWorkspace",
+          "when": "view == livesync.diffs",
+          "group": "navigation@5",
+          "icon": "$(repo-pull)"
         }
       ],
       "explorer/context": [

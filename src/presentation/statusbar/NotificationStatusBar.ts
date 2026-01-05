@@ -11,6 +11,7 @@ export class NotificationStatusBar {
   constructor() {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 98);
     this.item.name = 'LiveSync Notification';
+    this.item.command = 'livesync.showLogs';
   }
 
   /**

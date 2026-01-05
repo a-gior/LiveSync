@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { cmd } from '../cmd';
 import type { Services } from '../services';
 import { stringToRel, stringToWsId } from '@helpers/path';
+import { LogManager } from '../../infrastructure/helpers/logging';
 
 export function registerViewCommands(services: Services): void {
   const { context, provider, treeView } = services;
@@ -27,4 +28,7 @@ export function registerViewCommands(services: Services): void {
     vscode.window.showTextDocument(uri, { preview: true });
   });
 
+  cmd(context, 'livesync.showLogs', () => {
+    LogManager.showLogs();
+  });
 }
