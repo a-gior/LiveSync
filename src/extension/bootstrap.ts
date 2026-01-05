@@ -112,8 +112,8 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
 
   // Shared mutable container for workspace list (allows dynamic creation on single→multi-root transition)
   const workspaceListContainer = {
-    workspaceListProvider: views.listProvider,
-    workspaceListView: views.listView,
+    provider: views.listProvider,
+    view: views.listView,
   };
 
   // Register config change handler (quick validation on config changes)
