@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { cmd } from '../cmd';
 import type { Services } from '../services';
-import type { NodeIndex } from '../../domain/types';
+import type { NodeIndex, WorkspaceId } from '../../domain/types';
 import { resolveWorkspaceFolders } from '@helpers/resolve';
 import { stringToWsId } from '@helpers/path';
 import { refreshRemoteSnapshot } from '@helpers/remote';
@@ -61,25 +61,37 @@ export function registerViewToolbar(services: Services): void {
   });
 
   // Refresh both local & remote for the CURRENT workspace shown in Diff view
-  cmd(context, 'livesync.refresh', async () => {
-    const currentWsId = provider.getCurrentWorkspace();
-    if (!currentWsId) {
-      void vscode.window.showWarningMessage('LiveSync: no workspace selected.');
-      return;
-    }
+  cmd(context, 'livesync.refresh', async (arg?: vscode.WorkspaceFolder) => {
+    let folder: vscode.WorkspaceFolder | undefined;
+    let workspaceId: WorkspaceId;
 
-    const folder = vscode.workspace.workspaceFolders?.find(
-      f => stringToWsId(f.uri.fsPath) === currentWsId
-    );
+    if (arg && 'uri' in arg) {
+      // Called with specific folder (e.g., from config change)
+      folder = arg;
+      workspaceId = stringToWsId(folder.uri.fsPath);
+    } else {
+      // Called without args (e.g., from toolbar button) - use current selection
+      const currentWsId = provider.getCurrentWorkspace();
+      if (!currentWsId) {
+        void vscode.window.showWarningMessage('LiveSync: no workspace selected.');
+        return;
+      }
 
-    if (!folder) {
-      void vscode.window.showWarningMessage('LiveSync: workspace folder not found.');
-      return;
+      folder = vscode.workspace.workspaceFolders?.find(
+        f => stringToWsId(f.uri.fsPath) === currentWsId
+      );
+
+      if (!folder) {
+        void vscode.window.showWarningMessage('LiveSync: workspace folder not found.');
+        return;
+      }
+      
+      workspaceId = currentWsId;
     }
 
     // Check config validity before attempting refresh
-    const validationResult = validator.getCached(currentWsId);
-  
+    const validationResult = validator.getCached(workspaceId);
+
     if (!validationResult.hasConfig) {
       const choice = await vscode.window.showWarningMessage(
         `Cannot refresh ${folder.name}: No remote configuration found`,
@@ -138,7 +150,7 @@ export function registerViewToolbar(services: Services): void {
         p.report({ message: 'Fetching remote index…' });
         let remoteIndex: NodeIndex | undefined;
         try {
-          remoteIndex = await remote.list(currentWsId);
+          remoteIndex = await remote.list(workspaceId);
         } catch (e: any) {
           if (e?.name === 'RemoteNotConfiguredError') {
             void vscode.window.setStatusBarMessage(`LiveSync: ${folder.name} — remote not configured`, 2000);
@@ -149,10 +161,10 @@ export function registerViewToolbar(services: Services): void {
         }
 
         // ── Commit atomically
-        state.runBatch(currentWsId, undefined as any, () => {
-          state.setLocalIndex(currentWsId, localIndex);
+        state.runBatch(workspaceId, undefined as any, () => {
+          state.setLocalIndex(workspaceId, localIndex);
           if (remoteIndex) {
-            state.setRemoteIndex(currentWsId, remoteIndex);
+            state.setRemoteIndex(workspaceId, remoteIndex);
           }
         });
 
