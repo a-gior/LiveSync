@@ -69,7 +69,8 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   const showUnchanged = context.workspaceState.get<boolean>('livesync.view.showUnchanged', false);
   
   // Initialize view preferences from workspace state
-  await vscode.commands.executeCommand('setContext', 'livesyncViewMode', showAsTree ? 'tree' : 'list');
+  await vscode.commands.executeCommand('setContext', 'livesyncViewMode', showAsTree ?
+'tree' : 'list');
   views.diffsProvider.setShowAsTree(showAsTree);
   views.diffsProvider.setShowUnchanged(showUnchanged);
 
@@ -109,15 +110,32 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
     );
   }
 
+  // Shared mutable container for workspace list (allows dynamic creation on single→multi-root transition)
+  const workspaceListContainer = {
+    workspaceListProvider: views.listProvider,
+    workspaceListView: views.listView,
+  };
+
   // Register config change handler (quick validation on config changes)
-  registerConfigChangeHandler(config, validator, views.listProvider, configStatus, context);
-  // Register workspace folder changes handler (add/remove folders)
-  registerWorkspaceFolderHandler(config, validator, views.listProvider, configStatus, context);
+  registerConfigChangeHandler(config, validator, workspaceListContainer, configStatus, context);
+  
+  // Register workspace folder changes handler (add/remove folders, dynamic view creation)
+  registerWorkspaceFolderHandler(
+    config,
+    validator,
+    state,
+    views.diffsProvider,
+    folderState,
+    context.workspaceState,
+    configStatus,
+    context,
+    workspaceListContainer
+  );
 
   // Register commands
   context.subscriptions.push(
     vscode.commands.registerCommand('livesync.selectWorkspace', (wsId: WorkspaceId) => {
-      views.listProvider?.selectWorkspace(wsId);
+      workspaceListContainer.provider?.selectWorkspace(wsId);
     })
   );
 
@@ -141,7 +159,7 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
     progress, 
     notifications, 
     configStatus,
-    workspaceListProvider: views.listProvider,
+    workspaceListProvider: workspaceListContainer.provider,
     cachePersister,
   };
 }

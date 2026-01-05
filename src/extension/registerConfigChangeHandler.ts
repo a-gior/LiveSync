@@ -10,7 +10,7 @@ import { logConfig, logOperation } from '@helpers/logging';
 export function registerConfigChangeHandler(
   config: WorkspaceConfigService,
   validator: ConfigValidator,
-  workspaceListProvider: WorkspaceListProvider | undefined,
+  workspaceListContainer: { provider?: WorkspaceListProvider; view?: vscode.TreeView<any> },
   configStatusBar: ConfigStatusBar,
   context: vscode.ExtensionContext
 ): void {
@@ -27,8 +27,8 @@ export function registerConfigChangeHandler(
       
       const shouldRefresh = tracker.updateAndCheckRefresh(result, currentCfg.ignoreFilter.globs);
       
-      if (workspaceListProvider) {
-        workspaceListProvider.updateConfigStatus(
+      if (workspaceListContainer.provider) {
+        workspaceListContainer.provider.updateConfigStatus(
           result.workspaceId,
           result.hasConfig,
           result.isValid
