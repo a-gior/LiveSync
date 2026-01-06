@@ -18,8 +18,10 @@ import { DebouncedCachePersister } from '../infrastructure/persistence/Debounced
 import { registerWorkspaceFolderHandler } from './registerWorkspaceFolderHandler';
 import { NotificationStatusBar } from '../presentation/statusbar/NotificationStatusBar';
 import { ConfigStatusBar } from '../presentation/statusbar/ConfigStatusBar';
+import { logInfoMessage } from '../infrastructure/helpers/logging';
 
 export async function bootstrap(context: vscode.ExtensionContext): Promise<Services> {
+  
   // Core domain and application services
   const diffEngine = new DefaultDiffEngine();
   const state = new SyncStateManager(diffEngine);
@@ -69,8 +71,7 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   const showUnchanged = context.workspaceState.get<boolean>('livesync.view.showUnchanged', false);
   
   // Initialize view preferences from workspace state
-  await vscode.commands.executeCommand('setContext', 'livesyncViewMode', showAsTree ?
-'tree' : 'list');
+  await vscode.commands.executeCommand('setContext', 'livesyncViewMode', showAsTree ? 'tree' : 'list');
   views.diffsProvider.setShowAsTree(showAsTree);
   views.diffsProvider.setShowUnchanged(showUnchanged);
 

@@ -58,6 +58,7 @@ export async function activate(context: vscode.ExtensionContext) {
   registerDelete(services);
   registerTestCommands(services);
 
+  
   logInfoMessage('LiveSync activated.');
   return {
     getServices: () => globalServices,

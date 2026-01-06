@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fsp from 'fs/promises';
 import * as path from 'path';
 import { WorkspaceConfigData } from '@infra/config/WorkspaceConfig';
+import { logInfoMessage } from '../helpers/logging';
 
 /**
  * Detects and migrates old v1.0.9 configuration from .vscode/settings.json
@@ -136,8 +137,19 @@ export async function cleanupOldCache(context: vscode.ExtensionContext): Promise
 }
 
 /**
- * Run migration for all workspace folders and notify user
+ * Show a notification with a timeout - returns undefined if no response within timeout
  */
+async function showNotificationWithTimeout<T extends string>(
+  message: string,
+  timeoutMs: number,
+  ...items: T[]
+): Promise<T | undefined> {
+  return Promise.race([
+    vscode.window.showInformationMessage(message, ...items),
+    new Promise<undefined>(resolve => setTimeout(() => resolve(undefined), timeoutMs))
+  ]);
+}
+
 export async function runMigrationCheck(context: vscode.ExtensionContext): Promise<void> {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders) {return;}
@@ -153,16 +165,24 @@ export async function runMigrationCheck(context: vscode.ExtensionContext): Promi
 
   if (migrated.length === 0) {return;}
 
-  // Show notification
+  logInfoMessage(`[MIGRATION] Migrated ${migrated.length} workspace(s), clearing view state...`);
+  
+  // Show notification with 10 second timeout
   const message = migrated.length === 1
     ? `LiveSync: Configuration updated for "${migrated[0]}". Settings are now in .vscode/livesync.json`
     : `LiveSync: Updated ${migrated.length} workspace(s). Settings are now in .vscode/livesync.json`;
 
-  const choice = await vscode.window.showInformationMessage(
+  const choice = await showNotificationWithTimeout(
     message + ". Do you want to clean up old settings?",
+    10000, // 10 seconds
     'Yes',
     'Dismiss'
   );
+
+  // Clean old cache files from extension storage
+  await cleanupOldCache(context);
+
+  logInfoMessage(`[MIGRATION] User choice: ${choice ?? 'timeout/dismissed'}`);
 
   if (choice === 'Yes') {
     // Clean settings from .vscode/settings.json
@@ -171,10 +191,18 @@ export async function runMigrationCheck(context: vscode.ExtensionContext): Promi
         await cleanupOldSettings(folder);
       }
     }
-    
-    // Clean old cache files from extension storage
-    await cleanupOldCache(context);
-    
     void vscode.window.showInformationMessage('LiveSync: Old settings and cache cleaned up');
   }
+
+  const reload = await vscode.window.showWarningMessage(
+    'LiveSync: Window reload required to complete migration and load new views',
+    'Reload Now',
+    'Later'
+  );
+  
+  if (reload === 'Reload Now') {
+    await vscode.commands.executeCommand('workbench.action.reloadWindow');
+  }
+  
+  logInfoMessage('[MIGRATION] Migration check completed');
 }

@@ -4,7 +4,7 @@ import { SyncStateManager } from '@app/SyncStateManager';
 import { IndexCacheService } from '@infra/persistence/IndexCacheService';
 import { StorageService } from '@infra/storage/StorageService';
 import { ConfigErrorSuppressor } from '@infra/storage/ConfigErrorSuppressor';
-import { initLoggingDeps, logStartup, logOperation, logCache } from '@helpers/logging';
+import { initLoggingDeps, logStartup, logOperation, logCache, logInfoMessage } from '@helpers/logging';
 import { stringToWsId } from '@infra/helpers/path';
 import { ConfigValidator } from '../infrastructure/config/ConfigValidator';
 
@@ -16,6 +16,7 @@ export async function initializeInfrastructure(
   localCache: IndexCacheService;
   remoteCache: IndexCacheService;
 }> {
+  
   const storage = new StorageService(context);
   const suppressor = new ConfigErrorSuppressor(storage);
   initLoggingDeps({ suppressor });
