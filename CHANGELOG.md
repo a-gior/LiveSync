@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+
+## [1.1.1] - Improved Migration from v1.0.9 to v1.1.x 🛠️
+
+### Fixed
+- Fixed extension failing to activate after upgrading and restarting
+- Added window reload prompt after migration to ensure new views load correctly
+- Added timeout handling to migration prompts to prevent activation from hanging
+
 ## [1.1.0] - Complete Architecture Overhaul 🏗️⚡
 
 ### 🎉 Major Changes
