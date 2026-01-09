@@ -31,11 +31,28 @@ class SSHConnectionPool {
     this.maxConnections = maxConnections;
   }
 
+  /**
+   * Check if SSH client is still connected
+   */
+  private isClientAlive(client: SSHClient): boolean {
+    // SSHClient has internal _sshstream property when connected
+    return (client as any)._sshstream !== undefined && 
+          (client as any)._sshstream._writableState !== undefined &&
+          !(client as any)._sshstream.destroyed;
+  }
+
   async acquire(cfg: any): Promise<SSHClient> {
-    const idle = this.pool.pop();
-    if (idle) {
-      this.activeConnections++;
-      return idle;
+    // Check pool for healthy connection
+    while (this.pool.length > 0) {
+      const idle = this.pool.pop()!;
+      if (this.isClientAlive(idle)) {
+        this.activeConnections++;
+        return idle;
+      }
+      // Stale connection - close and try next
+      try { idle.end(); } catch {
+        // Ignore errors on closing stale connection
+      }
     }
 
     if (this.activeConnections < this.maxConnections) {
@@ -61,6 +78,12 @@ class SSHConnectionPool {
     }
 
     if (this.pool.length < 2) {
+      // Add error handler to prevent crashes from idle connection drops
+      client.removeAllListeners('error');
+      client.on('error', () => {
+        // Silent - will be caught on next acquire
+        this.pool = this.pool.filter(c => c !== client);
+      });
       this.pool.push(client);
     } else {
       client.end();
@@ -93,6 +116,8 @@ class SSHConnectionPool {
           privateKey: key,
           passphrase: cfg.data.passphrase,
           readyTimeout: 10000,
+          keepaliveInterval: 10000,
+          keepaliveCountMax: 3,
         });
     });
   }
