@@ -309,8 +309,8 @@ export class FileEventBridge {
         }
         
         // 5. Config validity check (AFTER policy check)
-        const validationResult = this.validator.getCached(workspaceId);
-        if (!validationResult.isValid || !validationResult.hasConfig) {
+        const validationResult = await this.validator.getCached(workspaceId);
+        if (!validationResult.isValid) {
           return;
         }
         
@@ -432,8 +432,8 @@ export class FileEventBridge {
         }
         
         // 5. Config validity check (AFTER policy check)
-        const validationResult = this.validator.getCached(workspaceId);
-        if (!validationResult.isValid || !validationResult.hasConfig) {
+        const validationResult = await this.validator.getCached(workspaceId);
+        if (!validationResult.isValid) {
           return;
         }
         
@@ -670,8 +670,8 @@ export class FileEventBridge {
     }
     
     // 5. Config validity check (AFTER policy check - "none" policies don't need valid config)
-    const validationResult = this.validator.getCached(workspaceId);
-    if (!validationResult.isValid || !validationResult.hasConfig) {
+    const validationResult = await this.validator.getCached(workspaceId);
+    if (!validationResult.isValid) {
       return null;
     }
     

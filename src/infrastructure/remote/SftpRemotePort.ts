@@ -25,68 +25,155 @@ class SSHConnectionPool {
   private pool: SSHClient[] = [];
   private readonly maxConnections: number;
   private activeConnections = 0;
-  private waitQueue: Array<(client: SSHClient) => void> = [];
+  private waitQueue: Array<{
+    resolve: (client: SSHClient) => void;
+    reject: (err: Error) => void;
+  }> = [];
 
   constructor(maxConnections: number = 4) {
     this.maxConnections = maxConnections;
   }
 
   /**
-   * Check if SSH client is still connected
+   * Acquire an SSH client from the pool
+   * Creates new connection if needed, or waits for one to become available
    */
-  private isClientAlive(client: SSHClient): boolean {
-    // SSHClient has internal _sshstream property when connected
-    return (client as any)._sshstream !== undefined && 
-          (client as any)._sshstream._writableState !== undefined &&
-          !(client as any)._sshstream.destroyed;
-  }
-
   async acquire(cfg: any): Promise<SSHClient> {
     // Check pool for healthy connection
     while (this.pool.length > 0) {
       const idle = this.pool.pop()!;
       if (this.isClientAlive(idle)) {
         this.activeConnections++;
+        console.log(`[SSHPool] Reusing connection from pool (active: ${this.activeConnections})`);
         return idle;
       }
       // Stale connection - close and try next
-      try { idle.end(); } catch {
+      console.log('[SSHPool] Found dead connection in pool, discarding');
+      try { 
+        idle.end(); 
+        idle.destroy();
+      } catch {
         // Ignore errors on closing stale connection
       }
     }
 
+    // Can create new connection
     if (this.activeConnections < this.maxConnections) {
       this.activeConnections++;
-      const client = new SSHClient();
-      await this.connectSSH(client, cfg);
-      return client;
+      console.log(`[SSHPool] Creating new connection (active: ${this.activeConnections}/${this.maxConnections})`);
+      
+      try {
+        const client = new SSHClient();
+        await this.connectSSH(client, cfg);
+        return client;
+      } catch (err) {
+        // Failed to create connection - decrement counter
+        this.activeConnections = Math.max(0, this.activeConnections - 1);
+        throw err;
+      }
     }
 
-    return new Promise((resolve) => {
-      this.waitQueue.push(resolve);
+    // All connections busy - wait for one to become available
+    console.log(`[SSHPool] All connections busy, waiting... (queue: ${this.waitQueue.length})`);
+    
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        // Remove from queue if timeout
+        const index = this.waitQueue.findIndex(item => item.resolve === resolve);
+        if (index !== -1) {
+          this.waitQueue.splice(index, 1);
+        }
+        reject(new Error('Timeout waiting for available SSH connection (30s)'));
+      }, 30000); // 30 second timeout
+
+      this.waitQueue.push({
+        resolve: (client: SSHClient) => {
+          clearTimeout(timeoutId);
+          resolve(client);
+        },
+        reject: (err: Error) => {
+          clearTimeout(timeoutId);
+          reject(err);
+        }
+      });
     });
   }
 
+  /**
+   * Release an SSH client back to the pool
+   */
   release(client: SSHClient): void {
-    this.activeConnections--;
+    this.activeConnections = Math.max(0, this.activeConnections - 1);
 
-    const waiter = this.waitQueue.shift();
-    if (waiter) {
-      this.activeConnections++;
-      waiter(client);
+    // Check if someone is waiting for a connection
+    if (this.waitQueue.length > 0) {
+      const waiter = this.waitQueue.shift()!;
+      
+      if (this.isClientAlive(client)) {
+        console.log(`[SSHPool] Passing connection to waiter (queue: ${this.waitQueue.length})`);
+        this.activeConnections++;
+        waiter.resolve(client);
+        return;
+      } else {
+        // Connection died - close it and reject the waiter
+        console.log('[SSHPool] Connection died, rejecting waiter');
+        try {
+          client.end();
+          client.destroy();
+        } catch {
+          // Ignore
+        }
+        waiter.reject(new Error('Connection was closed'));
+        return;
+      }
+    }
+
+    // No one waiting - return to pool or close
+    if (this.pool.length >= 2 || !this.isClientAlive(client)) {
+      console.log('[SSHPool] Closing connection (pool full or dead)');
+      try {
+        client.end();
+        client.destroy();
+      } catch {
+          // Ignore
+        }
       return;
     }
 
-    if (this.pool.length < 2) {
-      // Add error handler to prevent crashes from idle connection drops
-      client.removeAllListeners('error');
-      client.on('error', () => {
-        // Silent - will be caught on next acquire
-        this.pool = this.pool.filter(c => c !== client);
-      });
-      this.pool.push(client);
-    } else {
-      client.end();
+    // Add error handler to remove from pool if connection dies while idle
+    client.removeAllListeners('error');
+    client.once('error', () => {
+      console.log('[SSHPool] Idle connection error, removing from pool');
+      this.pool = this.pool.filter(c => c !== client);
+      try {
+        client.end();
+        client.destroy();
+      } catch {
+          // Ignore
+        }
+    });
+    
+    client.once('close', () => {
+      console.log('[SSHPool] Idle connection closed, removing from pool');
+      this.pool = this.pool.filter(c => c !== client);
+    });
+
+    this.pool.push(client);
+    console.log(`[SSHPool] Connection returned to pool (${this.pool.length}/2, active: ${this.activeConnections})`);
+  }
+
+  /**
+   * Check if SSH client connection is still alive
+   */
+  private isClientAlive(client: SSHClient): boolean {
+    try {
+      const stream = (client as any)._sshstream;
+      return stream !== undefined && 
+            stream._writableState !== undefined &&
+            !stream.destroyed &&
+            !stream._readableState?.ended;
+    } catch {
+      return false;
     }
   }
 

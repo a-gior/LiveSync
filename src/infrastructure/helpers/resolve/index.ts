@@ -101,34 +101,3 @@ export function resolveFolderTarget(arg?: unknown): { workspaceId: WorkspaceId; 
   if (!base) { return undefined; }
   return { workspaceId: base.workspaceId, folderPath: base.relPath };
 }
-
-// Resolve one or more workspace folders from an optional argument.
-// - Tree "workspace" node: { kind: 'workspace', workspaceId: string }
-// - URI (Explorer/Editor): use the folder owning that URI
-// - Fallback: all open workspace folders
-export function resolveWorkspaceFolders(arg?: unknown): ReadonlyArray<vscode.WorkspaceFolder> {
-  // Tree workspace node
-  if (arg && typeof arg === 'object' && (arg as any).kind === 'workspace') {
-    const wsId = (arg as any).workspaceId as string;
-    
-    return [ findWorkspaceFolderById(stringToWsId(wsId)) ];
-  }
-
-  // URI from Explorer/Editor
-  const uri =
-    arg instanceof vscode.Uri
-      ? arg
-      : (arg && typeof arg === 'object' && (arg as any).resourceUri instanceof vscode.Uri
-          ? (arg as any).resourceUri as vscode.Uri
-          : undefined);
-
-  if (uri) {
-    const folder = vscode.workspace.getWorkspaceFolder(uri);
-    if (folder) {
-      return [folder];
-    }
-  }
-
-  // Default: all folders
-  return vscode.workspace.workspaceFolders ?? [];
-}

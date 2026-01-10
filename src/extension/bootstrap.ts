@@ -7,7 +7,7 @@ import type { RemotePort } from '../application/ports/RemotePort';
 import { FolderStateStore } from '../presentation/tree/FolderStateStore';
 import { ProgressService } from '../presentation/statusbar/ProgressService';
 import { ConfigValidator } from '../infrastructure/config/ConfigValidator';
-import { stringToWsId } from '../infrastructure/helpers/path';
+import { basenameRel } from '../infrastructure/helpers/path';
 import { WorkspaceId } from '../domain/types';
 import type { Services } from './services';
 
@@ -18,7 +18,8 @@ import { DebouncedCachePersister } from '../infrastructure/persistence/Debounced
 import { registerWorkspaceFolderHandler } from './registerWorkspaceFolderHandler';
 import { NotificationStatusBar } from '../presentation/statusbar/NotificationStatusBar';
 import { ConfigStatusBar } from '../presentation/statusbar/ConfigStatusBar';
-import { logInfoMessage } from '../infrastructure/helpers/logging';
+import { logErrorMessage } from '../infrastructure/helpers/logging';
+import { findWorkspaceFolderById, getWorkspaceIds } from '../infrastructure/helpers/workspaceFolder';
 
 export async function bootstrap(context: vscode.ExtensionContext): Promise<Services> {
   
@@ -33,7 +34,7 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   // Status bars
   const progress = new ProgressService();
   const notifications = new NotificationStatusBar();
-  const configStatus = new ConfigStatusBar();
+  const configStatus = new ConfigStatusBar(validator);
   
   // Register disposables
   context.subscriptions.push(progress);
@@ -48,7 +49,7 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   const remote: RemotePort = new SftpRemotePort(config, 4);
 
   // Workspace setup
-  const workspaceIds = (vscode.workspace.workspaceFolders ?? []).map(f => stringToWsId(f.uri.fsPath));
+  const workspaceIds = getWorkspaceIds();
   const isMultiRoot = workspaceIds.length > 1;
   await vscode.commands.executeCommand('setContext', 'livesync.multiRoot', isMultiRoot);
 
@@ -65,7 +66,7 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   });
 
   // Setup workspace views (diffs tree + workspace list if multi-root)
-  const views = setupWorkspaceViews(workspaceIds, state, folderState, context.workspaceState);
+  const views = setupWorkspaceViews(workspaceIds, state, folderState, context.workspaceState, validator);
 
   const showAsTree = context.workspaceState.get<boolean>('livesync.view.showAsTree', true);
   const showUnchanged = context.workspaceState.get<boolean>('livesync.view.showUnchanged', false);
@@ -77,33 +78,12 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
 
   // Initialize config status bar for ALL workspaces (works for both single and multi-root)
   for (const result of validationResults) {
-    const folder = vscode.workspace.workspaceFolders?.find(
-      f => stringToWsId(f.uri.fsPath) === result.workspaceId
-    );
-    
-    if (!folder) {continue;}
-
-    let hostname: string | undefined;
-    let remotePath: string | undefined;
-    
-    if (result.isValid) {
-      try {
-        const cfg = await config.get(folder);
-        hostname = cfg.data.hostname;
-        remotePath = cfg.data.remotePath;
-      } catch {
-        // Ignore
-      }
+    const folder = findWorkspaceFolderById(result.workspaceId);
+    if(!folder) {
+      logErrorMessage(`Workspace "${basenameRel(result.workspaceId)}" not found`);
+      continue;
     }
     
-    configStatus.updateWorkspaceStatus(
-      result.workspaceId,
-      result,
-      hostname,
-      remotePath,
-      folder.name
-    );
-
     views.listProvider?.updateConfigStatus(
       result.workspaceId,
       result.hasConfig,
@@ -118,15 +98,12 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   };
 
   // Register config change handler (quick validation on config changes)
-  registerConfigChangeHandler(config, validator, workspaceListContainer, configStatus, context);
+  registerConfigChangeHandler(config, validator, context);
   
   // Register workspace folder changes handler (add/remove folders, dynamic view creation)
   registerWorkspaceFolderHandler(
-    config,
     validator,
-    state,
     views.diffsProvider,
-    folderState,
     context.workspaceState,
     configStatus,
     context,

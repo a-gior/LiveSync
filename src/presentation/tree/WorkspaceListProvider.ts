@@ -1,6 +1,10 @@
+// File: src/presentation/tree/WorkspaceListProvider.ts
+// Event-driven version - subscribes to validator events
+
 import * as vscode from 'vscode';
 import { WorkspaceId } from '../../domain/types';
 import { basenameRel } from '../../infrastructure/helpers/path';
+import type { ConfigValidator } from '@infra/config/ConfigValidator';
 
 interface WorkspaceNode {
   kind: 'workspace';
@@ -18,14 +22,33 @@ export class WorkspaceListProvider implements vscode.TreeDataProvider<WorkspaceN
 
   private workspaces = new Map<WorkspaceId, WorkspaceNode>();
   private selectedWorkspaceId: WorkspaceId | undefined;
+  private subscription: vscode.Disposable;
 
   constructor(
     initialWorkspaces: WorkspaceId[],
     private readonly onWorkspaceSelected: (wsId: WorkspaceId) => void,
-    private readonly state?: vscode.Memento
+    private readonly state: vscode.Memento | undefined,
+    validator: ConfigValidator
   ) {
     for (const wsId of initialWorkspaces) {
       this.addWorkspace(wsId);
+    }
+
+    // Subscribe to validation changes
+    this.subscription = validator.onValidationChanged(event => {
+      this.handleValidationChanged(event);
+    });
+  }
+
+  /**
+   * Handle validation changed event
+   */
+  private handleValidationChanged(event: { workspaceId: WorkspaceId; result: { hasConfig: boolean; isValid: boolean } }): void {
+    const node = this.workspaces.get(event.workspaceId);
+    if (node) {
+      node.hasConfig = event.result.hasConfig;
+      node.configValid = event.result.isValid;
+      this.refresh();
     }
   }
 
@@ -52,6 +75,9 @@ export class WorkspaceListProvider implements vscode.TreeDataProvider<WorkspaceN
     this.refresh();
   }
 
+  /**
+   * Manual update for backward compatibility (optional - events are preferred)
+   */
   public updateConfigStatus(workspaceId: WorkspaceId, hasConfig: boolean, configValid: boolean): void {
     const node = this.workspaces.get(workspaceId);
     if (node) {
@@ -74,31 +100,29 @@ export class WorkspaceListProvider implements vscode.TreeDataProvider<WorkspaceN
     return this.selectedWorkspaceId;
   }
 
-  /**
-   * Restore last selected workspace from state if available and valid.
-   * Returns the workspace ID that was selected (either restored or first available).
-   */
   public restoreSelection(): WorkspaceId | undefined {
     if (!this.state) {
-      return this.selectFirstAvailable();
+      // No state available - select first workspace if available
+      const first = Array.from(this.workspaces.keys())[0];
+      if (first) {
+        this.selectWorkspace(first);
+      }
+      return first;
     }
 
-    const stored = this.state.get<string>(SELECTED_WORKSPACE_KEY);
-    
-    if (stored && this.workspaces.has(stored as WorkspaceId)) {
-      this.selectWorkspace(stored as WorkspaceId);
-      return this.selectedWorkspaceId;
-    }
+    const savedId = this.state.get<WorkspaceId>(SELECTED_WORKSPACE_KEY);
 
-    return this.selectFirstAvailable();
-  }
-
-  private selectFirstAvailable(): WorkspaceId | undefined {
-    const firstWsId = Array.from(this.workspaces.keys())[0];
-    if (firstWsId) {
-      this.selectWorkspace(firstWsId);
+    if (savedId && this.workspaces.has(savedId)) {
+      this.selectWorkspace(savedId);
+      return savedId;
+    } else {
+      // Saved workspace no longer exists - select first available
+      const first = Array.from(this.workspaces.keys())[0];
+      if (first) {
+        this.selectWorkspace(first);
+      }
+      return first;
     }
-    return firstWsId;
   }
 
   private persistSelection(workspaceId: WorkspaceId): void {
@@ -113,35 +137,31 @@ export class WorkspaceListProvider implements vscode.TreeDataProvider<WorkspaceN
     }
   }
 
-  public refresh(): void {
-    this.changeEmitter.fire(undefined);
-  }
-
-  getTreeItem(element: WorkspaceNode): vscode.TreeItem {
-    const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.None);
-    
-    // Highlight selected workspace
-    if (element.workspaceId === this.selectedWorkspaceId) {
-      item.description = '(selected)';
-    }
+  getTreeItem(node: WorkspaceNode): vscode.TreeItem {
+    const item = new vscode.TreeItem(node.label);
+    item.contextValue = 'workspace';
 
     // Icon based on config status
-    if (!element.hasConfig) {
-      item.iconPath = new vscode.ThemeIcon('warning', new vscode.ThemeColor('notificationsWarningIcon.foreground'));
-      item.tooltip = 'No LiveSync configuration found';
-    } else if (!element.configValid) {
-      item.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('notificationsErrorIcon.foreground'));
-      item.tooltip = 'Invalid or unreachable configuration';
+    if (!node.hasConfig) {
+      item.iconPath = new vscode.ThemeIcon('circle-slash', new vscode.ThemeColor('errorForeground'));
+      item.tooltip = `${node.label}: No configuration`;
+    } else if (node.configValid) {
+      item.iconPath = new vscode.ThemeIcon('check', new vscode.ThemeColor('testing.iconPassed'));
+      item.tooltip = `${node.label}: Connected`;
     } else {
-      item.iconPath = new vscode.ThemeIcon('folder', new vscode.ThemeColor('charts.green'));
-      item.tooltip = 'LiveSync configured';
+      item.iconPath = new vscode.ThemeIcon('warning', new vscode.ThemeColor('testing.iconFailed'));
+      item.tooltip = `${node.label}: Configuration error`;
     }
 
-    item.contextValue = 'livesync.workspace';
+    // Highlight selected workspace
+    if (node.workspaceId === this.selectedWorkspaceId) {
+      item.description = '(current)';
+    }
+
     item.command = {
       command: 'livesync.selectWorkspace',
       title: 'Select Workspace',
-      arguments: [element.workspaceId]
+      arguments: [node.workspaceId],
     };
 
     return item;
@@ -149,5 +169,14 @@ export class WorkspaceListProvider implements vscode.TreeDataProvider<WorkspaceN
 
   getChildren(): WorkspaceNode[] {
     return Array.from(this.workspaces.values());
+  }
+
+  private refresh(): void {
+    this.changeEmitter.fire(undefined);
+  }
+
+  dispose(): void {
+    this.subscription.dispose();
+    this.changeEmitter.dispose();
   }
 }

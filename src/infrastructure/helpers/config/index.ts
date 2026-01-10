@@ -1,7 +1,5 @@
-import * as vscode from 'vscode';
 import type { WorkspaceId } from '@domain/types';
 import { Services } from '../../../extension/services';
-import { findWorkspaceFolderById } from '../workspaceFolder';
 
 /**
  * Check if workspace has valid remote config before executing remote commands
@@ -13,35 +11,39 @@ export async function requireValidRemoteConfig(
   services: Services, 
   workspaceId: WorkspaceId
 ): Promise<boolean> {
-  const folder = findWorkspaceFolderById(workspaceId);
-
   // Check cached validation result
-  const validationResult = services.validator.getCached(workspaceId);
-  
-  if (!validationResult.hasConfig) {
-    const choice = await vscode.window.showWarningMessage(
-      'No remote server configured. Configure remote sync?',
-      'Configure',
-    );
-    
-    if (choice === 'Configure') {
-      await vscode.commands.executeCommand('livesync.configuration', { folder });
-    }
-    return false;
-  }
-  
+  const validationResult = await services.validator.getCached(workspaceId);
   if (!validationResult.isValid) {
-    const errorMsg = validationResult.error || 'Invalid configuration';
-    const choice = await vscode.window.showErrorMessage(
-      `Remote configuration error: ${errorMsg}`,
-      'Fix Configuration',
-    );
-    
-    if (choice === 'Fix Configuration') {
-      await vscode.commands.executeCommand('livesync.configuration', { folder });
-    }
     return false;
   }
   
   return true;
+}
+
+/**
+ * Check if error message is network-related
+ */
+export function isNetworkError(error?: string): boolean {
+  if (!error) {return false;}
+  
+  // Check for network error keywords and error codes
+  const patterns = [
+    /econnreset/i,      // Connection reset
+    /econnaborted/i,    // Connection aborted
+    /econnrefused/i,    // Connection refused
+    /enotfound/i,       // DNS lookup failed
+    /ehostunreach/i,    // Host unreachable
+    /enetunreach/i,     // Network unreachable
+    /etimedout/i,       // Timeout
+    /epipe/i,           // Broken pipe
+    /ehostdown/i,       // Host down
+    /enetreset/i,       // Network reset
+    /timeout/i,         // Generic timeout
+    /unreachable/i,     // Generic unreachable
+    /refused/i,         // Generic refused
+    /connection/i,      // Generic connection error
+  ];
+  
+  const isConnectionError = patterns.some(pattern => pattern.test(error));
+  return isConnectionError;
 }

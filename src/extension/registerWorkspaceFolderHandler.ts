@@ -1,12 +1,13 @@
+// File: src/extension/registerWorkspaceFolderHandler.ts
+// Updated for event-driven validation
+
 import * as vscode from 'vscode';
 import { WorkspaceListProvider } from '@presentation/tree/WorkspaceListProvider';
 import { ConfigStatusBar } from '@presentation/statusbar/ConfigStatusBar';
 import { ConfigValidator } from '@infra/config/ConfigValidator';
-import { WorkspaceConfigService } from '@infra/config/WorkspaceConfigService';
 import { stringToWsId } from '@helpers/path';
-import { SyncStateManager } from '@app/SyncStateManager';
 import { ExperimentalTreeProvider } from '@presentation/tree/ExperimentalTreeProvider';
-import { FolderStateStore } from '@presentation/tree/FolderStateStore';
+import { findWorkspaceFolderById } from '../infrastructure/helpers/workspaceFolder';
 
 /**
  * Registers handler for workspace folder changes (add/remove)
@@ -14,11 +15,8 @@ import { FolderStateStore } from '@presentation/tree/FolderStateStore';
  * Dynamically creates workspace list view when transitioning from single→multi-root
  */
 export function registerWorkspaceFolderHandler(
-  config: WorkspaceConfigService,
   validator: ConfigValidator,
-  state: SyncStateManager,
   diffsProvider: ExperimentalTreeProvider,
-  folderState: FolderStateStore,
   workspaceState: vscode.Memento,
   configStatusBar: ConfigStatusBar,
   context: vscode.ExtensionContext,
@@ -45,12 +43,9 @@ export function registerWorkspaceFolderHandler(
       // Handle added folders
       for (const added of event.added) {
         const wsId = stringToWsId(added.uri.fsPath);
-        console.log('[WorkspaceFolders] Added:', wsId);
         
         // If transitioning from single→multi-root, create workspace list view
         if (!wasMultiRoot && isNowMultiRoot && !services.provider) {
-          console.log('[WorkspaceFolders] Creating workspace list view (single→multi-root transition)');
-          
           const allWorkspaceIds = (vscode.workspace.workspaceFolders ?? []).map(f => stringToWsId(f.uri.fsPath));
           
           services.provider = new WorkspaceListProvider(
@@ -58,7 +53,8 @@ export function registerWorkspaceFolderHandler(
             (selectedWsId) => {
               diffsProvider.setCurrentWorkspace(selectedWsId);
             },
-            workspaceState
+            workspaceState,
+            validator  // Pass validator for event subscription
           );
 
           services.view = vscode.window.createTreeView('livesync.workspaces', {
@@ -68,18 +64,11 @@ export function registerWorkspaceFolderHandler(
 
           context.subscriptions.push(services.view);
           
-          // Initialize config statuses for all existing workspaces
+          // Validate all existing workspaces (emits events → provider auto-updates)
           for (const workspaceId of allWorkspaceIds) {
-            const folder = vscode.workspace.workspaceFolders?.find(
-              f => stringToWsId(f.uri.fsPath) === workspaceId
-            );
+            const folder = findWorkspaceFolderById(workspaceId);
             if (folder) {
-              const result = await validator.validate(folder, false, true);
-              services.provider.updateConfigStatus(
-                result.workspaceId,
-                result.hasConfig,
-                result.isValid
-              );
+              await validator.validate(folder, false, true);
             }
           }
 
@@ -90,36 +79,8 @@ export function registerWorkspaceFolderHandler(
           services.provider?.addWorkspace(wsId);
         }
         
-        // Validate the new folder
-        const result = await validator.validate(added, false, true);
-        
-        services.provider?.updateConfigStatus(
-          result.workspaceId,
-          result.hasConfig,
-          result.isValid
-        );
-
-        // Update config status bar
-        let hostname: string | undefined;
-        let remotePath: string | undefined;
-        
-        if (result.isValid) {
-          try {
-            const cfg = await config.get(added);
-            hostname = cfg.data.hostname;
-            remotePath = cfg.data.remotePath;
-          } catch {
-            // Ignore
-          }
-        }
-        
-        configStatusBar.updateWorkspaceStatus(
-          result.workspaceId,
-          result,
-          hostname,
-          remotePath,
-          added.name
-        );
+        // Validate the new folder (emits event → status bar + workspace list auto-update)
+        await validator.validate(added, false, true);
       }
 
       // Update multi-root context

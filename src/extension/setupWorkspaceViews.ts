@@ -5,6 +5,7 @@ import { FolderStateStore } from '@presentation/tree/FolderStateStore';
 import { ExperimentalTreeProvider } from '@presentation/tree/ExperimentalTreeProvider';
 import { WorkspaceListProvider } from '@presentation/tree/WorkspaceListProvider';
 import { logInfoMessage } from '@helpers/logging';
+import { ConfigValidator } from '../infrastructure/config/ConfigValidator';
 
 interface WorkspaceViews {
   diffsProvider: ExperimentalTreeProvider;
@@ -17,7 +18,8 @@ export function setupWorkspaceViews(
   workspaceIds: WorkspaceId[],
   state: SyncStateManager,
   folderState: FolderStateStore,
-  workspaceState: vscode.Memento
+  workspaceState: vscode.Memento,
+  validator: ConfigValidator
 ): WorkspaceViews {
   const isMultiRoot = workspaceIds.length > 1;
   
@@ -49,7 +51,8 @@ export function setupWorkspaceViews(
       (selectedWsId) => {
         diffsProvider.setCurrentWorkspace(selectedWsId);
       },
-      workspaceState
+      workspaceState,
+      validator
     );
 
     try {

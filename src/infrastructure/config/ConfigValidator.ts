@@ -1,3 +1,6 @@
+// File: src/infrastructure/config/ConfigValidator.ts
+// COMPLETE REPLACEMENT - Event-Driven Version
+
 import * as vscode from 'vscode';
 import { WorkspaceConfigService } from './WorkspaceConfigService';
 import { WorkspaceId } from '@domain/types';
@@ -6,6 +9,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as net from 'net';
+import { findWorkspaceFolderById } from '../helpers/workspaceFolder';
+import { isNetworkError } from '../helpers/config';
 
 export interface ConfigValidationResult {
   workspaceId: WorkspaceId;
@@ -27,6 +32,17 @@ export interface ConnectionTestResult {
   success: boolean;
   message: string;
   details?: string;
+}
+
+/**
+ * Event emitted when validation state changes
+ */
+export interface ValidationChangedEvent {
+  workspaceId: WorkspaceId;
+  result: ConfigValidationResult;
+  hostname?: string;
+  remotePath?: string;
+  label?: string;
 }
 
 /**
@@ -70,8 +86,8 @@ export class ConfigValidationTracker {
       return true;
     }
     
-    // Config is valid and ignore patterns changed
-    const ignoreChanged = previous.ignoreGlobs.length !== currentIgnoreGlobs.length || previous.ignoreGlobs.some((pattern, i) => pattern !== currentIgnoreGlobs[i]);
+    const ignoreChanged = previous.ignoreGlobs.length !== currentIgnoreGlobs.length || 
+                          previous.ignoreGlobs.some((pattern, i) => pattern !== currentIgnoreGlobs[i]);
     if(ignoreChanged) {
       return true;
     }
@@ -88,9 +104,7 @@ export class ConfigValidationTracker {
       
       // Get ignore globs synchronously from config service
       const cfg = configService.getSync(
-        vscode.workspace.workspaceFolders?.find(
-          f => stringToWsId(f.uri.fsPath) === result.workspaceId
-        ) ?? vscode.workspace.workspaceFolders[0]
+        findWorkspaceFolderById(result.workspaceId) ?? vscode.workspace.workspaceFolders[0]
       );
       
       this.previousState.set(result.workspaceId, {
@@ -102,9 +116,17 @@ export class ConfigValidationTracker {
   }
 }
 
+/**
+ * ConfigValidator with event-driven architecture
+ * Emits 'validationChanged' events when validation state changes
+ */
 export class ConfigValidator {
   private readonly tracker = new ConfigValidationTracker();
   private readonly validationCache = new Map<WorkspaceId, ConfigValidationResult>();
+  private readonly eventEmitter = new vscode.EventEmitter<ValidationChangedEvent>();
+  
+  // Public event for subscribers
+  readonly onValidationChanged = this.eventEmitter.event;
 
   constructor(private readonly configService: WorkspaceConfigService) {}
 
@@ -116,25 +138,79 @@ export class ConfigValidator {
   }
 
   /**
-   * Get cached validation result, or return invalid if not cached
+   * Get cached validation result with optional auto-revalidation and user prompts
+   * 
+   * @param workspaceId - Workspace to validate
+   * @param options - Configuration options
+   * @returns Validation result (after optional revalidation and prompts)
    */
-  getCached(workspaceId: WorkspaceId): ConfigValidationResult {
-    const cached = this.validationCache.get(workspaceId);
-    if (cached) {
+  async getCached(
+    workspaceId: WorkspaceId,
+    showPrompt: boolean = true              // Show error dialogs (default: false)
+  ): Promise<ConfigValidationResult> {
+    let cached = this.validationCache.get(workspaceId);
+    
+    // No cache - return invalid
+    if (!cached) {
+      cached = {
+        workspaceId,
+        hasConfig: false,
+        isValid: false,
+        error: 'Configuration not yet validated'
+      };
+    }
+    
+    // Valid - return immediately
+    if (cached.isValid) {
       return cached;
     }
     
-    // Not validated yet - return invalid
-    return {
-      workspaceId,
-      hasConfig: false,
-      isValid: false,
-      error: 'Configuration not yet validated'
-    };
+    // Auto-revalidate stale network errors
+    const folder = findWorkspaceFolderById(workspaceId);
+    if (isNetworkError(cached.error)) {
+      if (folder) {
+        const fresh = await this.validate(folder, false, true);
+        cached = fresh; // Use fresh result
+      }
+    }
+    
+    // Show user prompts if requested
+    if (showPrompt && folder && !cached.isValid) {
+      await this.showValidationPrompt(cached, folder);
+    }
+    
+    return cached;
   }
 
   /**
-   * Clear cache for a workspace (call when config changes)
+   * Show appropriate error prompt based on validation result
+   */
+  private async showValidationPrompt(
+    result: ConfigValidationResult,
+    folder: vscode.WorkspaceFolder
+  ): Promise<void> {
+    if (!result.hasConfig) {
+      const choice = await vscode.window.showWarningMessage(
+        `Cannot access ${folder.name}: No remote configuration found`,
+        'Configure'
+      );
+      if (choice === 'Configure') {
+        await vscode.commands.executeCommand('livesync.configuration', { folder });
+      }
+    } else {
+      const errorMsg = result.error || 'Invalid configuration';
+      const choice = await vscode.window.showErrorMessage(
+        `Cannot access ${folder.name}: ${errorMsg}`,
+        'Fix Configuration'
+      );
+      if (choice === 'Fix Configuration') {
+        await vscode.commands.executeCommand('livesync.configuration', { folder });
+      }
+    }
+  }
+
+  /**
+   * Clear cache for a workspace (does NOT emit event - use invalidate() for that)
    */
   clearCache(workspaceId: WorkspaceId): void {
     this.validationCache.delete(workspaceId);
@@ -143,23 +219,67 @@ export class ConfigValidator {
   /**
    * Check if workspace has valid config (from cache)
    */
-  isValid(workspaceId: WorkspaceId): boolean {
-    return this.getCached(workspaceId).isValid;
+  async isValid(workspaceId: WorkspaceId): Promise<boolean> {
+    return (await this.getCached(workspaceId)).isValid;
+  }
+
+  async getError(workspaceId: WorkspaceId): Promise<string | undefined> {
+    return (await this.getCached(workspaceId)).error;
   }
 
   /**
-   * Get validation error message (from cache)
-   */
-  getError(workspaceId: WorkspaceId): string | undefined {
-    return this.getCached(workspaceId).error;
-  }
-
-  /**
-   * Validate all workspace configurations
+   * Mark workspace as invalid due to an error (typically connection error)
+   * Emits validationChanged event to update UI
    * 
-   * @param testConnection - If true, performs full SSH authentication tests (slow, 5-8s per host)
-   * @param quickReachability - If true, performs quick TCP reachability check (fast, 2s per host)
+   * Call this from catch blocks when remote operations fail
    */
+  async invalidate(workspaceId: WorkspaceId, error: Error | string): Promise<void> {
+    const errorMsg = error instanceof Error ? error.message : error;
+    
+    // Check if this is actually a network/connection error
+    if (!isNetworkError(errorMsg)) {
+      // Not a connection error - don't invalidate cache
+      return;
+    }
+    
+    
+    const folder = findWorkspaceFolderById(workspaceId);
+    if (!folder) {
+      return;
+    }
+    
+    // Get current config for metadata
+    let hostname: string | undefined;
+    let remotePath: string | undefined;
+    
+    try {
+      const cfg = await this.configService.get(folder);
+      hostname = cfg.data.hostname;
+      remotePath = cfg.data.remotePath;
+    } catch {
+      // Ignore
+    }
+    
+    const result: ConfigValidationResult = {
+      workspaceId,
+      hasConfig: true,
+      isValid: false,
+      error: errorMsg
+    };
+    
+    // Update cache
+    this.validationCache.set(workspaceId, result);
+    
+    // Emit event
+    this.eventEmitter.fire({
+      workspaceId,
+      result,
+      hostname,
+      remotePath,
+      label: folder.name
+    });
+  }
+
   async validateAll(testConnection: boolean = false, quickReachability: boolean = false): Promise<ConfigValidationResult[]> {
     const folders = vscode.workspace.workspaceFolders ?? [];
     const results: ConfigValidationResult[] = [];
@@ -172,13 +292,6 @@ export class ConfigValidator {
     return results;
   }
 
-  /**
-   * Validate a single workspace configuration
-   * 
-   * @param folder - The workspace folder to validate
-   * @param testConnection - If true, performs full SSH authentication test (slow but thorough)
-   * @param quickReachability - If true, performs quick host reachability check (fast, 2s timeout)
-   */
   async validate(
     folder: vscode.WorkspaceFolder, 
     testConnection: boolean = false,
@@ -199,7 +312,9 @@ export class ConfigValidator {
         isValid: false,
         error: 'No configuration file found'
       };
-      this.validationCache.set(workspaceId, result);
+      
+      // ONLY update cache and emit ONCE at the end
+      this.updateCacheAndEmit(workspaceId, result, folder.name);
       return result;
     }
 
@@ -207,7 +322,6 @@ export class ConfigValidator {
     try {
       const config = await this.configService.get(folder);
 
-      // Basic validation: needs hostname and remotePath for remote sync
       if (!config.data.hostname || !config.data.remotePath) {
         result = {
           workspaceId,
@@ -216,7 +330,6 @@ export class ConfigValidator {
           error: 'Missing required fields (hostname or remotePath)'
         };
       }
-      // Needs authentication
       else if (!config.data.password && !config.data.privateKeyPath) {
         result = {
           workspaceId,
@@ -225,7 +338,6 @@ export class ConfigValidator {
           error: 'Missing authentication (password or privateKeyPath)'
         };
       }
-      // Quick reachability check (fast - just TCP connect)
       else if (quickReachability && !await ConfigValidator.quickReachabilityTest(config.data.hostname, config.data.port || 22)) {
         result = {
           workspaceId,
@@ -234,7 +346,6 @@ export class ConfigValidator {
           error: `Host unreachable: ${config.data.hostname}:${config.data.port || 22}`
         };
       }
-      // Full connection test (slow - full SSH handshake + auth)
       else if (testConnection) {
         const connectionTest = await ConfigValidator.testConnection({
           hostname: config.data.hostname,
@@ -249,7 +360,6 @@ export class ConfigValidator {
           ? { workspaceId, hasConfig: true, isValid: true }
           : { workspaceId, hasConfig: true, isValid: false, error: `Connection failed: ${connectionTest.message}` };
       }
-      // All checks passed
       else {
         result = { workspaceId, hasConfig: true, isValid: true };
       }
@@ -262,15 +372,57 @@ export class ConfigValidator {
       };
     }
 
-    // Cache and return
-    this.validationCache.set(workspaceId, result);
+    // SINGLE point of cache update + event emission
+    this.updateCacheAndEmit(workspaceId, result, folder.name);
     return result;
   }
 
   /**
-   * Quick reachability test - just checks if host is reachable on the port
-   * Much faster than full SSH handshake (1-2 seconds vs 5-8 seconds)
+   * Update cache and emit event (single source of truth)
    */
+  private async updateCacheAndEmit(
+    workspaceId: WorkspaceId,
+    result: ConfigValidationResult,
+    label?: string
+  ): Promise<void> {
+    this.validationCache.set(workspaceId, result);
+    await this.emitValidationChanged(workspaceId, result, label);
+  }
+
+  /**
+   * Emit validationChanged event with full metadata
+   */
+  private async emitValidationChanged(
+    workspaceId: WorkspaceId, 
+    result: ConfigValidationResult,
+    label?: string
+  ): Promise<void> {
+    let hostname: string | undefined;
+    let remotePath: string | undefined;
+    
+    if (result.isValid) {
+      try {
+        
+        const folder = findWorkspaceFolderById(workspaceId);
+        if (folder) {
+          const cfg = await this.configService.get(folder);
+          hostname = cfg.data.hostname;
+          remotePath = cfg.data.remotePath;
+        }
+      } catch {
+        // Ignore
+      }
+    }
+    
+    this.eventEmitter.fire({
+      workspaceId,
+      result,
+      hostname,
+      remotePath,
+      label
+    });
+  }
+
   static async quickReachabilityTest(hostname: string, port: number = 22): Promise<boolean> {
     return new Promise(resolve => {
       const sock = new net.Socket();
@@ -283,10 +435,9 @@ export class ConfigValidator {
   }
 
   /**
-   * Test a connection with arbitrary settings (used by config panel)
+   * Test a connection
    */
   static async testConnection(settings: ConnectionSettings): Promise<ConnectionTestResult> {
-    // Validate required fields
     if (!settings.hostname) {
       return { success: false, message: 'Hostname is required' };
     }
@@ -331,7 +482,6 @@ export class ConfigValidator {
             });
           });
 
-        // Build connection config
         const config: any = {
           host: settings.hostname,
           port: settings.port || 22,
@@ -372,5 +522,9 @@ export class ConfigValidator {
         details: err instanceof Error ? err.message : 'Unknown error'
       };
     }
+  }
+
+  dispose(): void {
+    this.eventEmitter.dispose();
   }
 }

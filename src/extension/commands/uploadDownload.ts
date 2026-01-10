@@ -5,7 +5,7 @@ import { resolveEntryTarget, resolveFolderTarget } from '@infra/helpers/resolve'
 import type { RelPath, WorkspaceId } from '@domain/types';
 import { absFs, pathToString, stringToWsId } from '@helpers/path';
 import { isDownloadable, isUploadable } from '@helpers/diff';
-import { requireValidRemoteConfig } from '@infra/helpers/config';
+import { isNetworkError, requireValidRemoteConfig } from '@infra/helpers/config';
 import { parseActionPolicy } from '@helpers/policy/parser';
 import pLimit from 'p-limit';
 
@@ -19,7 +19,7 @@ import { executeUpload, executeDownload } from '@helpers/action/executor';
 import { notifySuccess, notifyError } from '@helpers/notification';
 import { logExpectedError, logSync } from '@helpers/logging';
 import { isTestMode } from '../../infrastructure/helpers/test';
-import { getFolderLabel } from '../../infrastructure/helpers/workspaceFolder';
+import { findWorkspaceFolderById, getFolderLabel } from '../../infrastructure/helpers/workspaceFolder';
 
 // Concurrency limits
 const BATCH_CONCURRENCY = 25; // For folder upload/download commands
@@ -29,7 +29,7 @@ const PROGRESS_THROTTLE_MS = 250; // Report progress max 4x per second (smooth a
  * Register all upload/download commands.
  */
 export function registerUploadDownload(services: Services): void {
-  const { context, state, config, provider, remote, notifications, progress } = services;
+  const { context, state, config, provider, remote, validator} = services;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Single File Upload
@@ -131,7 +131,7 @@ export function registerUploadDownload(services: Services): void {
       return;
     }
     
-    // ⚡ FAST UPLOAD with Throttled Progress + Cancellation Support
+    // Upload with Throttled Progress + Cancellation Support
     try {
       await vscode.window.withProgress(
         {
@@ -173,7 +173,10 @@ export function registerUploadDownload(services: Services): void {
               
               logSync(stringToWsId(workspaceId), 'upload', file.relPath as string);
               
-            } catch (err) {
+            }catch (err: any) {
+              // Invalidate cache on connection errors
+              await validator.invalidate(workspaceId, err);
+              
               const errorMsg = err instanceof Error ? err.message : String(err);
               errors.push({ relPath: file.relPath, error: errorMsg });
               logExpectedError(`uploadFolder:${file.relPath}`, err);
@@ -321,7 +324,10 @@ export function registerUploadDownload(services: Services): void {
               
               logSync(stringToWsId(workspaceId), 'download', file.relPath as string);
               
-            } catch (err) {
+            } catch (err: any) {
+              // Invalidate cache on connection errors
+              await validator.invalidate(workspaceId, err);
+
               const errorMsg = err instanceof Error ? err.message : String(err);
               errors.push({ relPath: file.relPath, error: errorMsg });
               logExpectedError(`downloadFolder:${file.relPath}`, err);
@@ -383,10 +389,7 @@ export function registerUploadDownload(services: Services): void {
       return;
     }
 
-    const folder = vscode.workspace.workspaceFolders?.find(
-      f => stringToWsId(f.uri.fsPath) === currentWsId
-    );
-
+    const folder = findWorkspaceFolderById(currentWsId);
     if (!folder) {
       void vscode.window.showWarningMessage('LiveSync: workspace folder not found.');
       return;
@@ -404,10 +407,7 @@ export function registerUploadDownload(services: Services): void {
       return;
     }
 
-    const folder = vscode.workspace.workspaceFolders?.find(
-      f => stringToWsId(f.uri.fsPath) === currentWsId
-    );
-
+    const folder = findWorkspaceFolderById(currentWsId);
     if (!folder) {
       void vscode.window.showWarningMessage('LiveSync: workspace folder not found.');
       return;
@@ -416,86 +416,85 @@ export function registerUploadDownload(services: Services): void {
     // Just call the existing folder download command with workspace root
     await vscode.commands.executeCommand('livesync.downloadFolder', folder.uri);
   });
-}
 
-/**
- * Shared handler for single-file upload/download commands.
- * Implements the complete workflow:
- * 1. Parse policy
- * 2. Get remote snapshot if needed
- * 3. Detect conflicts
- * 4. Resolve conflicts (or check-only)
- * 5. Execute action
- * 6. Notify user
- * 7. Cleanup
- */
-async function handleFileCommand(
-  operation: 'upload' | 'download',
-  workspaceId: WorkspaceId,
-  relPath: RelPath,
-  policyKey: 'actionOnUpload' | 'actionOnDownload',
-  services: Services
-): Promise<boolean> {
-  const { state, config, remote, notifications, provider } = services;
   
-  try {
-    // 1. Get policy
-    const cfg = await config.getById(workspaceId);
-    const policy = parseActionPolicy(cfg.data[policyKey]);
+  /**
+   * Shared handler for single-file upload/download commands.
+   */
+  async function handleFileCommand(
+    operation: 'upload' | 'download',
+    workspaceId: WorkspaceId,
+    relPath: RelPath,
+    policyKey: 'actionOnUpload' | 'actionOnDownload',
+    services: Services
+  ): Promise<boolean> {
+    const { state, config, remote, notifications, provider } = services;
     
-    if (isNoOpPolicy(policy)) {return false;}
-    
-    // 2. Ensure remote snapshot if policy requires it
-    if (requiresRemoteSnapshot(policy)) {
-      await ensureFreshRemoteSnapshot(state, remote, workspaceId);
-    }
-    
-    // 3. Detect conflicts
-    // Use 'save' for upload, 'open' for download (matches event semantics)
-    const eventType = operation === 'upload' ? 'save' : 'open';
-    const conflict = detectConflict(eventType, workspaceId, relPath, state);
-    
-    if (conflict) {
-      // 4a. Resolve conflict (or check-only)
-      if (isCheckOnlyPolicy(policy)) {
-        showCheckInfo(conflict);
-        markConflictIgnored(state, workspaceId, relPath, conflict);
+    try {
+      // 1. Get policy
+      const cfg = await config.getById(workspaceId);
+      const policy = parseActionPolicy(cfg.data[policyKey]);
+      
+      if (isNoOpPolicy(policy)) {return false;}
+      
+      // 2. Ensure remote snapshot if policy requires it
+      if (requiresRemoteSnapshot(policy)) {
+        await ensureFreshRemoteSnapshot(state, remote, workspaceId);
+      }
+      
+      // 3. Detect conflicts
+      // Use 'save' for upload, 'open' for download (matches event semantics)
+      const eventType = operation === 'upload' ? 'save' : 'open';
+      const conflict = detectConflict(eventType, workspaceId, relPath, state);
+      
+      if (conflict) {
+        // 4a. Resolve conflict (or check-only)
+        if (isCheckOnlyPolicy(policy)) {
+          showCheckInfo(conflict);
+          markConflictIgnored(state, workspaceId, relPath, conflict);
+          return false;
+        }
+        
+        const resolved = await resolveConflict(conflict, workspaceId, relPath);
+        if (!resolved) {
+          markConflictIgnored(state, workspaceId, relPath, conflict);
+          return false;
+        }
+      } else if (isCheckOnlyPolicy(policy)) {
+        // 4b. Check-only with no conflict
+        void vscode.window.showInformationMessage('LiveSync: no conflict detected.');
         return false;
       }
       
-      const resolved = await resolveConflict(conflict, workspaceId, relPath);
-      if (!resolved) {
-        markConflictIgnored(state, workspaceId, relPath, conflict);
-        return false;
+      // 5. Log operation start
+      logSync(stringToWsId(workspaceId), operation, relPath as string, 'starting');
+      
+      // 6. Execute action
+      try {
+        if (operation === 'upload') {
+          await executeUpload(remote, state, workspaceId, relPath);
+        } else {
+          await executeDownload(remote, state, workspaceId, relPath);
+        }
+      } catch (err: any) {
+        // Invalidate cache on connection errors
+        await validator.invalidate(workspaceId, err);
+        throw err;
       }
-    } else if (isCheckOnlyPolicy(policy)) {
-      // 4b. Check-only with no conflict
-      void vscode.window.showInformationMessage('LiveSync: no conflict detected.');
+      
+      // 7. Log completion
+      logSync(stringToWsId(workspaceId), operation, relPath as string, 'completed');
+      
+      // 8. Notify & cleanup
+      notifySuccess(notifications, operation, relPath);
+      provider.markRecentlyResolvedBatch(stringToWsId(workspaceId), [relPath]);
+      clearIgnoredConflictIfResolved(state, workspaceId, relPath);
+      
+      return true;
+    } catch (err) {
+      logExpectedError(`${operation}:${relPath}`, err);
+      notifyError(notifications, operation, relPath);
       return false;
     }
-    
-    // 5. Log operation start
-    logSync(stringToWsId(workspaceId), operation, relPath as string, 'starting');
-    
-    // 6. Execute action
-    if (operation === 'upload') {
-      await executeUpload(remote, state, workspaceId, relPath);
-    } else {
-      await executeDownload(remote, state, workspaceId, relPath);
-    }
-    
-    // 7. Log completion
-    logSync(stringToWsId(workspaceId), operation, relPath as string, 'completed');
-    
-    // 8. Notify & cleanup
-    notifySuccess(notifications, operation, relPath);
-    provider.markRecentlyResolvedBatch(stringToWsId(workspaceId), [relPath]);
-    clearIgnoredConflictIfResolved(state, workspaceId, relPath);
-    
-    return true;
-  } catch (err) {
-    logExpectedError(`${operation}:${relPath}`, err);
-    notifyError(notifications, operation, relPath);
-    return false;
   }
 }

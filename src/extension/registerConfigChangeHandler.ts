@@ -1,17 +1,14 @@
 import * as vscode from 'vscode';
 import { WorkspaceConfigService } from '@infra/config/WorkspaceConfigService';
 import { ConfigValidator } from '@infra/config/ConfigValidator';
-import { WorkspaceListProvider } from '@presentation/tree/WorkspaceListProvider';
-import { ConfigStatusBar } from '@presentation/statusbar/ConfigStatusBar';
 import { findWorkspaceFolderById } from '@infra/helpers/workspaceFolder';
 import { WorkspaceId } from '../domain/types';
-import { logConfig, logOperation } from '@helpers/logging';
+import { logConfig, logErrorMessage, logOperation } from '@helpers/logging';
+import { basenameRel } from '../infrastructure/helpers/path';
 
 export function registerConfigChangeHandler(
   config: WorkspaceConfigService,
   validator: ConfigValidator,
-  workspaceListContainer: { provider?: WorkspaceListProvider; view?: vscode.TreeView<any> },
-  configStatusBar: ConfigStatusBar,
   context: vscode.ExtensionContext
 ): void {
   context.subscriptions.push(
@@ -21,21 +18,17 @@ export function registerConfigChangeHandler(
       validator.clearCache(event.workspaceId);
 
       const folder = findWorkspaceFolderById(event.workspaceId);
-      const result = await validator.validate(folder, false, true);
-      const tracker = validator.getTracker();
-      const currentCfg = await config.get(folder);
-      
-      const shouldRefresh = tracker.updateAndCheckRefresh(result, currentCfg.ignoreFilter.globs);
-      
-      if (workspaceListContainer.provider) {
-        workspaceListContainer.provider.updateConfigStatus(
-          result.workspaceId,
-          result.hasConfig,
-          result.isValid
-        );
+      if(!folder) {
+        logErrorMessage(`Workspace "${basenameRel(event.workspaceId)}" not found`);
+        return;
       }
 
-      await updateConfigStatusForWorkspace(configStatusBar, config, folder, result);
+      const result = await validator.validate(folder, false, true);
+      // ^^^^ This emits event which updates status bar + workspace list automatically
+      
+      const tracker = validator.getTracker();
+      const currentCfg = await config.get(folder);
+      const shouldRefresh = tracker.updateAndCheckRefresh(result, currentCfg.ignoreFilter.globs);
       
       if (shouldRefresh) {
         logConfig(result.workspaceId, 'configuration valid - triggering auto-refresh');
@@ -50,33 +43,5 @@ export function registerConfigChangeHandler(
         logConfig(result.workspaceId, `validation failed: ${result.error}`);
       }
     })
-  );
-}
-
-async function updateConfigStatusForWorkspace(
-  configStatusBar: ConfigStatusBar,
-  config: WorkspaceConfigService,
-  folder: vscode.WorkspaceFolder,
-  result: ReturnType<typeof ConfigValidator.prototype.getCached>
-): Promise<void> {
-  let hostname: string | undefined;
-  let remotePath: string | undefined;
-  
-  if (result.isValid) {
-    try {
-      const cfg = await config.get(folder);
-      hostname = cfg.data.hostname;
-      remotePath = cfg.data.remotePath;
-    } catch {
-       // Ignore - validation errors already logged
-    }
-  }
-
-  configStatusBar.updateWorkspaceStatus(
-    result.workspaceId,
-    result,
-    hostname,
-    remotePath,
-    folder.name
   );
 }

@@ -1,45 +1,40 @@
+// File: src/presentation/statusbar/ConfigStatusBar.ts
+// Event-driven version with rich markdown tooltips
+
 import * as vscode from 'vscode';
-import type { ConfigValidationResult } from '@infra/config/ConfigValidator';
+import type { ConfigValidator, ValidationChangedEvent } from '@infra/config/ConfigValidator';
 
 /**
  * Status bar showing configuration state for all workspaces
+ * Automatically updates via event subscription
  * 
  * Single-folder: Shows icon + connection details
  * Multi-root: Shows aggregate counts with icons (e.g., "✓ 3 / ⚠ 1 / ✗ 2")
  */
 export class ConfigStatusBar {
   private item: vscode.StatusBarItem;
-  private workspaceStatuses = new Map<string, ConfigValidationResult & {
-    label?: string;
-    _hostname?: string;
-    _remotePath?: string;
-  }>();
+  private workspaceStatuses = new Map<string, ValidationChangedEvent>();
+  private subscription: vscode.Disposable;
 
-  constructor() {
+  constructor(validator: ConfigValidator) {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
     this.item.name = 'LiveSync Config Status';
     this.item.command = 'livesync.configuration';
+    
+    // Subscribe to validation changes
+    this.subscription = validator.onValidationChanged(event => {
+      this.handleValidationChanged(event);
+    });
+    
     this.updateDisplay();
     this.item.show();
   }
 
   /**
-   * Update status for a specific workspace
+   * Handle validation changed event
    */
-  updateWorkspaceStatus(
-    workspaceId: string,
-    result: ConfigValidationResult,
-    hostname?: string,
-    remotePath?: string,
-    label?: string
-  ): void {
-    this.workspaceStatuses.set(workspaceId, {
-      ...result,
-      label,
-      _hostname: hostname,
-      _remotePath: remotePath,
-    });
-
+  private handleValidationChanged(event: ValidationChangedEvent): void {
+    this.workspaceStatuses.set(event.workspaceId, event);
     this.updateDisplay();
   }
 
@@ -88,21 +83,21 @@ export class ConfigStatusBar {
       return;
     }
 
-    if (!status.hasConfig) {
+    if (!status.result.hasConfig) {
       this.item.text = '$(warning) LiveSync';
       this.item.tooltip = 'No configuration found\n\nClick to configure LiveSync';
       this.item.backgroundColor = undefined;
-    } else if (!status.isValid) {
+    } else if (!status.result.isValid) {
       this.item.text = '$(error) LiveSync';
       const tooltip = new vscode.MarkdownString(
-        `**Configuration Error**\n\n${status.error || 'Invalid configuration'}\n\n*Click to fix configuration*`
+        `**Configuration Error**\n\n${status.result.error || 'Invalid configuration'}\n\n*Click to fix configuration*`
       );
       tooltip.supportThemeIcons = true;
       this.item.tooltip = tooltip;
       this.item.backgroundColor = undefined;
     } else {
-      const hostname = status._hostname;
-      const remotePath = status._remotePath;
+      const hostname = status.hostname;
+      const remotePath = status.remotePath;
       
       this.item.text = '$(check) LiveSync';
       
@@ -143,17 +138,17 @@ export class ConfigStatusBar {
 
       const label = status.label || folder.name;
 
-      if (!status.hasConfig) {
+      if (!status.result.hasConfig) {
         unconfigured++;
         unconfiguredList.push(label);
-      } else if (!status.isValid) {
+      } else if (!status.result.isValid) {
         errors++;
-        const errorMsg = status.error || 'Invalid';
+        const errorMsg = status.result.error || 'Invalid';
         errorList.push({ label, error: errorMsg });
       } else {
         configured++;
-        const host = status._hostname;
-        const remote = status._remotePath;
+        const host = status.hostname;
+        const remote = status.remotePath;
         configuredList.push({ label, host, remote });
       }
     }
@@ -231,6 +226,7 @@ export class ConfigStatusBar {
   }
 
   dispose(): void {
+    this.subscription.dispose();
     this.item.dispose();
   }
 }
