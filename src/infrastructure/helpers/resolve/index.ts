@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import type { WorkspaceId, RelPath } from '../../../domain/types';
 import { asRel, relFromAbs } from '../path/RelPath';
 import { stringToWsId } from '../path';
-import { findWorkspaceFolderById } from '../workspaceFolder';
 
 export interface ResolvedTarget {
   workspaceId: WorkspaceId;
@@ -97,7 +96,34 @@ export function resolveDiffTarget(arg?: unknown): ResolvedTarget | undefined {
  * - Works with Tree nodes, Explorer/Editor URIs, or active editor.
  */
 export function resolveFolderTarget(arg?: unknown): { workspaceId: WorkspaceId; folderPath: RelPath } | undefined {
-  const base = resolveEntryTarget(arg);
-  if (!base) { return undefined; }
-  return { workspaceId: base.workspaceId, folderPath: base.relPath };
+  // Try normal resolution first
+  const base = resolveEntryTarget(arg, { allowActiveEditor: false });
+  if (base) { 
+    return { workspaceId: base.workspaceId, folderPath: base.relPath };
+  }
+  
+  // Fallback: handle URIs for non-existent folders (for download operations)
+  const uri = asUri(arg);
+  if (uri) {
+    const folder = vscode.workspace.getWorkspaceFolder(uri);
+    if (folder) {
+      try {
+        const workspaceId = stringToWsId(folder.uri.fsPath);
+        const relPath = relFromAbs(folder.uri.fsPath, uri.fsPath);
+        if (relPath !== undefined) {
+          return { workspaceId, folderPath: relPath };
+        }
+      } catch {
+        // relFromAbs failed - folder doesn't exist
+        // Compute path manually
+        const workspaceId = stringToWsId(folder.uri.fsPath);
+        const relativePath = uri.fsPath.substring(folder.uri.fsPath.length)
+          .replace(/^[\\/]+/, '')
+          .replace(/\\/g, '/');
+        return { workspaceId, folderPath: asRel(relativePath) };
+      }
+    }
+  }
+  
+  return undefined;
 }

@@ -10,7 +10,7 @@ import type { WorkspaceId, RelPath, NodeIndex, FolderMeta, FileMeta } from '@dom
 
 import { WorkspaceConfigService } from '../config/WorkspaceConfigService';
 import { asRel } from '@helpers/path/RelPath';
-import { logInfoMessage, logOperation, logSync } from '@helpers/logging';
+import { logSync } from '@helpers/logging';
 import { computeAllFolderHashes, sha256OfFile } from '../helpers/hash';
 import { IgnoreFilter } from '../helpers/ignore';
 
@@ -84,7 +84,7 @@ class SSHConnectionPool {
           this.waitQueue.splice(index, 1);
         }
         reject(new Error('Timeout waiting for available SSH connection (30s)'));
-      }, 30000); // 30 second timeout
+      }, 30000);
 
       this.waitQueue.push({
         resolve: (client: SSHClient) => {
@@ -93,50 +93,59 @@ class SSHConnectionPool {
         },
         reject: (err: Error) => {
           clearTimeout(timeoutId);
-          reject(err);
+          // If it's a "retry" error, retry immediately
+          if (err.message === 'Connection died, retry') {
+            this.acquire(cfg).then(resolve, reject);
+          } else {
+            reject(err);
+          }
         }
       });
     });
   }
-
   /**
    * Release an SSH client back to the pool
    */
   release(client: SSHClient): void {
     this.activeConnections = Math.max(0, this.activeConnections - 1);
 
-    // Check if someone is waiting for a connection
-    if (this.waitQueue.length > 0) {
-      const waiter = this.waitQueue.shift()!;
-      
-      if (this.isClientAlive(client)) {
-        console.log(`[SSHPool] Passing connection to waiter (queue: ${this.waitQueue.length})`);
-        this.activeConnections++;
-        waiter.resolve(client);
-        return;
-      } else {
-        // Connection died - close it and reject the waiter
-        console.log('[SSHPool] Connection died, rejecting waiter');
-        try {
-          client.end();
-          client.destroy();
-        } catch {
-          // Ignore
-        }
-        waiter.reject(new Error('Connection was closed'));
-        return;
-      }
-    }
-
-    // No one waiting - return to pool or close
-    if (this.pool.length >= 2 || !this.isClientAlive(client)) {
-      console.log('[SSHPool] Closing connection (pool full or dead)');
+    // If connection is dead, discard it and let waiters retry
+    if (!this.isClientAlive(client)) {
+      console.log('[SSHPool] Dead connection released, discarding');
       try {
         client.end();
         client.destroy();
       } catch {
-          // Ignore
-        }
+        // Ignore
+      }
+      
+      // If someone is waiting, reject them so they retry with a new connection
+      if (this.waitQueue.length > 0) {
+        const waiter = this.waitQueue.shift()!;
+        console.log('[SSHPool] Dead connection - triggering waiter retry');
+        waiter.reject(new Error('Connection died, retry'));
+      }
+      return;
+    }
+
+    // Check if someone is waiting for a connection (only pass healthy connections)
+    if (this.waitQueue.length > 0) {
+      const waiter = this.waitQueue.shift()!;
+      console.log(`[SSHPool] Passing connection to waiter (queue: ${this.waitQueue.length})`);
+      this.activeConnections++;
+      waiter.resolve(client);
+      return;
+    }
+
+    // No one waiting - return to pool or close
+    if (this.pool.length >= 2) {
+      console.log('[SSHPool] Closing connection (pool full)');
+      try {
+        client.end();
+        client.destroy();
+      } catch {
+        // Ignore
+      }
       return;
     }
 
@@ -149,8 +158,8 @@ class SSHConnectionPool {
         client.end();
         client.destroy();
       } catch {
-          // Ignore
-        }
+        // Ignore
+      }
     });
     
     client.once('close', () => {

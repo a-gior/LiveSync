@@ -119,6 +119,14 @@ export class FileEventBridge {
       const queueKey = `${workspaceId}:${relPath}`;
       
       await this.operationQueue.enqueue(queueKey, 'create', async () => {
+        // Update local snapshot (after conflict check)
+        try {
+          await updateLocalSnapshot(this.state, workspaceId, relPath, uri);
+        } catch (err) {
+          logExpectedError(`onCreate:updateSnapshot:${relPath}`, err);
+          return;
+        }
+
         // Pre-flight checks
         const policy = await this.shouldProceedWithEvent(workspaceId, relPath, 'actionOnCreate');
         if (!policy) {return;}
@@ -132,14 +140,6 @@ export class FileEventBridge {
         let conflict = null;
         if (policy.check) {
           conflict = detectConflict('create', workspaceId, relPath, this.state);
-        }
-        
-        // Update local snapshot (after conflict check)
-        try {
-          await updateLocalSnapshot(this.state, workspaceId, relPath, uri);
-        } catch (err) {
-          logExpectedError(`onCreate:updateSnapshot:${relPath}`, err);
-          return;
         }
         
         // Handle check-only

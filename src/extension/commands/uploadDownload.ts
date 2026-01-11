@@ -5,7 +5,7 @@ import { resolveEntryTarget, resolveFolderTarget } from '@infra/helpers/resolve'
 import type { RelPath, WorkspaceId } from '@domain/types';
 import { absFs, pathToString, stringToWsId } from '@helpers/path';
 import { isDownloadable, isUploadable } from '@helpers/diff';
-import { isNetworkError, requireValidRemoteConfig } from '@infra/helpers/config';
+import { requireValidRemoteConfig } from '@infra/helpers/config';
 import { parseActionPolicy } from '@helpers/policy/parser';
 import pLimit from 'p-limit';
 
@@ -456,10 +456,15 @@ export function registerUploadDownload(services: Services): void {
         }
         
         const resolved = await resolveConflict(conflict, workspaceId, relPath);
-        if (!resolved) {
+        if (resolved.action === 'cancel') {
+          return false;
+        }
+
+        if (resolved.action === 'ignore') {
           markConflictIgnored(state, workspaceId, relPath, conflict);
           return false;
         }
+
       } else if (isCheckOnlyPolicy(policy)) {
         // 4b. Check-only with no conflict
         void vscode.window.showInformationMessage('LiveSync: no conflict detected.');
