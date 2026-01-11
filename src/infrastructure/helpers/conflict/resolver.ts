@@ -24,6 +24,9 @@ const CONFLICT_MESSAGES: Record<string, string> = {
   'remote_modified_action': 'Remote file was modified',
   'remote_modified_check': 'Remote file was modified',
   
+  'content_differs_action': 'Local and remote files differ',
+  'content_differs_check': 'Local and remote files differ',
+  
   // Create conflicts
   'file_exists_action': 'File already exists on remote',
   'file_exists_check': 'File already exists on remote',
