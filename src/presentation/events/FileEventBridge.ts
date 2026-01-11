@@ -1,8 +1,11 @@
 /**
  * FileEventBridge - Event Handler for File Operations
  * 
- * Handles VS Code file events and delegates to unified action handler.
- * Uses the new handleAction() function for consistent conflict handling.
+ * Handles two types of events:
+ * 1. Internal VSCode events (user actions in UI) → Update snapshot + apply policy + sync
+ * 2. External file changes (terminal/git/OS) → Update local snapshot only
+ * 
+ * Uses two-phase tracking (onWill + onDid) to prevent duplicate processing.
  */
 
 import * as vscode from 'vscode';
@@ -20,6 +23,7 @@ import { sha256OfFile } from '@helpers/hash/FileHash';
 import { logExpectedError } from '@helpers/logging';
 import { FileOperationQueue } from '@helpers/concurrency';
 import { handleAction } from '@helpers/action/handler';
+import { updateLocalSnapshot } from '@helpers/snapshot/update';
 
 /**
  * FileEventBridge - Central event handler for file operations
@@ -41,34 +45,77 @@ export class FileEventBridge {
    * Register all event handlers
    */
   register(disposables: vscode.Disposable[]): void {
-    // Internal VSCode events
+    // ========================================================================
+    // PHASE 1: Pre-tracking (onWill* - mark operations as in-flight)
+    // ========================================================================
+    disposables.push(vscode.workspace.onWillCreateFiles((e) => this.preTrackCreate(e)));
+    disposables.push(vscode.workspace.onWillDeleteFiles((e) => this.preTrackDelete(e)));
+    disposables.push(vscode.workspace.onWillRenameFiles((e) => this.preTrackRename(e)));
+    disposables.push(vscode.workspace.onWillSaveTextDocument((e) => this.preTrackSave(e)));
+
+    // ========================================================================
+    // PHASE 2: Processing (onDid* - update snapshot + apply policy + sync)
+    // ========================================================================
     disposables.push(vscode.workspace.onDidCreateFiles((e) => this.onCreate(e)));
     disposables.push(vscode.workspace.onDidDeleteFiles((e) => this.onDelete(e)));
     disposables.push(vscode.workspace.onDidRenameFiles((e) => this.onRename(e)));
     disposables.push(vscode.workspace.onDidSaveTextDocument((d) => this.onSave(d)));
     disposables.push(vscode.workspace.onDidOpenTextDocument((d) => this.onOpen(d)));
+
+    // ========================================================================
+    // PHASE 3: External file changes (FileSystemWatcher)
+    // ========================================================================
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+      const pattern = new vscode.RelativePattern(folder, '**/*');
+      const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+
+      watcher.onDidCreate((uri) => this.onExternalCreate(uri));
+      watcher.onDidChange((uri) => this.onExternalChange(uri));
+      watcher.onDidDelete((uri) => this.onExternalDelete(uri));
+
+      disposables.push(watcher);
+    }
   }
 
-  /**
-   * Get workspace info for a URI
-   */
-  private getWorkspaceInfo(uri: vscode.Uri): { workspaceId: WorkspaceId; relPath: RelPath } | null {
-    const folder = vscode.workspace.getWorkspaceFolder(uri);
-    if (!folder) {return null;}
+  // ==========================================================================
+  // PRE-TRACK PHASE (onWill* - mark operations as in-flight)
+  // ==========================================================================
 
-    const workspaceId = stringToWsId(folder.uri.fsPath);
-    const relPath = relFromAbs(workspaceId, uri.fsPath);
-    
-    return { workspaceId, relPath };
+  private preTrackCreate(e: vscode.FileWillCreateEvent): void {
+    for (const uri of e.files) {
+      const info = this.getWorkspaceInfo(uri);
+      if (!info) {continue;}
+      this.inFlightOps.add(`${info.workspaceId}:${info.relPath}`);
+    }
   }
 
-  /**
-   * Check if file should be ignored based on ignore patterns
-   */
-  private async shouldIgnore(workspaceId: WorkspaceId, relPath: RelPath): Promise<boolean> {
-    const cfg = await this.config.getById(workspaceId);
-    return cfg.ignoreFilter.shouldIgnore(relPath as string);
+  private preTrackDelete(e: vscode.FileWillDeleteEvent): void {
+    for (const uri of e.files) {
+      const info = this.getWorkspaceInfo(uri);
+      if (!info) {continue;}
+      this.inFlightOps.add(`${info.workspaceId}:${info.relPath}`);
+    }
   }
+
+  private preTrackRename(e: vscode.FileWillRenameEvent): void {
+    for (const { oldUri, newUri } of e.files) {
+      const oldInfo = this.getWorkspaceInfo(oldUri);
+      const newInfo = this.getWorkspaceInfo(newUri);
+      if (oldInfo) {this.inFlightOps.add(`${oldInfo.workspaceId}:${oldInfo.relPath}`);}
+      if (newInfo) {this.inFlightOps.add(`${newInfo.workspaceId}:${newInfo.relPath}`);}
+    }
+  }
+
+  private preTrackSave(e: vscode.TextDocumentWillSaveEvent): void {
+    if (e.document.isUntitled) {return;}
+    const info = this.getWorkspaceInfo(e.document.uri);
+    if (!info) {return;}
+    this.inFlightOps.add(`${info.workspaceId}:${info.relPath}`);
+  }
+
+  // ==========================================================================
+  // PROCESS PHASE (onDid* - handle with unified action handler)
+  // ==========================================================================
 
   /**
    * Handle file creation (actionOnCreate)
@@ -81,10 +128,6 @@ export class FileEventBridge {
       const { workspaceId, relPath } = info;
       const queueKey = `${workspaceId}:${relPath}`;
       
-      // Prevent duplicate processing
-      if (this.inFlightOps.has(queueKey)) {return;}
-      this.inFlightOps.add(queueKey);
-
       await this.operationQueue.enqueue(queueKey, 'create', async () => {
         // Capture old metas (undefined for new file)
         const oldLocalMeta = this.state.getLocalMeta(workspaceId, relPath);
@@ -98,22 +141,17 @@ export class FileEventBridge {
           
           if (isDir) {
             actualLocalMeta = { type: 'folder', hash: '' };
-            this.state.applyLocal({
-              workspaceId,
-              type: 'create',
-              path: relPath,
-              meta: actualLocalMeta
-            });
           } else {
             const hash = await sha256OfFile(uri.fsPath);
             actualLocalMeta = { type: 'file', hash };
-            this.state.applyLocal({
-              workspaceId,
-              type: 'create',
-              path: relPath,
-              meta: actualLocalMeta
-            });
           }
+          
+          this.state.applyLocal({
+            workspaceId,
+            type: 'modify',
+            path: relPath,
+            meta: actualLocalMeta
+          });
         } catch (err) {
           logExpectedError(`onCreate:updateSnapshot:${relPath}`, err);
           return;
@@ -146,7 +184,8 @@ export class FileEventBridge {
         });
       });
       
-      setTimeout(() => this.inFlightOps.delete(queueKey), 100);
+      // Clear in-flight status after a delay
+      setTimeout(() => this.inFlightOps.delete(queueKey), 500);
     }));
   }
 
@@ -210,6 +249,8 @@ export class FileEventBridge {
         shouldIgnore: this.shouldIgnore.bind(this)
       });
     });
+    
+    setTimeout(() => this.inFlightOps.delete(queueKey), 500);
   }
 
   /**
@@ -223,10 +264,6 @@ export class FileEventBridge {
       const { workspaceId, relPath } = info;
       const queueKey = `${workspaceId}:${relPath}`;
       
-      // Prevent duplicate processing
-      if (this.inFlightOps.has(queueKey)) {return;}
-      this.inFlightOps.add(queueKey);
-
       await this.operationQueue.enqueue(queueKey, 'delete', async () => {
         // Capture old metas (file metadata before deletion)
         const oldLocalMeta = this.state.getLocalMeta(workspaceId, relPath);
@@ -266,7 +303,7 @@ export class FileEventBridge {
         });
       });
       
-      setTimeout(() => this.inFlightOps.delete(queueKey), 100);
+      setTimeout(() => this.inFlightOps.delete(queueKey), 500);
     }));
   }
 
@@ -285,7 +322,7 @@ export class FileEventBridge {
       const queueKey = `${workspaceId}:${newRel}`;
 
       await this.operationQueue.enqueue(queueKey, 'move', async () => {
-        // Capture old metas (before move)
+        // Capture old metas
         const oldLocalMeta = this.state.getLocalMeta(workspaceId, oldRel);
         const oldRemoteMeta = this.state.getRemoteMeta(workspaceId, oldRel);
         
@@ -297,24 +334,18 @@ export class FileEventBridge {
           
           if (isDir) {
             actualLocalMeta = { type: 'folder', hash: '' };
-            this.state.applyLocal({
-              workspaceId,
-              type: 'move',
-              path: oldRel,
-              newPath: newRel,
-              meta: actualLocalMeta
-            });
           } else {
             const hash = await sha256OfFile(newUri.fsPath);
             actualLocalMeta = { type: 'file', hash };
-            this.state.applyLocal({
-              workspaceId,
-              type: 'move',
-              path: oldRel,
-              newPath: newRel,
-              meta: actualLocalMeta
-            });
           }
+          
+          this.state.applyLocal({
+            workspaceId,
+            type: 'move',
+            path: oldRel,
+            newPath: newRel,
+            meta: actualLocalMeta
+          });
         } catch (err) {
           logExpectedError(`onRename:updateSnapshot:${newRel}`, err);
           return;
@@ -351,7 +382,7 @@ export class FileEventBridge {
       setTimeout(() => {
         this.inFlightOps.delete(`${workspaceId}:${oldRel}`);
         this.inFlightOps.delete(`${workspaceId}:${newRel}`);
-      }, 100);
+      }, 500);
     }));
   }
 
@@ -414,5 +445,124 @@ export class FileEventBridge {
         shouldIgnore: this.shouldIgnore.bind(this)
       });
     });
+    
+    setTimeout(() => this.inFlightOps.delete(queueKey), 500);
+  }
+
+  // ==========================================================================
+  // EXTERNAL FILE CHANGES (FileSystemWatcher - update local snapshot only)
+  // ==========================================================================
+
+  /**
+   * Handle external file creation (e.g., terminal, git, OS)
+   * Only updates local snapshot, does NOT trigger sync
+   */
+  private async onExternalCreate(uri: vscode.Uri): Promise<void> {
+    const info = this.getWorkspaceInfo(uri);
+    if (!info) {return;}
+
+    const { workspaceId, relPath } = info;
+    const key = `${workspaceId}:${relPath}`;
+
+    // Skip if internal operation in progress
+    if (this.inFlightOps.has(key)) {
+      return;
+    }
+
+    // Skip ignored files
+    if (await this.shouldIgnore(workspaceId, relPath)) {
+      return;
+    }
+
+    try {
+      await updateLocalSnapshot(this.state, workspaceId, relPath, uri);
+      this.provider.refresh(); // Update UI
+    } catch (err) {
+      logExpectedError(`externalCreate:${relPath}`, err);
+    }
+  }
+
+  /**
+   * Handle external file change (e.g., build tool, external editor)
+   * Only updates local snapshot, does NOT trigger sync
+   */
+  private async onExternalChange(uri: vscode.Uri): Promise<void> {
+    const info = this.getWorkspaceInfo(uri);
+    if (!info) {return;}
+
+    const { workspaceId, relPath } = info;
+    const key = `${workspaceId}:${relPath}`;
+
+    // Skip if internal operation in progress
+    if (this.inFlightOps.has(key)) {
+      return;
+    }
+
+    // Skip ignored files
+    if (await this.shouldIgnore(workspaceId, relPath)) {
+      return;
+    }
+
+    try {
+      await updateLocalSnapshot(this.state, workspaceId, relPath, uri);
+      this.provider.refresh(); // Update UI
+    } catch (err) {
+      logExpectedError(`externalChange:${relPath}`, err);
+    }
+  }
+
+  /**
+   * Handle external file deletion (e.g., rm command, git clean)
+   * Only updates local snapshot, does NOT trigger sync
+   */
+  private async onExternalDelete(uri: vscode.Uri): Promise<void> {
+    const info = this.getWorkspaceInfo(uri);
+    if (!info) {return;}
+
+    const { workspaceId, relPath } = info;
+    const key = `${workspaceId}:${relPath}`;
+
+    // Skip if internal operation in progress
+    if (this.inFlightOps.has(key)) {
+      return;
+    }
+
+    // Skip ignored files
+    if (await this.shouldIgnore(workspaceId, relPath)) {
+      return;
+    }
+
+    this.state.applyLocal({
+      workspaceId,
+      type: 'delete',
+      path: relPath
+    });
+    
+    this.provider.refresh(); // Update UI
+  }
+
+  // ==========================================================================
+  // HELPER METHODS
+  // ==========================================================================
+
+  /**
+   * Get workspace info for a URI
+   */
+  private getWorkspaceInfo(uri: vscode.Uri): { workspaceId: WorkspaceId; relPath: RelPath } | null {
+    const folder = vscode.workspace.getWorkspaceFolder(uri);
+    if (!folder) {return null;}
+
+    const workspaceId = stringToWsId(folder.uri.fsPath);
+    const relPath = relFromAbs(workspaceId, uri.fsPath);
+    
+    return { workspaceId, relPath };
+  }
+
+  /**
+   * Check if file should be ignored based on ignore patterns
+   */
+  private async shouldIgnore(workspaceId: WorkspaceId, relPath: RelPath): Promise<boolean> {
+    const cfg = await this.config.getById(workspaceId);
+    return cfg.ignoreFilter.shouldIgnore(relPath as string);
   }
 }
