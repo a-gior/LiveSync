@@ -24,29 +24,29 @@ export function registerShowDiff(services: Services): void {
     const absLocal = absFs(workspaceId, relPath);
     const remoteTmp = path.join(tmpdir(), `livesync-diff-${Date.now()}-${path.basename(absLocal)}`);
 
-    let left: vscode.Uri;   // Remote (or empty)
-    let right: vscode.Uri;  // Local (or empty)
+    let left: vscode.Uri;  // Local (or empty)
+    let right: vscode.Uri;   // Remote (or empty)
 
     if (entry?.status === 'added') {
       await ensureEmptyFile(remoteTmp);
-      left = vscode.Uri.file(remoteTmp);
-      right = vscode.Uri.file(absLocal);
+      right = vscode.Uri.file(remoteTmp);
+      left = vscode.Uri.file(absLocal);
     } else if (entry?.status === 'removed') {
       try { await remote.downloadFile(workspaceId, relPath, remoteTmp); } catch { await ensureEmptyFile(remoteTmp); }
-      left = vscode.Uri.file(remoteTmp);
+      right = vscode.Uri.file(remoteTmp);
       const empty = await tempPathFor(context, relPath + '.empty'); await ensureEmptyFile(empty);
-      right = vscode.Uri.file(empty);
+      left = vscode.Uri.file(empty);
     } else {
       try { await remote.downloadFile(workspaceId, relPath, remoteTmp); } catch { await ensureEmptyFile(remoteTmp); }
-      left = vscode.Uri.file(remoteTmp);
-      right = vscode.Uri.file(absLocal);
+      right = vscode.Uri.file(remoteTmp);
+      left = vscode.Uri.file(absLocal);
     }
 
     await vscode.commands.executeCommand(
       'vscode.diff',
       left,
       right,
-      `Remote ↔ Local: ${relPath as unknown as string}`,
+      `Local ↔ Remote: ${relPath as unknown as string}`,
       { preview: true }
     );
 
