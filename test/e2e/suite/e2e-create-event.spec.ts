@@ -24,7 +24,7 @@ import {
 suite('E2E - Create Event', function() {
   this.timeout(60000);
 
-  let ctx: Partial<E2ETestContext> = {};
+  const ctx: Partial<E2ETestContext> = {};
   let testFile: vscode.Uri;
   const testFileName = 'create-test.txt';
   const initialContent = ''; // Content is empty on creation

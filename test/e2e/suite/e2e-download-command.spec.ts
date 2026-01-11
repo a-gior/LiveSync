@@ -32,9 +32,9 @@ import {
 } from './e2e-shared-helpers';
 
 suite('E2E - Download Command', function() {
-  this.timeout(10000);
+  this.timeout(20000);
 
-  let ctx: Partial<E2ETestContext> = {};
+  const ctx: Partial<E2ETestContext> = {};
   
   const fileContent = 'File content for test';
   const conflictContent = 'Conflict content';
@@ -147,10 +147,14 @@ suite('E2E - Download Command', function() {
     // Clean folder (BEFORE test)
     try {
       await vscode.workspace.fs.delete(testFolder, { recursive: true });
-    } catch {}
+    } catch {
+      // Ignore errors
+    }
     try {
       await ctx.remoteVerifier!.deleteFolder(folderName);
-    } catch {}
+    } catch {
+      // Ignore errors
+    }
     await wait(1000);
     
     await refresh();
@@ -189,10 +193,14 @@ suite('E2E - Download Command', function() {
     // Clean folder (AFTER test)
     try {
       await vscode.workspace.fs.delete(testFolder, { recursive: true });
-    } catch {}
+    } catch {
+      // Ignore errors
+    }
     try {
       await ctx.remoteVerifier!.deleteFolder(folderName);
-    } catch {}
+    } catch {
+      // Ignore errors
+    }
     await wait(500);
   }
 

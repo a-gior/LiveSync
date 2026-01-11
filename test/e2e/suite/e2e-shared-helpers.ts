@@ -68,7 +68,9 @@ export async function teardownE2ESuite(
   if (configPath) {
     try {
       await fs.rm(configPath, { force: true });
-    } catch {}
+    } catch {
+      // Ignore errors
+    }
   }
 }
 
@@ -172,12 +174,16 @@ export async function cleanTestFile(
   // 1. Delete local file (programmatic - no events)
   try {
     await vscode.workspace.fs.delete(fileUri);
-  } catch {}
+  } catch {
+    // Ignore errors
+  }
   
   // 2. Delete remote file (SSH - no events)
   try {
     await remoteVerifier.deleteFile(fileName);
-  } catch {}
+  } catch {
+    // Ignore errors
+  }
   
   // 3. Clear any ignored conflict
   const workspaceId = getWorkspaceId(testWorkspace);
