@@ -16,6 +16,10 @@ import { requireValidRemoteConfig } from '@infra/helpers/config';
 import pLimit from 'p-limit';
 import { handleAction } from '@helpers/action/handler';
 import { logExpectedError } from '@helpers/logging';
+import { isTestMode } from '../../infrastructure/helpers/test';
+import { getFolderLabel } from '../../infrastructure/helpers/workspaceFolder';
+import { parseActionPolicy } from '../../infrastructure/helpers/policy/parser';
+import { isCheckOnlyPolicy, isNoOpPolicy } from '../../infrastructure/helpers/policy/utils';
 
 // Concurrency limits
 const BATCH_CONCURRENCY = 25;
@@ -166,9 +170,29 @@ export function registerUploadDownload(services: Services): void {
     }
 
     if (toUpload.length === 0) {
-      // Refresh before showing message
-      await vscode.commands.executeCommand('livesync.refresh', { workspaceId, folderPath });
       void vscode.window.showInformationMessage('LiveSync: no items to upload.');
+      return;
+    }
+
+    // Confirm (skip in test mode)
+    if (!isTestMode()) {
+      const label = getFolderLabel(workspaceId, folderPath);
+      const confirmed = await vscode.window.showWarningMessage(
+        `Upload ${toUpload.length} file(s) under "${label}"?`,
+        'Upload'
+      );
+      if (confirmed !== 'Upload') {return;}
+    }
+
+    // Parse policy
+    const cfg = await config.getById(workspaceId);
+    const policy = parseActionPolicy(cfg.data.actionOnUpload);
+    
+    if (isNoOpPolicy(policy)) {return;}
+
+    // Handle check-only policy
+    if (isCheckOnlyPolicy(policy)) {
+      void vscode.window.showInformationMessage('LiveSync: check-only mode, no upload performed.');
       return;
     }
 
@@ -245,9 +269,29 @@ export function registerUploadDownload(services: Services): void {
     }
 
     if (toDownload.length === 0) {
-      // Refresh before showing message
-      await vscode.commands.executeCommand('livesync.refresh', { workspaceId, folderPath });
       void vscode.window.showInformationMessage('LiveSync: no items to download.');
+      return;
+    }
+
+    // Confirm (skip in test mode)
+    if (!isTestMode()) {
+      const label = getFolderLabel(workspaceId, folderPath);
+      const confirmed = await vscode.window.showWarningMessage(
+        `Download ${toDownload.length} file(s) under "${label}"?`,
+        'Download'
+      );
+      if (confirmed !== 'Download') {return;}
+    }
+
+    // Parse policy
+    const cfg = await config.getById(workspaceId);
+    const policy = parseActionPolicy(cfg.data.actionOnDownload);
+    
+    if (isNoOpPolicy(policy)) {return;}
+
+    // Handle check-only policy
+    if (isCheckOnlyPolicy(policy)) {
+      void vscode.window.showInformationMessage('LiveSync: check-only mode, no download performed.');
       return;
     }
 
