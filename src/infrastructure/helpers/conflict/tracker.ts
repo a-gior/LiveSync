@@ -9,6 +9,20 @@ import type { WorkspaceId, RelPath } from '@domain/types';
 import type { SyncStateManager } from '@app/SyncStateManager';
 import type { ConflictInfo } from '@helpers/conflict/detector';
 
+// Import conflict messages to extract reason from type
+const CONFLICT_MESSAGES: Record<string, string> = {
+  'remote_modified_action': 'Remote file was modified',
+  'remote_modified_check': 'Remote file was modified',
+  'file_exists_action': 'File already exists on remote',
+  'file_exists_check': 'File already exists on remote',
+  'uncommitted_changes_action': 'Folder has uncommitted changes',
+  'uncommitted_changes_check': 'Folder has uncommitted changes',
+  'remote_differs_action': 'Remote file differs from local',
+  'remote_differs_check': 'Remote file differs from local',
+  'type_mismatch_action': 'Type mismatch (file vs folder)',
+  'type_mismatch_check': 'Type mismatch (file vs folder)',
+};
+
 /**
  * Mark a conflict as ignored by the user
  * 
@@ -24,12 +38,13 @@ export function markConflictIgnored(
   conflict: ConflictInfo
 ): void {
   const conflictType = mapConflictType(conflict.type);
+  const reason = CONFLICT_MESSAGES[conflict.type] || conflict.type;
   
   state.markConflictIgnored(
     workspaceId,
     relPath,
     conflictType,
-    conflict.reason
+    reason
   );
 }
 
@@ -67,19 +82,29 @@ export function isConflictIgnored(
 }
 
 /**
- * Map ConflictInfo type to SyncStateManager conflict type
+ * Map ConflictInfo type string to SyncStateManager conflict type
+ * 
+ * @param conflictType - Conflict type string (e.g., 'remote_modified_action')
+ * @returns Conflict type for state manager
  */
 function mapConflictType(
-  conflictType: ConflictInfo['type']
+  conflictType: string
 ): 'remote-modified' | 'local-modified' {
-  switch (conflictType) {
-    case 'upload-conflict':
-    case 'exists-conflict':
-    case 'delete-conflict':
-      return 'remote-modified';
-    case 'download-conflict':
-      return 'local-modified';
-    default:
-      return 'remote-modified';
+  // Extract base type from conflict type (remove '_action' or '_check' suffix)
+  const baseType = conflictType.replace(/_action$/, '').replace(/_check$/, '');
+  
+  // Determine if it's remote or local based on keywords
+  if (baseType.includes('remote_modified') || 
+      baseType.includes('file_exists') || 
+      baseType.includes('uncommitted_changes') ||
+      baseType.includes('type_mismatch')) {
+    return 'remote-modified';
   }
+  
+  if (baseType.includes('remote_differs')) {
+    return 'local-modified';
+  }
+  
+  // Default to remote-modified
+  return 'remote-modified';
 }

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { ConfigErrorSuppressor } from '../../storage/ConfigErrorSuppressor';
 import { stringToWsId } from '../path';
+import { SyncAction } from '../../../domain/types';
 
 let _suppressor: ConfigErrorSuppressor | undefined;
 export function initLoggingDeps(deps: { suppressor: ConfigErrorSuppressor }): void {
@@ -240,7 +241,7 @@ export function logOperation(workspace: string, operation: string, details?: str
 
 export function logSync(
   workspace: string,
-  operation: 'upload' | 'download' | 'delete' | 'skip',
+  operation: SyncAction,
   file: string,
   reason?: string
 ): void {

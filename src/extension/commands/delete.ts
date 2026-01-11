@@ -1,25 +1,33 @@
+/**
+ * Delete Commands
+ * 
+ * Single file and folder delete commands.
+ * Single file command now uses unified handleAction().
+ */
+
 import * as vscode from 'vscode';
 import type { Services } from '../services';
 import { cmd } from '../cmd';
 import { resolveEntryTarget, resolveFolderTarget } from '@infra/helpers/resolve';
 import type { RelPath } from '@domain/types';
-import { absFs, pathToString, stringToWsId } from '@helpers/path';
 import { requireValidRemoteConfig } from '@infra/helpers/config';
-import { executeDelete } from '@helpers/action/executor';
+import pLimit from 'p-limit';
+import { handleAction } from '@helpers/action/handler';
 import { logExpectedError } from '@helpers/logging';
-import { clearIgnoredConflictIfResolved } from '@helpers/conflict/tracker';
-import { isTestMode } from '@infra/helpers/test';
-import { getFolderLabel } from '@infra/helpers/workspaceFolder';
+
+const BATCH_CONCURRENCY = 25;
+const PROGRESS_THROTTLE_MS = 250;
 
 /**
- * Register delete commands.
+ * Register delete commands
  */
 export function registerDelete(services: Services): void {
-  const { context, state, provider, remote } = services;
+  const { context, state, config, provider, remote, validator, notifications } = services;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // Single File/Folder Delete
+  // Single File Delete
   // ═══════════════════════════════════════════════════════════════════════════
+  
   cmd(context, 'livesync.delete', async (arg?: unknown) => {
     const target = resolveEntryTarget(arg);
     if (!target) {return;}
@@ -30,117 +38,131 @@ export function registerDelete(services: Services): void {
 
     const { workspaceId, relPath } = target;
     const entry = state.getDiffEntry(workspaceId, relPath);
-    if (!entry) {return;}
 
-    // Confirm deletion
-    if (!isTestMode()) {
-      const label = entry.type === 'file' ? 'file' : 'folder';
-      const confirmed = await vscode.window.showWarningMessage(
-        `Delete ${label} "${relPath}"?`,
-        'Delete'
-      );
-      if (confirmed !== 'Delete') {return;}
-    }
+    // Only allow deleting files (not folders)
+    if (entry && entry.type !== 'file') {return;}
 
-    // Determine what exists
-    const localMeta = state.getLocalMeta(workspaceId, relPath);
-    const remoteMeta = state.getRemoteMeta(workspaceId, relPath);
-    const existsLocal = !!localMeta;
-    const existsRemote = !!remoteMeta;
-
-    if (!existsLocal && !existsRemote) {
-      void vscode.window.showErrorMessage('LiveSync: file does not exist locally or remotely');
-      return;
-    }
-
-    // Execute deletions
-    try {
-      if (existsLocal) {
-        const absPath = absFs(workspaceId, relPath);
-        const uri = vscode.Uri.file(absPath);
-        await vscode.workspace.fs.delete(uri, { recursive: true, useTrash: false });
+    // Capture metas
+    const oldLocalMeta = state.getLocalMeta(workspaceId, relPath);
+    const oldRemoteMeta = state.getRemoteMeta(workspaceId, relPath);
+    const actualLocalMeta = state.getLocalMeta(workspaceId, relPath);
+    
+    // Call unified handler
+    await handleAction({
+      workspaceId,
+      relPath,
+      policyKey: 'actionOnDelete',
+      operation: 'delete',
+      actualMetas: {
+        local: actualLocalMeta,
+        remote: undefined  // Fetched inside handleAction
+      },
+      oldMetas: {
+        local: oldLocalMeta,
+        remote: oldRemoteMeta
+      },
+      isCommand: true,  // Commands override ignored files
+      
+      // Services
+      state,
+      config,
+      validator,
+      remote,
+      notifications,
+      provider,
+      shouldIgnore: async (wsId, rPath) => {
+        const cfg = await config.getById(wsId);
+        return cfg.ignoreFilter.shouldIgnore(rPath as string);
       }
-
-      if (existsRemote) {
-        await executeDelete(remote, state, workspaceId, relPath);
-      }
-
-      // Cleanup
-      provider.markRecentlyResolvedBatch(stringToWsId(workspaceId), [relPath]);
-      clearIgnoredConflictIfResolved(state, workspaceId, relPath);
-
-      void vscode.window.showInformationMessage(`LiveSync: deleted ${entry.type}`);
-    } catch (err) {
-      logExpectedError(`delete:${relPath}`, err);
-      void vscode.window.showErrorMessage(`LiveSync: failed to delete ${entry.type}`);
-    }
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // Folder Delete (Batch)
+  // Folder Delete (batch)
   // ═══════════════════════════════════════════════════════════════════════════
+  
   cmd(context, 'livesync.deleteFolder', async (arg?: unknown) => {
     const target = resolveFolderTarget(arg);
     if (!target) {return;}
-    
+
     if (!await requireValidRemoteConfig(services, target.workspaceId)) {
       return;
     }
 
     const { workspaceId, folderPath } = target;
+    
+    // Get all entries in this folder
     const diff = state.getDiffEntries(workspaceId);
-
-    // Collect all files/folders under this path
-    const prefix = pathToString(folderPath);
     const entries: RelPath[] = [];
     
-    for (const [p, ] of diff.entries()) {
-      const inFolder = !prefix || (p as string).startsWith(prefix + '/') || p === prefix;
-      if (inFolder) {
+    for (const [p, e] of diff.entries()) {
+      const inFolder = folderPath === '' 
+        ? true 
+        : (p as string).startsWith((folderPath as string) + '/') || p === folderPath;
+      
+      if (inFolder && e.type === 'file') {
         entries.push(p);
       }
     }
 
     if (entries.length === 0) {
+      // Refresh before showing message
+      await vscode.commands.executeCommand('livesync.refresh', { workspaceId, folderPath });
       void vscode.window.showInformationMessage('LiveSync: no items to delete');
       return;
     }
 
     // Confirm deletion
-    if (!isTestMode()) {
-      const label = getFolderLabel(workspaceId, folderPath);
-      const confirmed = await vscode.window.showWarningMessage(
-        `Delete folder "${label}" with ${entries.length} item(s)?`,
-        'Delete'
-      );
-      if (confirmed !== 'Delete') {return;}
+    const folderName = folderPath === '' ? 'workspace' : folderPath;
+    const confirmation = await vscode.window.showWarningMessage(
+      `Delete ${entries.length} remote file(s) in ${folderName}?`,
+      { modal: true },
+      'Delete'
+    );
+
+    if (confirmation !== 'Delete') {
+      return;
     }
 
-    try {
-      // Delete local folder if it exists
-      const localMeta = state.getLocalMeta(workspaceId, folderPath);
-      if (localMeta) {
-        const absPath = absFs(workspaceId, folderPath);
-        const uri = vscode.Uri.file(absPath);
-        await vscode.workspace.fs.delete(uri, { recursive: true, useTrash: false });
-      }
+    // Batch delete with progress
+    const limit = pLimit(BATCH_CONCURRENCY);
+    let completed = 0;
+    let lastProgressUpdate = Date.now();
 
-      // Delete remote folder if it exists
-      const remoteMeta = state.getRemoteMeta(workspaceId, folderPath);
-      if (remoteMeta) {
-        await executeDelete(remote, state, workspaceId, folderPath);
-      }
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: 'LiveSync: Deleting files',
+        cancellable: false
+      },
+      async (progress) => {
+        const tasks = entries.map((relPath) =>
+          limit(async () => {
+            try {
+              await remote.deletePath(workspaceId, relPath);
+              completed++;
 
-      // Cleanup
-      provider.markRecentlyResolvedBatch(stringToWsId(workspaceId), entries);
-      for (const relPath of entries) {
-        clearIgnoredConflictIfResolved(state, workspaceId, relPath);
-      }
+              const now = Date.now();
+              if (now - lastProgressUpdate > PROGRESS_THROTTLE_MS) {
+                progress.report({
+                  message: `${completed}/${entries.length} files`,
+                  increment: (100 / entries.length)
+                });
+                lastProgressUpdate = now;
+              }
+            } catch (err) {
+              logExpectedError(`deleteFolder:${relPath}`, err);
+            }
+          })
+        );
 
-      void vscode.window.showInformationMessage('LiveSync: deleted folder');
-    } catch (err) {
-      logExpectedError(`deleteFolder:${folderPath}`, err);
-      void vscode.window.showErrorMessage('LiveSync: failed to delete folder');
-    }
+        await Promise.all(tasks);
+        progress.report({ message: `${completed}/${entries.length} files`, increment: 100 });
+      }
+    );
+
+    // Refresh after batch delete
+    await vscode.commands.executeCommand('livesync.refresh', { workspaceId, folderPath });
+    void vscode.window.showInformationMessage(`LiveSync: Deleted ${completed} file(s)`);
   });
 }

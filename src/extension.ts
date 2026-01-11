@@ -45,7 +45,7 @@ export async function activate(context: vscode.ExtensionContext) {
   globalServices = services;
 
   // File event auto-actions (save/create/delete/move)
-  const bridge = new FileEventBridge(services.state, services.config, services.validator, services.remote, services.notifications);
+  const bridge = new FileEventBridge(services.state, services.config, services.validator, services.remote, services.notifications, services.provider);
   bridge.register(context.subscriptions);
 
   // Commands

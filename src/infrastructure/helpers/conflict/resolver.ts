@@ -1,8 +1,8 @@
 /**
- * Conflict Resolution
+ * Conflict Resolution - User Prompts
  * 
  * Handles prompting the user and collecting their decision.
- * Manages test mode responses for automated testing.
+ * Uses conflict type to determine appropriate message.
  */
 
 import * as vscode from 'vscode';
@@ -17,12 +17,48 @@ export type Resolution =
   | { action: 'diff' };
 
 /**
+ * Mapping of conflict types to user-facing messages
+ */
+const CONFLICT_MESSAGES: Record<string, string> = {
+  // Save conflicts
+  'remote_modified_action': 'Remote file was modified',
+  'remote_modified_check': 'Remote file was modified',
+  
+  // Create conflicts
+  'file_exists_action': 'File already exists on remote',
+  'file_exists_check': 'File already exists on remote',
+  
+  // Move conflicts (file_exists is reused, but message is context-dependent)
+  'uncommitted_changes_action': 'Folder has uncommitted changes',
+  'uncommitted_changes_check': 'Folder has uncommitted changes',
+  
+  // Delete conflicts (remote_modified is reused)
+  
+  // Open conflicts
+  'remote_differs_action': 'Remote file differs from local',
+  'remote_differs_check': 'Remote file differs from local',
+  
+  // Global conflicts
+  'type_mismatch_action': 'Type mismatch (file vs folder)',
+  'type_mismatch_check': 'Type mismatch (file vs folder)',
+};
+
+/**
+ * Mapping of suggested actions to user-facing labels
+ */
+const ACTION_LABELS: Record<string, string> = {
+  'upload': 'Upload anyway',
+  'download': 'Download anyway',
+  'delete': 'Delete anyway',
+  'skip': 'Skip',
+};
+
+/**
  * Resolve a detected conflict by prompting the user
  * 
  * @param conflict - The detected conflict information
  * @param workspaceId - Workspace containing the file
  * @param relPath - Relative path of the conflicting file
- * @param state - State manager (used for test mode only)
  * @returns User's decision on how to proceed
  */
 export async function resolveConflict(
@@ -39,17 +75,8 @@ export async function resolveConflict(
     }
   }
 
-  // Determine action mode based on conflict type
-  const mode = conflict.suggestedAction === 'skip' 
-    ? 'delete'
-    : conflict.suggestedAction;
-
-  // Show prompt to user
-  const decision = await promptUser(
-    mode,
-    conflict.allowDiff,
-    conflict.reason
-  );
+  // Prompt user with appropriate message
+  const decision = await promptUserForConflict(conflict);
     
   if (decision === 'diff') {
     // Show diff
@@ -65,63 +92,49 @@ export async function resolveConflict(
 }
 
 /**
- * Show conflict prompt to user
+ * Prompt user to resolve conflict
  * 
- * @param mode - Type of action being attempted
- * @param allowDiff - Whether to show "Show Diff" option
- * @param relPath - File path for display
- * @param reason - Conflict reason/message
- * @returns User's choice: 'proceed' | 'diff' | 'cancel' | 'ignore'
+ * @param conflict - Detected conflict
+ * @returns User's decision
  */
-async function promptUser(
-  mode: 'upload' | 'download' | 'delete' | 'move',
-  allowDiff: boolean,
-  reason: string
-): Promise<'proceed' | 'diff' | 'cancel' | 'ignore'> {
-  const actionLabel = getActionLabel(mode);
-  const message = `${reason}. \n${actionLabel}?`;
-
-  // Build options
+async function promptUserForConflict(
+  conflict: ConflictInfo
+): Promise<'proceed' | 'cancel' | 'ignore' | 'diff'> {
+  // Get message for this conflict type
+  const message = CONFLICT_MESSAGES[conflict.type] || 'Conflict detected';
+  
+  // Check-only conflicts → just show info, no action
+  if (conflict.type.endsWith('_check')) {
+    await vscode.window.showInformationMessage(`LiveSync (check): ${message}.`);
+    return 'cancel';  // Don't proceed with any action
+  }
+  
+  // Action conflicts → prompt user with options
+  const actionLabel = ACTION_LABELS[conflict.suggestedAction] || 'Proceed anyway';
+  const fullMessage = `${message}.\n${actionLabel}?`;
+  
   const options: string[] = [];
   
-  if (allowDiff) {
+  if (conflict.allowDiff) {
     options.push('Show Diff');
   }
   
   options.push('Proceed', 'Ignore');
-
-  // Show modal prompt
-  const response = await vscode.window.showWarningMessage(
-    message,
-    ...options
-  );
-
-  // Map response to action
-  if (!response || response === 'Cancel') {
-    return 'cancel';
-  }
-
-  if (response === 'Show Diff') {
-    return 'diff';
-  }
-
-  if (response === 'Ignore') {
-    return 'ignore';
-  }
-
-  if (response === 'Proceed') {
-    return 'proceed';
-  }
-
-  return 'cancel'; // Default fallback
+  
+  const response = await vscode.window.showWarningMessage(fullMessage, ...options);
+  
+  if (!response || response === 'Cancel') {return 'cancel';}
+  if (response === 'Show Diff') {return 'diff';}
+  if (response === 'Ignore') {return 'ignore';}
+  if (response === 'Proceed') {return 'proceed';}
+  
+  return 'cancel';
 }
 
 /**
  * Show info-only notification for check-only policies
+ * (Alternative to resolveConflict when policy is check-only)
  * 
- * @param operation - Type of operation
- * @param relPath - File path
- * @param oldPath - Old path (for move operations)
  * @param conflict - Optional conflict info (if detected)
  */
 export async function showCheckInfo(
@@ -131,30 +144,13 @@ export async function showCheckInfo(
   
   if (conflict) {
     // Show conflict details
-    message = `LiveSync (check): ${conflict.reason}.`;
+    const conflictMessage = CONFLICT_MESSAGES[conflict.type] || 'Conflict detected';
+    message = `LiveSync (check): ${conflictMessage}.`;
   } else {
     // Show generic success message
-    message = `LiveSync (check): No action taken.`;
+    message = `LiveSync (check): No conflict detected.`;
   }
   
   // Show info notification (non-blocking)
   vscode.window.showInformationMessage(message);
-}
-
-/**
- * Get human-readable action label
- */
-function getActionLabel(mode: 'upload' | 'download' | 'delete' | 'move'): string {
-  switch (mode) {
-    case 'upload':
-      return 'Upload anyway';
-    case 'download':
-      return 'Download anyway';
-    case 'delete':
-      return 'Delete anyway';
-    case 'move':
-      return 'Move anyway';
-    default:
-      return 'Proceed anyway';
-  }
 }

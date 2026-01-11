@@ -1,52 +1,45 @@
 /**
- * Policy Utilities
- * 
- * Helper functions to make decisions based on parsed policies.
- * Pure functions with no side effects.
+ * Policy Utilities - Updated for Cleaner ActionPolicy
  */
 
 import type { ActionPolicy } from '@domain/types';
 
 /**
- * Check if policy is a no-op (does nothing)
+ * Check if policy is no-op (doesn't perform any action)
  * 
- * @param policy - Parsed policy object
- * @returns true if policy does nothing
+ * @param policy - Parsed policy
+ * @returns true if policy is 'none' or action is 'skip'
  */
 export function isNoOpPolicy(policy: ActionPolicy): boolean {
-  return !policy.check && !policy.direction && policy.extras.size === 0;
+  return policy.mode === 'none' || policy.action === 'skip';
 }
 
 /**
- * Check if policy requires fresh remote snapshot
+ * Check if policy is check-only (info message, no action)
  * 
- * @param policy - Parsed policy object
- * @returns true if remote snapshot should be refreshed
- */
-export function requiresRemoteSnapshot(policy: ActionPolicy): boolean {
-  // Need remote snapshot if:
-  // - Policy checks conflicts (needs to compare with remote)
-  // - Policy uploads (needs to verify remote state after)
-  return policy.check || policy.direction === 'upload';
-}
-
-/**
- * Check if policy requires fresh local snapshot
- * 
- * @param policy - Parsed policy object
- * @returns true if local snapshot should be refreshed
- */
-export function requiresLocalSnapshot(policy: ActionPolicy): boolean {
-  // Need local snapshot if checking conflicts for downloads
-  return policy.check && policy.direction === 'download';
-}
-
-/**
- * Check if policy is check-only (no action)
- * 
- * @param policy - Parsed policy object
- * @returns true if policy only checks without taking action
+ * @param policy - Parsed policy
+ * @returns true if mode is 'check'
  */
 export function isCheckOnlyPolicy(policy: ActionPolicy): boolean {
-  return policy.check && !policy.direction && policy.extras.size === 0;
+  return policy.mode === 'check';
+}
+
+/**
+ * Check if policy requires conflict detection
+ * 
+ * @param policy - Parsed policy
+ * @returns true if mode includes 'check'
+ */
+export function shouldCheckConflict(policy: ActionPolicy): boolean {
+  return policy.mode === 'check' || policy.mode === 'check&action';
+}
+
+/**
+ * Check if policy requires action execution
+ * 
+ * @param policy - Parsed policy
+ * @returns true if mode includes 'action'
+ */
+export function shouldExecuteAction(policy: ActionPolicy): boolean {
+  return policy.mode === 'action' || policy.mode === 'check&action';
 }

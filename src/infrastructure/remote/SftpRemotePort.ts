@@ -417,7 +417,7 @@ export class SftpRemotePort implements RemotePort {
         // Ensure parent directory exists
         await ensureRemoteDir(sftpClient, remoteDir);
         await sftpClient.rename(oldRemoteAbs, newRemoteAbs);
-        logSync(workspaceId, 'upload', newPath);
+        logSync(workspaceId, 'move', newPath);
       });
     });
   }

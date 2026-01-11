@@ -1,171 +1,189 @@
 /**
- * Conflict Detection
+ * Conflict Detection - Keyword-Based System
  * 
  * Pure functions to detect conflicts based on current state.
- * No side effects - just reads state and returns conflict info.
+ * Uses keywords to build conflict types dynamically.
  */
 
 import type { WorkspaceId, RelPath, NodeMeta } from '@domain/types';
 import type { SyncStateManager } from '@app/SyncStateManager';
-import { basenameRel } from '../path';
+import {
+  hasRemoteChangedExternally,
+  hasTypeMismatch,
+  fileExistsRemote,
+  folderHasUncommittedChanges,
+  hasContentDifference
+} from './helpers';
 
-export type ConflictType = 
-  | 'upload-conflict'      // Remote modified, trying to upload
-  | 'download-conflict'    // Local modified, trying to download
-  | 'exists-conflict'      // File exists remotely, trying to create
-  | 'move-conflict'     // File exists remotely, trying to move or move
-  | 'delete-conflict';     // Remote modified, trying to delete
+/**
+ * Conflict detection parameters
+ */
+export interface ConflictDetectionParams {
+  operation: 'save' | 'create' | 'delete' | 'move' | 'open';
+  workspaceId: WorkspaceId;
+  relPath: RelPath;
+  actualMetas: { 
+    local?: NodeMeta;   // Current filesystem state
+    remote?: NodeMeta;  // Fresh remote (just fetched, NOT saved to snapshot)
+  };
+  oldMetas: { 
+    local?: NodeMeta;   // From snapshot (before event)
+    remote?: NodeMeta;  // From snapshot (our last intentional change)
+  };
+  state: SyncStateManager;
+  isCheckOnly: boolean;  // From policy.check
+}
 
+/**
+ * Conflict information returned to caller
+ */
 export interface ConflictInfo {
-  type: ConflictType;
-  reason: string;
-  allowDiff: boolean;
+  type: string;           // e.g., 'remote_modified_action', 'file_exists_check'
+  allowDiff: boolean;     // Whether "Show Diff" button should appear
   suggestedAction: 'upload' | 'download' | 'delete' | 'skip';
 }
 
 /**
  * Detect conflict for a specific operation
  * 
- * IMPORTANT: Assumes snapshots are already fresh!
- * Call ensureFreshRemoteSnapshot() or ensureFreshLocalSnapshot() before this.
+ * Uses keyword-based system to build conflict types dynamically.
+ * Keywords describe what's wrong, mode describes the policy.
  * 
- * @param operation - Type of file operation
- * @param workspaceId - Workspace containing the file
- * @param relPath - Relative path to check
- * @param state - State manager with fresh snapshots
+ * @param params - Detection parameters
  * @returns ConflictInfo if conflict detected, null otherwise
  */
-export function detectConflict(
-  operation: 'save' | 'create' | 'delete' | 'move' | 'open',
-  workspaceId: WorkspaceId,
-  relPath: RelPath,
-  state: SyncStateManager,
-  oldLocalMeta?: NodeMeta
-): ConflictInfo | null {
-  const localMeta = state.getLocalMeta(workspaceId, relPath) || oldLocalMeta;
-  const remoteMeta = state.getRemoteMeta(workspaceId, relPath);
-  const fileName = basenameRel(relPath);
-
-  switch (operation) {
-    case 'save': {
-      // Uploading local changes - check if remote was modified
-      if (!remoteMeta || remoteMeta.type !== 'file') {
-        return null; // No remote file, no conflict
-      }
-      
-      if (!localMeta || localMeta.type !== 'file') {
-        return null; // No local file, no conflict
-      }
-      
-      const remoteModified = remoteMeta.hash !== localMeta.hash;
-      
-      if (remoteModified) {
-        return {
-          type: 'upload-conflict',
-          reason: `Remote file ${fileName} was modified`,
-          allowDiff: true,
-          suggestedAction: 'upload'
-        };
-      }
-      
-      return null;
-    }
-
-    case 'create':
-    case 'move': {
-      // For folders: check if status is NOT 'unchanged' or 'added'
-      if (localMeta && localMeta.type === 'folder') {
-        const folderEntry = state.getDiffEntry(workspaceId, relPath);
-        if (folderEntry && 
-            folderEntry.status !== 'unchanged' && 
-            folderEntry.status !== 'added') {
-          return {
-            type: 'move-conflict',
-            reason: `Folder ${fileName} has uncommitted changes`,
-            allowDiff: false,
-            suggestedAction: 'skip'
-          };
-        }
-      }
-      
-      // Creating/moving file - check if it already exists remotely
-      if (remoteMeta) {
-        return {
-          type: 'exists-conflict',
-          reason: operation === 'create' 
-            ? `File ${fileName} already exists on remote server`
-            : 'Target path already exists on remote server',
-          allowDiff: remoteMeta.type === 'file',
-          suggestedAction: 'download' // Suggest downloading existing remote file
-        };
-      }
-      
-      return null;
-    }
-
-    case 'delete': {
-      // Deleting file - check if remote was modified or deleted
-      if (!remoteMeta) {
-        return null;
-      }
-
-      if (remoteMeta.type !== 'file') {
-        return null; // Not a file, no conflict check
-      }
-
-      // Check if remote was modified since last sync
-      if (localMeta && localMeta.type === 'file') {
-        const remoteModified = remoteMeta.hash !== localMeta.hash;
-        
-        if (remoteModified) {
-          return {
-            type: 'delete-conflict',
-            reason: `Remote ${fileName} file was modified before deletion`,
-            allowDiff: true,
-            suggestedAction: 'skip' // Suggest keeping modified file
-          };
-        }
-      }
-      
-      return null;
-    }
-
-    case 'open': {
-      // Downloading file - check if local was modified
-      if (!localMeta || localMeta.type !== 'file') {
-        return null; // No local file, no conflict
-      }
-      
-      if (!remoteMeta || remoteMeta.type !== 'file') {
-        return null; // No remote file, no conflict
-      }
-      
-      const localModified = localMeta.hash !== remoteMeta.hash;
-      
-      if (localModified) {
-        return {
-          type: 'download-conflict',
-          reason: `Local file ${fileName} was modified`,
-          allowDiff: true,
-          suggestedAction: 'download'
-        };
-      }
-      
-      return null;
-    }
-
-    default:
-      return null;
+export function detectConflict(params: ConflictDetectionParams): ConflictInfo | null {
+  const { operation, workspaceId, relPath, actualMetas, oldMetas, state, isCheckOnly } = params;
+  const keywords: string[] = [];
+  
+  // ══════════════════════════════════════════════════════════
+  // GLOBAL CHECKS (apply to all operations)
+  // ══════════════════════════════════════════════════════════
+  
+  if (hasTypeMismatch(actualMetas.local, actualMetas.remote)) {
+    keywords.push('type_mismatch');
   }
+  
+  // ══════════════════════════════════════════════════════════
+  // OPERATION-SPECIFIC CHECKS
+  // ══════════════════════════════════════════════════════════
+  
+  switch (operation) {
+    case 'save':
+      // Check if someone else modified remote
+      if (hasRemoteChangedExternally(oldMetas.remote, actualMetas.remote)) {
+        keywords.push('remote_modified');
+      }
+      break;
+      
+    case 'create':
+      // Check if file already exists remotely
+      if (fileExistsRemote(actualMetas.remote)) {
+        keywords.push('file_exists');
+      }
+      break;
+      
+    case 'move':
+      // For folders: check uncommitted changes
+      if (actualMetas.local?.type === 'folder') {
+        if (folderHasUncommittedChanges(workspaceId, relPath, state)) {
+          keywords.push('uncommitted_changes');
+        }
+      }
+      // For files: check if target exists
+      else if (fileExistsRemote(actualMetas.remote)) {
+        keywords.push('file_exists');
+      }
+      break;
+      
+    case 'delete':
+      // For folders: check uncommitted changes
+      if (oldMetas.local?.type === 'folder') {
+        if (folderHasUncommittedChanges(workspaceId, relPath, state)) {
+          keywords.push('uncommitted_changes');
+        }
+      }
+      // For files: check if remote was modified
+      else if (hasRemoteChangedExternally(oldMetas.remote, actualMetas.remote)) {
+        keywords.push('remote_modified');
+      }
+      break;
+      
+    case 'open':
+      // Check if remote differs from local
+      if (hasContentDifference(actualMetas.local, actualMetas.remote)) {
+        keywords.push('remote_differs');
+      }
+      break;
+  }
+  
+  // No conflict detected
+  if (keywords.length === 0) {return null;}
+  
+  // ══════════════════════════════════════════════════════════
+  // BUILD CONFLICT TYPE
+  // ══════════════════════════════════════════════════════════
+  
+  const mode = isCheckOnly ? 'check' : 'action';
+  const type = `${keywords.join('_')}_${mode}`;
+  
+  return {
+    type,
+    allowDiff: determineAllowDiff(keywords),
+    suggestedAction: determineSuggestedAction(operation, keywords)
+  };
 }
 
 /**
- * Check if a file is currently marked as having an ignored conflict
+ * Determine if diff viewer should be available
+ * 
+ * @param keywords - Conflict keywords
+ * @returns true if diff should be allowed
  */
-export function hasIgnoredConflict(
-  state: SyncStateManager,
-  workspaceId: WorkspaceId,
-  relPath: RelPath
-): boolean {
-  return state.isConflictIgnored(workspaceId, relPath);
+function determineAllowDiff(keywords: string[]): boolean {
+  // Type mismatch → no diff possible (file vs folder)
+  if (keywords.includes('type_mismatch')) {return false;}
+  
+  // Uncommitted changes → no meaningful diff (folder-level)
+  if (keywords.includes('uncommitted_changes')) {return false;}
+  
+  // All other cases → allow diff
+  return true;
+}
+
+/**
+ * Determine suggested action based on operation and conflict keywords
+ * 
+ * @param operation - Type of operation
+ * @param keywords - Conflict keywords
+ * @returns Suggested action to perform
+ */
+function determineSuggestedAction(
+  operation: 'save' | 'create' | 'delete' | 'move' | 'open',
+  keywords: string[]
+): 'upload' | 'download' | 'delete' | 'skip' {
+  // Type mismatch or uncommitted changes → skip (can't proceed safely)
+  if (keywords.includes('type_mismatch') || keywords.includes('uncommitted_changes')) {
+    return 'skip';
+  }
+  
+  switch (operation) {
+    case 'save':
+      return 'upload';  // Remote modified, but we want to upload anyway
+      
+    case 'create':
+      return 'download';  // File exists, suggest downloading it
+      
+    case 'move':
+      return 'upload';  // Target exists, suggest overwriting
+      
+    case 'delete':
+      return 'delete';  // Remote modified, but we want to delete anyway
+      
+    case 'open':
+      return 'download';  // Remote differs, suggest downloading
+      
+    default:
+      return 'skip';
+  }
 }

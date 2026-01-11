@@ -1,32 +1,28 @@
-import { ActionPolicy } from "@domain/types";
-  
 /**
+ * Policy Parser - Updated with Cleaner ActionPolicy Structure
+ */
+
+import type { ActionPolicy, SyncAction, PolicyMode } from '@domain/types';
+
+/**
+ * Parse policy string to ActionPolicy
+ * 
  * Accepts strings like:
- *  - "check"
- *  - "save", "upload", "create"
- *  - "download"
- *  - "delete", "check&delete"
- *  - "move", "move", "check&move"
- *  - "check&save", "check&upload", "check&download"
- *  - "none", "", undefined
- *
- * Rules:
- *  - "check" alone => info popup only, no action.
- *  - "check&<action>" => confirmation popup + perform action on Proceed.
- *  - <action> without check => perform action directly.
- *  - Actions:
- *      upload-dir:  "save" | "upload" | "create"
- *      download-dir:"download"
- *      extras:      "delete", "move"/"move"
+ *  - "none", "off", "" → { mode: 'none', action: 'skip' }
+ *  - "check" → { mode: 'check', action: 'skip' }
+ *  - "upload" → { mode: 'action', action: 'upload' }
+ *  - "check&upload" → { mode: 'check&action', action: 'upload' }
+ *  - "delete" → { mode: 'action', action: 'delete' }
+ *  - "move" → { mode: 'action', action: 'move' }
+ *  - etc.
+ * 
+ * @param raw - Policy string from config
+ * @returns Parsed policy with mode and action
  */
 export function parseActionPolicy(raw: string | null | undefined): ActionPolicy {
-  const policy: ActionPolicy = {
-    check: false,
-    direction: undefined,
-    extras: new Set(),
-  };
-
-  if (!raw) {return policy;}
+  if (!raw) {
+    return { mode: 'none', action: 'skip' };
+  }
 
   const tokens = String(raw)
     .toLowerCase()
@@ -34,21 +30,51 @@ export function parseActionPolicy(raw: string | null | undefined): ActionPolicy 
     .map(t => t.trim())
     .filter(Boolean);
 
+  // Check for "none" or "off"
+  if (tokens.includes('none') || tokens.includes('off')) {
+    return { mode: 'none', action: 'skip' };
+  }
+
+  // Check for "check" flag
+  const hasCheck = tokens.includes('check');
+
+  // Determine action from tokens
+  let action: SyncAction = 'skip';
+  
   for (const token of tokens) {
-    if (token === 'check') {
-      policy.check = true;
-    } else if (token === 'none' || token === 'off') {
-      return { check: false, direction: undefined, extras: new Set() };
-    } else if (token === 'save' || token === 'upload' || token === 'create') {
-      policy.direction = 'upload';
-    } else if (token === 'download') {
-      policy.direction = 'download';
-    } else if (token === 'delete') {
-      policy.extras.add('delete');
-    } else if (token === 'move' || token === 'move') {
-      policy.extras.add('move');
+    switch (token) {
+      case 'save':
+      case 'upload':
+      case 'create':
+        action = 'upload';
+        break;
+      case 'download':
+      case 'open':
+        action = 'download';
+        break;
+      case 'delete':
+        action = 'delete';
+        break;
+      case 'move':
+        action = 'move';
+        break;
     }
   }
 
-  return policy;
+  // Handle check-only (check without action)
+  if (hasCheck && action === 'skip') {
+    return { mode: 'check', action: 'skip' };
+  }
+
+  // Determine mode
+  let mode: PolicyMode;
+  if (hasCheck) {
+    mode = 'check&action';
+  } else if (action === 'skip') {
+    mode = 'none';
+  } else {
+    mode = 'action';
+  }
+
+  return { mode, action };
 }
