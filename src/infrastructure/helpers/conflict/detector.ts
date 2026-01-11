@@ -70,9 +70,22 @@ export function detectConflict(params: ConflictDetectionParams): ConflictInfo | 
   
   switch (operation) {
     case 'save':
-      // Check if someone else modified remote
-      if (hasRemoteChangedExternally(oldMetas.remote, actualMetas.remote)) {
-        keywords.push('remote_modified');
+      // Check if content differs (always check this!)
+      if (hasContentDifference(actualMetas.local, actualMetas.remote)) {
+        // Now determine why for better messaging:
+        
+        if (hasRemoteChangedExternally(oldMetas.remote, actualMetas.remote)) {
+          // Remote changed since we last synced
+          keywords.push('remote_modified');
+        } 
+        else if (!oldMetas.remote && fileExistsRemote(actualMetas.remote)) {
+          // File exists but we never synced it
+          keywords.push('file_exists');
+        } 
+        else {
+          // They just differ (refresh updated snapshot, manual edit, etc.)
+          keywords.push('content_differs');
+        }
       }
       break;
       
