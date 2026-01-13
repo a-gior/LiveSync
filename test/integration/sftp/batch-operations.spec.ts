@@ -336,7 +336,7 @@ describe('SFTP Batch Operations', function() {
     assert.ok(files.length >= 20, `Should have at least 20 files, found ${files.length}`);
   });
 
-  // NEW TEST: Streaming pattern with pLimit (matches command layer)
+  // Streaming pattern with pLimit (matches command layer)
   it('streaming upload pattern with pLimit(25)', async () => {
     // Create 50 files
     const files = [];
@@ -375,7 +375,7 @@ describe('SFTP Batch Operations', function() {
     assert.equal(completed, 50, 'Should have completed 50 files');
   });
 
-  // NEW TEST: Streaming download pattern
+  // Streaming download pattern
   it('streaming download pattern with pLimit(25)', async () => {
     // Upload files first
     const files = [];

@@ -24,7 +24,7 @@ import {
 suite('E2E - Delete Event', function() {
   this.timeout(60000);
 
-  let ctx: Partial<E2ETestContext> = {};
+  const ctx: Partial<E2ETestContext> = {};
   let testFile: vscode.Uri;
   const testFileName = 'delete-test.txt';
   const initialContent = 'Initial content for delete test';

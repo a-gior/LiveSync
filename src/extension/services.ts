@@ -26,6 +26,7 @@ export interface Services {
   configStatus: ConfigStatusBar;
   localCache: IndexCacheService;
   remoteCache: IndexCacheService;
+  baseCache: IndexCacheService;
   workspaceListProvider?: WorkspaceListProvider;
   cachePersister: DebouncedCachePersister;
 }

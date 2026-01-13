@@ -29,7 +29,8 @@ describe('DefaultDiffEngine', () => {
       const local: NodeIndex = new Map();
       const remote: NodeIndex = new Map();
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+            const diff = engine.compute(local, remote, base);
       
       assert.equal(diff.size, 0);
     });
@@ -42,7 +43,8 @@ describe('DefaultDiffEngine', () => {
       ]);
       const remote: NodeIndex = new Map();
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+            const diff = engine.compute(local, remote, base);
       
       assert.equal(diff.size, 1);
       const entry = diff.get(stringToRel('new-file.txt'));
@@ -59,7 +61,8 @@ describe('DefaultDiffEngine', () => {
         [stringToRel('deleted-file.txt'), file('hash456')]
       ]);
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       
       assert.equal(diff.size, 1);
       const entry = diff.get(stringToRel('deleted-file.txt'));
@@ -78,7 +81,8 @@ describe('DefaultDiffEngine', () => {
         [stringToRel('same-file.txt'), file('hashABC')]
       ]);
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       
       assert.equal(diff.size, 1);
       const entry = diff.get(stringToRel('same-file.txt'));
@@ -95,7 +99,8 @@ describe('DefaultDiffEngine', () => {
         [stringToRel('modified-file.txt'), file('hashOLD')]
       ]);
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       
       assert.equal(diff.size, 1);
       const entry = diff.get(stringToRel('modified-file.txt'));
@@ -112,7 +117,8 @@ describe('DefaultDiffEngine', () => {
         [stringToRel('conflict'), folder('folderHash')]
       ]);
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       
       assert.equal(diff.size, 1);
       const entry = diff.get(stringToRel('conflict'));
@@ -130,7 +136,8 @@ describe('DefaultDiffEngine', () => {
       ]);
       const remote: NodeIndex = new Map();
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       
       const entry = diff.get(stringToRel('new-folder'));
       assert.ok(entry);
@@ -144,7 +151,8 @@ describe('DefaultDiffEngine', () => {
         [stringToRel('old-folder'), folder('folderHash')]
       ]);
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       
       const entry = diff.get(stringToRel('old-folder'));
       assert.ok(entry);
@@ -160,7 +168,8 @@ describe('DefaultDiffEngine', () => {
         [stringToRel('same-folder'), folder('folderHash123')]
       ]);
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       
       const entry = diff.get(stringToRel('same-folder'));
       assert.ok(entry);
@@ -176,7 +185,8 @@ describe('DefaultDiffEngine', () => {
         [stringToRel('changed-folder'), folder('oldHash')]
       ]);
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       
       const entry = diff.get(stringToRel('changed-folder'));
       assert.ok(entry);
@@ -198,7 +208,8 @@ describe('DefaultDiffEngine', () => {
         [stringToRel('modified.txt'), file('hashOLD')],
       ]);
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       
       assert.equal(diff.size, 4);
       assert.equal(diff.get(stringToRel('added.txt'))?.status, 'added');
@@ -216,7 +227,8 @@ describe('DefaultDiffEngine', () => {
       ]);
       const remote: NodeIndex = new Map();
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       
       assert.equal(diff.size, 2);
       assert.equal(diff.get(stringToRel('src/app.ts'))?.status, 'added');
@@ -232,7 +244,8 @@ describe('DefaultDiffEngine', () => {
         [stringToRel(deepPath), file('deepHash')]
       ]);
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       
       assert.equal(diff.get(stringToRel(deepPath))?.status, 'unchanged');
     });
@@ -247,7 +260,8 @@ describe('DefaultDiffEngine', () => {
         [stringToRel('file.txt'), file('hash123')]
       ]);
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       
       assert.equal(diff.get(stringToRel('file.txt'))?.status, 'modified');
     });
@@ -260,7 +274,8 @@ describe('DefaultDiffEngine', () => {
         [stringToRel('file.txt'), file('hash123')]
       ]);
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       
       assert.equal(diff.get(stringToRel('file.txt'))?.status, 'modified');
     });
@@ -273,7 +288,8 @@ describe('DefaultDiffEngine', () => {
         [stringToRel('file.txt'), file('__unknown__')]
       ]);
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       
       assert.equal(diff.get(stringToRel('file.txt'))?.status, 'modified');
     });
@@ -286,7 +302,8 @@ describe('DefaultDiffEngine', () => {
         [stringToRel('file.txt'), file('hash123')]
       ]);
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       
       assert.equal(diff.get(stringToRel('file.txt'))?.status, 'modified');
     });
@@ -304,7 +321,8 @@ describe('DefaultDiffEngine', () => {
       }
       
       const start = Date.now();
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       const duration = Date.now() - start;
       
       assert.equal(diff.size, 100);
@@ -324,7 +342,8 @@ describe('DefaultDiffEngine', () => {
       ]);
       const remote: NodeIndex = new Map();
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       const entry = diff.get(stringToRel('file.txt'));
       
       assert.ok(entry);
@@ -337,7 +356,8 @@ describe('DefaultDiffEngine', () => {
       ]);
       const remote: NodeIndex = new Map();
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       const entry = diff.get(stringToRel('file.txt'));
       
       assert.ok(entry);
@@ -351,7 +371,8 @@ describe('DefaultDiffEngine', () => {
       ]);
       const remote: NodeIndex = new Map();
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       const entry = diff.get(stringToRel('file.txt'));
       
       assert.ok(entry);
@@ -366,7 +387,8 @@ describe('DefaultDiffEngine', () => {
         [stringToRel('file.txt'), fileMeta]
       ]);
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       const entry = diff.get(stringToRel('file.txt'));
       
       assert.ok(entry);
@@ -385,7 +407,8 @@ describe('DefaultDiffEngine', () => {
         [stringToRel('file.txt'), rightMeta]
       ]);
       
-      const diff = engine.compute(local, remote);
+      const base: NodeIndex = new Map();  // Empty base for most tests
+      const diff = engine.compute(local, remote, base);
       const entry = diff.get(stringToRel('file.txt'));
       
       assert.ok(entry);
@@ -393,4 +416,70 @@ describe('DefaultDiffEngine', () => {
       assert.deepEqual(entry.right, rightMeta);
     });
   });
+
+  describe('3-Way Merge Logic', () => {
+  it('detects conflict when both changed differently', () => {
+    const base: NodeIndex = new Map([
+      [stringToRel('file.txt'), file('hashBASE')]
+    ]);
+    const local: NodeIndex = new Map([
+      [stringToRel('file.txt'), file('hashLOCAL')]
+    ]);
+    const remote: NodeIndex = new Map([
+      [stringToRel('file.txt'), file('hashREMOTE')]
+    ]);
+    
+    const diff = engine.compute(local, remote, base);
+    
+    assert.equal(diff.get(stringToRel('file.txt'))?.status, 'modified');
+  });
+
+  it('no conflict when both changed to same', () => {
+    const base: NodeIndex = new Map([
+      [stringToRel('file.txt'), file('hashBASE')]
+    ]);
+    const local: NodeIndex = new Map([
+      [stringToRel('file.txt'), file('hashSAME')]
+    ]);
+    const remote: NodeIndex = new Map([
+      [stringToRel('file.txt'), file('hashSAME')]
+    ]);
+    
+    const diff = engine.compute(local, remote, base);
+    
+    assert.equal(diff.get(stringToRel('file.txt'))?.status, 'unchanged');
+  });
+
+  it('only local changed = modified', () => {
+    const base: NodeIndex = new Map([
+      [stringToRel('file.txt'), file('hashBASE')]
+    ]);
+    const local: NodeIndex = new Map([
+      [stringToRel('file.txt'), file('hashNEW')]
+    ]);
+    const remote: NodeIndex = new Map([
+      [stringToRel('file.txt'), file('hashBASE')]
+    ]);
+    
+    const diff = engine.compute(local, remote, base);
+    
+    assert.equal(diff.get(stringToRel('file.txt'))?.status, 'modified');
+  });
+
+  it('only remote changed = modified', () => {
+    const base: NodeIndex = new Map([
+      [stringToRel('file.txt'), file('hashBASE')]
+    ]);
+    const local: NodeIndex = new Map([
+      [stringToRel('file.txt'), file('hashBASE')]
+    ]);
+    const remote: NodeIndex = new Map([
+      [stringToRel('file.txt'), file('hashNEW')]
+    ]);
+    
+    const diff = engine.compute(local, remote, base);
+    
+    assert.equal(diff.get(stringToRel('file.txt'))?.status, 'modified');
+  });
+});
 });

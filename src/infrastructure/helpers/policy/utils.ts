@@ -11,7 +11,7 @@ import type { ActionPolicy } from '@domain/types';
  * @returns true if policy is 'none' or action is 'skip'
  */
 export function isNoOpPolicy(policy: ActionPolicy): boolean {
-  return policy.mode === 'none' || policy.action === 'skip';
+  return policy.mode === 'none';
 }
 
 /**

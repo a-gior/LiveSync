@@ -9,7 +9,7 @@ import type { WorkspaceId, RelPath } from '@domain/types';
 import type { SyncStateManager } from '@app/SyncStateManager';
 import type { ConflictInfo } from '@helpers/conflict/detector';
 
-// Import conflict messages to extract reason from type
+// Conflict messages for user-friendly reasons
 const CONFLICT_MESSAGES: Record<string, string> = {
   'remote_modified_action': 'Remote file was modified',
   'remote_modified_check': 'Remote file was modified',
@@ -21,15 +21,12 @@ const CONFLICT_MESSAGES: Record<string, string> = {
   'remote_differs_check': 'Remote file differs from local',
   'type_mismatch_action': 'Type mismatch (file vs folder)',
   'type_mismatch_check': 'Type mismatch (file vs folder)',
+  'content_differs_action': 'File content differs',
+  'content_differs_check': 'File content differs',
 };
 
 /**
  * Mark a conflict as ignored by the user
- * 
- * @param state - State manager
- * @param workspaceId - Workspace containing the file
- * @param relPath - Relative path of the file
- * @param conflict - Conflict information
  */
 export function markConflictIgnored(
   state: SyncStateManager,
@@ -50,10 +47,6 @@ export function markConflictIgnored(
 
 /**
  * Clear ignored conflict if the file was successfully synced
- * 
- * @param state - State manager
- * @param workspaceId - Workspace containing the file
- * @param relPath - Relative path of the file
  */
 export function clearIgnoredConflictIfResolved(
   state: SyncStateManager,
@@ -67,11 +60,6 @@ export function clearIgnoredConflictIfResolved(
 
 /**
  * Check if a conflict is currently ignored
- * 
- * @param state - State manager
- * @param workspaceId - Workspace containing the file
- * @param relPath - Relative path of the file
- * @returns true if conflict is marked as ignored
  */
 export function isConflictIgnored(
   state: SyncStateManager,
@@ -83,9 +71,6 @@ export function isConflictIgnored(
 
 /**
  * Map ConflictInfo type string to SyncStateManager conflict type
- * 
- * @param conflictType - Conflict type string (e.g., 'remote_modified_action')
- * @returns Conflict type for state manager
  */
 function mapConflictType(
   conflictType: string
@@ -97,7 +82,8 @@ function mapConflictType(
   if (baseType.includes('remote_modified') || 
       baseType.includes('file_exists') || 
       baseType.includes('uncommitted_changes') ||
-      baseType.includes('type_mismatch')) {
+      baseType.includes('type_mismatch') ||
+      baseType.includes('content_differs')) {
     return 'remote-modified';
   }
   

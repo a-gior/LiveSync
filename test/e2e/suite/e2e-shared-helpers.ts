@@ -189,6 +189,26 @@ export async function cleanTestFile(
   const workspaceId = getWorkspaceId(testWorkspace);
   const relPath = relFromAbs(testWorkspace.uri.fsPath, fileUri.fsPath);
   
+  // Clear from ALL THREE snapshots
+  services.state.applyLocal({
+    workspaceId: workspaceId,
+    type: 'delete',
+    path: relPath
+  });
+  
+  services.state.applyRemote({
+    workspaceId: workspaceId,
+    type: 'delete',
+    path: relPath
+  });
+  
+  // Clear from base snapshot too!
+  services.state.applyBase({
+    workspaceId: workspaceId,
+    type: 'delete',
+    path: relPath
+  });
+
   if (services.state.isConflictIgnored(workspaceId, relPath)) {
     services.state.clearIgnoredConflict(workspaceId, relPath);
   }

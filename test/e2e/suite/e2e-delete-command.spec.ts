@@ -1,19 +1,14 @@
 /**
  * E2E Tests - Delete Commands
- * Tests unified delete commands that detect what exists and prompt user
+ * Tests delete commands with various policies and scenarios
  * 
  * Test Structure:
- * 1. Delete File (Local Only) - 1 test
- * 2. Delete File (Remote Only) - 1 test
- * 3. Delete File (Both) - 1 test
- * 4. Delete Folder (Local Only) - 1 test
- * 5. Delete Folder (Remote Only) - 1 test
- * 6. Delete Folder (Both) - 1 test
+ * 1. Delete File with Policies - 4 tests (none, delete, check, check&delete)
+ * 2. Delete File Scenarios - 3 tests (local-only, remote-only, both)
+ * 3. Delete Folder with Policies - 4 tests (none, delete, check, check&delete)
+ * 4. Delete Folder Scenarios - 3 tests (local-only, remote-only, both)
  * 
- * Total: 6 tests
- * 
- * Note: In test mode, commands delete both sides if both exist.
- * In real usage, user is prompted to choose which side(s) to delete.
+ * Total: 14 tests
  */
 
 import * as vscode from 'vscode';
@@ -21,7 +16,6 @@ import {
   setupE2ESuite,
   teardownE2ESuite,
   createAndOpenFile,
-  cleanTestFile,
   assertFileStatus,
   assertRemoteExists,
   assertLocalExists,
@@ -31,18 +25,18 @@ import {
   cleanAllTestFiles,
   createTestConfig
 } from './e2e-shared-helpers';
+import { RelPath, WorkspaceId } from '../../../src/domain/types';
+import path from 'path';
 
 suite('E2E - Delete Commands', function() {
-  this.timeout(10000);
+  this.timeout(30000);
 
-  let ctx: Partial<E2ETestContext> = {};
-  
+  const ctx: Partial<E2ETestContext> = {};
   const fileContent = 'Delete test content';
 
   suiteSetup(async () => {
     const setup = await setupE2ESuite();
     Object.assign(ctx, setup);
-    
     await cleanAllTestFiles(ctx.remoteVerifier!);
   });
 
@@ -56,218 +50,466 @@ suite('E2E - Delete Commands', function() {
   });
 
   // ==========================================================================
-  // HELPER FUNCTIONS
+  // TYPES & CONSTANTS
+  // ==========================================================================
+
+  type Scenario = 'local-only' | 'remote-only' | 'both';
+  type EntityType = 'file' | 'folder';
+  type DeletePolicy = 'none' | 'delete' | 'check' | 'check&delete';
+
+  interface TestEntity {
+    type: EntityType;
+    uri: vscode.Uri;
+    remotePath: string;
+    children?: { uri: vscode.Uri; remotePath: string }[];
+  }
+
+  interface ScenarioExpectations {
+    localBefore: boolean;
+    remoteBefore: boolean;
+    statusBefore: 'added' | 'removed' | 'unchanged';
+  }
+
+  // ==========================================================================
+  // ENTITY CREATION HELPERS
   // ==========================================================================
 
   /**
-   * Helper: Test file deletion behavior
+   * Create a test entity (file or folder)
    */
-  async function testDeleteFileBehavior(
-    testFileName: string,
-    scenario: 'local-only' | 'remote-only' | 'both',
-    shouldExistLocalAfter: boolean,
-    shouldExistRemoteAfter: boolean
-  ): Promise<void> {
-    const testFile = vscode.Uri.joinPath(ctx.testWorkspace!.uri, testFileName);
-    
-    await cleanTestFile(testFile, testFileName, ctx.remoteVerifier!, ctx.services!, ctx.testWorkspace!);
-    ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
+  function createTestEntity(name: string, type: EntityType): TestEntity {
+    if (type === 'file') {
+      const uri = vscode.Uri.joinPath(ctx.testWorkspace!.uri, name);
+      return {
+        type: 'file',
+        uri,
+        remotePath: name
+      };
+    } else {
+      const folderUri = vscode.Uri.joinPath(ctx.testWorkspace!.uri, name);
+      return {
+        type: 'folder',
+        uri: folderUri,
+        remotePath: name,
+        children: [
+          {
+            uri: vscode.Uri.joinPath(folderUri, 'file1.txt'),
+            remotePath: `${name}/file1.txt`
+          },
+          {
+            uri: vscode.Uri.joinPath(folderUri, 'file2.txt'),
+            remotePath: `${name}/file2.txt`
+          }
+        ]
+      };
+    }
+  }
+
+  /**
+   * Clean an entity (file or folder) - removes from filesystem, remote, AND state
+   */
+  async function cleanEntity(entity: TestEntity): Promise<void> {
+    // Delete from filesystem
+    try {
+      await vscode.workspace.fs.delete(entity.uri, { recursive: true });
+    } catch {
+      // Ignore
+    }
+
+    // Delete from remote
+    try {
+      if (entity.type === 'file') {
+        await ctx.remoteVerifier!.deleteFile(entity.remotePath);
+      } else {
+        await ctx.remoteVerifier!.deleteFolder(entity.remotePath);
+      }
+    } catch {
+      // Ignore
+    }
+
+    // Clear from state snapshots (NEW!)
+    if (ctx.services) {
+      const wsId = ctx.testWorkspace!.uri.fsPath as WorkspaceId;
+      
+      if (entity.type === 'file') {
+        const relPath = path.relative(ctx.testWorkspace!.uri.fsPath, entity.uri.fsPath) as RelPath;
+        clearFromAllSnapshots(wsId, relPath);
+      } else {
+        // For folders, clear all children
+        for (const child of entity.children!) {
+          const relPath = path.relative(ctx.testWorkspace!.uri.fsPath, child.uri.fsPath) as RelPath;
+          clearFromAllSnapshots(wsId, relPath);
+        }
+        
+        // Also clear the folder itself
+        const folderRelPath = path.relative(ctx.testWorkspace!.uri.fsPath, entity.uri.fsPath) as RelPath;
+        clearFromAllSnapshots(wsId, folderRelPath);
+      }
+    }
+
+    if (entity.type === 'folder') {
+      await wait(2000);  // 2s for folders
+    } else {
+      await wait(500);   // 500ms for files
+    }
+  }
+
+  /**
+   * Helper: Clear a path from all three snapshots
+   */
+  function clearFromAllSnapshots(workspaceId: WorkspaceId, relPath: RelPath): void {
+    ctx.services!.state.applyLocal({
+      workspaceId,
+      type: 'delete',
+      path: relPath
     });
-    await refresh();
     
-    // Setup based on scenario
-    if (scenario === 'local-only') {
-      // Create file locally (don't upload)
-      await createAndOpenFile(testFile, fileContent);
-      await wait(1000);
-      
-      await refresh();
-      await assertLocalExists(testFile, true, 'File should exist locally');
-      await assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile, 'added');
-      
-    } else if (scenario === 'remote-only') {
-      // Create file on remote only
-      await ctx.remoteVerifier!.createFile(testFileName, fileContent);
-      await wait(1000);
-      
-      await refresh();
-      await assertRemoteExists(ctx.remoteVerifier!, testFileName, true, 'File should exist remotely');
-      await assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile, 'removed');
-      
-    } else if (scenario === 'both') {
-      // Create file locally and upload
-      await createAndOpenFile(testFile, fileContent);
-      await wait(1000);
-      await vscode.commands.executeCommand('livesync.upload', testFile);
-      await wait(2000);
-      
-      await refresh();
-      await assertLocalExists(testFile, true, 'File should exist locally');
-      await assertRemoteExists(ctx.remoteVerifier!, testFileName, true, 'File should exist remotely');
-      await assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile, 'unchanged');
-    }
+    ctx.services!.state.applyRemote({
+      workspaceId,
+      type: 'delete',
+      path: relPath
+    });
     
-    // Execute delete command
-    await vscode.commands.executeCommand('livesync.delete', testFile);
-    await wait(2000);
-    
-    // Verify final state
-    await assertLocalExists(testFile, shouldExistLocalAfter, 
-      `File should ${shouldExistLocalAfter ? 'exist' : 'be deleted'} locally`);
-    await assertRemoteExists(ctx.remoteVerifier!, testFileName, shouldExistRemoteAfter,
-      `File should ${shouldExistRemoteAfter ? 'exist' : 'be deleted'} remotely`);
+    ctx.services!.state.applyBase({
+      workspaceId,
+      type: 'delete',
+      path: relPath
+    });
   }
 
   /**
-   * Helper: Test folder deletion behavior
+   * Create entity locally
    */
-  async function testDeleteFolderBehavior(
-    folderName: string,
-    scenario: 'local-only' | 'remote-only' | 'both',
-    shouldExistLocalAfter: boolean,
-    shouldExistRemoteAfter: boolean
-  ): Promise<void> {
-    const folderUri = vscode.Uri.joinPath(ctx.testWorkspace!.uri, folderName);
-    const file1 = vscode.Uri.joinPath(folderUri, 'file1.txt');
-    const file2 = vscode.Uri.joinPath(folderUri, 'file2.txt');
-    
-    // Clean any existing test artifacts
-    try {
-      await vscode.workspace.fs.delete(folderUri, { recursive: true });
-    } catch {}
-    try {
-      await ctx.remoteVerifier!.deleteFolder(folderName);
-    } catch {}
-    await wait(500);
-    
-    // Setup based on scenario
-    if (scenario === 'local-only') {
-      // Create folder with files locally (don't upload)
-      await vscode.workspace.fs.createDirectory(folderUri);
-      await vscode.workspace.fs.writeFile(file1, Buffer.from('content1'));
-      await vscode.workspace.fs.writeFile(file2, Buffer.from('content2'));
-      await wait(1000);
-      
-      await refresh();
-      await assertLocalExists(file1, true, 'File1 should exist locally');
-      await assertLocalExists(file2, true, 'File2 should exist locally');
-      await assertFileStatus(ctx.services!, ctx.testWorkspace!, file1, 'added');
-      await assertFileStatus(ctx.services!, ctx.testWorkspace!, file2, 'added');
-      
-    } else if (scenario === 'remote-only') {
-      // Create folder with files on remote only
-      await ctx.remoteVerifier!.createFile(`${folderName}/file1.txt`, 'content1');
-      await ctx.remoteVerifier!.createFile(`${folderName}/file2.txt`, 'content2');
-      await wait(1000);
-      
-      await refresh();
-      await assertRemoteExists(ctx.remoteVerifier!, `${folderName}/file1.txt`, true, 'File1 should exist remotely');
-      await assertRemoteExists(ctx.remoteVerifier!, `${folderName}/file2.txt`, true, 'File2 should exist remotely');
-      await assertFileStatus(ctx.services!, ctx.testWorkspace!, file1, 'removed');
-      await assertFileStatus(ctx.services!, ctx.testWorkspace!, file2, 'removed');
-      
-    } else if (scenario === 'both') {
-      // Create folder with files locally and upload
-      await vscode.workspace.fs.createDirectory(folderUri);
-      await vscode.workspace.fs.writeFile(file1, Buffer.from('content1'));
-      await vscode.workspace.fs.writeFile(file2, Buffer.from('content2'));
-      await wait(1000);
-      
-      await vscode.commands.executeCommand('livesync.uploadFolder', folderUri);
-      await wait(3000);
-      
-      await refresh();
-      await assertLocalExists(file1, true, 'File1 should exist locally');
-      await assertLocalExists(file2, true, 'File2 should exist locally');
-      await assertRemoteExists(ctx.remoteVerifier!, `${folderName}/file1.txt`, true, 'File1 should exist remotely');
-      await assertRemoteExists(ctx.remoteVerifier!, `${folderName}/file2.txt`, true, 'File2 should exist remotely');
-      await assertFileStatus(ctx.services!, ctx.testWorkspace!, file1, 'unchanged');
-      await assertFileStatus(ctx.services!, ctx.testWorkspace!, file2, 'unchanged');
-    }
-    
-    // Execute delete folder command
-    await vscode.commands.executeCommand('livesync.deleteFolder', folderUri);
-    await wait(2000);
-    
-    // Verify final state
-    if (!shouldExistLocalAfter) {
-      await assertLocalExists(folderUri, false, 'Folder should be deleted locally');
-      await assertLocalExists(file1, false, 'File1 should be deleted locally');
-      await assertLocalExists(file2, false, 'File2 should be deleted locally');
+  async function createEntityLocally(entity: TestEntity): Promise<void> {
+    if (entity.type === 'file') {
+      await createAndOpenFile(entity.uri, fileContent);
     } else {
-      await assertLocalExists(folderUri, true, 'Folder should exist locally');
-      await assertLocalExists(file1, true, 'File1 should exist locally');
-      await assertLocalExists(file2, true, 'File2 should exist locally');
+      await vscode.workspace.fs.createDirectory(entity.uri);
+      for (const child of entity.children!) {
+        await vscode.workspace.fs.writeFile(child.uri, Buffer.from(fileContent));
+      }
     }
-    
-    if (!shouldExistRemoteAfter) {
-      await assertRemoteExists(ctx.remoteVerifier!, `${folderName}/file1.txt`, false, 'File1 should be deleted remotely');
-      await assertRemoteExists(ctx.remoteVerifier!, `${folderName}/file2.txt`, false, 'File2 should be deleted remotely');
+    await wait(1000);
+  }
+
+  /**
+   * Create entity remotely
+   */
+  async function createEntityRemotely(entity: TestEntity): Promise<void> {
+    if (entity.type === 'file') {
+      await ctx.remoteVerifier!.createFile(entity.remotePath, fileContent);
     } else {
-      await assertRemoteExists(ctx.remoteVerifier!, `${folderName}/file1.txt`, true, 'File1 should exist remotely');
-      await assertRemoteExists(ctx.remoteVerifier!, `${folderName}/file2.txt`, true, 'File2 should exist remotely');
+      for (const child of entity.children!) {
+        await ctx.remoteVerifier!.createFile(child.remotePath, fileContent);
+      }
+    }
+    await wait(1000);
+  }
+
+  /**
+   * Upload entity
+   */
+  async function uploadEntity(entity: TestEntity): Promise<void> {
+    const command = entity.type === 'file' ? 'livesync.upload' : 'livesync.uploadFolder';
+    await vscode.commands.executeCommand(command, entity.uri);
+    await wait(entity.type === 'file' ? 2000 : 3000);
+  }
+
+  // ==========================================================================
+  // SCENARIO SETUP
+  // ==========================================================================
+
+  /**
+   * Setup entity according to scenario
+   */
+  async function setupScenario(
+    entity: TestEntity,
+    scenario: Scenario
+  ): Promise<ScenarioExpectations> {
+    await cleanEntity(entity);
+    
+    switch (scenario) {
+      case 'local-only':
+        await createEntityLocally(entity);
+        return { localBefore: true, remoteBefore: false, statusBefore: 'added' };
+
+      case 'remote-only':
+        await createEntityRemotely(entity);
+        return { localBefore: false, remoteBefore: true, statusBefore: 'removed' };
+
+      case 'both':
+        await createEntityLocally(entity);
+        await uploadEntity(entity);
+        return { localBefore: true, remoteBefore: true, statusBefore: 'unchanged' };
     }
   }
 
   // ==========================================================================
-  // DELETE FILE TESTS
+  // ASSERTION HELPERS
+  // ==========================================================================
+
+  /**
+   * Assert entity state before deletion
+   */
+  async function assertEntityStateBefore(
+    entity: TestEntity,
+    expectations: ScenarioExpectations
+  ): Promise<void> {
+    await refresh();
+
+    if (entity.type === 'file') {
+      await assertLocalExists(entity.uri, expectations.localBefore, 
+        `File should ${expectations.localBefore ? 'exist' : 'not exist'} locally`);
+      await assertRemoteExists(ctx.remoteVerifier!, entity.remotePath, expectations.remoteBefore,
+        `File should ${expectations.remoteBefore ? 'exist' : 'not exist'} remotely`);
+      
+      if (expectations.localBefore || expectations.remoteBefore) {
+        await assertFileStatus(ctx.services!, ctx.testWorkspace!, entity.uri, expectations.statusBefore);
+      }
+    } else {
+      for (const child of entity.children!) {
+        await assertLocalExists(child.uri, expectations.localBefore,
+          `Child file should ${expectations.localBefore ? 'exist' : 'not exist'} locally`);
+        await assertRemoteExists(ctx.remoteVerifier!, child.remotePath, expectations.remoteBefore,
+          `Child file should ${expectations.remoteBefore ? 'exist' : 'not exist'} remotely`);
+        
+        if (expectations.localBefore || expectations.remoteBefore) {
+          await assertFileStatus(ctx.services!, ctx.testWorkspace!, child.uri, expectations.statusBefore);
+        }
+      }
+    }
+  }
+
+  /**
+   * Assert entity state after deletion
+   */
+  async function assertEntityStateAfter(
+    entity: TestEntity,
+    shouldExistLocal: boolean,
+    shouldExistRemote: boolean
+  ): Promise<void> {
+    if (entity.type === 'file') {
+      await assertLocalExists(entity.uri, shouldExistLocal,
+        `File should ${shouldExistLocal ? 'exist' : 'be deleted'} locally`);
+      await assertRemoteExists(ctx.remoteVerifier!, entity.remotePath, shouldExistRemote,
+        `File should ${shouldExistRemote ? 'exist' : 'be deleted'} remotely`);
+    } else {
+      await assertLocalExists(entity.uri, shouldExistLocal,
+        `Folder should ${shouldExistLocal ? 'exist' : 'be deleted'} locally`);
+      
+      for (const child of entity.children!) {
+        await assertLocalExists(child.uri, shouldExistLocal,
+          `Child file should ${shouldExistLocal ? 'exist' : 'be deleted'} locally`);
+        await assertRemoteExists(ctx.remoteVerifier!, child.remotePath, shouldExistRemote,
+          `Child file should ${shouldExistRemote ? 'exist' : 'be deleted'} remotely`);
+      }
+    }
+  }
+
+  // ==========================================================================
+  // UNIFIED TEST HELPER
+  // ==========================================================================
+
+  /**
+   * Test delete behavior with given policy and scenario
+   */
+  async function testDelete(
+    name: string,
+    type: EntityType,
+    policy: DeletePolicy,
+    scenario: Scenario,
+    expectedLocalAfter: boolean,
+    expectedRemoteAfter: boolean
+  ): Promise<void> {
+    const entity = createTestEntity(name, type);
+
+    // Setup config with policy
+    ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
+      actionOnDelete: policy
+    });
+
+    // Setup scenario
+    const expectations = await setupScenario(entity, scenario);
+
+    // Assert state before
+    await assertEntityStateBefore(entity, expectations);
+
+    // Execute delete command
+    const command = type === 'file' ? 'livesync.delete' : 'livesync.deleteFolder';
+    await vscode.commands.executeCommand(command, entity.uri);
+    await wait(2000);
+
+    // Assert state after
+    await assertEntityStateAfter(entity, expectedLocalAfter, expectedRemoteAfter);
+  }
+
+  // ==========================================================================
+  // FILE POLICY TESTS
+  // ==========================================================================
+
+  test('Delete File with actionOnDelete=none - no deletion', async () => {
+    await testDelete(
+      'delete-file-none.txt',
+      'file',
+      'none',
+      'both',
+      true,  // File stays locally
+      true   // File stays remotely
+    );
+  });
+
+  test('Delete File with actionOnDelete=delete - direct delete without check', async () => {
+    await testDelete(
+      'delete-file-delete.txt',
+      'file',
+      'delete',
+      'both',
+      false, // File deleted locally
+      false  // File deleted remotely
+    );
+  });
+
+  test('Delete File with actionOnDelete=check - check only, no delete', async () => {
+    await testDelete(
+      'delete-file-check.txt',
+      'file',
+      'check',
+      'both',
+      true,  // File stays locally
+      true   // File stays remotely
+    );
+  });
+
+  test('Delete File with actionOnDelete=check&delete - delete after check', async () => {
+    await testDelete(
+      'delete-file-check-delete.txt',
+      'file',
+      'check&delete',
+      'both',
+      false, // File deleted locally
+      false  // File deleted remotely
+    );
+  });
+
+  // ==========================================================================
+  // FILE SCENARIO TESTS
   // ==========================================================================
 
   test('Delete File (Local Only) - removes only local file', async () => {
-    await testDeleteFileBehavior(
+    await testDelete(
       'delete-local-only.txt',
+      'file',
+      'delete',
       'local-only',
-      false, // shouldExistLocalAfter
-      false  // shouldExistRemoteAfter
+      false, // Local deleted
+      false  // Remote never existed
     );
   });
 
   test('Delete File (Remote Only) - removes only remote file', async () => {
-    await testDeleteFileBehavior(
+    await testDelete(
       'delete-remote-only.txt',
+      'file',
+      'delete',
       'remote-only',
-      false, // shouldExistLocalAfter
-      false  // shouldExistRemoteAfter
+      false, // Local never existed
+      false  // Remote deleted
     );
   });
 
-  test('Delete File (Both) - removes from both local and remote', async () => {
-    await testDeleteFileBehavior(
+  test('Delete File (Both) - removes from both sides', async () => {
+    await testDelete(
       'delete-both.txt',
+      'file',
+      'delete',
       'both',
-      false, // shouldExistLocalAfter
-      false  // shouldExistRemoteAfter
+      false, // Local deleted
+      false  // Remote deleted
     );
   });
 
   // ==========================================================================
-  // DELETE FOLDER TESTS
+  // FOLDER POLICY TESTS
+  // ==========================================================================
+
+  test('Delete Folder with actionOnDelete=none - no deletion', async () => {
+    await testDelete(
+      'delete-folder-none',
+      'folder',
+      'none',
+      'both',
+      true,  // Folder stays locally
+      true   // Folder stays remotely
+    );
+  });
+
+  test('Delete Folder with actionOnDelete=delete - direct delete without check', async () => {
+    await testDelete(
+      'delete-folder-delete',
+      'folder',
+      'delete',
+      'both',
+      false, // Folder deleted locally
+      false  // Folder deleted remotely
+    );
+  });
+
+  test('Delete Folder with actionOnDelete=check - check only, no delete', async () => {
+    await testDelete(
+      'delete-folder-check',
+      'folder',
+      'check',
+      'both',
+      true,  // Folder stays locally
+      true   // Folder stays remotely
+    );
+  });
+
+  test('Delete Folder with actionOnDelete=check&delete - delete after check', async () => {
+    await testDelete(
+      'delete-folder-check-delete',
+      'folder',
+      'check&delete',
+      'both',
+      false, // Folder deleted locally
+      false  // Folder deleted remotely
+    );
+  });
+
+  // ==========================================================================
+  // FOLDER SCENARIO TESTS
   // ==========================================================================
 
   test('Delete Folder (Local Only) - removes only local folder', async () => {
-    await testDeleteFolderBehavior(
+    await testDelete(
       'delete-folder-local-only',
+      'folder',
+      'delete',
       'local-only',
-      false, // shouldExistLocalAfter
-      false  // shouldExistRemoteAfter
+      false, // Local deleted
+      false  // Remote never existed
     );
   });
 
   test('Delete Folder (Remote Only) - removes only remote folder', async () => {
-    await testDeleteFolderBehavior(
+    await testDelete(
       'delete-folder-remote-only',
+      'folder',
+      'delete',
       'remote-only',
-      false, // shouldExistLocalAfter
-      false  // shouldExistRemoteAfter
+      false, // Local never existed
+      false  // Remote deleted
     );
   });
 
-  test('Delete Folder (Both) - removes from both local and remote', async () => {
-    await testDeleteFolderBehavior(
+  test('Delete Folder (Both) - removes from both sides', async () => {
+    await testDelete(
       'delete-folder-both',
+      'folder',
+      'delete',
       'both',
-      false, // shouldExistLocalAfter
-      false  // shouldExistRemoteAfter
+      false, // Local deleted
+      false  // Remote deleted
     );
   });
 });

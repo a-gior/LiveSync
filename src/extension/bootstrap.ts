@@ -56,9 +56,9 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   const folderState = new FolderStateStore(context.workspaceState);
 
   // Initialize infrastructure (storage, caching, logging)
-  const { localCache, remoteCache } = await initializeInfrastructure(context, state, validator);
+  const { localCache, remoteCache, baseCache } = await initializeInfrastructure(context, state, validator);
 
-  const cachePersister = new DebouncedCachePersister(state, localCache, remoteCache, 1000);
+  const cachePersister = new DebouncedCachePersister(state, localCache, remoteCache, baseCache, 1000);
   context.subscriptions.push({
     dispose: () => {
       cachePersister.dispose();
@@ -134,6 +134,7 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
     treeView: views.diffsView,
     localCache,
     remoteCache,
+    baseCache,
     progress, 
     notifications, 
     configStatus,

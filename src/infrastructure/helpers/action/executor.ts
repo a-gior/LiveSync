@@ -9,8 +9,7 @@ import type { WorkspaceId, RelPath } from '@domain/types';
 import type { SyncStateManager } from '@app/SyncStateManager';
 import type { RemotePort as SftpRemotePort } from '@app/ports/RemotePort';
 import { absFs } from '@helpers/path';
-import { logExpectedError } from '@helpers/logging';
-import { syncBothSnapshots, removeFromRemoteSnapshot, moveInRemoteSnapshot } from '@helpers/snapshot/update';
+import { syncAllSnapshots, removeFromRemoteSnapshot, moveInRemoteSnapshot, removeFromBaseSnapshot, moveInBaseSnapshot } from '@helpers/snapshot/update';
 
 /**
  * Execute file upload to remote
@@ -33,7 +32,7 @@ export async function executeUpload(
   await remote.uploadFile(workspaceId, relPath, absPath);
   
   // Sync both snapshots (hash once, update both)
-  await syncBothSnapshots(state, workspaceId, relPath, absPath);
+  await syncAllSnapshots(state, workspaceId, relPath, absPath);
 }
 
 /**
@@ -57,7 +56,7 @@ export async function executeDownload(
   await remote.downloadFile(workspaceId, relPath, absPath);
   
   // Sync both snapshots (hash once, update both)
-  await syncBothSnapshots(state, workspaceId, relPath, absPath);
+  await syncAllSnapshots(state, workspaceId, relPath, absPath);
 }
 
 /**
@@ -77,6 +76,7 @@ export async function executeDelete(
 ): Promise<void> {
   await remote.deletePath(workspaceId, relPath);
   removeFromRemoteSnapshot(state, workspaceId, relPath);
+  removeFromBaseSnapshot(state, workspaceId, relPath);
 }
 
 /**
@@ -100,4 +100,5 @@ export async function executeRename(
   
   // Update remote snapshot
   moveInRemoteSnapshot(state, workspaceId, oldPath, newPath);
+  moveInBaseSnapshot(state, workspaceId, oldPath, newPath);
 }

@@ -15,6 +15,7 @@ export class DebouncedCachePersister {
     private readonly state: SyncStateManager,
     private readonly localCache: IndexCacheService,
     private readonly remoteCache: IndexCacheService,
+    private readonly baseCache: IndexCacheService,
     debounceMs: number = 1000
   ) {
     this.debounceMs = debounceMs;
@@ -43,22 +44,21 @@ export class DebouncedCachePersister {
     const workspaces = Array.from(this.pendingWorkspaces);
     this.pendingWorkspaces.clear();
 
-    if (workspaces.length === 0) {
-      return;
-    }
+    if (workspaces.length === 0) {return;}
 
     await Promise.allSettled(
       workspaces.map(async (ws) => {
         try {
           const local = this.state.getLocalIndex(ws);
           const remote = this.state.getRemoteIndex(ws);
+          const base = this.state.getBaseIndex(ws);  
           
           await Promise.all([
             this.localCache.save(ws, local),
-            this.remoteCache.save(ws, remote)
+            this.remoteCache.save(ws, remote),
+            this.baseCache.save(ws, base)  
           ]);
         } catch (err) {
-          // Ignore cache write errors - non-critical
           console.error(`[DebouncedCachePersister] Failed to persist cache for ${ws}:`, err);
         }
       })

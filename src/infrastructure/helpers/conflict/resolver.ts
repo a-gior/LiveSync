@@ -53,6 +53,7 @@ const ACTION_LABELS: Record<string, string> = {
   'upload': 'Upload anyway',
   'download': 'Download anyway',
   'delete': 'Delete anyway',
+  'move': 'Move anyway',
   'skip': 'Skip',
 };
 

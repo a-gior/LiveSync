@@ -10,7 +10,7 @@ type Cache = {
 };
 
 export class IndexCacheService {
-  constructor(private readonly fileName: 'index.local.json' | 'index.remote.json') {}
+  constructor(private readonly fileName: 'index.local.json' | 'index.remote.json' | 'index.base.json') {}
 
   private filePath(workspaceFsPath: string): string {
     return path.join(workspaceFsPath, '.livesync', this.fileName);

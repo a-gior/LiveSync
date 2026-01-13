@@ -8,15 +8,19 @@ describe('DebouncedCachePersister', () => {
   let persister: DebouncedCachePersister;
   let localSaveCount: number;
   let remoteSaveCount: number;
+  let baseSaveCount: number;
   let lastLocalSaved: Map<WorkspaceId, NodeIndex>;
   let lastRemoteSaved: Map<WorkspaceId, NodeIndex>;
+  let lastBaseSaved: Map<WorkspaceId, NodeIndex>;
   let diffChangeListener: ((event: DiffChangeEvent) => void) | undefined;
 
   beforeEach(() => {
     localSaveCount = 0;
     remoteSaveCount = 0;
+    baseSaveCount = 0;
     lastLocalSaved = new Map();
     lastRemoteSaved = new Map();
+    lastBaseSaved = new Map();
     diffChangeListener = undefined;
 
     // Mock SyncStateManager
@@ -47,11 +51,20 @@ describe('DebouncedCachePersister', () => {
         lastRemoteSaved.set(wsId, new Map(index));
       },
     } as any;
+    
+    // Mock IndexCacheService for base cache
+    const mockBaseCache = {
+      save: async (wsId: WorkspaceId, index: NodeIndex) => {
+        baseSaveCount++;
+        lastBaseSaved.set(wsId, new Map(index));
+      },
+    } as any;
 
     persister = new DebouncedCachePersister(
       mockState,
       mockLocalCache,
       mockRemoteCache,
+      mockBaseCache,
       100 // 100ms debounce for faster tests
     );
   });
@@ -80,6 +93,7 @@ describe('DebouncedCachePersister', () => {
     // Should not have saved yet
     assert.equal(localSaveCount, 0, 'Should not save before debounce time');
     assert.equal(remoteSaveCount, 0, 'Should not save before debounce time');
+    assert.equal(baseSaveCount, 0, 'Should not save before debounce time');
 
     // Wait for debounce to complete
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -87,6 +101,7 @@ describe('DebouncedCachePersister', () => {
     // Should have saved once
     assert.equal(localSaveCount, 1, 'Should save local once after debounce');
     assert.equal(remoteSaveCount, 1, 'Should save remote once after debounce');
+    assert.equal(baseSaveCount, 1, 'Should save base once after debounce');
   });
 
   it('handles multiple workspaces independently', async function() {
@@ -212,6 +227,7 @@ describe('DebouncedCachePersister', () => {
 
     const failingPersister = new DebouncedCachePersister(
       failingMockState,
+      failingCache,
       failingCache,
       failingCache,
       100

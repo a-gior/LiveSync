@@ -15,7 +15,7 @@ import type { ExperimentalTreeProvider } from '@presentation/tree/ExperimentalTr
 
 import { parseActionPolicy } from '@helpers/policy/parser';
 import { isNoOpPolicy, isCheckOnlyPolicy, shouldCheckConflict } from '@helpers/policy/utils';
-import { detectConflict, type ConflictDetectionParams } from '@helpers/conflict/detector';
+import { detectConflict } from '@helpers/conflict/detector';
 import { resolveConflict, showCheckInfo } from '@helpers/conflict/resolver';
 import { markConflictIgnored, clearIgnoredConflictIfResolved } from '@helpers/conflict/tracker';
 import { executeUpload, executeDownload, executeDelete, executeRename } from './executor';
@@ -23,7 +23,7 @@ import { notifySuccess, notifyError } from '@helpers/notification';
 import { logExpectedError, logSync } from '@helpers/logging';
 import { stringToWsId, uriFromRel } from '@helpers/path';
 import { workspace } from 'vscode';
-import { removeFromLocalSnapshot } from '../snapshot/update';
+import { moveInLocalSnapshot, removeFromLocalSnapshot } from '../snapshot/update';
 
 /**
  * Parameters for handleAction
@@ -36,10 +36,6 @@ export interface HandleActionParams {
   actualMetas: {
     local?: NodeMeta;         // Current filesystem state
     remote?: NodeMeta;        // Fresh remote (just fetched, NOT in snapshot yet)
-  };
-  oldMetas: {
-    local?: NodeMeta;         // From snapshot (before event)
-    remote?: NodeMeta;        // From snapshot (our last intentional change)
   };
   isCommand: boolean;
   operation: 'save' | 'create' | 'delete' | 'move' | 'open';
@@ -86,7 +82,6 @@ export async function handleAction(params: HandleActionParams): Promise<HandleAc
     oldPath,
     policyKey,
     actualMetas,
-    oldMetas,
     isCommand,
     operation,
     state,
@@ -124,10 +119,18 @@ export async function handleAction(params: HandleActionParams): Promise<HandleAc
   let freshRemoteMeta: NodeMeta | undefined = actualMetas.remote;
   
   // If not provided, fetch it now (only if conflict checking is needed)
-  if (!freshRemoteMeta && shouldCheckConflict(policy)) {
+  if (!freshRemoteMeta) {
     try {
       const remoteIndex = await remote.list(workspaceId);
       freshRemoteMeta = remoteIndex.get(relPath);
+      if (freshRemoteMeta) {
+        state.applyRemote({
+          workspaceId,
+          type: 'modify',
+          path: relPath,
+          meta: freshRemoteMeta
+        });
+      }
     } catch {
       // List failed - connection issue, that's ok for conflict detection
       freshRemoteMeta = undefined;
@@ -140,7 +143,9 @@ export async function handleAction(params: HandleActionParams): Promise<HandleAc
   
   let conflict = null;
   if (shouldCheckConflict(policy)) {
-    const detectionParams: ConflictDetectionParams = {
+    const baseMeta = state.getBaseMeta(workspaceId, relPath);
+
+    conflict = detectConflict({
       operation,
       workspaceId,
       relPath,
@@ -148,12 +153,10 @@ export async function handleAction(params: HandleActionParams): Promise<HandleAc
         local: actualMetas.local,
         remote: freshRemoteMeta
       },
-      oldMetas,
+      baseMeta,
       state,
       isCheckOnly: isCheckOnlyPolicy(policy)
-    };
-    
-    conflict = detectConflict(detectionParams);
+    });
   }
   
   // ══════════════════════════════════════════════════════════
@@ -230,6 +233,12 @@ export async function handleAction(params: HandleActionParams): Promise<HandleAc
         if (!oldPath) {
           throw new Error('oldPath required for move operation');
         }
+
+        if(conflict && conflict.type === 'file_exists_action') {
+          // If target exists and conflict was detected, we need to delete it first
+          await executeDelete(remote, state, workspaceId, relPath);
+        }
+
         await executeRename(remote, state, workspaceId, oldPath, relPath);
         break;
     }

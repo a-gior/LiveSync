@@ -6,6 +6,8 @@
  * 2. External file changes (terminal/git/OS) → Update local snapshot only
  * 
  * Uses two-phase tracking (onWill + onDid) to prevent duplicate processing.
+ * 
+ * UPDATED for 3-way merge: No longer captures oldMetas - baseMeta fetched inside handleAction
  */
 
 import * as vscode from 'vscode';
@@ -24,6 +26,7 @@ import { logExpectedError } from '@helpers/logging';
 import { FileOperationQueue } from '@helpers/concurrency';
 import { handleAction } from '@helpers/action/handler';
 import { updateLocalSnapshot } from '@helpers/snapshot/update';
+import { wait } from '../../../test/e2e/suite/e2e-shared-helpers';
 
 /**
  * FileEventBridge - Central event handler for file operations
@@ -129,10 +132,6 @@ export class FileEventBridge {
       const queueKey = `${workspaceId}:${relPath}`;
       
       await this.operationQueue.enqueue(queueKey, 'create', async () => {
-        // Capture old metas (undefined for new file)
-        const oldLocalMeta = this.state.getLocalMeta(workspaceId, relPath);
-        const oldRemoteMeta = this.state.getRemoteMeta(workspaceId, relPath);
-        
         // Update local snapshot (file already created)
         let actualLocalMeta: NodeMeta | undefined;
         try {
@@ -157,7 +156,7 @@ export class FileEventBridge {
           return;
         }
         
-        // Call unified handler
+        // Call unified handler (baseMeta fetched inside)
         await handleAction({
           workspaceId,
           relPath,
@@ -165,11 +164,7 @@ export class FileEventBridge {
           operation: 'create',
           actualMetas: {
             local: actualLocalMeta,
-            remote: undefined  // Fetched inside handleAction if needed
-          },
-          oldMetas: {
-            local: oldLocalMeta,
-            remote: oldRemoteMeta
+            remote: undefined  // Fetched inside handleAction
           },
           isCommand: false,
           
@@ -184,73 +179,8 @@ export class FileEventBridge {
         });
       });
       
-      // Clear in-flight status after a delay
       setTimeout(() => this.inFlightOps.delete(queueKey), 500);
     }));
-  }
-
-  /**
-   * Handle file save (actionOnSave)
-   */
-  private async onSave(doc: vscode.TextDocument): Promise<void> {
-    if (doc.isUntitled) {return;}
-
-    const info = this.getWorkspaceInfo(doc.uri);
-    if (!info) {return;}
-
-    const { workspaceId, relPath } = info;
-    const queueKey = `${workspaceId}:${relPath}`;
-
-    await this.operationQueue.enqueue(queueKey, 'save', async () => {
-      // Capture old metas
-      const oldLocalMeta = this.state.getLocalMeta(workspaceId, relPath);
-      const oldRemoteMeta = this.state.getRemoteMeta(workspaceId, relPath);
-      
-      // Update local snapshot (file already saved)
-      let actualLocalMeta: NodeMeta | undefined;
-      try {
-        const hash = await sha256OfFile(doc.uri.fsPath);
-        actualLocalMeta = { type: 'file', hash };
-        
-        this.state.applyLocal({
-          workspaceId,
-          type: 'modify',
-          path: relPath,
-          meta: actualLocalMeta
-        });
-      } catch (err) {
-        logExpectedError(`onSave:updateSnapshot:${relPath}`, err);
-        return;
-      }
-      
-      // Call unified handler
-      await handleAction({
-        workspaceId,
-        relPath,
-        policyKey: 'actionOnSave',
-        operation: 'save',
-        actualMetas: {
-          local: actualLocalMeta,
-          remote: undefined  // Fetched inside handleAction if needed
-        },
-        oldMetas: {
-          local: oldLocalMeta,
-          remote: oldRemoteMeta
-        },
-        isCommand: false,
-        
-        // Services
-        state: this.state,
-        config: this.config,
-        validator: this.validator,
-        remote: this.remote,
-        notifications: this.notifications,
-        provider: this.provider,
-        shouldIgnore: this.shouldIgnore.bind(this)
-      });
-    });
-    
-    setTimeout(() => this.inFlightOps.delete(queueKey), 500);
   }
 
   /**
@@ -265,10 +195,6 @@ export class FileEventBridge {
       const queueKey = `${workspaceId}:${relPath}`;
       
       await this.operationQueue.enqueue(queueKey, 'delete', async () => {
-        // Capture old metas (file metadata before deletion)
-        const oldLocalMeta = this.state.getLocalMeta(workspaceId, relPath);
-        const oldRemoteMeta = this.state.getRemoteMeta(workspaceId, relPath);
-        
         // Update local snapshot (file already deleted)
         this.state.applyLocal({
           workspaceId,
@@ -276,7 +202,7 @@ export class FileEventBridge {
           path: relPath
         });
         
-        // Call unified handler
+        // Call unified handler (baseMeta fetched inside)
         await handleAction({
           workspaceId,
           relPath,
@@ -284,11 +210,7 @@ export class FileEventBridge {
           operation: 'delete',
           actualMetas: {
             local: undefined,  // File deleted
-            remote: undefined  // Fetched inside handleAction if needed
-          },
-          oldMetas: {
-            local: oldLocalMeta,
-            remote: oldRemoteMeta
+            remote: undefined  // Fetched inside handleAction
           },
           isCommand: false,
           
@@ -319,13 +241,10 @@ export class FileEventBridge {
       const workspaceId = stringToWsId(folder.uri.fsPath);
       const oldRel = relFromAbs(workspaceId, oldUri.fsPath);
       const newRel = relFromAbs(workspaceId, newUri.fsPath);
+      
       const queueKey = `${workspaceId}:${newRel}`;
-
+      
       await this.operationQueue.enqueue(queueKey, 'move', async () => {
-        // Capture old metas
-        const oldLocalMeta = this.state.getLocalMeta(workspaceId, oldRel);
-        const oldRemoteMeta = this.state.getRemoteMeta(workspaceId, oldRel);
-        
         // Update local snapshot (file already moved)
         let actualLocalMeta: NodeMeta | undefined;
         try {
@@ -343,15 +262,14 @@ export class FileEventBridge {
             workspaceId,
             type: 'move',
             path: oldRel,
-            newPath: newRel,
-            meta: actualLocalMeta
+            newPath: newRel
           });
         } catch (err) {
           logExpectedError(`onRename:updateSnapshot:${newRel}`, err);
           return;
         }
         
-        // Call unified handler
+        // Call unified handler (baseMeta fetched inside)
         await handleAction({
           workspaceId,
           relPath: newRel,
@@ -360,11 +278,7 @@ export class FileEventBridge {
           operation: 'move',
           actualMetas: {
             local: actualLocalMeta,
-            remote: undefined  // Fetched inside handleAction if needed
-          },
-          oldMetas: {
-            local: oldLocalMeta,
-            remote: oldRemoteMeta
+            remote: undefined  // Fetched inside handleAction
           },
           isCommand: false,
           
@@ -387,6 +301,62 @@ export class FileEventBridge {
   }
 
   /**
+   * Handle file save (actionOnSave)
+   */
+  private async onSave(doc: vscode.TextDocument): Promise<void> {
+    if (doc.isUntitled) {return;}
+
+    const info = this.getWorkspaceInfo(doc.uri);
+    if (!info) {return;}
+
+    const { workspaceId, relPath } = info;
+    const queueKey = `${workspaceId}:${relPath}`;
+
+    await this.operationQueue.enqueue(queueKey, 'save', async () => {
+      // Update local snapshot (file already saved)
+      let actualLocalMeta: NodeMeta | undefined;
+      try {
+        const hash = await sha256OfFile(doc.uri.fsPath);
+        actualLocalMeta = { type: 'file', hash };
+        
+        this.state.applyLocal({
+          workspaceId,
+          type: 'modify',
+          path: relPath,
+          meta: actualLocalMeta
+        });
+      } catch (err) {
+        logExpectedError(`onSave:updateSnapshot:${relPath}`, err);
+        return;
+      }
+      
+      // Call unified handler (baseMeta fetched inside)
+      await handleAction({
+        workspaceId,
+        relPath,
+        policyKey: 'actionOnSave',
+        operation: 'save',
+        actualMetas: {
+          local: actualLocalMeta,
+          remote: undefined  // Fetched inside handleAction
+        },
+        isCommand: false,
+        
+        // Services
+        state: this.state,
+        config: this.config,
+        validator: this.validator,
+        remote: this.remote,
+        notifications: this.notifications,
+        provider: this.provider,
+        shouldIgnore: this.shouldIgnore.bind(this)
+      });
+    });
+    
+    setTimeout(() => this.inFlightOps.delete(queueKey), 500);
+  }
+
+  /**
    * Handle file open (actionOnOpen)
    */
   private async onOpen(doc: vscode.TextDocument): Promise<void> {
@@ -398,6 +368,9 @@ export class FileEventBridge {
     const { workspaceId, relPath } = info;
     const queueKey = `${workspaceId}:${relPath}`;
     
+    // Small delay to allow any rename event to register first
+    await wait(50);
+
     // Skip if file was just created or moved (prevents create→open collision)
     if (this.operationQueue.hadRecentOperationAny(queueKey, ['create', 'move'])) {
       console.log(`onOpen: Skipping for recently created/moved file: ${relPath}`);
@@ -405,10 +378,6 @@ export class FileEventBridge {
     }
 
     await this.operationQueue.enqueue(queueKey, 'open', async () => {
-      // Capture old metas
-      const oldLocalMeta = this.state.getLocalMeta(workspaceId, relPath);
-      const oldRemoteMeta = this.state.getRemoteMeta(workspaceId, relPath);
-      
       // Get current local meta
       let actualLocalMeta: NodeMeta | undefined;
       try {
@@ -419,7 +388,7 @@ export class FileEventBridge {
         return;
       }
       
-      // Call unified handler
+      // Call unified handler (baseMeta fetched inside)
       await handleAction({
         workspaceId,
         relPath,
@@ -427,11 +396,7 @@ export class FileEventBridge {
         operation: 'open',
         actualMetas: {
           local: actualLocalMeta,
-          remote: undefined  // Fetched inside handleAction if needed
-        },
-        oldMetas: {
-          local: oldLocalMeta,
-          remote: oldRemoteMeta
+          remote: undefined  // Fetched inside handleAction
         },
         isCommand: false,
         

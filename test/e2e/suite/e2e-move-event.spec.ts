@@ -40,7 +40,7 @@ import {
 suite('E2E - Rename/Move Event', function() {
   this.timeout(60000);
 
-  let ctx: Partial<E2ETestContext> = {};
+  const ctx: Partial<E2ETestContext> = {};
   
   const fileContent = 'File content for test';
   const conflictContent = 'File already exists at target';

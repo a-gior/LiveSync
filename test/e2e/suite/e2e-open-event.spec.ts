@@ -26,7 +26,7 @@ import { DiffStatus } from '../../../src/domain/types';
 suite('E2E - Open Event', function() {
   this.timeout(60000);
 
-  let ctx: Partial<E2ETestContext> = {};
+  const ctx: Partial<E2ETestContext> = {};
   
   const remoteContent = 'Remote content';
   const localContent = 'Local content';
@@ -100,7 +100,7 @@ suite('E2E - Open Event', function() {
     
     // Step 4: Open the file (triggers onOpen event)
     await openFile(testFile);
-    await wait(500);
+    await wait(1000);
     
     // Step 5: Verify behavior based on policy
     await assertLocalContent(testFile, expectedLocalContent, "Local content after open");
@@ -158,7 +158,7 @@ suite('E2E - Open Event', function() {
 
     // Step 5: Open the file (triggers onOpen event with conflict detection)
     await openFile(testFile);
-    await wait(500);
+    await wait(1000);
     
     // Step 6: Verify behavior based on response
     await assertLocalContent(testFile, expectedLocalContent, "Local content after conflict open");

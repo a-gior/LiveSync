@@ -78,12 +78,12 @@ suite('E2E - Upload Command', function() {
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnUpload: policy
     });
-    await refresh();
     
     // Create file locally
     await createAndOpenFile(testFile, fileContent);
     await wait(500);
-    
+    await refresh();
+
     // Verify initial state: file added locally
     assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile, 'added');
     await assertRemoteExists(ctx.remoteVerifier!, testFileName, false);
@@ -238,16 +238,10 @@ suite('E2E - Upload Command', function() {
     // Step 1: Create file on remote first (conflict scenario)
     await ctx.remoteVerifier!.createFile(testFileName, conflictContent);
 
-    const fileStatus = getFileStatus(ctx.services!, ctx.testWorkspace!, testFile);
-    console.log(`[E2E Test] File status after upload attempt: ${fileStatus}`);
-    
     // Step 3: Execute upload command (should detect conflict)
     await vscode.commands.executeCommand('livesync.upload', testFile);
     await wait(1000);
 
-    const fileStatus2 = getFileStatus(ctx.services!, ctx.testWorkspace!, testFile);
-    console.log(`[E2E Test] File status after upload attempt: ${fileStatus2}`);
-    
     // Step 4: Verify outcome based on user response
     await assertRemoteContent(ctx.remoteVerifier!, testFileName, expectedRemoteContentAfter);
     await assertLocalContent(testFile, modifiedContent);

@@ -15,6 +15,7 @@ export async function initializeInfrastructure(
 ): Promise<{
   localCache: IndexCacheService;
   remoteCache: IndexCacheService;
+  baseCache: IndexCacheService;
 }> {
   
   const storage = new StorageService(context);
@@ -23,16 +24,18 @@ export async function initializeInfrastructure(
 
   const localCache = new IndexCacheService('index.local.json');
   const remoteCache = new IndexCacheService('index.remote.json');
+  const baseCache = new IndexCacheService('index.base.json');
 
-  await initializeAllWorkspaces(state, localCache, remoteCache, validator);
+  await initializeAllWorkspaces(state, localCache, remoteCache, baseCache, validator);
 
-  return { localCache, remoteCache };
+  return { localCache, remoteCache, baseCache };
 }
 
 async function initializeAllWorkspaces(
   state: SyncStateManager,
   localCache: IndexCacheService,
   remoteCache: IndexCacheService,
+  baseCache: IndexCacheService,
   validator: ConfigValidator
 ): Promise<void> {
   const folders = vscode.workspace.workspaceFolders ?? [];
@@ -42,16 +45,32 @@ async function initializeAllWorkspaces(
   for (const folder of folders) {
     const wsId = stringToWsId(folder.uri.fsPath);
     
+    // Load all three snapshots from cache
     const local = await localCache.load(wsId);
     const remote = await remoteCache.load(wsId);
+    const base = await baseCache.load(wsId);
     
     if (local && remote) {
       logCache(wsId, 'loaded', 'restoring indexes from cache');
+      
       state.runBatch(wsId, undefined as any, () => {
+        // Set local and remote
         state.setLocalIndex(wsId, local);
         state.setRemoteIndex(wsId, remote);
+        
+        // Set base (or initialize on first run/migration)
+        if (base && base.size > 0) {
+          // Use persisted base from cache
+          logCache(wsId, 'loaded', 'restoring base snapshot from cache');
+          state.setBaseIndex(wsId, base);
+        } else {
+          // First run or migration: empty base
+          logCache(wsId, 'initialized', 'base snapshot empty (first run - please review all files)');
+          state.setBaseIndex(wsId, new Map());
+        }
       });
     } else {
+      // No cache - need to fetch fresh
       const validationResult = await validator.getCached(wsId, false);
       
       if (validationResult.isValid && validationResult.hasConfig) {

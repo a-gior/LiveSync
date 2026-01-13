@@ -51,8 +51,6 @@ export function registerUploadDownload(services: Services): void {
     if (entry && !isUploadable(entry.status)) {return;}
 
     // Capture metas
-    const oldLocalMeta = state.getLocalMeta(workspaceId, relPath);
-    const oldRemoteMeta = state.getRemoteMeta(workspaceId, relPath);
     const actualLocalMeta = state.getLocalMeta(workspaceId, relPath);
     
     // Call unified handler
@@ -64,10 +62,6 @@ export function registerUploadDownload(services: Services): void {
       actualMetas: {
         local: actualLocalMeta,
         remote: undefined  // Fetched inside handleAction
-      },
-      oldMetas: {
-        local: oldLocalMeta,
-        remote: oldRemoteMeta
       },
       isCommand: true,  // Commands override ignored files
       
@@ -105,8 +99,6 @@ export function registerUploadDownload(services: Services): void {
     if (entry && !isDownloadable(entry.status)) {return;}
 
     // Capture metas
-    const oldLocalMeta = state.getLocalMeta(workspaceId, relPath);
-    const oldRemoteMeta = state.getRemoteMeta(workspaceId, relPath);
     const actualLocalMeta = state.getLocalMeta(workspaceId, relPath);
     
     // Call unified handler
@@ -118,10 +110,6 @@ export function registerUploadDownload(services: Services): void {
       actualMetas: {
         local: actualLocalMeta,
         remote: undefined  // Fetched inside handleAction
-      },
-      oldMetas: {
-        local: oldLocalMeta,
-        remote: oldRemoteMeta
       },
       isCommand: true,  // Commands override ignored files
       

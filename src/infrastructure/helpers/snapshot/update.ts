@@ -1,10 +1,3 @@
-/**
- * Snapshot Update Helpers
- * 
- * Convenience functions to update snapshots after file operations.
- * These ensure local and remote snapshots stay synchronized.
- */
-
 import * as vscode from 'vscode';
 import type { SyncStateManager } from '@app/SyncStateManager';
 import type { WorkspaceId, RelPath } from '@domain/types';
@@ -13,12 +6,6 @@ import { logExpectedError } from '@helpers/logging';
 
 /**
  * Update local snapshot for a file/folder
- * Used by FileEventBridge for internal VS Code events.
- * 
- * @param state - State manager
- * @param workspaceId - Workspace containing the file
- * @param relPath - Relative path to update
- * @param uri - VS Code URI of the file
  */
 export async function updateLocalSnapshot(
   state: SyncStateManager,
@@ -53,18 +40,9 @@ export async function updateLocalSnapshot(
 }
 
 /**
- * Sync both local and remote snapshots after upload/download
- * 
- * This is the core helper used by all executor functions.
- * Hashes the file once and updates both snapshots to keep them in sync.
- * 
- * @param state - State manager
- * @param workspaceId - Workspace containing the file
- * @param relPath - Relative path of the file
- * @param absPath - Absolute path to the file
- * @throws Error if hashing fails
+ * Sync all three snapshots after successful upload/download
  */
-export async function syncBothSnapshots(
+export async function syncAllSnapshots(
   state: SyncStateManager,
   workspaceId: WorkspaceId,
   relPath: RelPath,
@@ -73,67 +51,47 @@ export async function syncBothSnapshots(
   const hash = await sha256OfFile(absPath);
   const meta = { type: 'file' as const, hash };
   
-  // Update both snapshots with same hash
-  state.applyLocal({
-    workspaceId,
-    type: 'modify',
-    path: relPath,
-    meta
-  });
-  
-  state.applyRemote({
-    workspaceId,
-    type: 'modify',
-    path: relPath,
-    meta
-  });
+  // Update all three snapshots with same hash
+  state.applyLocal({ workspaceId, type: 'modify', path: relPath, meta });
+  state.applyRemote({ workspaceId, type: 'modify', path: relPath, meta });
+  state.applyBase({ workspaceId, type: 'modify', path: relPath, meta });
 }
 
 /**
- * Remove file/folder from local snapshot
- * 
- * @param state - State manager
- * @param workspaceId - Workspace containing the file
- * @param relPath - Relative path to remove
+ * Remove from local snapshot
  */
 export function removeFromLocalSnapshot(
   state: SyncStateManager,
   workspaceId: WorkspaceId,
   relPath: RelPath
 ): void {
-  state.applyLocal({
-    workspaceId,
-    type: 'delete',
-    path: relPath
-  });
+  state.applyLocal({ workspaceId, type: 'delete', path: relPath });
 }
 
 /**
- * Remove file/folder from remote snapshot
- * 
- * @param state - State manager
- * @param workspaceId - Workspace containing the file
- * @param relPath - Relative path to remove
+ * Remove from remote snapshot
  */
 export function removeFromRemoteSnapshot(
   state: SyncStateManager,
   workspaceId: WorkspaceId,
   relPath: RelPath
 ): void {
-  state.applyRemote({
-    workspaceId,
-    type: 'delete',
-    path: relPath
-  });
+  state.applyRemote({ workspaceId, type: 'delete', path: relPath });
 }
 
 /**
- * Update local snapshot for a move operation
- * 
- * @param state - State manager
- * @param workspaceId - Workspace containing the file
- * @param oldPath - Original path
- * @param newPath - New path
+ * Remove from base snapshot
+ */
+export function removeFromBaseSnapshot(
+  state: SyncStateManager,
+  workspaceId: WorkspaceId,
+  relPath: RelPath
+): void {
+  state.applyBase({ workspaceId, type: 'delete', path: relPath });
+}
+
+/**
+ * Update local snapshot for move
  */
 export function moveInLocalSnapshot(
   state: SyncStateManager,
@@ -141,21 +99,11 @@ export function moveInLocalSnapshot(
   oldPath: RelPath,
   newPath: RelPath
 ): void {
-  state.applyLocal({
-    workspaceId,
-    type: 'move',
-    path: oldPath,
-    newPath: newPath
-  });
+  state.applyLocal({ workspaceId, type: 'move', path: oldPath, newPath });
 }
 
 /**
- * Update remote snapshot for a move operation
- * 
- * @param state - State manager
- * @param workspaceId - Workspace containing the file
- * @param oldPath - Original path
- * @param newPath - New path
+ * Update remote snapshot for move
  */
 export function moveInRemoteSnapshot(
   state: SyncStateManager,
@@ -163,10 +111,17 @@ export function moveInRemoteSnapshot(
   oldPath: RelPath,
   newPath: RelPath
 ): void {
-  state.applyRemote({
-    workspaceId,
-    type: 'move',
-    path: oldPath,
-    newPath: newPath
-  });
+  state.applyRemote({ workspaceId, type: 'move', path: oldPath, newPath });
+}
+
+/**
+ * Update base snapshot for move
+ */
+export function moveInBaseSnapshot(
+  state: SyncStateManager,
+  workspaceId: WorkspaceId,
+  oldPath: RelPath,
+  newPath: RelPath
+): void {
+  state.applyBase({ workspaceId, type: 'move', path: oldPath, newPath });
 }
