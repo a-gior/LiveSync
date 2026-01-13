@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.2] - 3-Way Merge & Core Fixes 🔀
+
+### Major Changes
+
+- 3-Way Merge System — Introduced base snapshot tracking for proper conflict detection across sessions. Base snapshots represent the last successful sync point, enabling detection of external remote changes even after VS Code restarts.
+
+### Fixed
+- Fixes on events and commands handling.
 
 ## [1.1.1] - Improved Migration from v1.0.9 to v1.1.x 🛠️
 
