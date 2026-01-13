@@ -26,7 +26,6 @@ import { logExpectedError } from '@helpers/logging';
 import { FileOperationQueue } from '@helpers/concurrency';
 import { handleAction } from '@helpers/action/handler';
 import { updateLocalSnapshot } from '@helpers/snapshot/update';
-import { wait } from '../../../test/e2e/suite/e2e-shared-helpers';
 
 /**
  * FileEventBridge - Central event handler for file operations
@@ -369,7 +368,7 @@ export class FileEventBridge {
     const queueKey = `${workspaceId}:${relPath}`;
     
     // Small delay to allow any rename event to register first
-    await wait(50);
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     // Skip if file was just created or moved (prevents create→open collision)
     if (this.operationQueue.hadRecentOperationAny(queueKey, ['create', 'move'])) {

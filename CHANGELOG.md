@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+
+## [1.1.3] - Fix crash on extension activation 🛠️
+
+### Fixed
+- Fixed crash on activation
+
 ## [1.1.2] - 3-Way Merge & Core Fixes 🔀
 
 ### Major Changes
