@@ -12,7 +12,7 @@ import { stringToRel, stringToWsId } from '../../infrastructure/helpers/path';
 export function registerShowDiff(services: Services): void {
   const { context, state, remote, provider } = services;
 
-  cmd(context, 'livesync.experimental.node.showDiff', async (arg?: unknown) => {
+  cmd(context, 'livesync.node.showDiff', async (arg?: unknown) => {
     const target = resolveDiffTarget(arg);
     if (!target) { return; }
 

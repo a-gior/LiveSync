@@ -84,7 +84,7 @@ export async function resolveConflict(
     
   if (decision === 'diff') {
     // Show diff
-    await vscode.commands.executeCommand('livesync.experimental.node.showDiff', {
+    await vscode.commands.executeCommand('livesync.node.showDiff', {
       workspaceId,
       relPath
     });

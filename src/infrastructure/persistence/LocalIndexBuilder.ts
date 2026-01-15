@@ -1,123 +1,62 @@
+/**
+ * Local index builder using OS-native commands
+ */
+
 import * as vscode from 'vscode';
-import * as path from 'path';
-import fg, { Entry } from 'fast-glob';
-import { sha256OfFile } from '@helpers/hash/FileHash';
-import { computeAllFolderHashes } from '@helpers/hash/FolderHash';
-import { FileMeta, FolderMeta, NodeMeta, RelPath } from '@domain/types';
-import { stringToRel, relFromAbs } from '@helpers/path';
+import { scanLocal } from '@helpers/indexing';
 import { IgnoreFilter } from '@helpers/ignore';
+import type { NodeMeta, RelPath } from '@domain/types';
 
 export type BuildIndexOptions = {
   excludeGlobs?: readonly string[];
-  concurrency?: number;
+  concurrency?: number;  // Kept for API compat, but not used (OS handles parallelism)
   progress?: (done: number, total: number) => void;
   token?: vscode.CancellationToken;
 };
 
 /**
- * Build a complete local index for a workspace folder using fast-glob.
+ * Build a complete local index for a workspace folder.
+ * 
+ * Uses OS-native commands for performance:
  * - Files => { type:'file', hash: sha256 }
  * - Folders => { type:'folder', hash: computed from children }
  * - Includes empty folders
- * - Respects ignore patterns (including automatic .livesync exclusion)
+ * - Respects ignore patterns
+ * 
+ * @param workspace - VS Code workspace folder to scan
+ * @param options - Build options
+ * @returns NodeIndex map
  */
 export async function buildLocalIndex(
   workspace: vscode.WorkspaceFolder,
   options: BuildIndexOptions = {}
 ): Promise<Map<RelPath, NodeMeta>> {
-  const index = new Map<RelPath, NodeMeta>();
-  const concurrency = Math.max(1, options.concurrency ?? 4);
   const rootPath = workspace.uri.fsPath;
-
-  // Create IgnoreFilter which handles pattern expansion and .livesync auto-exclusion
+  
+  // Create IgnoreFilter to get expanded patterns
   const ignoreFilter = new IgnoreFilter(options.excludeGlobs ?? []);
-
-  // Step 1: Use fast-glob to list ALL entries (files + directories) at once
-  // Pass original glob patterns without transformation - fast-glob handles them correctly
-  const entries: Entry[] = await fg('**/*', {
-    cwd: rootPath,
-    dot: true,
-    stats: true,
-    onlyFiles: false,
-    ignore: ignoreFilter.getFastGlobPatterns(),
-    suppressErrors: true,
+  
+  // Convert cancellation token to abort signal
+  const abortController = new AbortController();
+  const tokenListener = options.token?.onCancellationRequested(() => {
+    abortController.abort();
   });
 
-  // Step 2: Process entries into files and folders
-  const filesToHash: Array<{ relPath: RelPath; absPath: string }> = [];
-  const allFolders = new Set<RelPath>();
-
-  for (const entry of entries) {
-    if (options.token?.isCancellationRequested) {
-      return index;
-    }
-
-    if (!entry.stats) {continue;}
-
-    const absPath = path.join(rootPath, entry.path);
-    
-    const relPath = relFromAbs(rootPath, absPath);
-    
-    // Double-check ignore rules (catches anything fast-glob missed)
-    if (ignoreFilter.shouldIgnore(relPath)) {
-      continue;
-    }
-
-    if (entry.stats.isDirectory()) {
-      allFolders.add(relPath);
-    } else if (entry.stats.isFile()) {
-      filesToHash.push({ relPath, absPath });
-    }
-  }
-
-  // Step 3: Add parent folders of files (for intermediate folders)
-  for (const file of filesToHash) {
-    const parts = (file.relPath as string).split('/');
-    for (let i = 1; i < parts.length; i++) {
-      const folderRel = parts.slice(0, i).join('/');
-      allFolders.add(stringToRel(folderRel));
-    }
-  }
-
-  // Step 4: Add all folders to index (including empty ones)
-  for (const folderRel of allFolders) {
-    index.set(folderRel, { type: 'folder', hash: '' } as FolderMeta);
-  }
-
-  // Step 5: Hash all files with concurrency
-  const totalCount = filesToHash.length;
-  let doneCount = 0;
-  const queue = filesToHash.slice();
-  const workers: Promise<void>[] = [];
-
-  for (let i = 0; i < concurrency; i += 1) {
-    workers.push(
-      (async () => {
-        while (true) {
-          if (options.token?.isCancellationRequested) {return;}
-          
-          const file = queue.shift();
-          if (!file) {return;}
-
-          try {
-            const hash = await sha256OfFile(file.absPath);
-            index.set(file.relPath, { type: 'file', hash } as FileMeta);
-          } catch (err) {
-            // File became unreadable or was deleted during scan
-          } finally {
-            doneCount += 1;
-            options.progress?.(doneCount, totalCount);
-            await new Promise((r) => setImmediate(r));
-          }
+  try {
+    const index = await scanLocal(rootPath, {
+      includeHashes: true,
+      excludePatterns: [...ignoreFilter.globs],
+      signal: abortController.signal,
+      onProgress: (progress) => {
+        // Map to existing progress callback signature
+        if (options.progress) {
+          options.progress(progress.done, progress.total || progress.done);
         }
-      })()
-    );
+      }
+    });
+
+    return index;
+  } finally {
+    tokenListener?.dispose();
   }
-
-  await Promise.all(workers);
-
-  // Step 6: Compute folder hashes bottom-up using existing helper
-  await computeAllFolderHashes(index);
-
-  return index;
 }

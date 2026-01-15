@@ -11,7 +11,7 @@ import type { WorkspaceConfigService } from '@infra/config/WorkspaceConfigServic
 import type { ConfigValidator } from '@infra/config/ConfigValidator';
 import type { RemotePort } from '@app/ports/RemotePort';
 import type { NotificationStatusBar } from '@presentation/statusbar/NotificationStatusBar';
-import type { ExperimentalTreeProvider } from '@presentation/tree/ExperimentalTreeProvider';
+import type { SyncStateTreeProvider } from '@presentation/tree/SyncStateTreeProvider';
 
 import { parseActionPolicy } from '@helpers/policy/parser';
 import { isNoOpPolicy, isCheckOnlyPolicy, shouldCheckConflict } from '@helpers/policy/utils';
@@ -46,7 +46,7 @@ export interface HandleActionParams {
   validator: ConfigValidator;
   remote: RemotePort;
   notifications: NotificationStatusBar;
-  provider: ExperimentalTreeProvider;
+  provider: SyncStateTreeProvider;
   shouldIgnore: (workspaceId: WorkspaceId, relPath: RelPath) => Promise<boolean>;
 }
 

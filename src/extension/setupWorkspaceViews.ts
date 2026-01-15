@@ -2,13 +2,13 @@ import * as vscode from 'vscode';
 import { WorkspaceId } from '@domain/types';
 import { SyncStateManager } from '@app/SyncStateManager';
 import { FolderStateStore } from '@presentation/tree/FolderStateStore';
-import { ExperimentalTreeProvider } from '@presentation/tree/ExperimentalTreeProvider';
+import { SyncStateTreeProvider } from '@presentation/tree/SyncStateTreeProvider';
 import { WorkspaceListProvider } from '@presentation/tree/WorkspaceListProvider';
 import { logInfoMessage } from '@helpers/logging';
 import { ConfigValidator } from '../infrastructure/config/ConfigValidator';
 
 interface WorkspaceViews {
-  diffsProvider: ExperimentalTreeProvider;
+  diffsProvider: SyncStateTreeProvider;
   diffsView: vscode.TreeView<any>;
   listProvider?: WorkspaceListProvider;
   listView?: vscode.TreeView<any>;
@@ -26,7 +26,7 @@ export function setupWorkspaceViews(
   logInfoMessage('[VIEWS] Setting up views...');
   
   const initialWorkspace = workspaceIds[0];
-  const diffsProvider = new ExperimentalTreeProvider(state, initialWorkspace, folderState);
+  const diffsProvider = new SyncStateTreeProvider(state, initialWorkspace, folderState);
   
   // Wrap in try-catch to handle race condition with view registration
   let diffsView: vscode.TreeView<any>;

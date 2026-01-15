@@ -6,7 +6,7 @@ import { WorkspaceListProvider } from '@presentation/tree/WorkspaceListProvider'
 import { ConfigStatusBar } from '@presentation/statusbar/ConfigStatusBar';
 import { ConfigValidator } from '@infra/config/ConfigValidator';
 import { stringToWsId } from '@helpers/path';
-import { ExperimentalTreeProvider } from '@presentation/tree/ExperimentalTreeProvider';
+import { SyncStateTreeProvider } from '@presentation/tree/SyncStateTreeProvider';
 import { findWorkspaceFolderById } from '../infrastructure/helpers/workspaceFolder';
 
 /**
@@ -16,7 +16,7 @@ import { findWorkspaceFolderById } from '../infrastructure/helpers/workspaceFold
  */
 export function registerWorkspaceFolderHandler(
   validator: ConfigValidator,
-  diffsProvider: ExperimentalTreeProvider,
+  diffsProvider: SyncStateTreeProvider,
   workspaceState: vscode.Memento,
   configStatusBar: ConfigStatusBar,
   context: vscode.ExtensionContext,

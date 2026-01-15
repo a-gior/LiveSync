@@ -11,7 +11,7 @@ import { DiffEngine } from '@domain/diff/DiffEngine';
 
 import { dirnameRel, parentsOf, stringToRel } from '@helpers/path';
 import { computeFolderHashFromNodeIndex } from '@helpers/hash';
-import { deleteSubtree, moveSubtree } from '@helpers/index';
+import { deleteSubtree, moveSubtree } from '@helpers/node/index';
 
 /** FS event kinds we reflect into the snapshot. */
 export type EventType  = 'create' | 'modify' | 'delete' | 'move';
