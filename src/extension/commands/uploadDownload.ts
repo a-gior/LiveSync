@@ -15,7 +15,7 @@ import { isDownloadable, isUploadable } from '@helpers/diff';
 import { requireValidRemoteConfig } from '@infra/helpers/config';
 import pLimit from 'p-limit';
 import { handleAction } from '@helpers/action/handler';
-import { LOG_FLAGS, logErrorMessage } from '@helpers/logging';
+import { LOG_FLAGS, logErrorMessage, logInfoMessage, logWarnMessage } from '@helpers/logging';
 import { isTestMode } from '../../infrastructure/helpers/test';
 import { getFolderLabel } from '../../infrastructure/helpers/workspaceFolder';
 import { parseActionPolicy } from '../../infrastructure/helpers/policy/parser';
@@ -152,7 +152,10 @@ export function registerUploadDownload(services: Services): void {
       
       if (!inFolder) {continue;}
       if (e.type !== 'file') {continue;}
-      if (isUploadable(e.status)) {
+
+      if(e.status !== 'unchanged') {
+        logInfoMessage(`Skipped ${e.path}: already up to date`);
+      } else if (isUploadable(e.status)) {
         toUpload.push({ relPath: p, absLocal: absFs(workspaceId, p) });
       }
     }
@@ -251,7 +254,10 @@ export function registerUploadDownload(services: Services): void {
       
       if (!inFolder) {continue;}
       if (e.type !== 'file') {continue;}
-      if (isDownloadable(e.status)) {
+      
+      if(e.status !== 'unchanged') {
+        logInfoMessage(`Skipped ${e.path}: already up to date`);
+      } else if (isDownloadable(e.status)) {
         toDownload.push({ relPath: p, absLocal: absFs(workspaceId, p) });
       }
     }
