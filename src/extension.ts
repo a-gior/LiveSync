@@ -27,6 +27,7 @@ import { registerUploadDownload } from './extension/commands/uploadDownload';
 import { runMigrationCheck } from '@infra/migration/ConfigMigration';
 import { registerTestCommands } from './extension/commands/test';
 import { registerDelete } from './extension/commands/delete';
+import { disposeLocalPowerShellClient } from '@helpers/indexing';
 
 let globalServices: Awaited<ReturnType<typeof bootstrap>> | undefined;
 
@@ -70,6 +71,9 @@ export async function deactivate() {
   if (globalServices?.cachePersister) {
     await globalServices.cachePersister.forceFlush();
   }
+  
+  // Dispose PowerShell client (Windows only, no-op on other platforms)
+  disposeLocalPowerShellClient();
 
   logInfoMessage('LiveSync deactivated.');
 }

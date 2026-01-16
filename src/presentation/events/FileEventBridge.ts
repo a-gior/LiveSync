@@ -17,7 +17,7 @@ import { WorkspaceConfigService } from '@infra/config/WorkspaceConfigService';
 import { ConfigValidator } from '@infra/config/ConfigValidator';
 import type { RemotePort } from '@app/ports/RemotePort';
 import { NotificationStatusBar } from '@presentation/statusbar/NotificationStatusBar';
-import type { ExperimentalTreeProvider } from '@presentation/tree/ExperimentalTreeProvider';
+import type { SyncStateTreeProvider } from '@presentation/tree/SyncStateTreeProvider';
 
 import type { RelPath, WorkspaceId, NodeMeta } from '@domain/types';
 import { relFromAbs, stringToWsId } from '@helpers/path';
@@ -40,7 +40,7 @@ export class FileEventBridge {
     private readonly validator: ConfigValidator,
     private readonly remote: RemotePort,
     private readonly notifications: NotificationStatusBar,
-    private readonly provider: ExperimentalTreeProvider
+    private readonly provider: SyncStateTreeProvider
   ) {}
 
   /**

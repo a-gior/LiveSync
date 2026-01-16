@@ -1,3 +1,12 @@
+/**
+ * SFTP Remote Port - SSH/SFTP operations for remote file synchronization
+ * 
+ * Uses:
+ * - SSH connection pool for list operations
+ * - SFTP client with p-limit for file operations
+ * - Native OS commands via scanRemote for efficient indexing
+ */
+
 import * as fsp from 'fs/promises';
 import * as path from 'path';
 import { tmpdir } from 'os';
@@ -6,21 +15,21 @@ import { Client as SSHClient } from 'ssh2';
 import pLimit from 'p-limit';
 
 import type { RemotePort } from '@app/ports/RemotePort';
-import type { WorkspaceId, RelPath, NodeIndex, FolderMeta, FileMeta } from '@domain/types';
+import type { WorkspaceId, RelPath, NodeIndex } from '@domain/types';
 
 import { WorkspaceConfigService } from '../config/WorkspaceConfigService';
-import { asRel } from '@helpers/path/RelPath';
 import { logSync } from '@helpers/logging';
-import { computeAllFolderHashes, sha256OfFile } from '../helpers/hash';
-import { IgnoreFilter } from '../helpers/ignore';
+import { sha256OfFile } from '@helpers/hash';
+import { scanRemote } from '@helpers/indexing';
 
 const p = path.posix;
 
 const normalize = (pp: string): string => pp.replace(/\\/g, '/');
 
-/**
- * Connection pool for managing SSH connections (for list operations)
- */
+// ═══════════════════════════════════════════════════════════════════════════
+// SSH Connection Pool
+// ═══════════════════════════════════════════════════════════════════════════
+
 class SSHConnectionPool {
   private pool: SSHClient[] = [];
   private readonly maxConnections: number;
@@ -34,10 +43,6 @@ class SSHConnectionPool {
     this.maxConnections = maxConnections;
   }
 
-  /**
-   * Acquire an SSH client from the pool
-   * Creates new connection if needed, or waits for one to become available
-   */
   async acquire(cfg: any): Promise<SSHClient> {
     // Check pool for healthy connection
     while (this.pool.length > 0) {
@@ -51,7 +56,7 @@ class SSHConnectionPool {
         idle.end(); 
         idle.destroy();
       } catch {
-        // Ignore errors on closing stale connection
+        // Ignore
       }
     }
 
@@ -64,21 +69,19 @@ class SSHConnectionPool {
         await this.connectSSH(client, cfg);
         return client;
       } catch (err) {
-        // Failed to create connection - decrement counter
         this.activeConnections = Math.max(0, this.activeConnections - 1);
         throw err;
       }
     }
 
-    // All connections busy - wait for one to become available
+    // All connections busy - wait
     return new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
-        // Remove from queue if timeout
         const index = this.waitQueue.findIndex(item => item.resolve === resolve);
         if (index !== -1) {
           this.waitQueue.splice(index, 1);
         }
-        reject(new Error('Timeout waiting for available SSH connection (30s)'));
+        reject(new Error('Timeout waiting for SSH connection (30s)'));
       }, 30000);
 
       this.waitQueue.push({
@@ -88,7 +91,6 @@ class SSHConnectionPool {
         },
         reject: (err: Error) => {
           clearTimeout(timeoutId);
-          // If it's a "retry" error, retry immediately
           if (err.message === 'Connection died, retry') {
             this.acquire(cfg).then(resolve, reject);
           } else {
@@ -98,13 +100,10 @@ class SSHConnectionPool {
       });
     });
   }
-  /**
-   * Release an SSH client back to the pool
-   */
+
   release(client: SSHClient): void {
     this.activeConnections = Math.max(0, this.activeConnections - 1);
 
-    // If connection is dead, discard it and let waiters retry
     if (!this.isClientAlive(client)) {
       try {
         client.end();
@@ -113,7 +112,6 @@ class SSHConnectionPool {
         // Ignore
       }
       
-      // If someone is waiting, reject them so they retry with a new connection
       if (this.waitQueue.length > 0) {
         const waiter = this.waitQueue.shift()!;
         waiter.reject(new Error('Connection died, retry'));
@@ -121,7 +119,6 @@ class SSHConnectionPool {
       return;
     }
 
-    // Check if someone is waiting for a connection (only pass healthy connections)
     if (this.waitQueue.length > 0) {
       const waiter = this.waitQueue.shift()!;
       this.activeConnections++;
@@ -129,7 +126,6 @@ class SSHConnectionPool {
       return;
     }
 
-    // No one waiting - return to pool or close
     if (this.pool.length >= 2) {
       try {
         client.end();
@@ -140,7 +136,6 @@ class SSHConnectionPool {
       return;
     }
 
-    // Add error handler to remove from pool if connection dies while idle
     client.removeAllListeners('error');
     client.once('error', () => {
       this.pool = this.pool.filter(c => c !== client);
@@ -159,9 +154,6 @@ class SSHConnectionPool {
     this.pool.push(client);
   }
 
-  /**
-   * Check if SSH client connection is still alive
-   */
   private isClientAlive(client: SSHClient): boolean {
     try {
       const stream = (client as any)._sshstream;
@@ -207,11 +199,15 @@ class SSHConnectionPool {
   }
 }
 
-/**
- * Use p-limit library for elegant concurrency control
- * Set limit to 9 to avoid event listener warnings (from 10 onwards)
- */
+// ═══════════════════════════════════════════════════════════════════════════
+// SFTP Concurrency Control
+// ═══════════════════════════════════════════════════════════════════════════
+
 const sftpLimit = pLimit(9);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SftpRemotePort Implementation
+// ═══════════════════════════════════════════════════════════════════════════
 
 export class SftpRemotePort implements RemotePort {
   private readonly sshConnectionPool: SSHConnectionPool;
@@ -223,6 +219,10 @@ export class SftpRemotePort implements RemotePort {
     this.sshConnectionPool = new SSHConnectionPool(concurrency);
   }
 
+  /**
+   * List all files and folders on remote, building a NodeIndex
+   * Uses streaming SSH commands for efficient scanning
+   */
   async list(workspaceId: WorkspaceId): Promise<NodeIndex> {
     const cfg = await this.configService.getById(workspaceId);
     if (!cfg.hasRemote || !cfg.data.remotePath) {
@@ -230,140 +230,35 @@ export class SftpRemotePort implements RemotePort {
     }
 
     const root = normalize(cfg.data.remotePath);
+    const hostKey = `${cfg.data.hostname}:${cfg.data.port ?? 22}`;
 
-    return await this.listViaBatchedSSH(cfg, root, cfg.ignoreFilter);
-  }
-
-  private async listViaBatchedSSH(
-    cfg: Awaited<ReturnType<WorkspaceConfigService['getById']>>,
-    root: string,
-    ignoreFilter: IgnoreFilter 
-  ): Promise<NodeIndex> {
     const sshClient = await this.sshConnectionPool.acquire(cfg);
 
     try {
-      const out: NodeIndex = new Map();
-      
-      const [filesAndDirsRaw, filesHashRaw] = await Promise.all([
-        this.execSSH(sshClient, 
-          `find "${root}" -printf '%p|%y|%s|%T@\\n' 2>/dev/null || true`
-        ),
-        this.execSSH(sshClient, 
-          `find "${root}" -type f -print0 2>/dev/null | xargs -0 -P4 -n100 sha256sum 2>/dev/null | sed -E "s|\\s+${root}/|,|" || true`
-        )
-      ]);
-
-      const files: Array<{ rel: RelPath; size: number; mtime: number }> = [];
-      const folders = new Set<RelPath>();
-      
-      const lines = filesAndDirsRaw.split('\n');
-      const rootLen = root.length;
-      
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (!line) {continue;}
-        
-        const parts = line.split('|');
-        if (parts.length < 4) {continue;}
-
-        const fullPath = parts[0];
-        const type = parts[1];
-        
-        let rel: string;
-        if (fullPath === root) {
-          rel = '';
-        } else if (fullPath.length > rootLen && fullPath[rootLen] === '/' && fullPath.startsWith(root)) {
-          rel = fullPath.substring(rootLen + 1);
-        } else {
-          continue;
-        }
-
-        const relPath = asRel(rel);
-        
-        if (ignoreFilter.shouldIgnore(relPath)) {  // ← Simplified
-          continue;
-        }
-
-        if (type === 'd') {
-          folders.add(relPath);
-        } else if (type === 'f') {
-          const size = parseInt(parts[2], 10) || 0;
-          const mtime = Math.floor(parseFloat(parts[3]) * 1000);
-          files.push({ rel: relPath, size, mtime });
-        }
-      }
-
-      const fileHashMap = new Map<string, string>();
-      const hashLines = filesHashRaw.split('\n');
-      
-      for (let i = 0; i < hashLines.length; i++) {
-        const line = hashLines[i];
-        if (!line) {continue;}
-        
-        const commaIdx = line.indexOf(',');
-        if (commaIdx === -1) {continue;}
-        
-        const hash = line.substring(0, commaIdx);
-        const relPath = line.substring(commaIdx + 1);
-        
-        if (hash && relPath) {
-          fileHashMap.set(relPath, hash);
-        }
-      }
-
-      for (const folderRel of folders) {
-        out.set(folderRel, { type: 'folder', hash: '' } as FolderMeta);
-      }
-
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const hash = fileHashMap.get(file.rel as string) || '';
-        
-        out.set(file.rel, { 
-          type: 'file', 
-          hash 
-        } as FileMeta);
-      }
-
-      await computeAllFolderHashes(out);
-
-      return out;
-
+      return await scanRemote(
+        hostKey,
+        root,
+        [...cfg.ignoreFilter.globs],
+        sshClient,
+        { includeHashes: true }
+      );
     } finally {
       this.sshConnectionPool.release(sshClient);
     }
   }
 
-  private execSSH(client: SSHClient, cmd: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      let output = '';
-      client.exec(cmd, (err, stream) => {
-        if (err) {return reject(err);}
-
-        stream
-          .on('data', (chunk: Buffer) => { output += chunk.toString(); })
-          .stderr.on('data', (chunk: Buffer) => { output += chunk.toString(); })
-          .on('close', () => resolve(output));
-      });
-    });
-  }
-
   /**
-   * ✅ KEY INSIGHT FROM OLD CODE:
-   * Use withSFTP pattern - create connection, use it, then close it
-   * Use p-limit to control concurrency elegantly
+   * Upload a file to remote
    */
   async uploadFile(workspaceId: WorkspaceId, relPath: RelPath, absLocal: string): Promise<void> {
     const cfg = await this.configService.getById(workspaceId);
     if (!cfg.hasRemote) {return;}
 
-    // Use p-limit to control concurrency (max 9 concurrent operations)
     await sftpLimit(async () => {
       await this.withSFTP(cfg, async (sftpClient) => {
         const remoteAbs = joinRemote(cfg.data.remotePath!, relPath as string);
         const remoteDir = p.dirname(remoteAbs);
         
-        // Ensure parent directory exists
         await ensureRemoteDir(sftpClient, remoteDir);
         await sftpClient.fastPut(absLocal, remoteAbs);
         logSync(workspaceId, 'upload', relPath as string);
@@ -371,6 +266,9 @@ export class SftpRemotePort implements RemotePort {
     });
   }
 
+  /**
+   * Download a file from remote
+   */
   async downloadFile(workspaceId: WorkspaceId, relPath: RelPath, absLocal: string): Promise<void> {
     const cfg = await this.configService.getById(workspaceId);
     if (!cfg.hasRemote) {return;}
@@ -387,6 +285,9 @@ export class SftpRemotePort implements RemotePort {
     });
   }
 
+  /**
+   * Move/rename a file or folder on remote
+   */
   async move(
     workspaceId: WorkspaceId,
     oldPath: RelPath,
@@ -395,14 +296,12 @@ export class SftpRemotePort implements RemotePort {
     const cfg = await this.configService.getById(workspaceId);
     if (!cfg.hasRemote) {return;}
     
-    // Use p-limit to control concurrency (max 9 concurrent operations)
     await sftpLimit(async () => {
       await this.withSFTP(cfg, async (sftpClient) => {
         const oldRemoteAbs = joinRemote(cfg.data.remotePath!, oldPath);
         const newRemoteAbs = joinRemote(cfg.data.remotePath!, newPath);
         const remoteDir = p.dirname(newRemoteAbs);
 
-        // Ensure parent directory exists
         await ensureRemoteDir(sftpClient, remoteDir);
         await sftpClient.rename(oldRemoteAbs, newRemoteAbs);
         logSync(workspaceId, 'move', newPath);
@@ -410,6 +309,9 @@ export class SftpRemotePort implements RemotePort {
     });
   }
 
+  /**
+   * Delete a file or folder on remote (recursive for folders)
+   */
   async deletePath(workspaceId: WorkspaceId, relPath: RelPath): Promise<void> {
     const cfg = await this.configService.getById(workspaceId);
     if (!cfg.hasRemote) {return;}
@@ -444,6 +346,9 @@ export class SftpRemotePort implements RemotePort {
     });
   }
 
+  /**
+   * Get hash of a single remote file
+   */
   async getFileHash(workspaceId: WorkspaceId, relPath: RelPath): Promise<string> {
     const cfg = await this.configService.getById(workspaceId);
     if (!cfg.hasRemote) {throw new Error('No remote config');}
@@ -451,7 +356,6 @@ export class SftpRemotePort implements RemotePort {
     return await this.withSFTP(cfg, async (sftpClient) => {
       const remoteAbs = joinRemote(cfg.data.remotePath!, relPath as string);
       
-      // Download to temp buffer and hash it
       const tmpFile = path.join(tmpdir(), `livesync-${Date.now()}-${path.basename(relPath as string)}`);
       try {
         await sftpClient.fastGet(remoteAbs, tmpFile);
@@ -466,9 +370,39 @@ export class SftpRemotePort implements RemotePort {
   }
 
   /**
-   * ✅ PATTERN FROM OLD CODE:
-   * withSFTP - Creates connection, runs callback, ensures cleanup
-   * This is more reliable than connection pooling for SFTP
+   * Execute a command on remote (for testing)
+   */
+  async executeCommand(workspaceId: WorkspaceId, command: string): Promise<string> {
+    const cfg = await this.configService.getById(workspaceId);
+    if (!cfg.hasRemote) {throw new Error('No remote config');}
+
+    const sshClient = await this.sshConnectionPool.acquire(cfg);
+    try {
+      return await this.execSSH(sshClient, command);
+    } finally {
+      this.sshConnectionPool.release(sshClient);
+    }
+  }
+
+  /**
+   * Execute SSH command (buffered)
+   */
+  private execSSH(client: SSHClient, cmd: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      let output = '';
+      client.exec(cmd, (err, stream) => {
+        if (err) {return reject(err);}
+
+        stream
+          .on('data', (chunk: Buffer) => { output += chunk.toString(); })
+          .stderr.on('data', (chunk: Buffer) => { output += chunk.toString(); })
+          .on('close', () => resolve(output));
+      });
+    });
+  }
+
+  /**
+   * SFTP connection wrapper - creates connection, runs callback, ensures cleanup
    */
   private async withSFTP<T>(
     cfg: Awaited<ReturnType<WorkspaceConfigService['getById']>>,
@@ -491,10 +425,7 @@ export class SftpRemotePort implements RemotePort {
 
       return await callback(sftp);
     } finally {
-      // Always close the connection
-      await sftp.end().catch(() => {
-        // Ignore cleanup errors
-      });
+      await sftp.end().catch(() => {});
     }
   }
 
@@ -503,7 +434,9 @@ export class SftpRemotePort implements RemotePort {
   }
 }
 
-// ---------- file-local helpers ------------------------------------------------
+// ═══════════════════════════════════════════════════════════════════════════
+// Helper Functions
+// ═══════════════════════════════════════════════════════════════════════════
 
 function joinRemote(root: string, rel: string): string {
   const clean = rel.replace(/^[\\/]+/, '').replace(/\\/g, '/');

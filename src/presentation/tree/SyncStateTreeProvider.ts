@@ -12,7 +12,7 @@ import { basenameRel, getParentPath, stringToRel } from '@helpers/path';
 
 type WorkspaceNode = { kind: 'workspace'; workspaceId: WorkspaceId; label: string };
 type EntryNode     = { kind: 'entry';     workspaceId: WorkspaceId; path: RelPath };
-export type ExperimentalNode = WorkspaceNode | EntryNode;
+export type Node = WorkspaceNode | EntryNode;
 
 // Human-readable labels for statuses
 const StatusLabel: Record<DiffStatus, string> = {
@@ -23,8 +23,8 @@ const StatusLabel: Record<DiffStatus, string> = {
   conflict: 'conflict',
 };
 
-export class ExperimentalTreeProvider implements vscode.TreeDataProvider<ExperimentalNode> {
-  private readonly changeEmitter = new vscode.EventEmitter<ExperimentalNode | undefined>();
+export class SyncStateTreeProvider implements vscode.TreeDataProvider<Node> {
+  private readonly changeEmitter = new vscode.EventEmitter<Node | undefined>();
   public readonly onDidChangeTreeData = this.changeEmitter.event;
 
   private currentWorkspaceId: WorkspaceId;
@@ -154,7 +154,7 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
       try {
         dispose();
       } catch (err) {
-        console.error('[ExperimentalTreeProvider] Error during disposal:', err);
+        console.error('[SyncStateTreeProvider] Error during disposal:', err);
       }
     }
     this.disposeCallbacks.length = 0;
@@ -259,7 +259,7 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
   /**
    * Returns the parent of the given element.
    */
-  getParent(element: ExperimentalNode): ExperimentalNode | undefined {
+  getParent(element: Node): Node | undefined {
     // Workspace nodes have no parent
     if (element.kind === 'workspace') {
       return undefined;
@@ -280,7 +280,7 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     return this.getOrCreateEntryNode(element.workspaceId, parentRelPath);
   }
 
-  async getChildren(element?: ExperimentalNode): Promise<ExperimentalNode[]> {
+  async getChildren(element?: Node): Promise<Node[]> {
     // List mode: return all files/folders flat from the root
     if (!this.showAsTree && !element) {
       return this.getAllEntriesFlat(this.currentWorkspaceId);
@@ -324,7 +324,7 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     return nodes;
   }
 
-  private getAllEntriesFlat(workspaceId: WorkspaceId): ExperimentalNode[] {
+  private getAllEntriesFlat(workspaceId: WorkspaceId): Node[] {
     const allPaths: RelPath[] = [];
     const foldersWithContent = new Set<RelPath>();
     const stack: RelPath[] = [stringToRel('')];
@@ -377,7 +377,7 @@ export class ExperimentalTreeProvider implements vscode.TreeDataProvider<Experim
     return nodes;
   }
 
-  getTreeItem(element: ExperimentalNode): vscode.TreeItem {
+  getTreeItem(element: Node): vscode.TreeItem {
     if (element.kind === 'workspace') {
       const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.Collapsed);
       item.id = `ws:${element.workspaceId}::${this.expandEpoch}`;
