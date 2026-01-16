@@ -1,6 +1,7 @@
 import type { SyncStateManager } from '@app/SyncStateManager';
 import type { IndexCacheService } from '@infra/persistence/IndexCacheService';
 import type { WorkspaceId } from '@domain/types';
+import { ConfigValidator } from '../config/ConfigValidator';
 
 /**
  * Listens to SyncStateManager diff changes and automatically persists
@@ -16,6 +17,7 @@ export class DebouncedCachePersister {
     private readonly localCache: IndexCacheService,
     private readonly remoteCache: IndexCacheService,
     private readonly baseCache: IndexCacheService,
+    private readonly validator: ConfigValidator,
     debounceMs: number = 1000
   ) {
     this.debounceMs = debounceMs;
@@ -49,6 +51,11 @@ export class DebouncedCachePersister {
     await Promise.allSettled(
       workspaces.map(async (ws) => {
         try {
+          const validation = await this.validator.getCached(ws, false);
+          if (!validation.hasConfig) {
+            return; // Skip - no config, don't create .livesync
+          }
+
           const local = this.state.getLocalIndex(ws);
           const remote = this.state.getRemoteIndex(ws);
           const base = this.state.getBaseIndex(ws);  

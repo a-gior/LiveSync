@@ -59,7 +59,7 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
   // Initialize infrastructure (storage, caching, logging)
   const { localCache, remoteCache, baseCache } = await initializeInfrastructure(context, state, validator);
 
-  const cachePersister = new DebouncedCachePersister(state, localCache, remoteCache, baseCache, 1000);
+  const cachePersister = new DebouncedCachePersister(state, localCache, remoteCache, baseCache, validator, 1000);
   context.subscriptions.push({
     dispose: () => {
       cachePersister.dispose();

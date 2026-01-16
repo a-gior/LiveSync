@@ -8,12 +8,19 @@ import type { WorkspaceId, NodeIndex } from '@domain/types';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
+import { ConfigValidator } from '../../../src/infrastructure/config/ConfigValidator';
 
 describe('Cache Persistence Integration', function() {
   this.timeout(10000);
 
   let tempWorkspaceDir: string;
   let wsId: WorkspaceId;
+
+  function createMockValidator(): ConfigValidator {
+    return {
+      getCached: async () => ({ hasConfig: true, isValid: true })
+    } as unknown as ConfigValidator;
+  }
 
   beforeEach(async () => {
     tempWorkspaceDir = path.join(os.tmpdir(), `livesync-cache-int-${Date.now()}`);
@@ -70,6 +77,7 @@ describe('Cache Persistence Integration', function() {
       localCache,
       remoteCache,
       baseCache,
+      createMockValidator(),
       100 // 100ms debounce
     );
 
@@ -107,7 +115,7 @@ describe('Cache Persistence Integration', function() {
     const remoteCache = new IndexCacheService('index.remote.json');
     const baseCache = new IndexCacheService('index.base.json');
 
-    const persister = new DebouncedCachePersister(state, localCache, remoteCache, baseCache, 1000);
+    const persister = new DebouncedCachePersister(state, localCache, remoteCache, baseCache, createMockValidator(), 1000);
 
     const localIndex: NodeIndex = new Map([
       [stringToRel('urgent.txt'), { type: 'file' as const, hash: 'urgent-hash' }],
@@ -133,7 +141,7 @@ describe('Cache Persistence Integration', function() {
     const remoteCache = new IndexCacheService('index.remote.json');
     const baseCache = new IndexCacheService('index.base.json');
 
-    const persister = new DebouncedCachePersister(state, localCache, remoteCache, baseCache,100);
+    const persister = new DebouncedCachePersister(state, localCache, remoteCache, baseCache, createMockValidator(), 100);
 
     // Create multiple workspace directories
     const ws1 = wsId;
@@ -178,7 +186,7 @@ describe('Cache Persistence Integration', function() {
     const remoteCache = new IndexCacheService('index.remote.json');
     const baseCache = new IndexCacheService('index.base.json');
 
-    const persister = new DebouncedCachePersister(state, localCache, remoteCache, baseCache, 100);
+    const persister = new DebouncedCachePersister(state, localCache, remoteCache, baseCache, createMockValidator(), 100);
 
     // First update
     state.setLocalIndex(wsId, new Map([
@@ -237,7 +245,7 @@ describe('Cache Persistence Integration', function() {
     const remoteCache = new IndexCacheService('index.remote.json');
     const baseCache = new IndexCacheService('index.base.json');
 
-    const persister = new DebouncedCachePersister(state, localCache, remoteCache, baseCache, 100);
+    const persister = new DebouncedCachePersister(state, localCache, remoteCache, baseCache, createMockValidator(), 100);
 
     // Rapid updates (10 updates in quick succession)
     for (let i = 0; i < 10; i++) {

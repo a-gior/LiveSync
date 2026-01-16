@@ -3,6 +3,7 @@ import { DebouncedCachePersister } from '@infra/persistence/DebouncedCachePersis
 import { stringToWsId, stringToRel } from '@helpers/path';
 import type { WorkspaceId, NodeIndex } from '@domain/types';
 import { DiffChangeEvent } from '@app/SyncStateManager';
+import { ConfigValidator } from '../../../../src/infrastructure/config/ConfigValidator';
 
 describe('DebouncedCachePersister', () => {
   let persister: DebouncedCachePersister;
@@ -60,11 +61,16 @@ describe('DebouncedCachePersister', () => {
       },
     } as any;
 
+    const mockValidator = {
+      getCached: async () => ({ hasConfig: true, isValid: true })
+    } as unknown as ConfigValidator;
+
     persister = new DebouncedCachePersister(
       mockState,
       mockLocalCache,
       mockRemoteCache,
       mockBaseCache,
+      mockValidator,
       100 // 100ms debounce for faster tests
     );
   });
@@ -225,11 +231,16 @@ describe('DebouncedCachePersister', () => {
       },
     } as any;
 
+    const mockValidator = {
+      getCached: async () => ({ hasConfig: true, isValid: true })
+    } as unknown as ConfigValidator;
+
     const failingPersister = new DebouncedCachePersister(
       failingMockState,
       failingCache,
       failingCache,
       failingCache,
+      mockValidator,
       100
     );
 
@@ -245,6 +256,70 @@ describe('DebouncedCachePersister', () => {
     assert.ok(true, 'Should handle save errors gracefully');
 
     failingPersister.dispose();
+  });
+
+  it('skips save when workspace has no config', async function() {
+    this.timeout(5000);
+    
+    // Mock SyncStateManager
+    const mockState = {
+      subscribeToDiffChanges: (listener: (event: DiffChangeEvent) => void) => {
+        diffChangeListener = listener;
+      },
+      getLocalIndex: (wsId: WorkspaceId) => {
+        return new Map([[stringToRel('local.txt'), { type: 'file' as const, hash: `local-${wsId}` }]]) as NodeIndex;
+      },
+      getRemoteIndex: (wsId: WorkspaceId) => {
+        return new Map([[stringToRel('remote.txt'), { type: 'file' as const, hash: `remote-${wsId}` }]]) as NodeIndex;
+      },
+    } as any;
+    
+    // Mock IndexCacheService for local cache
+    const mockLocalCache = {
+      save: async (wsId: WorkspaceId, index: NodeIndex) => {
+        localSaveCount++;
+        lastLocalSaved.set(wsId, new Map(index));
+      },
+    } as any;
+
+    // Mock IndexCacheService for remote cache
+    const mockRemoteCache = {
+      save: async (wsId: WorkspaceId, index: NodeIndex) => {
+        remoteSaveCount++;
+        lastRemoteSaved.set(wsId, new Map(index));
+      },
+    } as any;
+    
+    // Mock IndexCacheService for base cache
+    const mockBaseCache = {
+      save: async (wsId: WorkspaceId, index: NodeIndex) => {
+        baseSaveCount++;
+        lastBaseSaved.set(wsId, new Map(index));
+      },
+    } as any;
+
+    const noConfigValidator = {
+      getCached: async () => ({ hasConfig: false, isValid: false })
+    } as unknown as ConfigValidator;
+
+    const noConfigPersister = new DebouncedCachePersister(
+      mockState,
+      mockLocalCache,
+      mockRemoteCache,
+      mockBaseCache,
+      noConfigValidator,
+      100
+    );
+
+    const wsId = stringToWsId('/no-config-workspace');
+    diffChangeListener!({ workspaceId: wsId });
+
+    await new Promise(resolve => setTimeout(resolve, 150));
+
+    assert.equal(localSaveCount, 0, 'Should not save when no config');
+    assert.equal(remoteSaveCount, 0, 'Should not save when no config');
+
+    noConfigPersister.dispose();
   });
 
   it('batches multiple workspace changes in single flush', async function() {
