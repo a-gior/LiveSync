@@ -213,7 +213,7 @@ export class RemoteIndexScheduler implements vscode.Disposable {
       this.deps.provider.refresh();
 
       this.deps.notifications.notifySuccess(`${folder.name} remote refreshed`);
-      logInfoMessage(`[RemoteIndexScheduler] Auto-refreshed ${folder.name}`);
+      logInfoMessage(`[RemoteIndexScheduler] Auto-refreshed ${folder.name} remote indexes`);
     } catch (err: any) {
       logExpectedError(`RemoteIndexScheduler:${folder.name}`, err);
       await this.deps.validator.invalidate(workspaceId, err);
