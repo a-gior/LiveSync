@@ -2,7 +2,7 @@
   "name": "livesync",
   "displayName": "LiveSync",
   "description": "Instant file sync over SSH/SFTP with diff tracking and easy config UI.",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "publisher": "agior",
   "icon": "resources/icons/livesync-logo-gold.png",
   "repository": {
@@ -395,7 +395,7 @@
     "@types/ssh2": "^1.15.0",
     "@types/ssh2-sftp-client": "^9.0.3",
     "@types/tmp": "^0.2.6",
-    "@types/vscode": "^1.108.1",
+    "@types/vscode": "1.96.0",
     "@types/vscode-webview": "^1.57.5",
     "@vscode/test-cli": "^0.0.8",
     "@vscode/test-electron": "^2.5.2",

@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.4] - Guard Improvements & Remote Index Scheduler 🛡️
+
+### 💡 Improvements
+- **Remote Index Scheduler** — New VSCode setting `livesync.remoteIndex.autoRefreshInterval` to auto-refresh remote indexes (0 = disabled)
+- **New command** — `livesync.refreshRemoteIndex` to manually refresh only remote indexes
+- **Smarter folder sync** — Upload/download folders now skip unchanged files
+- **OS-aware indexing** — Local and remote indexing now uses platform-optimized commands
+- Reduced logging verbosity
+
+### Fixed
+- Extension no longer creates `.livesync` folder or indexes for workspaces without configuration
+- Fixed constant download trigger when opening files with `check&download` action
+- Remote Index Scheduler now properly handles workspace folder add/remove
 
 ## [1.1.3] - Fix crash on extension activation 🛠️
 
