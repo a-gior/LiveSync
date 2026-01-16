@@ -60,7 +60,7 @@ export class RemoteIndexScheduler implements vscode.Disposable {
       // Stagger initial start to avoid all refreshing at once
       setTimeout(() => {
         if (!this.isDisposed) {
-          this.startTimerForWorkspace(wsId);
+          void this.startTimerForWorkspace(wsId);
         }
       }, index * staggerMs);
     });
@@ -69,12 +69,18 @@ export class RemoteIndexScheduler implements vscode.Disposable {
   /**
    * Start or restart timer for a specific workspace
    */
-  private startTimerForWorkspace(workspaceId: WorkspaceId): void {
+  private async startTimerForWorkspace(workspaceId: WorkspaceId): Promise<void> {
     // Clear existing timer
     this.stopTimerForWorkspace(workspaceId);
 
     const folder = findWorkspaceFolderById(workspaceId);
     if (!folder) {return;}
+
+    const validation = await this.deps.validator.getCached(workspaceId, false);
+    if (!validation.hasConfig || !validation.isValid) {
+      logInfoMessage(`[RemoteIndexScheduler] Skipping ${folder.name}: no valid config`);
+      return;
+    }
 
     const intervalMinutes = vscode.workspace
       .getConfiguration('livesync', folder.uri)
