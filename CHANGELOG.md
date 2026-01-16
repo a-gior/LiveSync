@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+
+## [1.1.5] - Fix 
+
+### Fixed
+- Fixed `.livesync` folder still being created after file events when no configuration was found.
+
 ## [1.1.4] - Guard Improvements & Remote Index Scheduler 🛡️
 
 ### 💡 Improvements

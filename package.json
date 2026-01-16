@@ -2,7 +2,7 @@
   "name": "livesync",
   "displayName": "LiveSync",
   "description": "Instant file sync over SSH/SFTP with diff tracking and easy config UI.",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "publisher": "agior",
   "icon": "resources/icons/livesync-logo-gold.png",
   "repository": {
@@ -360,7 +360,8 @@
     }
   },
   "scripts": {
-    "install:dev": "npm install && cd webview-ui && npm install",
+    "clean:dev": "rimraf node_modules package-lock.json webview-ui/node_modules webview-ui/package-lock.json",
+    "install:dev": "npm run clean:dev && npm install --save-dev && cd webview-ui && npm install --save-dev",
     "install:prod": "npm run clean-install && cd webview-ui && npm run clean-install",
     "clean-install": "rm -rf node_modules package-lock.json && npm install --omit=dev",
     "start:webview": "cd webview-ui && npm run dev",
