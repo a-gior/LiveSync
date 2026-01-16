@@ -15,15 +15,15 @@ import type { SyncStateTreeProvider } from '@presentation/tree/SyncStateTreeProv
 
 import { parseActionPolicy } from '@helpers/policy/parser';
 import { isNoOpPolicy, isCheckOnlyPolicy, shouldCheckConflict } from '@helpers/policy/utils';
-import { detectConflict } from '@helpers/conflict/detector';
+import { detectConflict, OperationType } from '@helpers/conflict/detector';
 import { resolveConflict, showCheckInfo } from '@helpers/conflict/resolver';
 import { markConflictIgnored, clearIgnoredConflictIfResolved } from '@helpers/conflict/tracker';
 import { executeUpload, executeDownload, executeDelete, executeRename } from './executor';
 import { notifySuccess, notifyError } from '@helpers/notification';
-import { logExpectedError, logSync } from '@helpers/logging';
+import { LOG_FLAGS, logErrorMessage, logSync } from '@helpers/logging';
 import { stringToWsId, uriFromRel } from '@helpers/path';
 import { workspace } from 'vscode';
-import { moveInLocalSnapshot, removeFromLocalSnapshot } from '../snapshot/update';
+import { removeFromLocalSnapshot } from '../snapshot/update';
 
 /**
  * Parameters for handleAction
@@ -38,7 +38,7 @@ export interface HandleActionParams {
     remote?: NodeMeta;        // Fresh remote (just fetched, NOT in snapshot yet)
   };
   isCommand: boolean;
-  operation: 'save' | 'create' | 'delete' | 'move' | 'open';
+  operation: OperationType;
   
   // Services
   state: SyncStateManager;
@@ -250,7 +250,7 @@ export async function handleAction(params: HandleActionParams): Promise<HandleAc
     // Invalidate on connection errors
     await validator.invalidate(workspaceId, err);
     
-    logExpectedError(`handleAction:${operation}:${relPath}`, err);
+    logErrorMessage(err.message, LOG_FLAGS.ALL, `handleAction:${operation}:${relPath}`);
     notifyError(notifications, action, relPath);
     
     return { success: false };

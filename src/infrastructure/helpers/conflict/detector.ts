@@ -9,11 +9,14 @@ import {
 } from './helpers';
 import { LOG_FLAGS, logInfoMessage } from '../logging';
 
+export type OperationType = 'save' | 'create' | 'delete' | 'move' | 'open' | 'upload' | 'download';
+export type Action = 'upload' | 'download' | 'delete' | 'move' | 'skip';
+
 /**
  * Conflict detection parameters
  */
 export interface ConflictDetectionParams {
-  operation: 'save' | 'create' | 'delete' | 'move' | 'open';
+  operation: OperationType;
   workspaceId: WorkspaceId;
   relPath: RelPath;
   actualMetas: { 
@@ -28,7 +31,7 @@ export interface ConflictDetectionParams {
 export interface ConflictInfo {
   type: string;
   allowDiff: boolean;
-  suggestedAction: 'upload' | 'download' | 'delete' | 'move' | 'skip';
+  suggestedAction: Action;
 }
 
 export function detectConflict(params: ConflictDetectionParams): ConflictInfo | null {
@@ -42,11 +45,11 @@ export function detectConflict(params: ConflictDetectionParams): ConflictInfo | 
   
   // Suggested action
   let suggestedAction: ConflictInfo['suggestedAction'] = 'skip';
-  if (operation === 'save' || operation === 'create') {
+  if (operation === 'save' || operation === 'create' || operation === 'upload') {
     suggestedAction = 'upload';
   } else if (operation === 'move') {
     suggestedAction = 'move';
-  } else if (operation === 'open') {
+  } else if (operation === 'open' || operation === 'download') {
     suggestedAction = 'download';
   } else if (operation === 'delete') {
     suggestedAction = 'delete';

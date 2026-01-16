@@ -15,7 +15,7 @@ import { isDownloadable, isUploadable } from '@helpers/diff';
 import { requireValidRemoteConfig } from '@infra/helpers/config';
 import pLimit from 'p-limit';
 import { handleAction } from '@helpers/action/handler';
-import { logExpectedError } from '@helpers/logging';
+import { LOG_FLAGS, logErrorMessage } from '@helpers/logging';
 import { isTestMode } from '../../infrastructure/helpers/test';
 import { getFolderLabel } from '../../infrastructure/helpers/workspaceFolder';
 import { parseActionPolicy } from '../../infrastructure/helpers/policy/parser';
@@ -58,7 +58,7 @@ export function registerUploadDownload(services: Services): void {
       workspaceId,
       relPath,
       policyKey: 'actionOnUpload',
-      operation: 'save',  // Upload uses save conflict detection
+      operation: 'upload',  // Upload uses save conflict detection
       actualMetas: {
         local: actualLocalMeta,
         remote: undefined  // Fetched inside handleAction
@@ -106,7 +106,7 @@ export function registerUploadDownload(services: Services): void {
       workspaceId,
       relPath,
       policyKey: 'actionOnDownload',
-      operation: 'open',  // Download uses open conflict detection
+      operation: 'download',  // Download uses open conflict detection
       actualMetas: {
         local: actualLocalMeta,
         remote: undefined  // Fetched inside handleAction
@@ -210,8 +210,8 @@ export function registerUploadDownload(services: Services): void {
                 });
                 lastProgressUpdate = now;
               }
-            } catch (err) {
-              logExpectedError(`uploadFolder:${item.relPath}`, err);
+            } catch (err: any) {
+              logErrorMessage(err.message, LOG_FLAGS.CONSOLE_AND_LOG_MANAGER, `command:uploadFolder:${item.relPath}`);
             }
           })
         );
@@ -309,8 +309,8 @@ export function registerUploadDownload(services: Services): void {
                 });
                 lastProgressUpdate = now;
               }
-            } catch (err) {
-              logExpectedError(`downloadFolder:${item.relPath}`, err);
+            } catch (err: any) {
+              logErrorMessage(err.message, LOG_FLAGS.CONSOLE_AND_LOG_MANAGER, `command:downloadFolder:${item.relPath}`);
             }
           })
         );
