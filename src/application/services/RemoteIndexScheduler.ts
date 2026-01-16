@@ -16,6 +16,7 @@ import type { SyncStateTreeProvider } from '@presentation/tree/SyncStateTreeProv
 import { workspaceOperationQueue } from '@helpers/concurrency/WorkspaceOperationQueue';
 import { findWorkspaceFolderById, getWorkspaceIds } from '@helpers/workspaceFolder';
 import { logInfoMessage, logExpectedError } from '@helpers/logging';
+import { stringToWsId } from '../../infrastructure/helpers/path';
 
 interface SchedulerDeps {
   state: SyncStateManager;
@@ -31,10 +32,12 @@ export class RemoteIndexScheduler implements vscode.Disposable {
   private readonly deps: SchedulerDeps;
   private configListener: vscode.Disposable | undefined;
   private isDisposed = false;
+  private workspaceFolderListener: vscode.Disposable | undefined;
 
   constructor(deps: SchedulerDeps) {
     this.deps = deps;
     this.startConfigListener();
+    this.startWorkspaceFolderListener();
     this.initializeTimers();
   }
 
@@ -45,6 +48,30 @@ export class RemoteIndexScheduler implements vscode.Disposable {
     this.configListener = vscode.workspace.onDidChangeConfiguration(e => {
       if (e.affectsConfiguration('livesync.remoteIndex.autoRefreshInterval')) {
         this.restartAllTimers();
+      }
+    });
+  }
+
+  private startWorkspaceFolderListener(): void {
+    this.workspaceFolderListener = vscode.workspace.onDidChangeWorkspaceFolders(async (event) => {
+      // Stop timers for removed folders
+      for (const removed of event.removed) {
+        const wsId = stringToWsId(removed.uri.fsPath);
+        this.stopTimerForWorkspace(wsId);
+        logInfoMessage(`[RemoteIndexScheduler] Stopped timer for removed workspace: ${removed.name}`);
+      }
+
+      // Start timers for added folders (with stagger)
+      for (let i = 0; i < event.added.length; i++) {
+        const added = event.added[i];
+        const wsId = stringToWsId(added.uri.fsPath);
+        
+        // Stagger new workspace timers
+        setTimeout(() => {
+          if (!this.isDisposed) {
+            void this.startTimerForWorkspace(wsId);
+          }
+        }, i * 5000);
       }
     });
   }
@@ -258,5 +285,6 @@ export class RemoteIndexScheduler implements vscode.Disposable {
     this.timers.clear();
 
     this.configListener?.dispose();
+    this.workspaceFolderListener?.dispose();
   }
 }
