@@ -44,6 +44,13 @@ async function initializeAllWorkspaces(
   
   for (const folder of folders) {
     const wsId = stringToWsId(folder.uri.fsPath);
+
+    // Skip if no config exists
+    const validationResult = await validator.getCached(wsId, false);
+    if (!validationResult.hasConfig) {
+      logOperation(wsId, 'skipped', 'no configuration');
+      continue;  // Don't touch cache, don't create .livesync
+    }
     
     // Load all three snapshots from cache
     const local = await localCache.load(wsId);
