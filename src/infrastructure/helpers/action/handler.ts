@@ -201,8 +201,6 @@ export async function handleAction(params: HandleActionParams): Promise<HandleAc
   }
   
   try {
-    logSync(stringToWsId(workspaceId), action, relPath as string, 'starting');
-    
     switch (action) {
       case 'upload':
         await executeUpload(remote, state, workspaceId, relPath);
@@ -243,9 +241,7 @@ export async function handleAction(params: HandleActionParams): Promise<HandleAc
         break;
     }
     
-    logSync(stringToWsId(workspaceId), action, relPath as string, 'completed');
     notifySuccess(notifications, action, relPath);
-    
   } catch (err: any) {
     // Invalidate on connection errors
     await validator.invalidate(workspaceId, err);
