@@ -100,6 +100,9 @@ export function detectConflict(params: ConflictDetectionParams): ConflictInfo | 
     case 'open':
       if (hasContentDifference(actualMetas.local, actualMetas.remote)) {
         keywords.push('remote_differs');
+      } else {
+        // Avoid downloading on each open
+        return {type:"skip", allowDiff:false, suggestedAction:'skip'};
       }
       break;
   }

@@ -172,7 +172,7 @@ export async function handleAction(params: HandleActionParams): Promise<HandleAc
   // 5. RESOLVE ACTION CONFLICT
   // ══════════════════════════════════════════════════════════
   
-  if (conflict) {
+  if (conflict && conflict.suggestedAction !== 'skip') {
     const resolution = await resolveConflict(conflict, workspaceId, relPath);
     
     if (resolution.action === 'cancel') {
