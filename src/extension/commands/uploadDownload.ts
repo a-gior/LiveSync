@@ -15,7 +15,7 @@ import { isDownloadable, isUploadable } from '@helpers/diff';
 import { requireValidRemoteConfig } from '@infra/helpers/config';
 import pLimit from 'p-limit';
 import { handleAction } from '@helpers/action/handler';
-import { LOG_FLAGS, logErrorMessage, logInfoMessage, logWarnMessage } from '@helpers/logging';
+import { LOG_FLAGS, logErrorMessage, logInfoMessage } from '@helpers/logging';
 import { isTestMode } from '../../infrastructure/helpers/test';
 import { getFolderLabel } from '../../infrastructure/helpers/workspaceFolder';
 import { parseActionPolicy } from '../../infrastructure/helpers/policy/parser';

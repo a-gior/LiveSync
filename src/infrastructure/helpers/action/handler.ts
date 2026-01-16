@@ -20,7 +20,7 @@ import { resolveConflict, showCheckInfo } from '@helpers/conflict/resolver';
 import { markConflictIgnored, clearIgnoredConflictIfResolved } from '@helpers/conflict/tracker';
 import { executeUpload, executeDownload, executeDelete, executeRename } from './executor';
 import { notifySuccess, notifyError } from '@helpers/notification';
-import { LOG_FLAGS, logErrorMessage, logSync } from '@helpers/logging';
+import { LOG_FLAGS, logErrorMessage } from '@helpers/logging';
 import { stringToWsId, uriFromRel } from '@helpers/path';
 import { workspace } from 'vscode';
 import { removeFromLocalSnapshot } from '../snapshot/update';
