@@ -20,6 +20,7 @@ import { NotificationStatusBar } from '../presentation/statusbar/NotificationSta
 import { ConfigStatusBar } from '../presentation/statusbar/ConfigStatusBar';
 import { logErrorMessage } from '../infrastructure/helpers/logging';
 import { findWorkspaceFolderById, getWorkspaceIds } from '../infrastructure/helpers/workspaceFolder';
+import { RemoteIndexScheduler } from '../application/services/RemoteIndexScheduler';
 
 export async function bootstrap(context: vscode.ExtensionContext): Promise<Services> {
   
@@ -123,6 +124,16 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
     context.subscriptions.push(views.listView);
   }
 
+  const remoteIndexScheduler = new RemoteIndexScheduler({
+    state,
+    config,
+    validator,
+    remote,
+    notifications,
+    provider: views.diffsProvider,
+  });
+  context.subscriptions.push(remoteIndexScheduler);
+
   return {
     context,
     diffEngine,
@@ -140,5 +151,6 @@ export async function bootstrap(context: vscode.ExtensionContext): Promise<Servi
     configStatus,
     workspaceListProvider: workspaceListContainer.provider,
     cachePersister,
+    remoteIndexScheduler,
   };
 }

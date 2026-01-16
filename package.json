@@ -120,6 +120,11 @@
         "icon": "$(sync)"
       },
       {
+        "command": "livesync.refreshRemoteIndex",
+        "title": "LiveSync: Refresh Remote Index",
+        "icon": "$(cloud-download)"
+      },
+      {
         "command": "livesync.view.switchToTree",
         "title": "Switch to Tree View",
         "category": "LiveSync",
@@ -342,6 +347,14 @@
             ]
           },
           "uniqueItems": true
+        },
+        "livesync.remoteIndex.autoRefreshInterval": {
+          "type": "integer",
+          "scope": "resource",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 1440,
+          "markdownDescription": "Interval in minutes to automatically refresh the remote index. Set to `0` to disable auto-refresh"
         }
       }
     }

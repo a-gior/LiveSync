@@ -5,6 +5,7 @@ import type { NodeIndex, WorkspaceId } from '../../domain/types';
 import { stringToWsId } from '@helpers/path';
 import { findWorkspaceFolderById } from '../../infrastructure/helpers/workspaceFolder';
 import { logErrorMessage } from '../../infrastructure/helpers/logging';
+import { workspaceOperationQueue } from '../../infrastructure/helpers/concurrency/WorkspaceOperationQueue';
 
 export function registerViewToolbar(services: Services): void {
   const { context, state, config, remote, provider, validator } = services;
@@ -30,6 +31,85 @@ export function registerViewToolbar(services: Services): void {
     await context.workspaceState.update('livesync.view.showAsTree', false);
     await vscode.commands.executeCommand('setContext', 'livesyncViewMode', 'list');
     provider.setShowAsTree(false);
+  });
+
+  // Refresh remote index only (manual trigger with progress)
+  cmd(context, 'livesync.refreshRemoteIndex', async (arg?: vscode.WorkspaceFolder) => {
+    let folder: vscode.WorkspaceFolder;
+    let workspaceId: WorkspaceId;
+
+    if (arg && 'uri' in arg) {
+      folder = arg;
+      workspaceId = stringToWsId(folder.uri.fsPath);
+    } else {
+      // Use current workspace from diff view
+      const currentWsId = provider.getCurrentWorkspace();
+      if (!currentWsId) {
+        void vscode.window.showWarningMessage('LiveSync: no workspace selected.');
+        return;
+      }
+
+      const tmpFolder = findWorkspaceFolderById(currentWsId);
+      if (!tmpFolder) {
+        void vscode.window.showWarningMessage('LiveSync: workspace folder not found.');
+        return;
+      }
+
+      folder = tmpFolder;
+      workspaceId = currentWsId;
+    }
+
+    // Validate config
+    const validation = await validator.getCached(workspaceId);
+    if (!validation.isValid) {
+      void vscode.window.showErrorMessage(
+        `LiveSync: ${folder.name} has invalid configuration.`
+      );
+      return;
+    }
+
+    // Queue the operation to serialize with other workspace operations
+    try {
+      await workspaceOperationQueue.enqueue(
+        workspaceId,
+        'refreshRemoteIndex',
+        async () => {
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: `LiveSync: Refreshing remote index for ${folder.name}`,
+              cancellable: true,
+            },
+            async (p, token) => {
+              try {
+                p.report({ message: 'Connecting to remote...' });
+
+                const remoteIndex = await remote.list(workspaceId);
+
+                if (token.isCancellationRequested) {
+                  void vscode.window.showInformationMessage(
+                    `LiveSync: Remote refresh cancelled for ${folder.name}.`
+                  );
+                  return;
+                }
+
+                // Update only remote index
+                state.setRemoteIndex(workspaceId, remoteIndex);
+
+                void vscode.window.showInformationMessage(
+                  `LiveSync: Remote index refreshed for ${folder.name}.`
+                );
+              } catch (err: any) {
+                await validator.invalidate(workspaceId, err);
+                throw err;
+              }
+            }
+          );
+        }
+      );
+    } catch (err: unknown) {
+      // Error already logged by queue
+    }
   });
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -269,4 +349,5 @@ export function registerViewToolbar(services: Services): void {
       }
     );
   });
+
 }

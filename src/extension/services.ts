@@ -11,6 +11,7 @@ import { ConfigValidator } from '@infra/config/ConfigValidator';
 import { DebouncedCachePersister } from '@infra/persistence/DebouncedCachePersister';
 import { NotificationStatusBar } from '../presentation/statusbar/NotificationStatusBar';
 import { ConfigStatusBar } from '../presentation/statusbar/ConfigStatusBar';
+import { RemoteIndexScheduler } from '../application/services/RemoteIndexScheduler';
 
 export interface Services {
   context: vscode.ExtensionContext;
@@ -29,4 +30,5 @@ export interface Services {
   baseCache: IndexCacheService;
   workspaceListProvider?: WorkspaceListProvider;
   cachePersister: DebouncedCachePersister;
+  remoteIndexScheduler: RemoteIndexScheduler;
 }
