@@ -62,9 +62,23 @@ export class SyncStateTreeProvider implements vscode.TreeDataProvider<Node> {
     // Load config-driven view options immediately
     this.updateViewConfig();
 
-    // Subscribe to targeted diff changes; refresh minimally using the RefreshPlanner
-    this.state.subscribeToDiffChanges(({ workspaceId, changedPath, parentPath }) => {
+    // Subscribe to diff changes with targeted refresh + ancestor propagation.
+    //
+    // WorkspaceNode is never returned by getChildren(undefined) — the tree root
+    // yields EntryNodes directly — so fire(workspaceNode) is a no-op in VS Code.
+    // We always use fire(undefined) for workspace-level refreshes instead.
+    //
+    // For root-level files/folders (no ancestors), fire(undefined) is also needed
+    // because ancestorPaths() returns [] and VS Code won't re-add a node to the
+    // tree unless its parent (or root) is told to re-fetch its children.
+    const unsubscribe = this.state.subscribeToDiffChanges(({ workspaceId, changedPath, parentPath }) => {
       if (this.isDisposed) {return;}
+
+      // List mode: flat view always rebuilds from root
+      if (!this.showAsTree) {
+        this.changeEmitter.fire(undefined);
+        return;
+      }
 
       const realizedPaths = this.getRealizedPathsSet(workspaceId);
       const entryStillExists = Boolean(changedPath && this.state.getDiffEntry(workspaceId, stringToRel(changedPath)));
@@ -76,50 +90,24 @@ export class SyncStateTreeProvider implements vscode.TreeDataProvider<Node> {
         realizedPaths: new Set<string>([...realizedPaths].map(p => p as unknown as string)),
       });
 
-      // Determine target node to refresh
       if (decision.kind === 'workspace') {
         this.changeEmitter.fire(undefined);
         return;
       }
 
-      // For 'file' or 'parent': refresh target + all ancestors
+      // For 'file' or 'parent': refresh the target node, all ancestor folders,
+      // and fire(undefined) for root-level items so they can reappear in the tree
+      // after previously being hidden (e.g., status was 'unchanged' then changed).
       const targetPath = stringToRel(decision.path ?? '');
-      
-      // Refresh the target node
       this.changeEmitter.fire(this.getOrCreateEntryNode(workspaceId, targetPath));
-      
-      // Refresh all ancestor folders to recalculate aggregate status
-      for (const ancestorPath of this.ancestorPaths(targetPath)) {
+
+      const ancestors = this.ancestorPaths(targetPath);
+      for (const ancestorPath of ancestors) {
         this.changeEmitter.fire(this.getOrCreateEntryNode(workspaceId, ancestorPath));
       }
-});
-
-    // Subscribe to diff changes with cleanup tracking
-    const unsubscribe = this.state.subscribeToDiffChanges(({ workspaceId, changedPath, parentPath }) => {
-      if (this.isDisposed) {return;} // Guard against post-disposal events
-
-      // In list mode, always refresh from workspace root
-      if (!this.showAsTree) {
-        this.changeEmitter.fire(this.getOrCreateWorkspaceNode(workspaceId));
-        return;
-      }
-
-      const realizedPaths = this.getRealizedPathsSet(workspaceId);
-      const entryStillExists = Boolean(changedPath && this.state.getDiffEntry(workspaceId, stringToRel(changedPath)));
-
-      const decision = computeRefreshTarget({
-        changedPath: changedPath as string | undefined,
-        parentPath : parentPath  as string | undefined,
-        entryStillExists,
-        realizedPaths: new Set<string>([...realizedPaths].map(p => p as unknown as string)),
-      });
-
-      if (decision.kind === 'file') {
-        this.changeEmitter.fire(this.getOrCreateEntryNode(workspaceId, stringToRel(decision.path)));
-      } else if (decision.kind === 'parent') {
-        this.changeEmitter.fire(this.getOrCreateEntryNode(workspaceId, stringToRel(decision.path ?? '')));
-      } else {
-        this.changeEmitter.fire(this.getOrCreateWorkspaceNode(workspaceId));
+      if (ancestors.length === 0) {
+        // Root-level item: fire(undefined) so the tree root re-fetches its children
+        this.changeEmitter.fire(undefined);
       }
     });
 
@@ -232,11 +220,12 @@ export class SyncStateTreeProvider implements vscode.TreeDataProvider<Node> {
       }
 
       const parentPath = getParentPath(path);
-      const nodeToRefresh = parentPath
-        ? this.getOrCreateEntryNode(workspaceId, parentPath)
-        : this.getOrCreateWorkspaceNode(workspaceId);
-
-      this.changeEmitter.fire(nodeToRefresh);
+      if (parentPath) {
+        this.changeEmitter.fire(this.getOrCreateEntryNode(workspaceId, parentPath));
+      } else {
+        // Root-level item: fire(undefined) since WorkspaceNode is not in the tree
+        this.changeEmitter.fire(undefined);
+      }
     }, this.retentionMs);
 
     mapForWs.set(path, timeout);

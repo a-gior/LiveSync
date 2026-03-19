@@ -6,6 +6,7 @@
  */
 
 import * as vscode from 'vscode';
+import * as fsp from 'fs/promises';
 import type { Services } from '../services';
 import { cmd } from '../cmd';
 import { resolveEntryTarget, resolveFolderTarget } from '@infra/helpers/resolve';
@@ -142,25 +143,32 @@ export function registerUploadDownload(services: Services): void {
     const { workspaceId, folderPath } = target;
     const diff = state.getDiffEntries(workspaceId);
     
-    // Collect uploadable files in this folder
+    // Collect uploadable files and empty folders in this folder
     const toUpload: Array<{ relPath: RelPath; absLocal: string }> = [];
-    
-    for (const [p, e] of diff.entries()) {
-      const inFolder = folderPath === '' 
-        ? true 
-        : (p as string).startsWith((folderPath as string) + '/');
-      
-      if (!inFolder) {continue;}
-      if (e.type !== 'file') {continue;}
+    const emptyFoldersToUpload: RelPath[] = [];
 
-      if(e.status !== 'unchanged') {
-        logInfoMessage(`Skipped ${e.path}: already up to date`);
-      } else if (isUploadable(e.status)) {
-        toUpload.push({ relPath: p, absLocal: absFs(workspaceId, p) });
+    for (const [p, e] of diff.entries()) {
+      const inFolder = folderPath === ''
+        ? true
+        : (p as string).startsWith((folderPath as string) + '/');
+
+      if (!inFolder) {continue;}
+
+      if (e.type === 'folder') {
+        if (e.status === 'unchanged') { continue; }
+        if (isUploadable(e.status)) { emptyFoldersToUpload.push(p); }
+        continue;
       }
+
+      if (e.status === 'unchanged') {
+        logInfoMessage(`Skipped ${e.path}: already up to date`);
+        continue;
+      }
+      if (!isUploadable(e.status)) { continue; }
+      toUpload.push({ relPath: p, absLocal: absFs(workspaceId, p) });
     }
 
-    if (toUpload.length === 0) {
+    if (toUpload.length === 0 && emptyFoldersToUpload.length === 0) {
       void vscode.window.showInformationMessage('LiveSync: no items to upload.');
       return;
     }
@@ -168,8 +176,9 @@ export function registerUploadDownload(services: Services): void {
     // Confirm (skip in test mode)
     if (!isTestMode()) {
       const label = getFolderLabel(workspaceId, folderPath);
+      const total = toUpload.length + emptyFoldersToUpload.length;
       const confirmed = await vscode.window.showWarningMessage(
-        `Upload ${toUpload.length} file(s) under "${label}"?`,
+        `Upload ${total} item(s) under "${label}"?`,
         'Upload'
       );
       if (confirmed !== 'Upload') {return;}
@@ -189,17 +198,19 @@ export function registerUploadDownload(services: Services): void {
 
     // Batch upload with progress
     const limit = pLimit(BATCH_CONCURRENCY);
+    const total = toUpload.length + emptyFoldersToUpload.length;
     let completed = 0;
     let lastProgressUpdate = Date.now();
 
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: 'LiveSync: Uploading files',
+        title: 'LiveSync: Uploading',
         cancellable: false
       },
       async (progress) => {
-        const tasks = toUpload.map((item) =>
+        // Upload files
+        const fileTasks = toUpload.map((item) =>
           limit(async () => {
             try {
               await remote.uploadFile(workspaceId, item.relPath, item.absLocal);
@@ -208,8 +219,8 @@ export function registerUploadDownload(services: Services): void {
               const now = Date.now();
               if (now - lastProgressUpdate > PROGRESS_THROTTLE_MS) {
                 progress.report({
-                  message: `${completed}/${toUpload.length} files`,
-                  increment: (100 / toUpload.length)
+                  message: `${completed}/${total} items`,
+                  increment: (100 / total)
                 });
                 lastProgressUpdate = now;
               }
@@ -219,14 +230,27 @@ export function registerUploadDownload(services: Services): void {
           })
         );
 
-        await Promise.all(tasks);
-        progress.report({ message: `${completed}/${toUpload.length} files`, increment: 100 });
+        // Create empty folders on remote
+        const folderTasks = emptyFoldersToUpload.map((folderRelPath) =>
+          limit(async () => {
+            try {
+              await remote.createDirectory(workspaceId, folderRelPath);
+              state.applyRemote({ workspaceId, type: 'create', path: folderRelPath, meta: { type: 'folder', hash: '' } });
+              completed++;
+            } catch (err: any) {
+              logErrorMessage(err.message, LOG_FLAGS.CONSOLE_AND_LOG_MANAGER, `command:uploadFolder:dir:${folderRelPath}`);
+            }
+          })
+        );
+
+        await Promise.all([...fileTasks, ...folderTasks]);
+        progress.report({ message: `${completed}/${total} items`, increment: 100 });
       }
     );
 
     // Refresh after batch upload
     await vscode.commands.executeCommand('livesync.refresh', { workspaceId, folderPath });
-    void vscode.window.showInformationMessage(`LiveSync: Uploaded ${completed} file(s)`);
+    void vscode.window.showInformationMessage(`LiveSync: Uploaded ${completed} item(s)`);
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -244,25 +268,32 @@ export function registerUploadDownload(services: Services): void {
     const { workspaceId, folderPath } = target;
     const diff = state.getDiffEntries(workspaceId);
     
-    // Collect downloadable files in this folder
+    // Collect downloadable files and empty folders in this folder
     const toDownload: Array<{ relPath: RelPath; absLocal: string }> = [];
-    
+    const emptyFoldersToDownload: RelPath[] = [];
+
     for (const [p, e] of diff.entries()) {
-      const inFolder = folderPath === '' 
-        ? true 
+      const inFolder = folderPath === ''
+        ? true
         : (p as string).startsWith((folderPath as string) + '/');
-      
+
       if (!inFolder) {continue;}
-      if (e.type !== 'file') {continue;}
-      
-      if(e.status !== 'unchanged') {
-        logInfoMessage(`Skipped ${e.path}: already up to date`);
-      } else if (isDownloadable(e.status)) {
-        toDownload.push({ relPath: p, absLocal: absFs(workspaceId, p) });
+
+      if (e.type === 'folder') {
+        if (e.status === 'unchanged') { continue; }
+        if (isDownloadable(e.status)) { emptyFoldersToDownload.push(p); }
+        continue;
       }
+
+      if (e.status === 'unchanged') {
+        logInfoMessage(`Skipped ${e.path}: already up to date`);
+        continue;
+      }
+      if (!isDownloadable(e.status)) { continue; }
+      toDownload.push({ relPath: p, absLocal: absFs(workspaceId, p) });
     }
 
-    if (toDownload.length === 0) {
+    if (toDownload.length === 0 && emptyFoldersToDownload.length === 0) {
       void vscode.window.showInformationMessage('LiveSync: no items to download.');
       return;
     }
@@ -270,8 +301,9 @@ export function registerUploadDownload(services: Services): void {
     // Confirm (skip in test mode)
     if (!isTestMode()) {
       const label = getFolderLabel(workspaceId, folderPath);
+      const total = toDownload.length + emptyFoldersToDownload.length;
       const confirmed = await vscode.window.showWarningMessage(
-        `Download ${toDownload.length} file(s) under "${label}"?`,
+        `Download ${total} item(s) under "${label}"?`,
         'Download'
       );
       if (confirmed !== 'Download') {return;}
@@ -280,7 +312,7 @@ export function registerUploadDownload(services: Services): void {
     // Parse policy
     const cfg = await config.getById(workspaceId);
     const policy = parseActionPolicy(cfg.data.actionOnDownload);
-    
+
     if (isNoOpPolicy(policy)) {return;}
 
     // Handle check-only policy
@@ -291,17 +323,19 @@ export function registerUploadDownload(services: Services): void {
 
     // Batch download with progress
     const limit = pLimit(BATCH_CONCURRENCY);
+    const total = toDownload.length + emptyFoldersToDownload.length;
     let completed = 0;
     let lastProgressUpdate = Date.now();
 
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: 'LiveSync: Downloading files',
+        title: 'LiveSync: Downloading',
         cancellable: false
       },
       async (progress) => {
-        const tasks = toDownload.map((item) =>
+        // Download files
+        const fileTasks = toDownload.map((item) =>
           limit(async () => {
             try {
               await remote.downloadFile(workspaceId, item.relPath, item.absLocal);
@@ -310,8 +344,8 @@ export function registerUploadDownload(services: Services): void {
               const now = Date.now();
               if (now - lastProgressUpdate > PROGRESS_THROTTLE_MS) {
                 progress.report({
-                  message: `${completed}/${toDownload.length} files`,
-                  increment: (100 / toDownload.length)
+                  message: `${completed}/${total} items`,
+                  increment: (100 / total)
                 });
                 lastProgressUpdate = now;
               }
@@ -321,14 +355,27 @@ export function registerUploadDownload(services: Services): void {
           })
         );
 
-        await Promise.all(tasks);
-        progress.report({ message: `${completed}/${toDownload.length} files`, increment: 100 });
+        // Create empty folders locally
+        const folderTasks = emptyFoldersToDownload.map((folderRelPath) =>
+          limit(async () => {
+            try {
+              await fsp.mkdir(absFs(workspaceId, folderRelPath), { recursive: true });
+              state.applyLocal({ workspaceId, type: 'create', path: folderRelPath, meta: { type: 'folder', hash: '' } });
+              completed++;
+            } catch (err: any) {
+              logErrorMessage(err.message, LOG_FLAGS.CONSOLE_AND_LOG_MANAGER, `command:downloadFolder:dir:${folderRelPath}`);
+            }
+          })
+        );
+
+        await Promise.all([...fileTasks, ...folderTasks]);
+        progress.report({ message: `${completed}/${total} items`, increment: 100 });
       }
     );
 
     // Refresh after batch download
     await vscode.commands.executeCommand('livesync.refresh', { workspaceId, folderPath });
-    void vscode.window.showInformationMessage(`LiveSync: Downloaded ${completed} file(s)`);
+    void vscode.window.showInformationMessage(`LiveSync: Downloaded ${completed} item(s)`);
   });
 
   // ═══════════════════════════════════════════════════════════════════════════

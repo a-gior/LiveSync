@@ -347,6 +347,22 @@ export class SftpRemotePort implements RemotePort {
   }
 
   /**
+   * Create an empty directory on remote (no-op if already exists)
+   */
+  async createDirectory(workspaceId: WorkspaceId, relPath: RelPath): Promise<void> {
+    const cfg = await this.configService.getById(workspaceId);
+    if (!cfg.hasRemote) { return; }
+
+    await sftpLimit(async () => {
+      await this.withSFTP(cfg, async (sftpClient) => {
+        const remoteAbs = joinRemote(cfg.data.remotePath!, relPath as string);
+        await ensureRemoteDir(sftpClient, remoteAbs);
+        logSync(workspaceId, 'mkdir', relPath as string);
+      });
+    });
+  }
+
+  /**
    * Get hash of a single remote file
    */
   async getFileHash(workspaceId: WorkspaceId, relPath: RelPath): Promise<string> {
