@@ -39,6 +39,7 @@ describe('SFTP File Operations', function() {
           remotePath: REMOTE_PATHS.integration,
         },
         ignoreFilter: {
+          globs: [],
           shouldIgnore: () => false,
           getFastGlobPatterns: () => [],
         } as any,

@@ -32,6 +32,7 @@ describe('SFTP Connection Management', function() {
           remotePath: REMOTE_PATHS.integration,
         },
         ignoreFilter: {
+          globs: [],
           shouldIgnore: () => false,
           getFastGlobPatterns: () => [],
         } as any,
@@ -75,6 +76,7 @@ describe('SFTP Connection Management', function() {
           remotePath: REMOTE_PATHS.integration,
         },
         ignoreFilter: {
+          globs: [],
           shouldIgnore: () => false,
           getFastGlobPatterns: () => [],
         } as any,
@@ -99,6 +101,7 @@ describe('SFTP Connection Management', function() {
           remotePath: REMOTE_PATHS.integration,
         },
         ignoreFilter: {
+          globs: [],
           shouldIgnore: () => false,
           getFastGlobPatterns: () => [],
         } as any,
@@ -122,6 +125,7 @@ describe('SFTP Connection Management', function() {
           remotePath: REMOTE_PATHS.integration,
         },
         ignoreFilter: {
+          globs: [],
           shouldIgnore: () => false,
           getFastGlobPatterns: () => [],
         } as any,

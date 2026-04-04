@@ -45,6 +45,7 @@ describe('SFTP List & Indexing', function() {
           remotePath: REMOTE_PATHS.integration,
         },
         ignoreFilter: {
+          globs: ['.git/**', 'node_modules/**'],
           shouldIgnore: (path: string) => {
             // Mock ignore: ignore .git and node_modules
             return path.includes('.git') || path.includes('node_modules');

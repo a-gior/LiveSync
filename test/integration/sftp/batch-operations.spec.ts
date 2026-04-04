@@ -38,6 +38,7 @@ describe('SFTP Batch Operations', function() {
           remotePath: REMOTE_PATHS.batch,
         },
         ignoreFilter: {
+          globs: [],
           shouldIgnore: () => false,
           getFastGlobPatterns: () => [],
         } as any,
