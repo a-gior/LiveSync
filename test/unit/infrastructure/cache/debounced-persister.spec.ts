@@ -35,6 +35,9 @@ describe('DebouncedCachePersister', () => {
       getRemoteIndex: (wsId: WorkspaceId) => {
         return new Map([[stringToRel('remote.txt'), { type: 'file' as const, hash: `remote-${wsId}` }]]) as NodeIndex;
       },
+      getBaseIndex: (wsId: WorkspaceId) => {
+        return new Map([[stringToRel('base.txt'), { type: 'file' as const, hash: `base-${wsId}` }]]) as NodeIndex;
+      },
     } as any;
 
     // Mock IndexCacheService for local cache
@@ -272,8 +275,11 @@ describe('DebouncedCachePersister', () => {
       getRemoteIndex: (wsId: WorkspaceId) => {
         return new Map([[stringToRel('remote.txt'), { type: 'file' as const, hash: `remote-${wsId}` }]]) as NodeIndex;
       },
+      getBaseIndex: (wsId: WorkspaceId) => {
+        return new Map([[stringToRel('base.txt'), { type: 'file' as const, hash: `base-${wsId}` }]]) as NodeIndex;
+      },
     } as any;
-    
+
     // Mock IndexCacheService for local cache
     const mockLocalCache = {
       save: async (wsId: WorkspaceId, index: NodeIndex) => {
