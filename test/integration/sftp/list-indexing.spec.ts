@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { SftpRemotePort } from '@infra/remote/SftpRemotePort';
 import { WorkspaceConfigService } from '@infra/config/WorkspaceConfigService';
+import { IgnoreFilter } from '@helpers/ignore/IgnoreFilter';
 import { stringToWsId, stringToRel } from '@helpers/path';
 import { VM_CONFIG, cleanupRemotePath, REMOTE_PATHS, setupVMTests } from '../../helpers/vm/config';
 import type { WorkspaceId } from '@domain/types';
@@ -44,14 +45,7 @@ describe('SFTP List & Indexing', function() {
           passphrase: VM_CONFIG.passphrase || '',
           remotePath: REMOTE_PATHS.integration,
         },
-        ignoreFilter: {
-          globs: ['.git/**', 'node_modules/**'],
-          shouldIgnore: (path: string) => {
-            // Mock ignore: ignore .git and node_modules
-            return path.includes('.git') || path.includes('node_modules');
-          },
-          getFastGlobPatterns: () => ['.git/**', 'node_modules/**'],
-        } as any,
+        ignoreFilter: new IgnoreFilter(['.git', 'node_modules']),
       }),
     } as any;
 
