@@ -5,7 +5,7 @@
  * Implements the complete flow from pre-flight checks through execution.
  */
 
-import type { WorkspaceId, RelPath, NodeMeta, ActionPolicy } from '@domain/types';
+import type { WorkspaceId, RelPath, NodeMeta, ActionPolicy, SyncAction } from '@domain/types';
 import type { SyncStateManager } from '@app/SyncStateManager';
 import type { WorkspaceConfigService } from '@infra/config/WorkspaceConfigService';
 import type { ConfigValidator } from '@infra/config/ConfigValidator';
@@ -55,7 +55,7 @@ export interface HandleActionParams {
  */
 export interface HandleActionResult {
   success: boolean;
-  action?: 'upload' | 'download' | 'delete' | 'move';
+  action?: SyncAction;
   skipped?: boolean;
   ignored?: boolean;
 }

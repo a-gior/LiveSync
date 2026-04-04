@@ -62,7 +62,7 @@ export type PerWorkspaceNodeIndex = PerWorkspace<NodeIndex>;
 export const isFileMeta = (m: NodeMeta): m is FileMeta => m.type === 'file';
 export const isFolderMeta = (m: NodeMeta): m is FolderMeta => m.type === 'folder';
 
-export type SyncAction = 'upload' | 'download' | 'delete' | 'move' | 'skip';
+export type SyncAction = 'upload' | 'download' | 'delete' | 'move' | 'skip' | 'mkdir';
 export type PolicyMode = 'none' | 'check' | 'action' | 'check&action';
 
 export type ActionPolicy = {

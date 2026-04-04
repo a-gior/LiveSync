@@ -6,7 +6,7 @@
  */
 
 import * as path from 'path';
-import type { RelPath } from '@domain/types';
+import type { RelPath, SyncAction } from '@domain/types';
 import type { NotificationStatusBar } from '@presentation/statusbar/NotificationStatusBar';
 
 /**
@@ -18,7 +18,7 @@ import type { NotificationStatusBar } from '@presentation/statusbar/Notification
  */
 export function notifySuccess(
   notifications: NotificationStatusBar,
-  action: 'upload' | 'download' | 'delete' | 'move',
+  action: SyncAction,
   relPath: RelPath
 ): void {
   const fileName = path.basename(relPath as string);
@@ -48,7 +48,7 @@ export function notifySuccess(
  */
 export function notifyError(
   notifications: NotificationStatusBar,
-  action: 'upload' | 'download' | 'delete' | 'move',
+  action: SyncAction,
   relPath: RelPath
 ): void {
   const fileName = path.basename(relPath as string);

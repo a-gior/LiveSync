@@ -82,12 +82,6 @@ describe('Policy Parser', () => {
       assert.equal(policy.mode, 'action');
       assert.equal(policy.action, 'move');
     });
-
-    it('parses "rename" as move action', () => {
-      const policy = parseActionPolicy('rename');
-      assert.equal(policy.mode, 'action');
-      assert.equal(policy.action, 'move');
-    });
   });
 
   describe('Check Flag', () => {

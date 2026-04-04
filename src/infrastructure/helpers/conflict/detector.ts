@@ -1,4 +1,4 @@
-import type { WorkspaceId, RelPath, NodeMeta } from '@domain/types';
+import type { WorkspaceId, RelPath, NodeMeta, SyncAction } from '@domain/types';
 import type { SyncStateManager } from '@app/SyncStateManager';
 import {
   hasRemoteChangedExternally,
@@ -10,7 +10,7 @@ import {
 import { LOG_FLAGS, logInfoMessage } from '../logging';
 
 export type OperationType = 'save' | 'create' | 'delete' | 'move' | 'open' | 'upload' | 'download';
-export type Action = 'upload' | 'download' | 'delete' | 'move' | 'skip';
+export type Action = SyncAction;
 
 /**
  * Conflict detection parameters
