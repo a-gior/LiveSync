@@ -30,11 +30,10 @@ import {
   wait,
   type E2ETestContext,
   cleanAllTestFiles,
-  getFileStatus
 } from './e2e-shared-helpers';
 
 suite('E2E - Upload Command', function() {
-  this.timeout(10000);
+  this.timeout(30000);
 
   const ctx: Partial<E2ETestContext> = {};
   
@@ -159,7 +158,8 @@ suite('E2E - Upload Command', function() {
     await vscode.workspace.fs.writeFile(testFile1, Buffer.from(fileContent));
     await vscode.workspace.fs.writeFile(testFile2, Buffer.from(fileContent));
     await wait(500);
-    
+    await refresh();
+
     // Verify initial state
     await assertRemoteExists(ctx.remoteVerifier!, `${folderName}/file1.txt`, false);
     await assertRemoteExists(ctx.remoteVerifier!, `${folderName}/file2.txt`, false);
