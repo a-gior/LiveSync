@@ -125,8 +125,13 @@ async function promptUserForConflict(
   
   options.push('Proceed', 'Ignore');
   
-  const response = await vscode.window.showWarningMessage(fullMessage, ...options);
-  
+  const DIALOG_TIMEOUT_MS = 15_000; // 15 seconds — unblocks queue if notification is hidden
+  const timeout = new Promise<undefined>(resolve => setTimeout(resolve, DIALOG_TIMEOUT_MS));
+  const response = await Promise.race([
+    vscode.window.showWarningMessage(fullMessage, ...options),
+    timeout
+  ]);
+
   if (!response || response === 'Cancel') {return 'cancel';}
   if (response === 'Show Diff') {return 'diff';}
   if (response === 'Ignore') {return 'ignore';}
