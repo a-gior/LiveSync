@@ -239,6 +239,7 @@ suite('E2E - Delete Commands', function() {
 
       case 'both':
         await createEntityLocally(entity);
+        await refresh(); // Ensure state is rebuilt from filesystem before uploading
         await uploadEntity(entity);
         return { localBefore: true, remoteBefore: true, statusBefore: 'unchanged' };
     }
