@@ -37,6 +37,13 @@ const CONFLICT_MESSAGES: Record<string, string> = {
   
   // Delete conflicts (remote_modified is reused)
   
+  // Download conflicts
+  'local_modified_action': 'Local file was modified',
+  'local_modified_check': 'Local file was modified',
+
+  'local_exists_action': 'Local file already exists and was never synced',
+  'local_exists_check': 'Local file already exists and was never synced',
+
   // Open conflicts
   'remote_differs_action': 'Remote file differs from local',
   'remote_differs_check': 'Remote file differs from local',

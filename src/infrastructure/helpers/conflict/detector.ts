@@ -2,6 +2,7 @@ import type { WorkspaceId, RelPath, NodeMeta, SyncAction } from '@domain/types';
 import type { SyncStateManager } from '@app/SyncStateManager';
 import {
   hasRemoteChangedExternally,
+  hasLocalChangedFromBase,
   hasTypeMismatch,
   fileExistsRemote,
   folderHasUncommittedChanges,
@@ -58,6 +59,7 @@ export function detectConflict(params: ConflictDetectionParams): ConflictInfo | 
   // Operation-specific checks
   switch (operation) {
     case 'save':
+    case 'upload':
       if (hasRemoteChangedExternally(actualMetas.remote, baseMeta)) {
         // Remote different from base
         keywords.push('remote_modified');
@@ -96,7 +98,17 @@ export function detectConflict(params: ConflictDetectionParams): ConflictInfo | 
         keywords.push('remote_modified');
       }
       break;
-      
+
+    case 'download':
+      if (hasLocalChangedFromBase(actualMetas.local, baseMeta)) {
+        // Local changed since last sync — downloading overwrites local changes
+        keywords.push('local_modified');
+      } else if (!baseMeta && actualMetas.local) {
+        // File exists locally but was never synced — unknown if safe to overwrite
+        keywords.push('local_exists');
+      }
+      break;
+
     case 'open':
       if (hasContentDifference(actualMetas.local, actualMetas.remote)) {
         keywords.push('remote_differs');
@@ -115,8 +127,8 @@ export function detectConflict(params: ConflictDetectionParams): ConflictInfo | 
   const type = keywords.join('_') + '_' + mode;
   
   // Determine if diff is allowed
-  const allowDiff = keywords.some(k => 
-    ['remote_modified', 'content_differs', 'remote_differs', 'file_exists'].includes(k)
+  const allowDiff = keywords.some(k =>
+    ['remote_modified', 'content_differs', 'remote_differs', 'file_exists', 'local_modified', 'local_exists'].includes(k)
   );
   
   return { type, allowDiff, suggestedAction };
