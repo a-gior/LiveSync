@@ -150,7 +150,7 @@ export function registerUploadDownload(services: Services): void {
     for (const [p, e] of diff.entries()) {
       const inFolder = folderPath === ''
         ? true
-        : (p as string).startsWith((folderPath as string) + '/');
+        : (p as string) === (folderPath as string) || (p as string).startsWith((folderPath as string) + '/');
 
       if (!inFolder) {continue;}
 
@@ -173,8 +173,8 @@ export function registerUploadDownload(services: Services): void {
       return;
     }
 
-    // Confirm (skip in test mode)
-    if (!isTestMode()) {
+    // Confirm (skip in test mode; also skip when only creating empty folders — no destructive action)
+    if (!isTestMode() && toUpload.length > 0) {
       const label = getFolderLabel(workspaceId, folderPath);
       const total = toUpload.length + emptyFoldersToUpload.length;
       const confirmed = await vscode.window.showWarningMessage(
@@ -275,7 +275,7 @@ export function registerUploadDownload(services: Services): void {
     for (const [p, e] of diff.entries()) {
       const inFolder = folderPath === ''
         ? true
-        : (p as string).startsWith((folderPath as string) + '/');
+        : (p as string) === (folderPath as string) || (p as string).startsWith((folderPath as string) + '/');
 
       if (!inFolder) {continue;}
 
@@ -298,8 +298,8 @@ export function registerUploadDownload(services: Services): void {
       return;
     }
 
-    // Confirm (skip in test mode)
-    if (!isTestMode()) {
+    // Confirm (skip in test mode; also skip when only creating empty folders — no destructive action)
+    if (!isTestMode() && toDownload.length > 0) {
       const label = getFolderLabel(workspaceId, folderPath);
       const total = toDownload.length + emptyFoldersToDownload.length;
       const confirmed = await vscode.window.showWarningMessage(

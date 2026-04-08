@@ -389,12 +389,13 @@ export class SyncStateTreeProvider implements vscode.TreeDataProvider<Node> {
     // Collapsible state
     let collapsibleState = vscode.TreeItemCollapsibleState.None;
     
-    if (this.showAsTree && isFolder) {
+    if (this.showAsTree && isFolder && hasChildren) {
       // Tree mode: folders are collapsible based on FolderStateStore
       const isOpen = this.folderStateStore.isOpen(element.workspaceId as unknown as string, element.path as unknown as string);
       const shouldOpen = (!this.collapseAll) && isOpen;
       collapsibleState = shouldOpen ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed;
     }
+    // Empty folders (hasChildren=false) stay as None — shown as leaf nodes with folder icon + diff status
     // List mode: everything is None (no collapse icon)
 
     const item = new vscode.TreeItem(label, collapsibleState);
@@ -499,7 +500,12 @@ export class SyncStateTreeProvider implements vscode.TreeDataProvider<Node> {
     for (const p of paths) {
       const entry = this.state.getDiffEntry(workspaceId, p);
       const isChanged = Boolean(entry && entry.status !== 'unchanged');
-      const keep = isChanged || this.isRecentlyResolved(workspaceId, p);
+      // For unchanged folders: check descendants too, because folder hashes only cover file descendants —
+      // adding/removing an empty subfolder doesn't affect the parent hash.
+      // Gate on entry.type === 'folder' so files (which can't have descendants) skip the scan entirely.
+      const isUnchangedFolder = !isChanged && entry?.type === 'folder';
+      const hasChangedChild = isUnchangedFolder && this.state.hasChangedDescendants(workspaceId, p);
+      const keep = isChanged || hasChangedChild || this.isRecentlyResolved(workspaceId, p);
       if (keep) {
         filtered.push(p);
       }

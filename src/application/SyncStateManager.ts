@@ -267,6 +267,18 @@ export class SyncStateManager {
     return Array.from(childPaths).sort((a, b) => (a as string).localeCompare(b as string));
   }
 
+  /** Returns true if any diff entry under the given path has a non-unchanged status. */
+  hasChangedDescendants(workspaceId: WorkspaceId, path: RelPath): boolean {
+    const prefix = (path as string).length > 0 ? (path as string) + '/' : '';
+    const diff = this.ensureWorkspaceDiff(this.diffByWorkspace, workspaceId);
+
+    for (const [p, e] of diff.entries()) {
+      if (prefix && !(p as string).startsWith(prefix)) { continue; }
+      if (e.status !== 'unchanged') { return true; }
+    }
+    return false;
+  }
+
   public getLocalIndex(workspaceId: WorkspaceId): ReadonlyNodeIndex {
     const idx = this.ensureWorkspaceIndex(this.localByWorkspace, workspaceId);
     return new Map(idx);
