@@ -524,7 +524,9 @@ export class SyncStateManager {
   }
 
   private rehashAncestors(index: NodeIndex, path: RelPath): void {
-    const dirs = parentsOf(path);
+    // Process deepest directories first so that when a parent is hashed,
+    // its children's hashes are already up to date (folder hashes now include subfolders).
+    const dirs = parentsOf(path).reverse();
     for (const dir of dirs) {
       const currentMeta = index.get(dir);
       if (currentMeta && currentMeta.type === 'folder') {

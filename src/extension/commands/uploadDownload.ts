@@ -150,7 +150,7 @@ export function registerUploadDownload(services: Services): void {
     for (const [p, e] of diff.entries()) {
       const inFolder = folderPath === ''
         ? true
-        : (p as string) === (folderPath as string) || (p as string).startsWith((folderPath as string) + '/');
+        : (p as string).startsWith((folderPath as string) + '/');
 
       if (!inFolder) {continue;}
 
@@ -166,6 +166,15 @@ export function registerUploadDownload(services: Services): void {
       }
       if (!isUploadable(e.status)) { continue; }
       toUpload.push({ relPath: p, absLocal: absFs(workspaceId, p) });
+    }
+
+    // If nothing was found under the folder, check if the folder itself is an empty folder entry
+    // (user right-clicked an empty folder and uploaded it directly).
+    if (toUpload.length === 0 && emptyFoldersToUpload.length === 0 && folderPath !== '') {
+      const folderEntry = diff.get(folderPath as RelPath);
+      if (folderEntry?.type === 'folder' && isUploadable(folderEntry.status)) {
+        emptyFoldersToUpload.push(folderPath as RelPath);
+      }
     }
 
     if (toUpload.length === 0 && emptyFoldersToUpload.length === 0) {
@@ -275,7 +284,7 @@ export function registerUploadDownload(services: Services): void {
     for (const [p, e] of diff.entries()) {
       const inFolder = folderPath === ''
         ? true
-        : (p as string) === (folderPath as string) || (p as string).startsWith((folderPath as string) + '/');
+        : (p as string).startsWith((folderPath as string) + '/');
 
       if (!inFolder) {continue;}
 
@@ -291,6 +300,15 @@ export function registerUploadDownload(services: Services): void {
       }
       if (!isDownloadable(e.status)) { continue; }
       toDownload.push({ relPath: p, absLocal: absFs(workspaceId, p) });
+    }
+
+    // If nothing was found under the folder, check if the folder itself is an empty folder entry
+    // (user right-clicked an empty folder and downloaded it directly).
+    if (toDownload.length === 0 && emptyFoldersToDownload.length === 0 && folderPath !== '') {
+      const folderEntry = diff.get(folderPath as RelPath);
+      if (folderEntry?.type === 'folder' && isDownloadable(folderEntry.status)) {
+        emptyFoldersToDownload.push(folderPath as RelPath);
+      }
     }
 
     if (toDownload.length === 0 && emptyFoldersToDownload.length === 0) {
