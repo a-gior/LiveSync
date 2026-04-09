@@ -20,7 +20,6 @@ import {
   assertRemoteExists,
   assertLocalExists,
   refresh,
-  wait,
   type E2ETestContext,
   cleanAllTestFiles,
   createTestConfig
@@ -46,7 +45,6 @@ suite('E2E - Delete Commands', function() {
 
   setup(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    await wait(500);
   });
 
   // ==========================================================================
@@ -147,11 +145,6 @@ suite('E2E - Delete Commands', function() {
       }
     }
 
-    if (entity.type === 'folder') {
-      await wait(2000);  // 2s for folders
-    } else {
-      await wait(500);   // 500ms for files
-    }
   }
 
   /**
@@ -189,7 +182,6 @@ suite('E2E - Delete Commands', function() {
         await vscode.workspace.fs.writeFile(child.uri, Buffer.from(fileContent));
       }
     }
-    await wait(1000);
   }
 
   /**
@@ -203,7 +195,6 @@ suite('E2E - Delete Commands', function() {
         await ctx.remoteVerifier!.createFile(child.remotePath, fileContent);
       }
     }
-    await wait(1000);
   }
 
   /**
@@ -212,7 +203,6 @@ suite('E2E - Delete Commands', function() {
   async function uploadEntity(entity: TestEntity): Promise<void> {
     const command = entity.type === 'file' ? 'livesync.upload' : 'livesync.uploadFolder';
     await vscode.commands.executeCommand(command, entity.uri);
-    await wait(entity.type === 'file' ? 2000 : 3000);
   }
 
   // ==========================================================================
@@ -338,7 +328,6 @@ suite('E2E - Delete Commands', function() {
     // Execute delete command
     const command = type === 'file' ? 'livesync.delete' : 'livesync.deleteFolder';
     await vscode.commands.executeCommand(command, entity.uri);
-    await wait(2000);
 
     // Assert state after
     await assertEntityStateAfter(entity, expectedLocalAfter, expectedRemoteAfter);

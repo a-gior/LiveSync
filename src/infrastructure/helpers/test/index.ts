@@ -3,6 +3,9 @@
  * Allows tests to control dialog responses in automated testing
  */
 
+import { fileOperationQueue } from '@helpers/concurrency';
+import { workspaceOperationQueue } from '@helpers/concurrency';
+
 type ConflictResponse = 'proceed' | 'cancel' | 'ignore' | 'diff' | null;
 
 let testConflictResponse: ConflictResponse = null;
@@ -48,4 +51,25 @@ export function setTestConflictResponse(response: ConflictResponse): void {
     return;
   }
   testConflictResponse = response;
+}
+
+/**
+ * Wait until both queues (file operations + workspace operations) are fully idle.
+ * Polls every 50ms. Use this in tests instead of fixed waits after triggering file events.
+ *
+ * @param timeoutMs - Maximum time to wait before throwing
+ * @param settleMs - Initial delay before polling starts. Use this when an async event handler
+ *                   (e.g. onOpen) may not have enqueued its operation yet at call time.
+ */
+export async function waitForIdle(timeoutMs = 10000, settleMs = 0): Promise<void> {
+  if (settleMs > 0) {
+    await new Promise(resolve => setTimeout(resolve, settleMs));
+  }
+  const deadline = Date.now() + timeoutMs;
+  while (fileOperationQueue.getActiveCount() > 0 || workspaceOperationQueue.hasAnyPending()) {
+    if (Date.now() > deadline) {
+      throw new Error('[LiveSync] waitForIdle timed out');
+    }
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
 }

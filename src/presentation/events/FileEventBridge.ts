@@ -23,7 +23,7 @@ import type { RelPath, WorkspaceId, NodeMeta } from '@domain/types';
 import { relFromAbs, stringToWsId } from '@helpers/path';
 import { sha256OfFile } from '@helpers/hash/FileHash';
 import { logExpectedError } from '@helpers/logging';
-import { FileOperationQueue } from '@helpers/concurrency';
+import { fileOperationQueue } from '@helpers/concurrency';
 import { handleAction } from '@helpers/action/handler';
 import { updateLocalSnapshot } from '@helpers/snapshot/update';
 
@@ -31,7 +31,7 @@ import { updateLocalSnapshot } from '@helpers/snapshot/update';
  * FileEventBridge - Central event handler for file operations
  */
 export class FileEventBridge {
-  private readonly operationQueue = new FileOperationQueue();
+  private readonly operationQueue = fileOperationQueue;
   private readonly inFlightOps = new Set<string>();
   
   constructor(

@@ -32,7 +32,6 @@ import {
   assertConflictIgnored,
   setTestResponse,
   refresh,
-  wait,
   type E2ETestContext,
   cleanAllTestFiles
 } from './e2e-shared-helpers';
@@ -60,7 +59,6 @@ suite('E2E - Rename/Move Event', function() {
   setup(async () => {
     // Close all editors between tests
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    await wait(500);
   });
 
   /**
@@ -80,7 +78,7 @@ suite('E2E - Rename/Move Event', function() {
     const edit = new vscode.WorkspaceEdit();
     edit.renameFile(oldUri, newUri);
     await vscode.workspace.applyEdit(edit);
-    await wait(1000);
+    await vscode.commands.executeCommand('livesync.test.waitForIdle');
   }
 
   // ==========================================================================
@@ -112,19 +110,16 @@ suite('E2E - Rename/Move Event', function() {
     
     // Step 1: Create and upload file
     await vscode.workspace.fs.writeFile(oldFile, Buffer.from(fileContent));
-    await wait(500);
-    
+
     await vscode.commands.executeCommand('livesync.upload', oldFile);
-    await wait(1000);
-    
+
     // Verify uploaded and status
     await assertRemoteExists(ctx.remoteVerifier!, oldFileName, true);
     await assertRemoteContent(ctx.remoteVerifier!, oldFileName, fileContent);
     assertFileStatus(ctx.services!, ctx.testWorkspace!, oldFile, 'unchanged');
-    
+
     // Step 2: Rename file locally (same directory)
     await moveFileWithEvent(oldFile, newFile);
-    await wait(2000);
     
     // Step 3: Verify local state
     // Old file should not exist locally
@@ -177,25 +172,21 @@ suite('E2E - Rename/Move Event', function() {
     
     // Step 1: Create and upload source file
     await vscode.workspace.fs.writeFile(oldFile, Buffer.from(fileContent));
-    await wait(500);
-    
+
     await vscode.commands.executeCommand('livesync.upload', oldFile);
-    await wait(1000);
-    
+
     // Verify uploaded
     await assertRemoteExists(ctx.remoteVerifier!, oldFileName, true);
     assertFileStatus(ctx.services!, ctx.testWorkspace!, oldFile, 'unchanged');
-    
+
     // Step 2: Create file at target name on remote (conflict!)
     await ctx.remoteVerifier!.createFile(newFileName, conflictContent);
-    await wait(500);
-    
+
     await assertRemoteExists(ctx.remoteVerifier!, newFileName, true);
     await assertRemoteContent(ctx.remoteVerifier!, newFileName, conflictContent);
-    
+
     // Step 3: Rename file locally (triggers conflict)
     await moveFileWithEvent(oldFile, newFile);
-    await wait(2000);
     
     // Step 4: Verify behavior
     await assertRemoteExists(ctx.remoteVerifier!, oldFileName, shouldExistAtOldPath);
@@ -316,18 +307,15 @@ suite('E2E - Rename/Move Event', function() {
     
     // Step 1: Create and upload file
     await vscode.workspace.fs.writeFile(oldFile, Buffer.from(fileContent));
-    await wait(500);
-    
+
     await vscode.commands.executeCommand('livesync.upload', oldFile);
-    await wait(1000);
-    
+
     // Verify uploaded
     await assertRemoteExists(ctx.remoteVerifier!, oldPath, true);
     assertFileStatus(ctx.services!, ctx.testWorkspace!, oldFile, 'unchanged');
-    
+
     // Step 2: Move file to different directory
     await moveFileWithEvent(oldFile, newFile);
-    await wait(2000);
     
     // Step 3: Verify remote state
     await assertRemoteExists(ctx.remoteVerifier!, oldPath, shouldExistAtOldPath);
@@ -368,26 +356,20 @@ suite('E2E - Rename/Move Event', function() {
     
     // Create folder structure: folder/file1.txt, folder/subfolder/file2.txt
     await vscode.workspace.fs.createDirectory(folderUri);
-    await wait(200);
-    
+
     const subfolderUri = vscode.Uri.joinPath(folderUri, 'subfolder');
     await vscode.workspace.fs.createDirectory(subfolderUri);
-    await wait(200);
-    
+
     // Create files
     const file1Uri = vscode.Uri.joinPath(folderUri, 'file1.txt');
     const file2Uri = vscode.Uri.joinPath(subfolderUri, 'file2.txt');
-    
+
     await vscode.workspace.fs.writeFile(file1Uri, Buffer.from('Content of file1'));
-    await wait(200);
     await vscode.workspace.fs.writeFile(file2Uri, Buffer.from('Content of file2'));
-    await wait(200);
-    
+
     // Upload each file manually
     await vscode.commands.executeCommand('livesync.upload', file1Uri);
-    await wait(500);
     await vscode.commands.executeCommand('livesync.upload', file2Uri);
-    await wait(500);
     
     // Verify uploaded
     await assertRemoteExists(ctx.remoteVerifier!, `${folderName}/file1.txt`, true);
@@ -421,7 +403,6 @@ suite('E2E - Rename/Move Event', function() {
     
     // Step 2: Rename folder
     await moveFileWithEvent(oldFolder, newFolder);
-    await wait(2000);
     
     // Step 3: Verify remote state for all files
     const files = ['file1.txt', 'subfolder/file2.txt'];
@@ -499,8 +480,7 @@ suite('E2E - Rename/Move Event', function() {
     
     // Step 2: Move folder
     await moveFileWithEvent(oldFolder, newFolder);
-    await wait(2000);
-    
+
     // Step 3: Verify remote state
     const files = ['file1.txt', 'subfolder/file2.txt'];
     
@@ -575,14 +555,12 @@ suite('E2E - Rename/Move Event', function() {
     // Step 2: Modify a file inside the folder (makes folder "dirty")
     const file1Uri = vscode.Uri.joinPath(oldFolder, 'file1.txt');
     await vscode.workspace.fs.writeFile(file1Uri, Buffer.from('MODIFIED CONTENT'));
-    await wait(500);
-    
+
     // Verify folder is now in dirty state (status should be 'modified')
     // assertFileStatus(ctx.services!, ctx.testWorkspace!, oldFolder, 'modified');
-    
+
     // Step 3: Rename folder (should trigger conflict due to dirty state)
     await moveFileWithEvent(oldFolder, newFolder);
-    await wait(2000);
     
     // Step 4: Verify behavior based on response
     // For 'proceed': folder should be moved despite dirty state

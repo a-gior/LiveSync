@@ -15,7 +15,6 @@ import {
   assertConflictIgnored,
   setTestResponse,
   refresh,
-  wait,
   type E2ETestContext,
   assertLocalContent,
   cleanAllTestFiles
@@ -44,7 +43,6 @@ suite('E2E - Create Event', function() {
 
   setup(async () => {
     await cleanTestFile(testFile, testFileName, ctx.remoteVerifier!, ctx.services!, ctx.testWorkspace!);
-    await wait(500);
   });
 
   /**
@@ -54,7 +52,6 @@ suite('E2E - Create Event', function() {
     const edit = new vscode.WorkspaceEdit();
     edit.createFile(uri, { overwrite: false, ignoreIfExists: false });
     await vscode.workspace.applyEdit(edit);
-    await wait(1000);
     
     // Write content
     // await vscode.workspace.fs.writeFile(uri, Buffer.from(content));
@@ -81,8 +78,8 @@ suite('E2E - Create Event', function() {
     
     // Create file
     await createFileWithEvent(testFile);
-    await wait(2000);
-    
+    await vscode.commands.executeCommand('livesync.test.waitForIdle');
+
     // Verify post-create state
     assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile, expectedStatusAfterCreate);
     await assertRemoteExists(ctx.remoteVerifier!, testFileName, shouldExistRemotelyAfterCreate);
@@ -108,13 +105,12 @@ suite('E2E - Create Event', function() {
     
     // Step 1: Create file on remote first (creates conflict)
     await ctx.remoteVerifier!.createFile(testFileName, conflictContent);
-    await wait(500);
-    
+
     await assertRemoteContent(ctx.remoteVerifier!, testFileName, conflictContent, "Remote file should exist before local create");
-    
+
     // Step 2: Create file locally (triggers conflict detection)
     await createFileWithEvent(testFile);
-    await wait(1000);
+    await vscode.commands.executeCommand('livesync.test.waitForIdle');
     
     // Step 3: Verify behavior based on response
     await assertLocalContent(testFile, expectedRemoteContentAfter, "Local content should match expected after conflict resolution");

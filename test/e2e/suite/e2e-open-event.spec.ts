@@ -17,7 +17,7 @@ import {
   assertConflictIgnored,
   setTestResponse,
   refresh,
-  wait,
+  writeExternalFile,
   type E2ETestContext,
   cleanAllTestFiles
 } from './e2e-shared-helpers';
@@ -46,7 +46,6 @@ suite('E2E - Open Event', function() {
   setup(async () => {
     // Close all editors between tests
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    await wait(500);
   });
 
   /**
@@ -76,31 +75,29 @@ suite('E2E - Open Event', function() {
     });
     await refresh();
     
-    // Step 1: Create file locally with initial content
-    await vscode.workspace.fs.writeFile(testFile, Buffer.from(localContent));
-    await wait(500);
-    
+    // Step 1: Create file locally with initial content (wait for external watcher to update snapshot)
+    await writeExternalFile(testFile, localContent);
+
     // Verify initial state: file exists locally
     await assertLocalContent(testFile, localContent, "Initial local content");
     assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile, 'added');
-    
+
     // Step 2: Create file on remote with different content
     await ctx.remoteVerifier!.createFile(testFileName, remoteContent);
-    await wait(500);
-    
+
     // Verify remote exists with remote content
     await assertRemoteContent(ctx.remoteVerifier!, testFileName, remoteContent);
-    
+
     // Step 3: Refresh to update snapshots
     await refresh();
-    await wait(500);
-    
+
     // File should show as "modified" (exists both places with different content)
     assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile, 'modified');
-    
+
     // Step 4: Open the file (triggers onOpen event)
+    // onOpen has a 50ms internal delay before enqueuing, so settle for 100ms first
     await openFile(testFile);
-    await wait(1000);
+    await vscode.commands.executeCommand('livesync.test.waitForIdle', 100);
     
     // Step 5: Verify behavior based on policy
     await assertLocalContent(testFile, expectedLocalContent, "Local content after open");
@@ -130,35 +127,32 @@ suite('E2E - Open Event', function() {
     // Set test response before triggering conflict
     await setTestResponse(userResponse);
     
-    // Step 1: Create file locally with initial content
-    await vscode.workspace.fs.writeFile(testFile, Buffer.from(localContent));
-    await wait(500);
-    
+    // Step 1: Create file locally with initial content (wait for external watcher to update snapshot)
+    await writeExternalFile(testFile, localContent);
+
     // Verify initial state: file exists locally
     await assertLocalContent(testFile, localContent, "Initial local content");
     assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile, 'added');
-    
+
     // Step 2: Create file on remote with different content (conflict)
     await ctx.remoteVerifier!.createFile(testFileName, remoteContent);
-    await wait(500);
-    
+
     // Verify remote exists with remote content
     await assertRemoteContent(ctx.remoteVerifier!, testFileName, remoteContent);
-    
+
     // Step 3: Refresh to update snapshots
     await refresh();
-    await wait(500);
-    
+
     // File should show as "modified" (conflict: both places have different content)
     assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile, 'modified');
-    
+
     // Step 4: Update file on remote with different content (conflict)
     await ctx.remoteVerifier!.createFile(testFileName, conflictContent);
-    await wait(500);
 
     // Step 5: Open the file (triggers onOpen event with conflict detection)
+    // onOpen has a 50ms internal delay before enqueuing, so settle for 100ms first
     await openFile(testFile);
-    await wait(1000);
+    await vscode.commands.executeCommand('livesync.test.waitForIdle', 100);
     
     // Step 6: Verify behavior based on response
     await assertLocalContent(testFile, expectedLocalContent, "Local content after conflict open");

@@ -18,7 +18,6 @@ import {
   assertConflictIgnored,
   setTestResponse,
   refresh,
-  wait,
   type E2ETestContext,
   cleanAllTestFiles
 } from './e2e-shared-helpers';
@@ -65,8 +64,7 @@ suite('E2E - Save Event', function() {
     
     // Create file and open in editor
     const editor = await createAndOpenFile(testFile, initialContent);
-    await wait(500);
-    
+
     // Verify initial state: file added locally
     assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile, 'added');
     await assertRemoteExists(ctx.remoteVerifier!, testFileName, false);
@@ -100,28 +98,24 @@ suite('E2E - Save Event', function() {
     
     // Step 1: Create file and upload
     const editor = await createAndOpenFile(testFile, initialContent);
-    await wait(500);
-    
+
     // Verify: File should be "added" (local only)
     assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile, 'added');
 
     await vscode.commands.executeCommand('livesync.upload', testFile);
-    await wait(1000);
-    
+
     // Verify uploaded and status should be "unchanged" (synced)
     await assertRemoteExists(ctx.remoteVerifier!, testFileName, true);
     assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile, 'unchanged');
-    
+
     // Step 2: Modify remote file (create conflict)
     await ctx.remoteVerifier!.createFile(testFileName, conflictContent);
-    await wait(1000);
-    
+
     // Verify remote has conflict content
     await assertRemoteContent(ctx.remoteVerifier!, testFileName, conflictContent);
-    
+
     // Step 3: Modify local file and save (triggers conflict detection and response)
     await modifyAndSave(editor, modifiedContent);
-    await wait(500);
     
     // Step 4: Verify behavior based on response
     await assertRemoteContent(ctx.remoteVerifier!, testFileName, expectedRemoteContentAfter);

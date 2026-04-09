@@ -67,6 +67,13 @@ export class WorkspaceOperationQueue {
   }
 
   /**
+   * Check if any workspace has a pending operation
+   */
+  hasAnyPending(): boolean {
+    return this.queues.size > 0;
+  }
+
+  /**
    * Get currently active operation name
    */
   getActiveOperation(workspaceId: WorkspaceId): string | undefined {

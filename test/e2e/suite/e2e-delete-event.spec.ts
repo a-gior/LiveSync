@@ -16,7 +16,6 @@ import {
   assertConflictIgnored,
   setTestResponse,
   refresh,
-  wait,
   type E2ETestContext,
   cleanAllTestFiles
 } from './e2e-shared-helpers';
@@ -53,7 +52,7 @@ suite('E2E - Delete Event', function() {
     const edit = new vscode.WorkspaceEdit();
     edit.deleteFile(uri, { ignoreIfNotExists: true });
     await vscode.workspace.applyEdit(edit);
-    await wait(500);
+    await vscode.commands.executeCommand('livesync.test.waitForIdle');
   }
 
   /**
@@ -71,22 +70,19 @@ suite('E2E - Delete Event', function() {
     
     // Step 1: Create file locally and upload to remote
     await createAndOpenFile(testFile, initialContent);
-    await wait(500);
-    
+
     // Verify initial state: file added locally
     assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile, 'added');
-    
+
     // Upload to remote
     await vscode.commands.executeCommand('livesync.upload', testFile);
-    await wait(1000);
-    
+
     // Verify file is synced
     await assertRemoteExists(ctx.remoteVerifier!, testFileName, true);
     assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile, 'unchanged');
-    
+
     // Step 2: Delete file locally
     await deleteFileWithEvent(testFile);
-    await wait(2000);
     
     // Step 3: Verify post-delete state
     // Local file should no longer exist
@@ -124,26 +120,22 @@ suite('E2E - Delete Event', function() {
     
     // Step 1: Create file locally and upload
     await createAndOpenFile(testFile, initialContent);
-    await wait(500);
-    
+
     await vscode.commands.executeCommand('livesync.upload', testFile);
-    await wait(1000);
-    
+
     // Verify uploaded
     await assertRemoteExists(ctx.remoteVerifier!, testFileName, true);
     await assertRemoteContent(ctx.remoteVerifier!, testFileName, initialContent);
     assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile, 'unchanged');
-    
+
     // Step 2: Modify remote file (create conflict - file changed since last sync)
     await ctx.remoteVerifier!.createFile(testFileName, conflictContent);
-    await wait(500);
-    
+
     // Verify remote has conflict content
     await assertRemoteContent(ctx.remoteVerifier!, testFileName, conflictContent);
-    
+
     // Step 3: Delete file locally (triggers conflict detection and response)
     await deleteFileWithEvent(testFile);
-    await wait(2000);
     
     // Step 4: Verify behavior based on response
     await assertRemoteExists(ctx.remoteVerifier!, testFileName, shouldExistRemotelyAfterDelete);

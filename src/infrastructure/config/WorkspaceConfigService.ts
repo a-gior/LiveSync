@@ -94,6 +94,15 @@ export class WorkspaceConfigService {
   }
 
   /**
+   * Force-reload config from disk without firing onConfigChange (for use in tests).
+   * Bypasses the file watcher and does NOT clear the validator cache, so subsequent
+   * operations that check config validity continue to work correctly.
+   */
+  async reloadFolder(folder: vscode.WorkspaceFolder): Promise<void> {
+    await this.loadFromDisk(folder); // loadFromDisk already sets the cache
+  }
+
+  /**
    * Force reload config from disk
    */
   private async reload(folder: vscode.WorkspaceFolder): Promise<void> {

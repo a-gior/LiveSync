@@ -224,3 +224,6 @@ export class FileOperationQueue {
     this.recentOperations.clear();
   }
 }
+
+/** Singleton instance shared across the extension */
+export const fileOperationQueue = new FileOperationQueue();

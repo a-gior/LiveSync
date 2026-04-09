@@ -97,7 +97,7 @@ export async function createTestConfig(
 ): Promise<string> {
   const configPath = path.join(testWorkspace.uri.fsPath, '.vscode', 'livesync.json');
   await fs.mkdir(path.dirname(configPath), { recursive: true });
-  
+
   await fs.writeFile(configPath, JSON.stringify({
     hostname: E2E_VM_CONFIG.hostname,
     port: E2E_VM_CONFIG.port,
@@ -113,10 +113,10 @@ export async function createTestConfig(
     actionOnDownload: policies.actionOnDownload || 'download',
     ignoreList: ['.vscode', '.livesync']
   }));
-  
-  // Wait for config to load
-  await wait(2000);
-  
+
+  // Force-reload config immediately instead of waiting for the file watcher
+  await vscode.commands.executeCommand('livesync.test.reloadConfig', testWorkspace.uri.fsPath);
+
   return configPath;
 }
 
@@ -125,13 +125,27 @@ export async function createTestConfig(
 // ==========================================================================
 
 /**
+ * Write file externally (via vscode.workspace.fs) and wait for the file watcher to update
+ * the local snapshot. External writes trigger onExternalCreate/Change, which are NOT tracked
+ * by fileOperationQueue, so we need a small sleep to let the watcher fire.
+ */
+export async function writeExternalFile(fileUri: vscode.Uri, content: string): Promise<void> {
+  await vscode.workspace.fs.writeFile(fileUri, Buffer.from(content));
+  await new Promise(resolve => setTimeout(resolve, 200));
+  await vscode.commands.executeCommand('livesync.test.waitForIdle');
+}
+
+/**
  * Create and open file in editor
+ *
+ * Uses external writeFile which triggers onExternalCreate (not tracked by fileOperationQueue).
+ * We wait 200ms to let the file watcher fire, then waitForIdle to ensure all queue ops complete.
  */
 export async function createAndOpenFile(
   fileUri: vscode.Uri,
   content: string
 ): Promise<vscode.TextEditor> {
-  await vscode.workspace.fs.writeFile(fileUri, Buffer.from(content));
+  await writeExternalFile(fileUri, content);
   const doc = await vscode.workspace.openTextDocument(fileUri);
   return await vscode.window.showTextDocument(doc);
 }
@@ -141,8 +155,7 @@ export async function createAndOpenFile(
  */
 export async function modifyAndSave(
   editor: vscode.TextEditor,
-  newContent: string,
-  waitMs: number = 1000
+  newContent: string
 ): Promise<void> {
   const edit = new vscode.WorkspaceEdit();
   const fullRange = new vscode.Range(
@@ -150,10 +163,10 @@ export async function modifyAndSave(
     editor.document.positionAt(editor.document.getText().length)
   );
   edit.replace(editor.document.uri, fullRange, newContent);
-  
+
   await vscode.workspace.applyEdit(edit);
   await editor.document.save();
-  await wait(waitMs);
+  await vscode.commands.executeCommand('livesync.test.waitForIdle');
 }
 
 /**
@@ -259,8 +272,6 @@ export async function cleanAllTestFiles(remoteVerifier: RemoteStateVerifier): Pr
   } catch (err) {
     // Ignore errors
   }
-  
-  await wait(500);
 }
 
 // ==========================================================================
@@ -412,9 +423,8 @@ export async function setTestResponse(
 }
 
 /**
- * Refresh extension
+ * Refresh extension (command is fully awaited internally, no extra wait needed)
  */
 export async function refresh(): Promise<void> {
   await vscode.commands.executeCommand('livesync.refresh');
-  await wait(1000);
 }

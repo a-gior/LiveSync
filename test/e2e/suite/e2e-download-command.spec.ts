@@ -26,7 +26,6 @@ import {
   assertConflictIgnored,
   setTestResponse,
   refresh,
-  wait,
   type E2ETestContext,
   cleanAllTestFiles
 } from './e2e-shared-helpers';
@@ -53,7 +52,6 @@ suite('E2E - Download Command', function() {
 
   setup(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    await wait(500);
   });
 
   // ==========================================================================
@@ -81,15 +79,13 @@ suite('E2E - Download Command', function() {
     // Create file on remote
     await ctx.remoteVerifier!.createFile(testFileName, fileContent);
     await refresh();
-    await wait(500);
-    
+
     // Verify initial state: file missing locally
     assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile, 'removed');
     await assertRemoteExists(ctx.remoteVerifier!, testFileName, true);
-    
+
     // Execute download command
     await vscode.commands.executeCommand('livesync.download', testFile);
-    await wait(1000);
     
     // Verify post-download state
     assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile, expectedStatusAfter);
@@ -155,28 +151,24 @@ suite('E2E - Download Command', function() {
     } catch {
       // Ignore errors
     }
-    await wait(1000);
-    
+
     await refresh();
-    await wait(500);
-    
+
     ctx.configPath = await createTestConfig(ctx.testWorkspace!, {
       actionOnDownload: policy
     });
-    
+
     // Create folder with files on remote
     await ctx.remoteVerifier!.createFile(`${folderName}/file1.txt`, fileContent);
     await ctx.remoteVerifier!.createFile(`${folderName}/file2.txt`, fileContent);
     await refresh();
-    await wait(500);
     
     // Verify initial state - files missing locally
     assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile1, 'removed');
     assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile2, 'removed');
     
-    // Execute download command on folder
+    // Execute download command on folder (fully awaited)
     await vscode.commands.executeCommand('livesync.downloadFolder', testFolder);
-    await wait(3000);
     
     // Verify post-download state
     if (shouldExistLocallyAfter) {
@@ -201,7 +193,6 @@ suite('E2E - Download Command', function() {
     } catch {
       // Ignore errors
     }
-    await wait(500);
   }
 
   test('Download Folder with actionOnDownload=none - no download occurs', async () => {
@@ -247,16 +238,13 @@ suite('E2E - Download Command', function() {
     
     // Step 1: Create file locally first (conflict scenario)
     await vscode.workspace.fs.writeFile(testFile, Buffer.from(localContent));
-    await wait(500);
-    
+
     // Step 2: Create file on remote with different content
     await ctx.remoteVerifier!.createFile(testFileName, conflictContent);
     await refresh();
-    await wait(500);
-    
+
     // Step 3: Execute download command (should detect conflict)
     await vscode.commands.executeCommand('livesync.download', testFile);
-    await wait(1000);
     
     // Step 4: Verify outcome based on user response
     await assertLocalContent(testFile, expectedLocalContentAfter);
