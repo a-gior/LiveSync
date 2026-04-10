@@ -280,6 +280,7 @@
         },
         {
           "command": "livesync.node.showDiff",
+          "when": "!explorerResourceIsFolder",
           "group": "LiveSync@3"
         }
       ]
