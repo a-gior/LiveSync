@@ -281,10 +281,6 @@
         {
           "command": "livesync.node.showDiff",
           "group": "LiveSync@3"
-        },
-        {
-          "command": "livesync.delete",
-          "group": "LiveSync@4"
         }
       ]
     },
