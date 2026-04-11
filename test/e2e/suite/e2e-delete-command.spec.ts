@@ -197,14 +197,6 @@ suite('E2E - Delete Commands', function() {
     }
   }
 
-  /**
-   * Upload entity
-   */
-  async function uploadEntity(entity: TestEntity): Promise<void> {
-    const command = entity.type === 'file' ? 'livesync.upload' : 'livesync.uploadFolder';
-    await vscode.commands.executeCommand(command, entity.uri);
-  }
-
   // ==========================================================================
   // SCENARIO SETUP
   // ==========================================================================
@@ -229,8 +221,9 @@ suite('E2E - Delete Commands', function() {
 
       case 'both':
         await createEntityLocally(entity);
-        await refresh(); // Ensure state is rebuilt from filesystem before uploading
-        await uploadEntity(entity);
+        await createEntityRemotely(entity);
+        // Build both snapshots directly so delete tests don't depend on upload behavior.
+        await refresh();
         return { localBefore: true, remoteBefore: true, statusBefore: 'unchanged' };
     }
   }

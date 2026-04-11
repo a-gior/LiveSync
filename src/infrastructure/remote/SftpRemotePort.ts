@@ -465,7 +465,13 @@ async function ensureRemoteDir(client: SftpClient, remoteDir: string): Promise<v
   } catch (e) {
     const msg = (e as any)?.message ?? String(e);
     if (!/exists|already/i.test(msg)) {
-      throw e;
+      // Concurrent uploads can race on mkdir for the same fresh directory.
+      // Some SFTP servers/library combinations report this as a generic
+      // "permission denied" even though the directory now exists.
+      const kind = await client.exists(remoteDir).catch(() => false);
+      if (kind !== 'd') {
+        throw e;
+      }
     }
   }
 }
