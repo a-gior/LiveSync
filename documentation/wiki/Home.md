@@ -23,14 +23,13 @@ LiveSync is a VS Code extension that allows you to **synchronize a local workspa
 ### 🔧 Installation & Setup
 - [🛠️ Installation Guide](https://github.com/a-gior/LiveSync/wiki/%F0%9F%9B%A0%EF%B8%8FInstallation)
 - [⚙️ Configuration Options](https://github.com/a-gior/LiveSync/wiki/%E2%9A%99%EF%B8%8FConfiguration)
+- [🗂️ Multi-Workspace Setup](https://github.com/a-gior/LiveSync/wiki/%F0%9F%97%82%EF%B8%8F-Multi-Workspace-Setup)
 - [🔐 SSH Key Authentication](https://github.com/a-gior/LiveSync/wiki/%F0%9F%94%90-Using-SSH-Key-Authentication)
 
 ### 🚀 Usage & Features
 - [⚡ Event Handling & Sync Configuration](https://github.com/a-gior/LiveSync/wiki/%E2%9A%A1Event-Handling-&-Sync-Configuration)
 - [📂 Using the Tree View](https://github.com/a-gior/LiveSync/wiki/%F0%9F%93%82-Using-the-Tree-View)
 - [🖱️ Explorer Context Menu Commands](https://github.com/a-gior/LiveSync/wiki/%F0%9F%96%B1%EF%B8%8F-Explorer-Context-Menu-Commands)
-
-### 🗂️ [Multi-Workspace Setup](https://github.com/a-gior/LiveSync/wiki/Multi-Workspace)
 
 ### ❓ [Frequently Asked Questions (FAQ)](https://github.com/a-gior/LiveSync/wiki/%E2%9D%93-Frequently-Asked-Questions-(FAQ))
 

@@ -66,17 +66,17 @@ Folder upload/download only transfers files that are not already **Unchanged** �
 
 | VS Code button | Action |
 |---|---|
-| ![Eye icon](./assets/codicons/eye.svg) | Toggle Show/Hide Unchanged Files |
-| ![Refresh icon](./assets/codicons/refresh.svg) | Refresh the current workspace diff |
-| ![Upload workspace icon](./assets/codicons/repo-push.svg) | Upload the entire current workspace |
-| ![Download workspace icon](./assets/codicons/repo-pull.svg) | Download the entire current workspace |
-| ![List view icon](./assets/codicons/list-flat.svg) / ![Tree view icon](./assets/codicons/list-tree.svg) | Switch between Tree View and List View. The button changes based on the current mode. |
+| ![Eye icon](https://github.com/a-gior/LiveSync/raw/main/documentation/wiki/assets/codicons/eye.svg) | Toggle Show/Hide Unchanged Files |
+| ![Refresh icon](https://github.com/a-gior/LiveSync/raw/main/documentation/wiki/assets/codicons/refresh.svg) | Refresh the current workspace diff |
+| ![Upload workspace icon](https://github.com/a-gior/LiveSync/raw/main/documentation/wiki/assets/codicons/repo-push.svg) | Upload the entire current workspace |
+| ![Download workspace icon](https://github.com/a-gior/LiveSync/raw/main/documentation/wiki/assets/codicons/repo-pull.svg) | Download the entire current workspace |
+| ![List view icon](https://github.com/a-gior/LiveSync/raw/main/documentation/wiki/assets/codicons/list-flat.svg) / ![Tree view icon](https://github.com/a-gior/LiveSync/raw/main/documentation/wiki/assets/codicons/list-tree.svg) | Switch between Tree View and List View. The button changes based on the current mode. |
 
 #### LiveSync Workspaces toolbar (multi-root only)
 
 | VS Code button | Action |
 |---|---|
-| ![Refresh all icon](./assets/codicons/sync.svg) | Refresh all workspace diffs |
+| ![Refresh all icon](https://github.com/a-gior/LiveSync/raw/main/documentation/wiki/assets/codicons/sync.svg) | Refresh all workspace diffs |
 
 ---
 
@@ -84,8 +84,8 @@ Folder upload/download only transfers files that are not already **Unchanged** �
 
 LiveSync keeps a local and remote index to calculate differences efficiently. You can refresh in several ways:
 
-- **Refresh** (![Refresh icon](./assets/codicons/refresh.svg)) – Re-scans the current workspace and updates all diffs.
-- **Refresh All** (![Refresh all icon](./assets/codicons/sync.svg)) – Same but for all workspace folders from the **LiveSync Workspaces** view (multi-root only).
+- **Refresh** (![Refresh icon](https://github.com/a-gior/LiveSync/raw/main/documentation/wiki/assets/codicons/refresh.svg)) – Re-scans the current workspace and updates all diffs.
+- **Refresh All** (![Refresh all icon](https://github.com/a-gior/LiveSync/raw/main/documentation/wiki/assets/codicons/sync.svg)) – Same but for all workspace folders from the **LiveSync Workspaces** view (multi-root only).
 - **Refresh Remote Index** – Forces a fresh scan of the remote server. Useful when files were changed on the server directly. Run it from the Command Palette: `LiveSync: Refresh Remote Index`.
 
 You can also set the remote index to auto-refresh in the background using the `livesync.remoteIndex.autoRefreshInterval` setting (in minutes).
@@ -97,7 +97,7 @@ You can also set the remote index to auto-refresh in the background using the `l
 - **Tree View** – Shows files in a hierarchical folder structure. Great for navigating large projects.
 - **List View** – Shows all changed files in a flat list. Great for quickly seeing everything that's out of sync.
 
-Switch between them using the ![List view icon](./assets/codicons/list-flat.svg) or ![Tree view icon](./assets/codicons/list-tree.svg) button in the toolbar.
+Switch between them using the ![List view icon](https://github.com/a-gior/LiveSync/raw/main/documentation/wiki/assets/codicons/list-flat.svg) or ![Tree view icon](https://github.com/a-gior/LiveSync/raw/main/documentation/wiki/assets/codicons/list-tree.svg) button in the toolbar.
 
 ---
 
