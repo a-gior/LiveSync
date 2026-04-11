@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 
 
+## [1.1.6] - Safer Sync & Empty Folder Fixes
+
+### Improvements
+- Downloads now detect local conflicts before overwriting files, including locally modified files and files that already exist locally but were never synced.
+- Conflict dialogs now auto-timeout after 15 seconds so hidden prompts no longer block operations on the same file.
+- Explorer context menus are cleaner: `Show Diff` is hidden for folders and the Explorer delete command has been removed.
+
+### Fixed
+- Fixed folder upload/download so unchanged files are skipped correctly during folder sync.
+- Fixed empty folders not appearing correctly in the tree or being missed by upload/download operations.
+- Fixed folder hash propagation so adding or removing empty subfolders updates parent folder states correctly.
+- Fixed tree refresh behavior for root-level items after visibility or status changes.
+
+### Documentation
+- Updated the README and GitHub wiki.
+
 ## [1.1.5] - Fix 
 
 ### Fixed
