@@ -423,8 +423,13 @@ export async function setTestResponse(
 }
 
 /**
- * Refresh extension (command is fully awaited internally, no extra wait needed)
+ * Refresh extension and wait for any queued workspace refreshes to settle.
+ *
+ * Config file writes can trigger an additional auto-refresh via the config watcher.
+ * That refresh is not awaited by the explicit `livesync.refresh` command promise, so
+ * tests need a short settle window before checking state.
  */
 export async function refresh(): Promise<void> {
   await vscode.commands.executeCommand('livesync.refresh');
+  await vscode.commands.executeCommand('livesync.test.waitForIdle', 100);
 }

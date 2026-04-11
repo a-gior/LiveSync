@@ -78,7 +78,9 @@ suite('E2E - Create Event', function() {
     
     // Create file
     await createFileWithEvent(testFile);
-    await vscode.commands.executeCommand('livesync.test.waitForIdle');
+    // onDidCreate/onDidOpen can be dispatched on the next turn, so give them time
+    // to enqueue before waiting for the file-operation queue to drain.
+    await vscode.commands.executeCommand('livesync.test.waitForIdle', 100);
 
     // Verify post-create state
     assertFileStatus(ctx.services!, ctx.testWorkspace!, testFile, expectedStatusAfterCreate);
@@ -110,7 +112,9 @@ suite('E2E - Create Event', function() {
 
     // Step 2: Create file locally (triggers conflict detection)
     await createFileWithEvent(testFile);
-    await vscode.commands.executeCommand('livesync.test.waitForIdle');
+    // onDidCreate/onDidOpen can be dispatched on the next turn, so give them time
+    // to enqueue before waiting for the file-operation queue to drain.
+    await vscode.commands.executeCommand('livesync.test.waitForIdle', 100);
     
     // Step 3: Verify behavior based on response
     await assertLocalContent(testFile, expectedRemoteContentAfter, "Local content should match expected after conflict resolution");
