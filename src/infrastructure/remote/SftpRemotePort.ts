@@ -21,6 +21,7 @@ import { WorkspaceConfigService } from '../config/WorkspaceConfigService';
 import { logSync } from '@helpers/logging';
 import { sha256OfFile } from '@helpers/hash';
 import { scanRemote } from '@helpers/indexing';
+import { getProxyConfig, createProxySocket } from '@helpers/proxy/createProxySocket';
 
 const p = path.posix;
 
@@ -180,6 +181,11 @@ class SSHConnectionPool {
       ? await fsp.readFile(cfg.data.privateKeyPath, 'utf8').catch(() => undefined)
       : undefined;
 
+    const proxy = getProxyConfig();
+    const sock = proxy
+      ? await createProxySocket(cfg.data.hostname!, cfg.data.port ?? 22, proxy)
+      : undefined;
+
     return new Promise<void>((resolve, reject) => {
       client
         .on('ready', () => resolve())
@@ -194,6 +200,7 @@ class SSHConnectionPool {
           readyTimeout: 10000,
           keepaliveInterval: 10000,
           keepaliveCountMax: 3,
+          ...(sock ? { sock } : {}),
         });
     });
   }
@@ -429,6 +436,11 @@ export class SftpRemotePort implements RemotePort {
       ? await fsp.readFile(cfg.data.privateKeyPath, 'utf8').catch(() => undefined)
       : undefined;
 
+    const proxy = getProxyConfig();
+    const sock = proxy
+      ? await createProxySocket(cfg.data.hostname!, cfg.data.port ?? 22, proxy)
+      : undefined;
+
     try {
       await sftp.connect({
         host: cfg.data.hostname!,
@@ -437,6 +449,7 @@ export class SftpRemotePort implements RemotePort {
         password: cfg.data.password,
         privateKey: key,
         passphrase: cfg.data.passphrase,
+        ...(sock ? { sock } : {}),
       });
 
       return await callback(sftp);

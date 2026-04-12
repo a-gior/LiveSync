@@ -11,6 +11,7 @@ import * as os from 'os';
 import * as net from 'net';
 import { findWorkspaceFolderById } from '../helpers/workspaceFolder';
 import { isNetworkError } from '../helpers/config';
+import { getProxyConfig, createProxySocket } from '../helpers/proxy/createProxySocket';
 
 export interface ConfigValidationResult {
   workspaceId: WorkspaceId;
@@ -424,6 +425,18 @@ export class ConfigValidator {
   }
 
   static async quickReachabilityTest(hostname: string, port: number = 22): Promise<boolean> {
+    const proxy = getProxyConfig();
+
+    if (proxy) {
+      try {
+        const sock = await createProxySocket(hostname, port, proxy);
+        sock.destroy();
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
     return new Promise(resolve => {
       const sock = new net.Socket();
       sock.setTimeout(2000);
@@ -511,7 +524,25 @@ export class ConfigValidator {
           }
         }
 
-        client.connect(config);
+        const proxy = getProxyConfig();
+        if (proxy) {
+          createProxySocket(settings.hostname!, settings.port || 22, proxy)
+            .then((sock) => {
+              config.sock = sock;
+              client.connect(config);
+            })
+            .catch((err) => {
+              clearTimeout(timeout);
+              client.end();
+              resolve({
+                success: false,
+                message: 'Proxy connection failed',
+                details: err instanceof Error ? err.message : 'Unknown error',
+              });
+            });
+        } else {
+          client.connect(config);
+        }
       });
 
       return result;
