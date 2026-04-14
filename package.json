@@ -357,21 +357,25 @@
           "type": "boolean",
           "default": false,
           "description": "Route SSH/SFTP connections through a SOCKS5 proxy."
+          "order": 0
         },
         "livesync.proxy.host": {
           "type": "string",
           "default": "",
           "markdownDescription": "SOCKS5 proxy address in `host:port` format (e.g. `192.168.1.1:1080`). Leave empty to use the proxy configured in your OS environment (`ALL_PROXY` / `HTTPS_PROXY` / `HTTP_PROXY` or Windows Internet Settings)."
+          "order": 1
         },
         "livesync.proxy.username": {
           "type": "string",
           "default": "",
           "description": "Username for SOCKS5 proxy authentication. Required when a proxy host is set."
+          "order": 2
         },
         "livesync.proxy.password": {
           "type": "string",
           "default": "",
           "description": "Password for SOCKS5 proxy authentication. Optional."
+          "order": 3
         }
       }
     }
