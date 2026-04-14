@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 
 
+## [1.1.7] - SOCKS5 Proxy Support
+
+### New
+- **SOCKS5 proxy support** — All SSH and SFTP connections (including file transfers and remote indexing) can now be routed through a SOCKS5 proxy. Configure via the new `livesync.proxy.*` settings:
+  - `livesync.proxy.enabled` — enable/disable the proxy
+  - `livesync.proxy.host` — proxy address in `host:port` format
+  - `livesync.proxy.username` / `livesync.proxy.password` — optional proxy authentication
+- **OS proxy fallback** — leaving `livesync.proxy.host` empty will automatically detect the system proxy from environment variables (`ALL_PROXY`, `HTTPS_PROXY`, `HTTP_PROXY`) or Windows Internet Settings.
+- Reachability checks now also go through the proxy when one is configured.
+
 ## [1.1.6] - Safer Sync & Empty Folder Fixes
 
 ### Improvements
