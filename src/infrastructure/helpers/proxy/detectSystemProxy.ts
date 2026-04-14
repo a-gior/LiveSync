@@ -22,7 +22,8 @@ function parseProxyUrl(raw: string): ProxyConfig | null {
     }
 
     const url = new URL(normalized);
-    const host = url.hostname;
+    // url.hostname keeps brackets for IPv6 (e.g. "[::1]") — strip them
+    const host = url.hostname.replace(/^\[(.+)\]$/, '$1');
     const port = parseInt(url.port, 10);
 
     if (!host || isNaN(port) || port <= 0 || port > 65535) {

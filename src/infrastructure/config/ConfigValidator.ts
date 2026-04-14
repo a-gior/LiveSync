@@ -429,7 +429,12 @@ export class ConfigValidator {
 
     if (proxy) {
       try {
-        const sock = await createProxySocket(hostname, port, proxy);
+        const sock = await Promise.race([
+          createProxySocket(hostname, port, proxy),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('proxy reachability timeout')), 2000)
+          ),
+        ]);
         sock.destroy();
         return true;
       } catch {
